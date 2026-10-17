@@ -14,6 +14,8 @@ export async function runAiCheck(
     about?: string[];
     /** The owner's words it was sent with. */
     request?: string;
+    /** The model chosen for its session; none for the connection's. */
+    model?: string;
     started?: (sessionUuid: string) => void;
     restore?: () => void;
   } = {},
@@ -23,6 +25,7 @@ export async function runAiCheck(
     const { sessionUuid } = await aiApi.runCheck(check.templateId, {
       ...(options.about?.length ? { about: options.about } : {}),
       ...(options.request ? { request: options.request } : {}),
+      ...(options.model ? { model: options.model } : {}),
     });
     if (sessionUuid) {
       if (options.started) options.started(sessionUuid);

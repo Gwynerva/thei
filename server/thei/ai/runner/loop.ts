@@ -34,7 +34,6 @@ import {
   SESSION_NAME_MAX,
   sessionUnnamed,
 } from '../sessions/names';
-import { findTemplate } from '../templates/store';
 import { settleTemplateTurn } from '../templates/coverage';
 import { backgroundEvent } from './background-event';
 import { repairTranscript } from './transcript';
@@ -271,11 +270,8 @@ export async function runSessionTurn(
     const { db, schema } = THEI_SERVER.useDb();
     /** Still going by the owner's first words: the model names it now. */
     const unnamed = sessionUnnamed(session);
-    // A template's session is answered with the template's own model, if it
-    // names one.
-    const settings = sessionModel(
-      session.templateId ? findTemplate(session.templateId)?.model : undefined,
-    );
+    // The model the owner chose for the session, or the connection's.
+    const settings = sessionModel(session.model ?? undefined);
     const said = sessionMessages(sessionUuid);
     // A turn the last process left half-done is put right before it is
     // read again.
@@ -295,11 +291,7 @@ export async function runSessionTurn(
     );
     const messageUuid = message.messageUuid;
     beginTurn(sessionUuid, messageUuid);
-    updateSession(sessionUuid, {
-      state: 'running',
-      error: null,
-      ...(settings ? { model: settings.model } : {}),
-    });
+    updateSession(sessionUuid, { state: 'running', error: null });
     publishSession(sessionUuid, { type: 'message', messageUuid });
     publishSession(sessionUuid, { type: 'session' });
 

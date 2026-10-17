@@ -379,6 +379,8 @@ export const aiApi = {
     files?: AiComposerFile[];
     /** The ready-made request the words began from. */
     templateId?: string;
+    /** The model chosen for it; none for the connection's. */
+    model?: string;
   }) {
     return $fetch<{ sessionUuid: string }>('/api/admin/ai/sessions', {
       method: 'POST',
@@ -398,7 +400,7 @@ export const aiApi = {
    */
   runCheck(
     templateId: string,
-    body: { about?: string[]; request?: string } = {},
+    body: { about?: string[]; request?: string; model?: string } = {},
   ) {
     return $fetch<AiTemplateRunResponse>(
       `/api/admin/ai/templates/${templateId}/run`,
@@ -411,6 +413,8 @@ export const aiApi = {
       title: string;
       pinned: boolean;
       archived: boolean;
+      /** Empty for the connection's own. */
+      model: string;
     }>,
   ) {
     return $fetch<AiSessionItem>(`/api/admin/ai/sessions/${sessionUuid}`, {

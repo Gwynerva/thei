@@ -4,21 +4,17 @@ import {
   AI_TEMPLATE_TITLE_MAX,
   type AiTemplateDetail,
 } from '#layers/thei/shared/ai-template';
-import {
-  aiModelName,
-  type AiModelsResponse,
-} from '#layers/thei/shared/ai-model';
-import type { SelectOption } from '#layers/thei/app/components/field/FieldSelect.vue';
 import ModalContainer from '../ModalContainer.vue';
 import ModalHeaderButton from '../ModalHeaderButton.vue';
 import ModalTitle from '../ModalTitle.vue';
 import ModalWaiting from '../ModalWaiting.vue';
 
 /**
- * One template's settings: its request in the owner's words and which model
- * answers it, with the sessions it started. A built-in check keeps its
- * words: the owner sets its model, or makes a copy to rewrite as a request
- * of their own. A new one starts here too.
+ * One template: its request in the owner's words, with the sessions it
+ * started — opened in a new session from here, or, for a built-in check,
+ * run over what is new in the archive. A built-in check's words are the
+ * code's: a copy makes them a request of the owner's own. A new one starts
+ * here too. The model is chosen for each session, not here.
  */
 const { modalData } = defineProps<{
   modalData: { templateId?: string };
@@ -29,18 +25,10 @@ const emit = defineEmits<{ modalResult: [result: Result] }>();
 interface Draft {
   title: string;
   instruction: string;
-  model: string;
 }
 
 const detail = ref<AiTemplateDetail>();
-/** What the connection answers with, read as the AI page reads it. */
-const { data: connection } = useAiModel();
-const models = ref<string[]>([]);
-const draft = ref<Draft>({
-  title: '',
-  instruction: '',
-  model: '',
-});
+const draft = ref<Draft>({ title: '', instruction: '' });
 const saved = ref('');
 const busy = ref<'save' | 'run' | 'copy' | 'delete'>();
 const error = ref('');
@@ -53,11 +41,7 @@ const dirty = computed(() => JSON.stringify(draft.value) !== saved.value);
 
 function draftOf(detail: AiTemplateDetail): Draft {
   const { template } = detail;
-  return {
-    title: template.title,
-    instruction: template.instruction,
-    model: template.model,
-  };
+  return { title: template.title, instruction: template.instruction };
 }
 
 async function load() {
@@ -79,72 +63,12 @@ onMounted(async () => {
   }
 });
 
-/**
- * The models the connection's service offers, asked for when the owner
- * reaches for the field, not on every opening: asking sends the API key.
- */
-let modelsAsked = false;
-function modelsWanted() {
-  if (modelsAsked) return;
-  modelsAsked = true;
-  void $fetch<AiModelsResponse>('/api/admin/ai/model/models', {
-    method: 'POST',
-    body: {},
-  })
-    .then((answer) => (models.value = answer.models))
-    .catch(() => {});
-}
-
-const connectionModel = computed(() =>
-  connection.value ? aiModelName(connection.value) : '',
-);
-
-/**
- * The model as the select shows it, once the service has listed its own:
- * the connection's, one of the listed, or «another» with a field of its own
- * for a name the service did not list.
- */
-const OTHER = 'other';
-const otherModel = ref(false);
-const modelChoice = computed({
-  get: () => {
-    const value = draft.value.model;
-    return otherModel.value || (value && !models.value.includes(value))
-      ? OTHER
-      : value;
-  },
-  set: (choice: string) => {
-    otherModel.value = choice === OTHER;
-    if (choice !== OTHER) draft.value.model = choice;
-  },
-});
-const modelOptions = computed<SelectOption[]>(() => [
-  {
-    value: '',
-    label: connectionModel.value
-      ? phrase.value.ai_template_model_placeholder(connectionModel.value)
-      : phrase.value.ai_template_model_connection,
-    divider: true,
-  },
-  ...models.value.map((model, index) => ({
-    value: model,
-    label: model,
-    divider: index === models.value.length - 1,
-  })),
-  { value: OTHER, label: phrase.value.ai_model_other },
-]);
-
 async function save() {
   if (busy.value) return;
   const form = draft.value;
   busy.value = 'save';
   error.value = '';
-  const body = {
-    model: form.model.trim(),
-    ...(builtin.value
-      ? {}
-      : { title: form.title, instruction: form.instruction }),
-  };
+  const body = { title: form.title, instruction: form.instruction };
   try {
     await $fetch(
       isNew.value
@@ -159,16 +83,15 @@ async function save() {
   }
 }
 
+/** Opened in a new session, its words wait for an entity or more words. */
+function open() {
+  if (busy.value || !template.value) return;
+  emit('modalResult', { type: 'opened' });
+  void navigateTo(newSessionLocation({ template: template.value.templateId }));
+}
+
 async function run() {
   if (busy.value || !template.value) return;
-  // A ready-made request is opened, not run: its words wait to be added to.
-  if (!builtin.value) {
-    emit('modalResult', { type: 'opened' });
-    void navigateTo(
-      newSessionLocation({ template: template.value.templateId }),
-    );
-    return;
-  }
   busy.value = 'run';
   const started = await runAiCheck(template.value);
   busy.value = undefined;
@@ -213,12 +136,12 @@ async function remove() {
 
 const canSave = computed(
   () =>
+    !builtin.value &&
     !busy.value &&
     !loading.value &&
     (isNew.value || dirty.value) &&
-    (builtin.value ||
-      (draft.value.title.trim() !== '' &&
-        draft.value.instruction.trim() !== '')),
+    draft.value.title.trim() !== '' &&
+    draft.value.instruction.trim() !== '',
 );
 
 const modalContainer =
@@ -259,6 +182,7 @@ useModalCloseGuard(
           @click="closeModal"
         />
         <ModalHeaderButton
+          v-if="!builtin"
           variant="accent"
           :label="canSave || isNew ? phrase.save : phrase.saved"
           :disabled="!canSave"
@@ -310,41 +234,6 @@ useModalCloseGuard(
         />
       </Field>
 
-      <!-- Typed until the service has listed its models, then chosen. -->
-      <Field>
-        <FieldLabel>{{ phrase.ai_template_model }}</FieldLabel>
-        <template v-if="models.length">
-          <FieldSelect
-            v-model="modelChoice"
-            :options="modelOptions"
-            wide
-            data-template-model
-          />
-          <FieldInput
-            v-if="modelChoice === OTHER"
-            v-model="draft.model"
-            autocomplete="off"
-            no-typography
-            :placeholder="phrase.ai_model_id_placeholder"
-            data-template-model-other
-          />
-        </template>
-        <FieldInput
-          v-else
-          v-model="draft.model"
-          autocomplete="off"
-          no-typography
-          :placeholder="
-            connectionModel
-              ? phrase.ai_template_model_placeholder(connectionModel)
-              : ''
-          "
-          data-template-model
-          @focusin="modelsWanted"
-        />
-        <FieldHint>{{ phrase.ai_template_model_hint }}</FieldHint>
-      </Field>
-
       <section v-if="detail?.sessions.length" class="flex flex-col gap-xs">
         <h3 class="text-sm font-semibold text-text-2">
           {{ phrase.ai_template_sessions }}
@@ -362,14 +251,23 @@ useModalCloseGuard(
           class="flex h-9 shrink-0 items-center gap-xs whitespace-nowrap
             pointer-coarse:h-11"
           :disabled="Boolean(busy) || dirty"
+          data-template-open-now
+          @click="open"
+        >
+          <Icon name="ai-chat" />{{ phrase.ai_template_open }}
+        </Button>
+        <Button
+          v-if="builtin"
+          variant="secondary"
+          class="flex h-9 shrink-0 items-center gap-xs whitespace-nowrap
+            pointer-coarse:h-11"
+          :disabled="Boolean(busy)"
           data-template-run-now
           @click="run"
         >
-          <Icon
-            :name="
-              busy === 'run' ? 'loading' : builtin ? 'list-check' : 'ai-chat'
-            "
-          />{{ builtin ? phrase.ai_template_run : phrase.ai_template_open }}
+          <Icon :name="busy === 'run' ? 'loading' : 'list-check'" />{{
+            phrase.ai_template_run
+          }}
         </Button>
         <Button
           variant="secondary"

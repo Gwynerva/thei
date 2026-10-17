@@ -74,6 +74,8 @@ export async function runTemplate(
     about?: readonly string[];
     /** The owner's words the run was asked with, editing Markdown. */
     request?: string;
+    /** The model chosen for its session; none for the connection's. */
+    model?: string;
     now?: number;
   } = {},
 ): Promise<{ sessionUuid: string | null }> {
@@ -83,7 +85,7 @@ export async function runTemplate(
     template.builtin ??
     fail('A ready-made request opens as a new session; it is not run.');
   if (!THEI_SERVER.config.mcp.enabled) fail('AI is off.');
-  if (!sessionModel(template.model)) fail('No model is set up to answer.');
+  if (!sessionModel(options.model)) fail('No model is set up to answer.');
   const scope = scopeOf(options.about);
   const source = TEMPLATE_SOURCES[key];
   const request = options.request?.trim() ?? '';
@@ -135,6 +137,9 @@ export async function runTemplate(
             ? `${faces[0]!.title}${faces.length > 1 ? ' …' : ''}`
             : shortDate(now)
         }`,
+        ...(options.model?.trim()
+          ? { model: options.model.trim().slice(0, 200) }
+          : {}),
       },
       now,
     );

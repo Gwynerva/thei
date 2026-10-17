@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import { aiModelName } from '#layers/thei/shared/ai-model';
 import type { AiEntityRef } from '#layers/thei/shared/ai';
 import type {
   AiComposerExpose,
@@ -25,7 +24,6 @@ const router = useRouter();
 const requestFetch = useRequestFetch();
 const { data: model, refresh: refreshModel } = await useAiModel();
 const modelReady = computed(() => model.value?.state === 'ready');
-const modelName = computed(() => (model.value ? aiModelName(model.value) : ''));
 
 /** What the month has spent, under the list; none without a model. */
 const usage = computed(() => {
@@ -93,6 +91,8 @@ const { data: templates } = await useAsyncData('ai-templates', () =>
 // Every template is offered: a built-in check sent from here runs.
 const presets = computed(() => templates.value?.templates ?? []);
 const composer = ref<AiComposerExpose>();
+/** The model the new session is answered with; empty for the connection's. */
+const newModel = ref('');
 
 function usePreset(preset: AiPresetItem) {
   composer.value?.prefill(preset.instruction, preset.templateId);
@@ -138,6 +138,7 @@ async function start(
         files,
         restore,
         templateId,
+        model: newModel.value,
       },
       {
         presets: presets.value,
@@ -209,9 +210,14 @@ async function deleted() {
               {{ phrase.ai_new_title }}
             </h2>
             <p class="text-text-2">{{ phrase.ai_new_text }}</p>
-            <p v-if="modelReady" class="text-xs text-text-3">
-              {{ phrase.ai_new_model_line(modelName) }}
-            </p>
+            <div
+              v-if="modelReady"
+              class="flex items-center gap-1 text-xs"
+              data-session-new-model
+            >
+              <Icon name="sparkles" class="shrink-0 text-text-3" />
+              <AiModelPicker v-model="newModel" />
+            </div>
             <p
               v-if="about"
               ref="aboutRoot"

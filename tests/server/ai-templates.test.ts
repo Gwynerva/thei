@@ -242,15 +242,10 @@ describe('the built-in checks', () => {
     const keys = Object.keys(findTemplate(id('proofread'))!);
     expect(keys).not.toContain('schedule');
     expect(keys).not.toContain('offerOn');
-    // Only their model is the owner's.
-    const changed = saveTemplate(id('links'), {
-      model: 'fake-large',
-      title: 'Mine',
-    });
-    expect(changed).toMatchObject({
-      title: 'Broken links',
-      model: 'fake-large',
-    });
+    // Their words are the code's: copied to be changed, never deleted.
+    expect(() => saveTemplate(id('links'), { title: 'Mine' })).toThrow(
+      /copy it/,
+    );
     expect(() => deleteTemplate(id('links'))).toThrow();
     const copy = copyTemplate(id('links'));
     expect(copy.title).toBe('Broken links (copy)');

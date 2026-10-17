@@ -6,8 +6,10 @@ import {
 } from '#layers/thei/shared/ai-model';
 import {
   modelSettings,
+  sameService,
   savedModelConfig,
 } from '../../../../thei/ai/model/admin';
+import { forgetChosenModels } from '../../../../thei/ai/sessions/store';
 import { updateTheiConfig } from '../../../../thei/config/write';
 import { markReadOnlyRequest } from '../../../../thei/read-only-request';
 
@@ -60,6 +62,7 @@ export default defineEventHandler(async (event): Promise<AiModelSettings> => {
       fail('Invalid limit');
     monthlyTokens = body.monthlyTokens;
   }
+  const before = THEI_SERVER.config.mcp.model;
   await updateTheiConfig((config) => ({
     ...config,
     mcp: {
@@ -68,5 +71,6 @@ export default defineEventHandler(async (event): Promise<AiModelSettings> => {
       ...(monthlyTokens === undefined ? {} : { monthlyTokens }),
     },
   }));
+  if (!sameService(before, THEI_SERVER.config.mcp.model)) forgetChosenModels();
   return modelSettings();
 });

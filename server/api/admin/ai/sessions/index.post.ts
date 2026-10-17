@@ -1,12 +1,14 @@
 import { requireAiOn } from '../../../../thei/ai-on';
 import { startOwnerSession } from '../../../../thei/ai/sessions/owner';
+import { chosenModel } from '../../../../thei/ai/model/settings';
 import { markReadOnlyRequest } from '../../../../thei/read-only-request';
 import { rememberOrigin } from '../../../../thei/ai/runner/background-event';
 
 /**
  * Starts a session of the owner's: about what they name, with their first
  * words and the files they bring, which the model answers at once — words
- * that may have begun as a template's, which the session then remembers.
+ * that may have begun as a template's, which the session then remembers —
+ * and answers with the model chosen for it, or the connection's.
  */
 export default defineEventHandler(async (event) => {
   requireAiOn();
@@ -20,6 +22,7 @@ export default defineEventHandler(async (event) => {
     text: typeof body.text === 'string' ? body.text : undefined,
     files: body.files,
     templateId: body.templateId,
+    model: chosenModel(body.model) ?? undefined,
   });
   return { sessionUuid };
 });

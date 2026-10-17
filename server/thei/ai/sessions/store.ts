@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, gt, max, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, isNotNull, max, or, sql } from 'drizzle-orm';
 import type {
   AiEntityType,
   AiMessagePart,
@@ -300,6 +300,19 @@ export function updateSession(
   db.update(schema.aiSessions)
     .set(change)
     .where(eq(schema.aiSessions.sessionUuid, sessionUuid))
+    .run();
+}
+
+/**
+ * Lets every session's chosen model go: names of one service mean nothing
+ * to another, so once the connection speaks to another, sessions are
+ * answered with its own model until the owner chooses again.
+ */
+export function forgetChosenModels() {
+  const { db, schema } = THEI_SERVER.useDb();
+  db.update(schema.aiSessions)
+    .set({ model: null })
+    .where(isNotNull(schema.aiSessions.model))
     .run();
 }
 

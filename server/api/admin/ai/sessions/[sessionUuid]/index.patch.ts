@@ -7,11 +7,13 @@ import {
   updateSession,
 } from '../../../../../thei/ai/sessions/store';
 import { cleanSessionTitle } from '../../../../../thei/ai/sessions/names';
+import { chosenModel } from '../../../../../thei/ai/model/settings';
 import { sessionHead } from '../../../../../thei/ai/sessions/view';
 import { markReadOnlyRequest } from '../../../../../thei/read-only-request';
 
 /**
- * Renames, pins or archives a session, and brings one back. Archived by the
+ * Renames, pins or archives a session, brings one back, or chooses the
+ * model its next turns are answered with. Archived by the
  * owner, a session is also closed: its turn stops, the files an app still
  * has on their way into it are cancelled, and an app may not go on with it;
  * brought back, it is open again.
@@ -24,7 +26,9 @@ export default defineEventHandler(async (event) => {
   if (!session) throw createError({ statusCode: 404 });
   const body = (await readBody<Record<string, unknown>>(event)) ?? {};
   const now = Date.now();
+  const model = chosenModel(body.model);
   updateSession(sessionUuid, {
+    ...(model !== undefined ? { model } : {}),
     ...(typeof body.title === 'string'
       ? { title: cleanSessionTitle(body.title) }
       : {}),

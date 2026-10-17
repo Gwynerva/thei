@@ -40,8 +40,6 @@ export interface AiTemplateItem {
   builtin?: AiBuiltinTemplateKey;
   title: string;
   instruction: string;
-  /** The model it is answered by; empty for the one of the connection. */
-  model: string;
   /** The session its last run started, and what waits in it. */
   lastSession?: {
     sessionUuid: string;

@@ -15,6 +15,7 @@ import {
 } from '../../server/thei/ai/sessions/owner';
 import {
   findSession,
+  forgetChosenModels,
   sessionMessages,
 } from '../../server/thei/ai/sessions/store';
 import { sessionDetail } from '../../server/thei/ai/sessions/view';
@@ -156,10 +157,11 @@ describe('a session turn', () => {
       state: 'pending',
       messageUuid: answer!.messageUuid,
     });
+    // No model chosen for it: the connection's answers.
     expect(findSession(sessionUuid)).toMatchObject({
       state: 'idle',
       waiting: 1,
-      model: 'fake-small',
+      model: null,
     });
     expect(findSession(sessionUuid)!.tokens).toBeGreaterThan(0);
     const detail = await sessionDetail(sessionUuid);
@@ -747,6 +749,19 @@ describe('how a turn ends', () => {
     expect(model!.requests.every((request) => !request.body.thinking)).toBe(
       true,
     );
+  });
+
+  it('answers with the model chosen for the session, until the service changes', async () => {
+    await useModel([{ text: 'One.' }]);
+    const sessionUuid = startOwnerSession({
+      text: 'Hello',
+      model: 'fake-large',
+    });
+    await turnsSettled();
+    expect(model!.requests.at(-1)!.body.model).toBe('fake-large');
+    // Names of one service mean nothing to another.
+    forgetChosenModels();
+    expect(findSession(sessionUuid)!.model).toBeNull();
   });
 
   it('works under a write budget of the session’s own', async () => {

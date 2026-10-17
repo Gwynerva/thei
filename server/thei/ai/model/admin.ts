@@ -61,7 +61,7 @@ function addressOf(baseUrl: string) {
  * and keeps the address of the one it spoke to — Anthropic's is empty,
  * another service's never is.
  */
-function sameService(
+export function sameService(
   a: Pick<AiModelConfig, 'provider' | 'baseUrl'>,
   b: Pick<AiModelConfig, 'provider' | 'baseUrl'>,
 ) {

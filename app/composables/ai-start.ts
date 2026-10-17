@@ -19,6 +19,8 @@ export async function startAiSession(
     restore: () => void;
     /** The ready-made request the words began from. */
     templateId: string | undefined;
+    /** The model chosen for it; empty for the connection's. */
+    model?: string;
   },
   options: {
     /** The ready-made requests offered, the built-in checks among them. */
@@ -33,6 +35,7 @@ export async function startAiSession(
     await runAiCheck(check, {
       about: message.about,
       request: message.text,
+      model: message.model,
       restore: message.restore,
       started: (sessionUuid) => void options.started(sessionUuid),
     });
@@ -44,6 +47,7 @@ export async function startAiSession(
       files: message.files,
       about: message.about,
       templateId: message.templateId,
+      ...(message.model ? { model: message.model } : {}),
     });
     await options.started(sessionUuid);
   } catch (caught) {

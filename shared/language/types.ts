@@ -1360,7 +1360,6 @@ export type LanguagePhrases = {
   ai_template_edit: string;
   ai_template_running: string;
   ai_template_never_run: string;
-  ai_template_default_model: string;
   ai_template_started: (title: string) => string;
   ai_template_saved: string;
   ai_template_deleted: string;
@@ -1371,11 +1370,7 @@ export type LanguagePhrases = {
   ai_template_name_placeholder: string;
   ai_template_instruction: string;
   ai_template_instruction_placeholder: string;
-  ai_template_model: string;
-  ai_template_model_placeholder: (model: string) => string;
   /** The connection's model, while its name is not known. */
-  ai_template_model_connection: string;
-  ai_template_model_hint: string;
   ai_template_sessions: string;
   ai_template_copy: string;
   ai_template_delete: string;
@@ -1475,7 +1470,6 @@ export type LanguagePhrases = {
   ai_usage_average: (average: number, averageText: string) => string;
   ai_new_title: string;
   ai_new_text: string;
-  ai_new_model_line: (model: string) => string;
   /** The built-in checks' words: what each is called and asks. */
   ai_template_builtins: Record<
     import('../ai-template').AiBuiltinTemplateKey,
@@ -1786,6 +1780,9 @@ export type LanguagePhrases = {
   ai_model_unlisted: string;
   ai_model_choose: string;
   ai_model_other: string;
+  ai_model_choice: string;
+  ai_model_connection: (model: string) => string;
+  ai_model_default: string;
   ai_model_id_placeholder: string;
   ai_model_missing: string;
   ai_model_address_invalid: string;

@@ -1867,7 +1867,6 @@ export default defineI18nModule({
     ai_template_edit: 'Настроить',
     ai_template_running: 'идёт сейчас',
     ai_template_never_run: 'ещё не запускался',
-    ai_template_default_model: 'модель по умолчанию',
     ai_template_started: (title) => `Сессия «${title}» начата`,
     ai_template_saved: 'Шаблон сохранён',
     ai_template_deleted: 'Шаблон удалён',
@@ -1879,11 +1878,6 @@ export default defineI18nModule({
     ai_template_instruction: 'Запрос',
     ai_template_instruction_placeholder:
       'Что сделать модели — как сказали бы человеку. Например: «Посмотри эту запись и скажи, чего в ней не хватает…»',
-    ai_template_model: 'Модель',
-    ai_template_model_placeholder: (model) => `Как в «Подключении» — ${model}`,
-    ai_template_model_connection: 'Как в «Подключении»',
-    ai_template_model_hint:
-      'Пусто — модель из «Подключения». Сильная модель — для разборов, где надо думать, дешёвая — для коротких проверок.',
     ai_template_sessions: 'Сессии этого шаблона',
     ai_template_copy: 'Сделать копию',
     ai_template_delete: 'Удалить шаблон',
@@ -2053,8 +2047,6 @@ export default defineI18nModule({
       count === null
         ? `«${title}» — запущено вами`
         : `«${title}» — запущено вами · к проверке: ${count}`,
-    ai_new_model_line: (model) =>
-      `Отвечает модель из «Подключения» · ${model}. Разговор в другом приложении ИИ через MCP тоже появится здесь — с его действиями.`,
     ai_action_kinds: {
       update: 'Изменить',
       field: 'Поле',
@@ -2479,6 +2471,10 @@ export default defineI18nModule({
       'Сервис не дал списка моделей — впишите название вручную.',
     ai_model_choose: 'Выберите модель',
     ai_model_other: 'Другая…',
+    ai_model_choice: 'Модель сессии',
+    ai_model_connection: (model) =>
+      model ? `${model} · по умолчанию` : 'Модель по умолчанию',
+    ai_model_default: 'модель по умолчанию',
     ai_model_id_placeholder: 'Название модели',
     ai_model_missing: 'Укажите модель.',
     ai_model_address_invalid:

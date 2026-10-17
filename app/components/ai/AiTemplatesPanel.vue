@@ -129,12 +129,6 @@ async function edit(template?: AiTemplateItem) {
                 scope="col"
                 class="min-w-44 p-td-tight text-left max-sm:hidden"
               >
-                {{ phrase.ai_template_model }}
-              </th>
-              <th
-                scope="col"
-                class="min-w-44 p-td-tight text-left max-sm:hidden"
-              >
                 {{ phrase.ai_templates_column_last }}
               </th>
               <th scope="col" class="rounded-tr-normal"></th>
@@ -143,7 +137,7 @@ async function edit(template?: AiTemplateItem) {
           <tbody>
             <template v-for="group in groups" :key="group.key">
               <tr class="tr-section" :data-templates-group="group.key">
-                <td colspan="4" class="p-td-tight text-sm text-text-2">
+                <td colspan="3" class="p-td-tight text-sm text-text-2">
                   {{ group.title }}
                 </td>
               </tr>
@@ -157,7 +151,7 @@ async function edit(template?: AiTemplateItem) {
                 @edit="edit(template)"
               />
               <tr v-if="!group.templates.length">
-                <td colspan="4" class="p-td text-sm text-text-3">
+                <td colspan="3" class="p-td text-sm text-text-3">
                   {{ phrase.ai_templates_own_empty }}
                 </td>
               </tr>

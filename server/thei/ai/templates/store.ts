@@ -13,10 +13,9 @@ import { refuse as fail } from '../../entity-patch/text';
 import { findSession } from '../sessions/store';
 
 /**
- * The templates: the built-in checks, written in the code — the owner sets
- * only which model answers them — and the owner's own ready-made requests,
- * written by the owner. A built-in one's settings are a row under its id,
- * made the first time the owner changes them or runs it.
+ * The templates: the built-in checks, written in the code, and the owner's
+ * own ready-made requests, written by the owner. A built-in one has a row
+ * under its id from its first run, which keeps its last session.
  */
 
 type TemplateRow = typeof import('../../db/schema/ai').aiTemplates.$inferSelect;
@@ -76,7 +75,6 @@ function builtinItem(key: AiBuiltinTemplateKey): AiTemplateItem {
     builtin: key,
     title: words.title,
     instruction: words.instruction,
-    model: row?.model ?? '',
     ...lastSessionOf(builtinTemplateId(key), row),
   };
 }
@@ -86,7 +84,6 @@ function ownItem(row: TemplateRow): AiTemplateItem {
     templateId: row.templateId,
     title: row.title ?? '',
     instruction: row.instruction ?? '',
-    model: row.model,
     ...lastSessionOf(row.templateId, row),
   };
 }
@@ -144,13 +141,12 @@ function checkedLength(text: string, max: number, what: string): string {
 export interface TemplateInput {
   title?: unknown;
   instruction?: unknown;
-  model?: unknown;
 }
 
 /**
- * Saves a template: a new one of the owner's when `templateId` is null, or
- * what the owner changed of one. Of a built-in one only its model is the
- * owner's; its words are the code's.
+ * Saves a template of the owner's: a new one when `templateId` is null, or
+ * what the owner changed of one. A built-in one's words are the code's: it
+ * is copied to be changed.
  */
 export function saveTemplate(
   templateId: string | null,
@@ -159,43 +155,35 @@ export function saveTemplate(
 ): AiTemplateItem {
   const current = templateId ? findTemplate(templateId) : undefined;
   if (templateId && !current) fail('There is no such template.');
-  const builtin = current?.builtin;
-  const model =
-    input.model === undefined
-      ? (current?.model ?? '')
-      : typeof input.model === 'string'
-        ? input.model.trim().slice(0, 200)
-        : fail('The model is named by a word.');
-  const words = builtin
-    ? { title: null, instruction: null }
-    : {
-        title:
-          input.title === undefined && current
-            ? current.title
-            : cleanLine(input.title, AI_TEMPLATE_TITLE_MAX, 'title'),
-        instruction:
-          input.instruction === undefined && current
-            ? current.instruction
-            : cleanParagraphs(
-                input.instruction,
-                AI_TEMPLATE_INSTRUCTION_MAX,
-                'request',
-              ),
-      };
+  if (current?.builtin)
+    fail('A built-in template is not changed: copy it to make it your own.');
+  const words = {
+    title:
+      input.title === undefined && current
+        ? current.title
+        : cleanLine(input.title, AI_TEMPLATE_TITLE_MAX, 'title'),
+    instruction:
+      input.instruction === undefined && current
+        ? current.instruction
+        : cleanParagraphs(
+            input.instruction,
+            AI_TEMPLATE_INSTRUCTION_MAX,
+            'request',
+          ),
+  };
   const id = templateId ?? `${EntityPrefix.AiTemplate}-${randomUUID()}`;
   const { db, schema } = THEI_SERVER.useDb();
   db.insert(schema.aiTemplates)
     .values({
       templateId: id,
-      builtin: builtin ?? null,
+      builtin: null,
       ...words,
-      model,
       createdAt: now,
       updatedAt: now,
     })
     .onConflictDoUpdate({
       target: schema.aiTemplates.templateId,
-      set: { ...words, model, updatedAt: now },
+      set: { ...words, updatedAt: now },
     })
     .run();
   return findTemplate(id)!;
@@ -211,7 +199,6 @@ export function copyTemplate(templateId: string, now = Date.now()) {
         .ai_template_copy_title(source.title)
         .slice(0, AI_TEMPLATE_TITLE_MAX),
       instruction: source.instruction,
-      model: source.model,
     },
     now,
   );
@@ -238,7 +225,6 @@ export function recordRun(templateId: string, sessionUuid: string, at: number) {
       builtin: template.builtin ?? null,
       title: null,
       instruction: null,
-      model: template.model,
       lastSessionUuid: sessionUuid,
       createdAt: at,
       updatedAt: at,

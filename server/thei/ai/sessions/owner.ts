@@ -204,6 +204,8 @@ export function startOwnerSession(
     files?: unknown;
     /** The ready-made request the words began from, if any. */
     templateId?: unknown;
+    /** The model chosen for it; none for the connection's. */
+    model?: string;
   },
   now = Date.now(),
 ): string {
@@ -220,6 +222,7 @@ export function startOwnerSession(
       origin: 'owner',
       title: given || template?.title || titleFromWords(input.text ?? ''),
       ...(template ? { templateId: template.templateId } : {}),
+      ...(input.model ? { model: input.model } : {}),
     },
     now,
   );

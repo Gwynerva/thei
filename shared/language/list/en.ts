@@ -1803,7 +1803,6 @@ export default defineI18nBase({
     ai_template_edit: 'Settings',
     ai_template_running: 'running now',
     ai_template_never_run: 'not run yet',
-    ai_template_default_model: 'default model',
     ai_template_started: (title) => `Session “${title}” started`,
     ai_template_saved: 'Template saved',
     ai_template_deleted: 'Template deleted',
@@ -1815,11 +1814,6 @@ export default defineI18nBase({
     ai_template_instruction: 'Request',
     ai_template_instruction_placeholder:
       'What the model should do — as you would tell a person. For example: “Look over this entry and say what is missing…”',
-    ai_template_model: 'Model',
-    ai_template_model_placeholder: (model) => `As in Connection — ${model}`,
-    ai_template_model_connection: 'As in Connection',
-    ai_template_model_hint:
-      'Empty: the model of Connection. A strong model for reviews that need thought, a cheap one for short checks.',
     ai_template_sessions: 'Sessions of this template',
     ai_template_copy: 'Make a copy',
     ai_template_delete: 'Delete template',
@@ -1977,8 +1971,6 @@ export default defineI18nBase({
       count === null
         ? `“${title}” — started by you`
         : `“${title}” — started by you · ${count} to look at`,
-    ai_new_model_line: (model) =>
-      `Answered by the model from “Connection” · ${model}. A conversation in another AI app over MCP shows up here too, with its actions.`,
     ai_action_kinds: {
       update: 'Change',
       field: 'Field',
@@ -2401,6 +2393,10 @@ export default defineI18nBase({
     ai_model_unlisted: 'The service gave no list of models: type the name.',
     ai_model_choose: 'Choose a model',
     ai_model_other: 'Another…',
+    ai_model_choice: 'Model of the session',
+    ai_model_connection: (model) =>
+      model ? `${model} · default` : 'The default model',
+    ai_model_default: 'the default model',
     ai_model_id_placeholder: 'The model’s name',
     ai_model_missing: 'Name the model.',
     ai_model_address_invalid:

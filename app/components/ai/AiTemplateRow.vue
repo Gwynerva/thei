@@ -2,8 +2,8 @@
 import type { AiTemplateItem } from '#layers/thei/shared/ai-template';
 
 /**
- * One template, a row of the templates' table: what it asks, which model
- * answers it and, for a check, what its last run left — under its words on
+ * One template, a row of the templates' table: what it asks and, for a
+ * check, what its last run left — under its words on
  * a phone — and at the right its buttons: open it in a new session, to add
  * an entity or words to; for a check, run it over what is new in the
  * archive at once; and its settings.
@@ -36,13 +36,6 @@ const check = computed(() => Boolean(props.template.builtin));
           <AiTemplateLastRun :template :starting />
         </div>
       </div>
-    </td>
-    <td class="p-td text-xs leading-snug text-text-2 max-sm:hidden">
-      <span class="inline-flex min-w-0 items-center gap-1">
-        <Icon name="sparkles" class="shrink-0 text-text-3" />{{
-          template.model || phrase.ai_template_default_model
-        }}
-      </span>
     </td>
     <td class="p-td text-xs leading-snug max-sm:hidden">
       <AiTemplateLastRun v-if="check" :template :starting />

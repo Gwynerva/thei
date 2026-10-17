@@ -30,6 +30,7 @@ import aiTemplateCoverage from './0.0.6-ai-template-coverage';
 import aiTemplatesEverywhere from './0.0.6-ai-templates-everywhere';
 import fileCaptions from './0.0.6-file-captions';
 import aiSessionPurge from './0.0.6-ai-session-purge';
+import aiTemplateModel from './0.0.6-ai-template-model';
 
 /**
  * Every migration Thei has ever shipped, oldest first.
@@ -73,6 +74,7 @@ export const migrationRegistry: TheiMigration[] = [
   aiTemplatesEverywhere,
   fileCaptions,
   aiSessionPurge,
+  aiTemplateModel,
 ];
 
 export { baselineSql } from './0.0.1-baseline';

@@ -54,7 +54,10 @@ export const aiSessions = sqliteTable(
     /** The app's own name for itself, as it introduced itself over MCP. */
     client: text(),
     templateId: text(),
-    /** The model that answered, as the service names it. */
+    /**
+     * The model the owner chose for it, as the service names it; none for
+     * the connection's own. A change of service lets every choice go.
+     */
     model: text(),
     state: text().notNull().default('idle').$type<AiSessionState>(),
     pinned: integer({ mode: 'boolean' }).notNull().default(false),
@@ -243,16 +246,14 @@ export const aiDigests = sqliteTable(
 );
 
 /**
- * Session templates: the owner's own, and the owner's settings of the
- * built-in checks (`builtin` names one; its words live in the code).
+ * Session templates: the owner's own, and a row for each built-in check run
+ * (`builtin` names one; its words live in the code).
  */
 export const aiTemplates = sqliteTable('ai-templates', {
   templateId: text().primaryKey(),
   builtin: text(),
   title: text(),
   instruction: text(),
-  /** The model to use; empty for the one of the connection. */
-  model: text().notNull().default(''),
   lastSessionUuid: text(),
   createdAt: integer().notNull(),
   updatedAt: integer().notNull(),

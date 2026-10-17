@@ -16,7 +16,6 @@ export default defineEventHandler((event) =>
     return saveTemplate(null, {
       title: body.title,
       instruction: body.instruction,
-      model: body.model,
     });
   }),
 );

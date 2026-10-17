@@ -222,6 +222,7 @@ export interface AiSessionItem {
   /** The app's name for itself. */
   client: string | null;
   templateId: string | null;
+  /** The model chosen for it; none for the connection's own. */
   model: string | null;
   state: AiSessionState;
   pinned: boolean;

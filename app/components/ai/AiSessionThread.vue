@@ -311,19 +311,24 @@ async function remove() {
             <span class="inline-flex items-center gap-1"
               ><Icon :name="sessionSource(session).icon" />{{ origin }}</span
             >
+            <!-- Which model answers it from here on, and what it spent. -->
             <span
-              v-if="!app && (session.model || session.tokens)"
-              class="inline-flex items-center gap-1"
-              ><Icon name="sparkles" />{{
-                [
-                  session.model,
-                  session.tokens
-                    ? phrase.ai_session_tokens(compactAmount(session.tokens))
-                    : '',
-                ]
-                  .filter(Boolean)
-                  .join(' · ')
-              }}</span
+              v-if="!app"
+              class="inline-flex min-w-0 items-center gap-1"
+              data-session-model
+              ><Icon name="sparkles" /><AiModelPicker
+                v-if="!archived"
+                :model-value="session.model ?? ''"
+                @update:model-value="change({ model: $event })"
+              /><template v-else>{{
+                session.model || phrase.ai_model_default
+              }}</template
+              ><template v-if="session.tokens">
+                ·
+                {{
+                  phrase.ai_session_tokens(compactAmount(session.tokens))
+                }}</template
+              ></span
             >
           </p>
           <!-- What it is about, drawn as links in a text are: each with its

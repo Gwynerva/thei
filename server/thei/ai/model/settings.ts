@@ -31,8 +31,19 @@ export function modelState(): AiModelStateKind {
 }
 
 /**
+ * A model chosen for a session, as a page or a request sends it: a name of
+ * the connection's service, or null for the connection's own; undefined
+ * when none is given.
+ */
+export function chosenModel(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== 'string') return undefined;
+  return value.trim().slice(0, 200) || null;
+}
+
+/**
  * The model sessions are answered with, when AI is on and one is set — or,
- * for a template that names its own, that model of the same service.
+ * for a session the owner chose another for, that model of the same service.
  */
 export function sessionModel(own?: string): ModelSettings | undefined {
   const { enabled, model: config } = THEI_SERVER.config.mcp;

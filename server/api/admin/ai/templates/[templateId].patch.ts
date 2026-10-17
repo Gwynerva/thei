@@ -8,8 +8,8 @@ import {
 import { markReadOnlyRequest } from '../../../../thei/read-only-request';
 
 /**
- * The owner changes a template: of their own, anything; of a built-in one,
- * its model.
+ * The owner changes a template of their own; a built-in one is copied to be
+ * changed.
  */
 export default defineEventHandler((event) =>
   withRefusals(async (): Promise<AiTemplateItem> => {
@@ -19,7 +19,6 @@ export default defineEventHandler((event) =>
     return saveTemplate(getRouterParam(event, 'templateId') ?? '', {
       title: body.title,
       instruction: body.instruction,
-      model: body.model,
     });
   }),
 );
