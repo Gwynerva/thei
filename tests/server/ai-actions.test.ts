@@ -190,6 +190,41 @@ describe('proposing actions', () => {
     ]);
   });
 
+  it('refuses a text whose letters were lost to a wrong encoding', async () => {
+    // What an app in another code page than UTF-8 sends for «Ремейк».
+    const lost = String.fromCodePoint(0xfffd).repeat(6);
+    const { results } = await propose(
+      session(),
+      {
+        kind: 'field',
+        target: `project:${PROJECT}`,
+        field: 'summary',
+        value: `${lost} of a browser game`,
+      },
+      {
+        kind: 'revise',
+        target: 'diary-entry:2026-10-13',
+        text: 'body',
+        mode: 'proofread',
+        corrections: [
+          {
+            find: 'bos',
+            replace: 'boss',
+            category: 'spelling',
+            reason: `${lost}: a typo`,
+          },
+        ],
+      },
+    );
+    expect(results).toEqual([
+      { refused: expect.stringMatching(/^value holds U\+FFFD.*as UTF-8/) },
+      {
+        refused: expect.stringMatching(/^corrections\.0\.reason holds U\+FFFD/),
+      },
+    ]);
+    expect(one('SELECT COUNT(*) AS n FROM `ai-actions`')?.n).toBe(0);
+  });
+
   it('never makes a deletion the sure call', async () => {
     const actionUuid = await proposed(session(), {
       kind: 'delete',
