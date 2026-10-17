@@ -35,9 +35,11 @@ const KINDS: Record<AssetType, string> = {
   [AssetType.Other]: 'file',
 };
 
+/** A file's size as a reader says it: a small file by its bytes. */
 function size(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
   return bytes < 1024 * 1024
-    ? `${Math.max(1, Math.round(bytes / 1024))} KB`
+    ? `${Math.round(bytes / 1024)} KB`
     : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
