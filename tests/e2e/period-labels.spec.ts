@@ -50,9 +50,10 @@ const period = (startDate: string, endDate: string, label = '') => ({
  */
 async function createTrip(page: Page) {
   const stamp = Date.now();
+  const title = `Grand tour ${stamp}`;
   const response = await page.request.post('/api/admin/events', {
     data: {
-      title: `Grand tour ${stamp}`,
+      title,
       summary: 'Two countries in a row, and a day at home after.',
       access: 'public',
       humanReadableSlug: 'grand-tour',
@@ -70,6 +71,7 @@ async function createTrip(page: Page) {
   const body = await response.json();
   expect(body.type, JSON.stringify(body)).toBe('success');
   return {
+    title,
     uuid: body.eventUuid as string,
     path: `/events/grand-tour-tour${stamp}/`,
   };
@@ -165,11 +167,13 @@ test('a period known to the month reads so on the page and in its copy', async (
 });
 
 test('a life card names the period it marks', async ({ page }) => {
-  await createTrip(page);
+  // Every run adds its trip to the same days: the cards read are this one's.
+  const trip = await createTrip(page);
   await page.setViewportSize({ width: 1280, height: 900 });
   await open(page, '/life/?d=2011-03-20');
   const card = page
     .locator('article')
+    .filter({ hasText: trip.title })
     .filter({ hasText: /France/ })
     .first();
   await expect(card).toBeVisible();
@@ -192,7 +196,7 @@ test('a life card names the period it marks', async ({ page }) => {
   const day = page
     .locator('article')
     .filter({ has: page.locator('[data-period-mark="day"]') })
-    .filter({ hasText: /Grand tour/ })
+    .filter({ hasText: trip.title })
     .first();
   await expect(day.getByText(/^(Event|Событие)$/)).toBeVisible();
 });
