@@ -802,6 +802,9 @@ describe('how a turn ends', () => {
     await turnsSettled();
     const system = model!.requests[0]!.body.messages[0].content as string;
     expect(system.split('Always answer in rhyme.')).toHaveLength(2);
+    // Read for it, the overview is never a tool it is told to call.
+    expect(system).not.toContain('Call site_overview');
+    expect(system).toContain('What site_overview says is read for you');
   });
 });
 

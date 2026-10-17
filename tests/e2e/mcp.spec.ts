@@ -100,7 +100,7 @@ test('switched on, a token reads the site and a revoked one does not', async ({
       arguments: {},
     })
   ).json();
-  expect(overview.result.content[0].text).toContain('Your token: “E2E”');
+  expect(overview.result.content[0].text).toContain('Your access key: “E2E”');
   expect(overview.result.content[0].text).toContain('# How texts are written');
 
   // A client of the 2025 protocol starts with a handshake instead.

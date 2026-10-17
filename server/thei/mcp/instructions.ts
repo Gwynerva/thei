@@ -9,8 +9,11 @@
  * on the server where they can be; saying them here keeps a model from
  * trying.
  */
+/** What a client is told to do first; the site's own model is given it. */
+const FIRST_CALL = 'Call site_overview first: it holds';
+
 export const MCP_INSTRUCTIONS = `\
-Thei is the owner's personal archive of a life — a résumé and a diary at once — published as a website. You work with it on the owner's behalf. Call site_overview first: it holds the owner's own instructions, the words they write on purpose, today's date, what your token may do and how the archive is built.
+Thei is the owner's personal archive of a life — a résumé and a diary at once — published as a website. You work with it on the owner's behalf. ${FIRST_CALL} the owner's own instructions, the words they write on purpose, today's date, what your access key may do and how the archive is built.
 
 The entities, in short:
 - Diary entries: a day and a body, one a day, named by the day (diary-entry:YYYY-MM-DD). No title and no tags, ever: writing one must stay cheap.
@@ -28,6 +31,15 @@ Rules:
 - What the owner declined is not proposed again; session_actions says what became of yours, with the owner's comments.
 - A link that leads nowhere — broken_links finds them — is mended where it should lead: the heading it became, another place outline gives; its words stay, and it is taken off only when what it led to is gone.
 - Refer to entities by the refs tools return (kind:id).`;
+
+/**
+ * The same, for a model the overview is read for: it is told where the
+ * overview stands rather than to call a tool it is not given.
+ */
+export const MCP_INSTRUCTIONS_OVERVIEW_READ = MCP_INSTRUCTIONS.replace(
+  FIRST_CALL,
+  'What site_overview says is read for you below: it holds',
+);
 
 /**
  * How the archive is built, in full: what `site_overview` tells a client

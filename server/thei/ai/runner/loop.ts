@@ -6,7 +6,10 @@ import type {
 } from '#layers/thei/shared/ai';
 import type { ApiTokenPrincipal } from '../../api-tokens';
 import { entityFace, findEntity, refOf } from '../../entity-kinds';
-import { MCP_INSTRUCTIONS } from '../../mcp/instructions';
+import {
+  MCP_INSTRUCTIONS,
+  MCP_INSTRUCTIONS_OVERVIEW_READ,
+} from '../../mcp/instructions';
 import { FILES_META, REFUSED_META } from '../../mcp/result';
 import { directTools, type DirectTool } from '../../mcp/registry';
 import { withOwnerInstructions } from '../../mcp/server';
@@ -391,7 +394,9 @@ export async function runSessionTurn(
     const system = [
       // The overview says the owner's instructions itself: read for the
       // model, they are not said twice.
-      overview ? MCP_INSTRUCTIONS : withOwnerInstructions(MCP_INSTRUCTIONS),
+      overview
+        ? MCP_INSTRUCTIONS_OVERVIEW_READ
+        : withOwnerInstructions(MCP_INSTRUCTIONS),
       sessionNote(THEI_SERVER.phrase.language_name),
       overview
         ? `What site_overview says, read for you:\n\n${overview.content

@@ -22,7 +22,7 @@ export function registerOverviewTool(
     {
       title: 'Overview of the site',
       description:
-        'What this site is and how much it holds, today, what this token may ' +
+        'What this site is and how much it holds, today, what this access key may ' +
         "do, the owner's own instructions and dictionary, how the archive " +
         'is built, and how texts are written. Call it before anything else.',
       annotations: READS,
@@ -44,7 +44,7 @@ export function registerOverviewTool(
           `Today: ${new Date().toISOString().slice(0, 10)} (UTC); the latest day that has come somewhere on Earth: ${lifeArrivalCutoff()}. The site keeps no time zone: ask the owner which day it is for them when it matters.`,
           `It holds ${total(schema.projects)} projects, ${total(schema.events)} events, ${total(schema.diaryEntries)} diary entries, ${total(schema.pages)} pages and ${total(schema.tags)} tags.`,
           '',
-          `## Your token: “${context.principal.label}”`,
+          `## Your access key: “${context.principal.label}”`,
           '',
           ...scopeSummary(context.principal.scopes).map((line) => `- ${line}`),
           '',
