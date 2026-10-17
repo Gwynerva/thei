@@ -404,7 +404,8 @@ export const baselineSql: string[] = [
 	\`createdAt\` integer NOT NULL,
 	\`lastActiveAt\` integer NOT NULL,
 	\`closedAt\` integer,
-	\`archivedAt\` integer
+	\`archivedAt\` integer,
+	\`context\` text
 );
 `,
   `CREATE INDEX \`ai-sessions-active-idx\` ON \`ai-sessions\` (\`archivedAt\`,\`lastActiveAt\`);`,
@@ -445,6 +446,7 @@ export const baselineSql: string[] = [
 	\`undo\` text,
 	\`assetUuids\` text DEFAULT '[]' NOT NULL,
 	\`appliedBy\` text,
+	\`proposed\` text,
 	\`createdAt\` integer NOT NULL,
 	\`decidedAt\` integer,
 	\`error\` text

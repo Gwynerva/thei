@@ -20,6 +20,7 @@ import {
 } from '../../server/thei/ai/sessions/store';
 import { sessionDetail } from '../../server/thei/ai/sessions/view';
 import { deleteSession } from '../../server/thei/ai/sessions/lifecycle';
+import { nameSession } from '../../server/thei/ai/sessions/names';
 import { createAsset } from '../../server/thei/assets/repository/create';
 import { findAssetByIdentity } from '../../server/thei/assets/repository/find-by-identity';
 import { findAssetBySlug } from '../../server/thei/assets/repository/find-by-slug';
@@ -238,18 +239,30 @@ describe('a session turn', () => {
     expect(offered(0)).toBe(true);
     // A name is a heading: no full stop at its end.
     expect(findSession(sessionUuid)!.title).toBe('A shorter summary');
-    // Named, its steps say nothing of it, and it is not offered again.
+    // Named, its steps say nothing of it. It stays offered — what a turn
+    // is offered never changes in a session — but names it no more.
     expect(
       partOf(modelMessage(sessionUuid)[0]!.parts, 'steps'),
     ).toBeUndefined();
     postOwnerMessage(sessionUuid, { text: 'Thanks' });
     await turnsSettled();
-    expect(offered(model!.requests.length - 1)).toBe(false);
+    expect(offered(model!.requests.length - 1)).toBe(true);
+    expect(model!.requests.at(-1)!.body.messages[0].content).toEqual(
+      model!.requests[0]!.body.messages[0].content,
+    );
+    expect(nameSession(sessionUuid, 'Another name')).toBe(
+      'It has its name already.',
+    );
+    expect(findSession(sessionUuid)!.title).toBe('A shorter summary');
 
-    // A session the owner named is the owner's to rename.
+    // A session the owner named is the owner's to rename: the model is not
+    // asked to name it.
     const named = startOwnerSession({ title: 'Mine', text: long });
     await turnsSettled();
-    expect(offered(model!.requests.length - 1)).toBe(false);
+    expect(model!.requests.at(-1)!.body.messages[0].content).not.toContain(
+      'has no name yet',
+    );
+    expect(nameSession(named, 'Theirs')).toBe('It has its name already.');
     expect(findSession(named)!.title).toBe('Mine');
   });
 

@@ -22,6 +22,7 @@ import ai from './0.0.6-ai';
 import aiConfig from './0.0.6-ai-config';
 import entities from './0.0.6-entities';
 import fileCaptions from './0.0.6-file-captions';
+import aiContext from './0.0.7-ai';
 
 /**
  * Every migration Thei has ever shipped, oldest first.
@@ -57,6 +58,7 @@ export const migrationRegistry: TheiMigration[] = [
   aiConfig,
   entities,
   fileCaptions,
+  aiContext,
 ];
 
 export { baselineSql } from './0.0.1-baseline';

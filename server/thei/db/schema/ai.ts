@@ -19,6 +19,7 @@ import type {
   AiSessionState,
   AiTranscriptTurn,
 } from '#layers/thei/shared/ai';
+import type { AiSessionContext } from '../../ai/runner/context';
 
 /**
  * What the site's model spent, a row a day on the server's clock: the
@@ -73,6 +74,13 @@ export const aiSessions = sqliteTable(
     lastActiveAt: integer().notNull(),
     closedAt: integer(),
     archivedAt: integer(),
+    /**
+     * What every turn of the site's own model is sent before the
+     * conversation, kept from its first answered request, and what was last
+     * sent: the conversation only ever grows, as the model's thinking needs
+     * (`server/thei/ai/runner/context.ts`). None until that first answer.
+     */
+    context: text({ mode: 'json' }).$type<AiSessionContext>(),
   },
   (t) => [
     index('ai-sessions-active-idx').on(t.archivedAt, t.lastActiveAt),
@@ -145,6 +153,11 @@ export const aiActions = sqliteTable(
     /** Files the action brings or frees: held from cleanup while it may apply or undo. */
     assetUuids: text({ mode: 'json' }).notNull().default([]).$type<string[]>(),
     appliedBy: text().$type<AiAppliedBy>(),
+    /**
+     * What the model proposed, once the owner corrected its words: `payload`
+     * is then the owner's. None while the words are the model's own.
+     */
+    proposed: text({ mode: 'json' }).$type<unknown>(),
     createdAt: integer().notNull(),
     decidedAt: integer(),
     error: text(),

@@ -16,10 +16,22 @@ import { withOwnerInstructions } from '../../mcp/server';
 import { ModelError } from '../model/service';
 import {
   streamTurn,
+  ThinkingBindingError,
   type StreamCall,
   type StreamFile,
   type StreamFileKind,
+  type StreamTurnOutput,
 } from '../model/stream';
+import { lifeArrivalCutoff } from '#layers/thei/shared/life';
+import {
+  digestOf,
+  hasThinking,
+  promptDigest,
+  serverDay,
+  toolsDigest,
+  withoutThinking,
+  type AiSessionContext,
+} from './context';
 import { sessionModel } from '../model/settings';
 import {
   countedTokens,
@@ -88,9 +100,6 @@ const TOOL_ANSWER_MAX = 30_000;
 /** How often the words written so far are saved while they stream. */
 const SAVE_EVERY_MS = 800;
 
-/** Read for the model before the turn: it is in the instructions. */
-const HIDDEN_TOOLS = new Set(['site_overview']);
-
 /** The one tool only a session has: asking the owner, with choices. */
 const ASK_TOOL = {
   name: 'ask_owner',
@@ -112,8 +121,9 @@ const ASK_TOOL = {
 };
 
 /**
- * Offered while the session still goes by the owner's first words: the
- * model names it in its first answer.
+ * Offered in every turn of the owner's sessions, so what a turn is offered
+ * never changes: a session still going by the owner's first words is named
+ * with it in the model's first answer, and one named already says so.
  */
 const NAME_TOOL = {
   name: 'name_session',
@@ -152,7 +162,17 @@ const FILE_TOOL = {
 const OWN_TOOLS = new Set([ASK_TOOL.name, NAME_TOOL.name, FILE_TOOL.name]);
 
 function nameNote(language: string) {
-  return `This session has no name yet. In this answer, call ${NAME_TOOL.name} with a short name for it, in ${language}: two to five words saying what it is about.`;
+  return `This session has no name yet. In your first answer, call ${NAME_TOOL.name} with a short name for it, in ${language}: two to five words saying what it is about.`;
+}
+
+/** A turn on a later day than the model was last told. */
+function dayNote(day: string) {
+  return `(Thei: it is ${day} now on the server's clock; the latest day that has come somewhere on Earth: ${lifeArrivalCutoff()}.)`;
+}
+
+/** The owner's own instructions, changed since the model last read them. */
+function instructionsNote(instructions: string) {
+  return `(Thei: the owner changed their own instructions; from now on they read:\n\n${instructions || '(none)'})`;
 }
 
 function sessionNote(language: string) {
@@ -264,6 +284,8 @@ export async function runSessionTurn(
 ): Promise<void> {
   /** Writes what the turn leaves, once: set once the turn has begun. */
   let close: ((stop?: TurnStop) => void) | undefined;
+  /** Keeps what the session's turns are sent before the conversation. */
+  let keepContext: (() => void) | undefined;
   try {
     const session = findSession(sessionUuid);
     if (!session) return;
@@ -273,19 +295,26 @@ export async function runSessionTurn(
     // The model the owner chose for the session, or the connection's.
     const settings = sessionModel(session.model ?? undefined);
     const said = sessionMessages(sessionUuid);
+    /** What every turn is sent before the conversation, once answered. */
+    const kept: AiSessionContext | null = session.context ?? null;
     // A turn the last process left half-done is put right before it is
-    // read again.
-    const history = repairTranscript(
-      said.flatMap((message) => message.transcript),
-    );
-    /** What the owner's files were called, for a model shown them. */
-    const fileNames = new Map(
+    // read again; thinking cut off once is never sent again.
+    let history = repairTranscript(
       said.flatMap((message) =>
-        message.parts.flatMap((part) =>
-          part.type === 'file' ? [[part.assetUuid, part.name] as const] : [],
-        ),
+        message.seq < (kept?.thinkingFrom ?? 0)
+          ? message.transcript.map(withoutThinking)
+          : message.transcript,
       ),
     );
+    /**
+     * What the owner's files were called, for a model shown them: by the
+     * name they were first brought under, as the model was first shown it.
+     */
+    const fileNames = new Map<string, string>();
+    for (const message of said)
+      for (const part of message.parts)
+        if (part.type === 'file' && !fileNames.has(part.assetUuid))
+          fileNames.set(part.assetUuid, part.name);
     const message = db.transaction((tx) =>
       insertMessage(tx, schema, sessionUuid, { role: 'model' }),
     );
@@ -335,6 +364,7 @@ export async function runSessionTurn(
       // unable to go on: each gets its answer.
       transcript.splice(0, transcript.length, ...repairTranscript(transcript));
       save();
+      keepContext?.();
       updateSession(sessionUuid, {
         state: 'idle',
         ...(stop && stop.kind !== 'stopped' ? { error: stop.kind } : {}),
@@ -367,44 +397,65 @@ export async function runSessionTurn(
       principal,
       session: { sessionUuid, messageUuid, live, signal },
     });
-    // The overview is read for the model, unless it takes too long: then
-    // the model may read it itself.
-    const overview = await within(
-      all.find((tool) => tool.name === 'site_overview')!.call({}, { signal }),
-      signal,
-      TURN_LIMITS.toolMs,
-    ).catch((error: unknown) => {
-      if (error instanceof TookTooLong) return undefined;
-      throw error;
-    });
-    going();
     const tools = new Map<string, DirectTool>(
-      all
-        .filter((tool) => !overview || !HIDDEN_TOOLS.has(tool.name))
-        .map((tool) => [tool.name, tool]),
+      all.map((tool) => [tool.name, tool]),
     );
-    const system = [
-      // The overview says the owner's instructions itself: read for the
-      // model, they are not said twice.
-      overview
-        ? MCP_INSTRUCTIONS_OVERVIEW_READ
-        : withOwnerInstructions(MCP_INSTRUCTIONS),
-      sessionNote(THEI_SERVER.phrase.language_name),
-      overview
-        ? `What site_overview says, read for you:\n\n${overview.content
-            .map((part) => ('text' in part ? part.text : ''))
-            .join('\n')}`
-        : '',
-      aboutLines(sessionUuid),
-      unnamed ? nameNote(THEI_SERVER.phrase.language_name) : '',
-    ]
-      .filter(Boolean)
-      .join('\n\n');
+    // The same in every turn of the session: what is offered never changes.
+    const offered = [
+      ...all.map(({ name, description, inputSchema }) => ({
+        name,
+        description,
+        inputSchema,
+      })),
+      ASK_TOOL,
+      FILE_TOOL,
+      ...(session.origin === 'owner' ? [NAME_TOOL] : []),
+    ];
+    const offeredDigest = toolsDigest(offered);
+
+    let system: string;
+    if (kept) system = kept.system;
+    else {
+      // The overview is read for the model, unless it takes too long: then
+      // the model may read it itself.
+      const overview = await within(
+        tools.get('site_overview')!.call({}, { signal }),
+        signal,
+        TURN_LIMITS.toolMs,
+      ).catch((error: unknown) => {
+        if (error instanceof TookTooLong) return undefined;
+        throw error;
+      });
+      going();
+      system = [
+        // The overview says the owner's instructions itself: read for the
+        // model, they are not said twice.
+        overview
+          ? MCP_INSTRUCTIONS_OVERVIEW_READ
+          : withOwnerInstructions(MCP_INSTRUCTIONS),
+        sessionNote(THEI_SERVER.phrase.language_name),
+        overview
+          ? `What site_overview said as this session began, read for you — call it again for what may have changed since:\n\n${overview.content
+              .map((part) => ('text' in part ? part.text : ''))
+              .join('\n')}`
+          : '',
+        aboutLines(sessionUuid),
+        unnamed ? nameNote(THEI_SERVER.phrase.language_name) : '',
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+    }
+
+    // What earlier turns showed is shown again as it was, however long it
+    // takes to make ready: told in words this time, it would change what
+    // came before. The turn's own clock bounds it.
+    const files = await modelFiles(history, fileNames, signal);
+    going();
     /**
-     * The files these turns show, made ready within the time a tool call
-     * has; ones that take longer are told of in words alone.
+     * The files a tool shows in this turn, made ready within the time a
+     * tool call has; ones that take longer are told of in words alone.
      */
-    const readyFiles = (turns: readonly { role: string; files?: string[] }[]) =>
+    const readyNew = (turns: readonly { role: string; files?: string[] }[]) =>
       within(
         modelFiles(turns, fileNames, signal),
         signal,
@@ -416,20 +467,85 @@ export async function runSessionTurn(
           .warn('The files of a session took too long to make ready.');
         return new Map<string, StreamFile[]>();
       });
-    const files = await readyFiles(history);
-    going();
+
     /** Kinds of a file's blocks the model's service turned away. */
-    let unshown = new Set<StreamFileKind>();
-    const offered = [
-      ...[...tools.values()].map(({ name, description, inputSchema }) => ({
-        name,
-        description,
-        inputSchema,
-      })),
-      ASK_TOOL,
-      FILE_TOOL,
-      ...(unnamed ? [NAME_TOOL] : []),
-    ];
+    let unshown = new Set<StreamFileKind>(kept?.unshown ?? []);
+    const instructions = THEI_SERVER.config.mcp.instructions.trim();
+    const today = serverDay();
+    // Sent to another model, offered other tools, or with earlier messages
+    // that no longer read as they were sent, the conversation keeps its
+    // words and leaves the thinking that came before: thought over what is
+    // no more, it would be refused.
+    const moved = kept
+      ? kept.toolsDigest !== offeredDigest ||
+        kept.provider !== settings.provider ||
+        kept.model !== settings.model ||
+        (kept.sent !== undefined &&
+          kept.sent.digest !==
+            promptDigest({
+              system,
+              toolsDigest: offeredDigest,
+              provider: kept.provider,
+              model: kept.model,
+              unshown: kept.unshown,
+              turns: history.slice(0, kept.sent.turns),
+              files,
+            }))
+      : history.some(hasThinking);
+    let thinkingFrom = kept?.thinkingFrom;
+    if (moved && history.some(hasThinking)) {
+      history = history.map(withoutThinking);
+      thinkingFrom = message.seq;
+      THEI_SERVER.console
+        .tag('AI')
+        .warn(
+          `Session ${sessionUuid} changed under its model; earlier thinking is no longer sent.`,
+        );
+    }
+    // What changed since the model last heard is told now, as the turn's
+    // first words, rather than written into what came before.
+    if (kept && kept.day !== today)
+      transcript.push({ role: 'user', text: dayNote(today) });
+    if (kept && kept.instructionsDigest !== digestOf(instructions))
+      transcript.push({ role: 'user', text: instructionsNote(instructions) });
+    /** The last request answered in this turn: its turns, the kinds unshown. */
+    let answered: { turns: number; unshown: StreamFileKind[] } | undefined;
+    /** What the session's turns are sent before the conversation, now. */
+    const contextNow = (): AiSessionContext => ({
+      system,
+      toolsDigest: offeredDigest,
+      provider: settings.provider,
+      model: settings.model,
+      day: today,
+      instructionsDigest: digestOf(instructions),
+      unshown: answered?.unshown ?? [...unshown],
+      ...(thinkingFrom !== undefined ? { thinkingFrom } : {}),
+      ...(answered
+        ? {
+            sent: {
+              turns: answered.turns,
+              digest: promptDigest({
+                system,
+                toolsDigest: offeredDigest,
+                provider: settings.provider,
+                model: settings.model,
+                unshown: answered.unshown,
+                turns: [...history, ...transcript].slice(0, answered.turns),
+                files,
+              }),
+            },
+          }
+        : kept?.sent
+          ? { sent: kept.sent }
+          : {}),
+    });
+    /** Whether the session keeps one: from its first answered request on. */
+    let keeping = Boolean(kept);
+    if (keeping) updateSession(sessionUuid, { context: contextNow() });
+    keepContext = () => {
+      if (keeping) updateSession(sessionUuid, { context: contextNow() });
+    };
+    let bindingRetried = false;
 
     /**
      * What a call spent is spent, whatever became of the call or the turn:
@@ -454,38 +570,72 @@ export async function runSessionTurn(
       const before = text.length;
       const separator = text ? '\n\n' : '';
       let first = true;
-      const turn = await streamTurn({
-        settings,
-        system,
-        turns: [...history, ...transcript],
-        files,
-        unshown,
-        tools: offered,
-        signal,
-        onUsage: spend,
-        onText(delta) {
-          if (closed) return;
-          const piece = first ? separator + delta : delta;
-          first = false;
-          const at = text.length;
-          text += piece;
-          setWriting(messageUuid, text);
-          publishSession(sessionUuid, {
-            type: 'delta',
-            messageUuid,
-            text: piece,
-            at,
-          });
-          if (Date.now() - savedAt > SAVE_EVERY_MS) {
-            savedAt = Date.now();
-            updateMessage(messageUuid, { text });
-          }
-        },
-      });
+      const carried = history.length + transcript.length;
+      let turn: StreamTurnOutput;
+      try {
+        turn = await streamTurn({
+          settings,
+          system,
+          turns: [...history, ...transcript],
+          files,
+          unshown,
+          tools: offered,
+          signal,
+          onUsage: spend,
+          onText(delta) {
+            if (closed) return;
+            const piece = first ? separator + delta : delta;
+            first = false;
+            const at = text.length;
+            text += piece;
+            setWriting(messageUuid, text);
+            publishSession(sessionUuid, {
+              type: 'delta',
+              messageUuid,
+              text: piece,
+              at,
+            });
+            if (Date.now() - savedAt > SAVE_EVERY_MS) {
+              savedAt = Date.now();
+              updateMessage(messageUuid, { text });
+            }
+          },
+        });
+      } catch (error) {
+        if (!(error instanceof ThinkingBindingError) || bindingRetried)
+          throw error;
+        // Refused all the same — something changed that nothing here saw:
+        // no thinking of before is sent again, this turn's included, and the
+        // call is asked once more.
+        bindingRetried = true;
+        going();
+        history = history.map(withoutThinking);
+        transcript.splice(
+          0,
+          transcript.length,
+          ...transcript.map(withoutThinking),
+        );
+        thinkingFrom = transcript.some((each) => each.role === 'assistant')
+          ? message.seq + 1
+          : message.seq;
+        keepContext?.();
+        THEI_SERVER.console
+          .tag('AI')
+          .warn(
+            `The model's service refused earlier thinking in session ${sessionUuid}; it is no longer sent. ${error.detail}`,
+          );
+        continue;
+      }
       going();
       // What came streamed is what the provider gave in the end.
       text = text.slice(0, before) + (turn.text ? separator + turn.text : '');
       unshown = turn.unshown;
+      answered = { turns: carried, unshown: [...unshown] };
+      // Answered once, the session keeps what it was sent from now on.
+      if (!keeping) {
+        keeping = true;
+        keepContext?.();
+      }
       // An answer with neither words nor calls is kept out of the
       // conversation: no service takes an empty turn back.
       if (turn.text || turn.calls.length)
@@ -635,8 +785,12 @@ export async function runSessionTurn(
         });
         // What a tool showed is made ready for the model's next call.
         if (result.files) {
-          for (const [id, blocks] of await readyFiles([
-            { role: 'tool', files: result.files },
+          // One shown before keeps the blocks it was shown as.
+          for (const [id, blocks] of await readyNew([
+            {
+              role: 'tool',
+              files: result.files.filter((id) => !files.has(id)),
+            },
           ]))
             files.set(id, blocks);
           going();

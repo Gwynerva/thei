@@ -12,6 +12,7 @@ import {
   chatUsage,
   ModelError,
   outputLimit,
+  providerDetail,
   refusedThinking,
   type ChatUsage,
 } from './service';
@@ -460,6 +461,29 @@ async function readAnthropic(
   return { content, inputs, stop };
 }
 
+/**
+ * The service refused the thinking sent back: what came before it is not
+ * what it was thought over (`runner/context.ts`). The turn sends the
+ * conversation again without it.
+ */
+export class ThinkingBindingError extends ModelError {
+  constructor(detail: string) {
+    super('error', detail);
+    this.name = 'ThinkingBindingError';
+  }
+}
+
+/** Whether a refusal is of thinking bound to another conversation. */
+function refusedBinding(error: unknown): string | undefined {
+  if (!(error instanceof Anthropic.BadRequestError)) return undefined;
+  const detail = providerDetail(error);
+  return /bound to a different conversation|invalid\W+signature\W+in\W+thinking/i.test(
+    detail,
+  )
+    ? detail
+    : undefined;
+}
+
 /** An answer of Anthropic's as a turn: its words, its calls, how it ended. */
 function anthropicTurn(
   answer: AnthropicAnswer,
@@ -473,6 +497,9 @@ function anthropicTurn(
   const content = answer.content.flatMap(
     (block, index): Anthropic.ContentBlock[] => {
       if (!block) return [];
+      // Thinking cut off before it was signed is no thinking a service
+      // takes back.
+      if (block.type === 'thinking' && !block.signature) return [];
       if (block.type !== 'tool_use') return [block];
       const call = parsedCall(
         {
@@ -568,6 +595,10 @@ async function streamAnthropic({
     } catch (error) {
       meter.tell(false);
       if (signal.aborted) throw error;
+      // Thinking bound elsewhere is for the turn to leave out: dropping a
+      // file's blocks would only change the conversation further.
+      const binding = written ? undefined : refusedBinding(error);
+      if (binding) throw new ThinkingBindingError(binding);
       // A model that takes no adaptive thinking is asked again without it.
       if (!written && refusedThinking(settings.model, error)) continue;
       // A request the service refuses while it carries a file's blocks is
