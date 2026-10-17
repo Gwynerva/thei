@@ -48,7 +48,7 @@ const period = (startDate: string, endDate: string, label = '') => ({
  * Italy ends the day France begins: the two overlap, and still stay two
  * periods, because they are named apart.
  */
-async function createTrip(page: Page) {
+async function createTrip(page: Page, year = 2011) {
   const stamp = Date.now();
   const title = `Grand tour ${stamp}`;
   const response = await page.request.post('/api/admin/events', {
@@ -62,9 +62,9 @@ async function createTrip(page: Page) {
         data: { blocks: [{ type: 'paragraph', data: { text: 'Went.' } }] },
       },
       periods: [
-        period('2011-03-10', '2011-03-20', 'France'),
-        period('2011-03-01', '2011-03-10', 'Italy'),
-        period('2011-05-05', '2011-05-05'),
+        period(`${year}-03-10`, `${year}-03-20`, 'France'),
+        period(`${year}-03-01`, `${year}-03-10`, 'Italy'),
+        period(`${year}-05-05`, `${year}-05-05`),
       ],
     },
   });
@@ -167,13 +167,23 @@ test('a period known to the month reads so on the page and in its copy', async (
 });
 
 test('a life card names the period it marks', async ({ page }) => {
-  // Every run adds its trip to the same days: the cards read are this one's.
-  const trip = await createTrip(page);
+  // A year of its own, which nothing else lands on: another trip on the
+  // same days would part the stretch into a start and an end.
+  const year = 1900 + (Date.now() % 100);
+  const trip = await createTrip(page, year);
+  try {
+    await lifeCards(page, trip.title, year);
+  } finally {
+    await page.request.delete(`/api/admin/events/${trip.uuid}`);
+  }
+});
+
+async function lifeCards(page: Page, title: string, year: number) {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await open(page, '/life/?d=2011-03-20');
+  await open(page, `/life/?d=${year}-03-20`);
   const card = page
     .locator('article')
-    .filter({ hasText: trip.title })
+    .filter({ hasText: title })
     .filter({ hasText: /France/ })
     .first();
   await expect(card).toBeVisible();
@@ -192,14 +202,14 @@ test('a life card names the period it marks', async ({ page }) => {
   await expect(page).toHaveURL(/\/life\//);
 
   // A period without a name goes by its kind.
-  await open(page, '/life/?d=2011-05-05');
+  await open(page, `/life/?d=${year}-05-05`);
   const day = page
     .locator('article')
     .filter({ has: page.locator('[data-period-mark="day"]') })
-    .filter({ hasText: trip.title })
+    .filter({ hasText: title })
     .first();
   await expect(day.getByText(/^(Event|Событие)$/)).toBeVisible();
-});
+}
 
 test('the popup names a period and picks a day by picking it twice', async ({
   page,
