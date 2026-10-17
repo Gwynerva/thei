@@ -20,6 +20,7 @@ import { buildAdminAssetUrls } from './assets/urls';
 import { contentOwnerKeys } from './content/history';
 import { resolveEntityIconMedia } from './media/generated-icon';
 import { buildAdminEntityBanner } from './entity-banner';
+import { inChunks } from './db/in-chunks';
 
 /**
  * The picture that stands for a related entity in a list.
@@ -161,16 +162,6 @@ export type RelationTarget = {
   access: ProjectEventAccessLevel;
 };
 
-/** SQLite takes a bounded number of parameters per statement. */
-const LOOKUP_CHUNK = 500;
-
-function chunks<T>(items: T[]): T[][] {
-  const result: T[][] = [];
-  for (let index = 0; index < items.length; index += LOOKUP_CHUNK)
-    result.push(items.slice(index, index + LOOKUP_CHUNK));
-  return result;
-}
-
 /**
  * The entities behind a set of endpoints, one query per kind.
  *
@@ -191,7 +182,7 @@ export async function loadRelationTargets(
     ),
   ];
 
-  for (const ids of chunks(idsOf('project')))
+  for (const ids of inChunks(idsOf('project')))
     for (const project of db
       .select()
       .from(schema.projects)
@@ -207,7 +198,7 @@ export async function loadRelationTargets(
         access: project.access,
       });
 
-  for (const ids of chunks(idsOf('event')))
+  for (const ids of inChunks(idsOf('event')))
     for (const event of db
       .select()
       .from(schema.events)
@@ -223,7 +214,7 @@ export async function loadRelationTargets(
         access: event.access,
       });
 
-  for (const ids of chunks(idsOf('diary-entry')))
+  for (const ids of inChunks(idsOf('diary-entry')))
     for (const entry of db
       .select()
       .from(schema.diaryEntries)

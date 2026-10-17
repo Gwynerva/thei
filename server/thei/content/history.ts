@@ -43,6 +43,7 @@ import {
 } from '#layers/thei/shared/content-history';
 import { isOneOf } from '#layers/thei/shared/utils/isOneOf';
 import { assetHeldByAiSql } from '../assets/ai-hold-sql';
+import { inChunks } from '../db/in-chunks';
 
 /**
  * The server side of content history: the drafts of a field and the versions
@@ -845,7 +846,7 @@ export function releaseHistoryHolds(
   schema: any,
   actionUuids: readonly string[],
 ) {
-  for (const chunk of chunks(actionUuids, 500))
+  for (const chunk of inChunks(actionUuids))
     tx.update(schema.contentHistory)
       .set({ heldBy: null })
       .where(inArray(schema.contentHistory.heldBy, chunk))
@@ -866,7 +867,7 @@ export function assetsHeldByHistory(
   if (!assetUuids.length) return new Set();
   const { rawDb } = THEI_SERVER.useDb();
   const held = new Set<string>();
-  for (const chunk of chunks(assetUuids, 500)) {
+  for (const chunk of inChunks(assetUuids)) {
     const rows = rawDb
       .prepare(
         `SELECT DISTINCT j.value AS assetUuid FROM "content-history" h, json_each(h.assetUuids) j WHERE j.value IN (${chunk.map(() => '?').join(',')})`,
@@ -913,7 +914,7 @@ export function touchReleasedAssets(
   now: number,
 ) {
   const unique = [...new Set(assetUuids)];
-  for (const chunk of chunks(unique, 500)) {
+  for (const chunk of inChunks(unique)) {
     tx.update(schema.assets)
       .set({ touchedAt: now })
       .where(
@@ -1104,7 +1105,7 @@ export function runContentHistoryMaintenance(now = Date.now()) {
         ),
       )
       .all() as Pick<Row, 'id' | 'assetUuids'>[];
-    for (const chunk of chunks(expired, 500)) {
+    for (const chunk of inChunks(expired)) {
       tx.delete(schema.contentHistory)
         .where(
           inArray(
@@ -1122,13 +1123,6 @@ export function runContentHistoryMaintenance(now = Date.now()) {
     );
     return { abandoned: abandoned.length, expired: expired.length };
   });
-}
-
-function chunks<T>(items: readonly T[], size: number): T[][] {
-  const result: T[][] = [];
-  for (let index = 0; index < items.length; index += size)
-    result.push(items.slice(index, index + size));
-  return result;
 }
 
 // --- Requests ---------------------------------------------------------------

@@ -1,4 +1,5 @@
 import { and, eq, inArray, isNotNull, notExists } from 'drizzle-orm';
+import { inChunks } from '../db/in-chunks';
 import {
   ASSET_DESCRIPTION_MAX,
   cleanAssetDescription,
@@ -97,17 +98,6 @@ export function readFamilyDescription(
     .where(eq(schema.assetDescriptions.familyUuid, familyUuid))
     .get() as { text: string; updatedAt: number } | undefined;
   return row ?? { text: '', updatedAt: null };
-}
-
-/**
- * Ids in groups SQLite takes as the values of one `IN`: a page with a
- * thousand files asks in a few queries rather than past the limit.
- */
-function inChunks<T>(ids: readonly T[], size = 500): T[][] {
-  const chunks: T[][] = [];
-  for (let index = 0; index < ids.length; index += size)
-    chunks.push(ids.slice(index, index + size));
-  return chunks;
 }
 
 /** The descriptions of these families, by family; those with none left out. */
