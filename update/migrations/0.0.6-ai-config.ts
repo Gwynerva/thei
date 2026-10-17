@@ -10,7 +10,7 @@ import { defineMigration, type MigrationContext } from './types';
  */
 
 export default defineMigration({
-  id: '0.0.6/008-ai-config',
+  id: '0.0.6/002-ai-config',
   version: '0.0.6',
   title: {
     en: 'Add the AI settings to the settings file',

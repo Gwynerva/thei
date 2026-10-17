@@ -418,3 +418,21 @@ describe.each([
     }
   });
 });
+
+describe('the schema migrations of 0.0.6', () => {
+  it('change nothing run again over what they made', async () => {
+    for (const statement of schema_0_0_5) rawDb.prepare(statement).run();
+    seedLedger(
+      rawDb,
+      migrationRegistry.filter(({ id }) =>
+        (migrations_0_0_5 as readonly string[]).includes(id),
+      ),
+    );
+    await runPendingMigrations(rawDb, { contentPath });
+    const made = describeSchema(rawDb);
+    for (const migration of migrationRegistry)
+      if (['0.0.6/001-ai', '0.0.6/003-entities'].includes(migration.id))
+        migration.up!({ rawDb } as never);
+    expect(describeSchema(rawDb)).toEqual(made);
+  });
+});

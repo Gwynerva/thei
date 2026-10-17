@@ -12,10 +12,10 @@ import { defineMigration } from './types';
  * before any task of this one, and it reads captions as this release does.
  * It runs in one transaction with its ledger row, so a text is never escaped
  * twice. Only rows that change are written; the fingerprints of drafts and
- * versions are counted again by the task `0.0.6/017-file-caption-fingerprints`.
+ * versions are counted again by the task `0.0.6/005-file-caption-fingerprints`.
  */
 export default defineMigration({
-  id: '0.0.6/016-file-captions',
+  id: '0.0.6/004-file-captions',
   version: '0.0.6',
   title: {
     en: 'Let file captions carry markup',

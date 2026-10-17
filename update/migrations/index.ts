@@ -18,19 +18,10 @@ import externalLinkNotes from './0.0.3-external-link-notes';
 import periodLabels from './0.0.4-period-labels';
 import projectSections from './0.0.4-project-sections';
 import audioExtensions from './0.0.4-audio-extensions';
-import apiTokens from './0.0.6-api-tokens';
-import oauth from './0.0.6-oauth';
-import aiConfig from './0.0.6-ai-config';
 import ai from './0.0.6-ai';
-import entitySynonyms from './0.0.6-entity-synonyms';
-import aiTemplateOffers from './0.0.6-ai-template-offers';
-import contentAnchors from './0.0.6-content-anchors';
-import assetDescriptions from './0.0.6-asset-descriptions';
-import aiTemplateCoverage from './0.0.6-ai-template-coverage';
-import aiTemplatesEverywhere from './0.0.6-ai-templates-everywhere';
+import aiConfig from './0.0.6-ai-config';
+import entities from './0.0.6-entities';
 import fileCaptions from './0.0.6-file-captions';
-import aiSessionPurge from './0.0.6-ai-session-purge';
-import aiTemplateModel from './0.0.6-ai-template-model';
 
 /**
  * Every migration Thei has ever shipped, oldest first.
@@ -62,19 +53,10 @@ export const migrationRegistry: TheiMigration[] = [
   periodLabels,
   projectSections,
   audioExtensions,
-  apiTokens,
-  oauth,
-  aiConfig,
   ai,
-  entitySynonyms,
-  aiTemplateOffers,
-  contentAnchors,
-  assetDescriptions,
-  aiTemplateCoverage,
-  aiTemplatesEverywhere,
+  aiConfig,
+  entities,
   fileCaptions,
-  aiSessionPurge,
-  aiTemplateModel,
 ];
 
 export { baselineSql } from './0.0.1-baseline';

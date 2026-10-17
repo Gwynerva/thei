@@ -1,13 +1,13 @@
 import { defineUpdateTask } from './types';
 
 /**
- * Migration `0.0.6/016-file-captions` wrote the captions of recordings and
+ * Migration `0.0.6/004-file-captions` wrote the captions of recordings and
  * files as markup, in the kept drafts and versions of texts too. Their
  * fingerprints are counted again from what they now hold, as a save would
  * count them, so a draft still reads as the version it matches.
  */
 export default defineUpdateTask({
-  id: '0.0.6/017-file-caption-fingerprints',
+  id: '0.0.6/005-file-caption-fingerprints',
   version: '0.0.6',
   title: {
     en: 'Recount the drafts of texts',
