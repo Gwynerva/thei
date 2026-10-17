@@ -29,7 +29,8 @@ interface Draft {
 
 const detail = ref<AiTemplateDetail>();
 const draft = ref<Draft>({ title: '', instruction: '' });
-const saved = ref('');
+// Nothing is changed before the template is read: no words of it yet.
+const saved = ref(JSON.stringify(draft.value));
 const busy = ref<'save' | 'run' | 'copy' | 'delete'>();
 const error = ref('');
 const loading = ref(Boolean(modalData.templateId));
@@ -154,9 +155,12 @@ useSaveShortcut(() => void save(), {
 // A request written and not saved is not dropped by a stray Escape.
 useModalCloseGuard(
   () =>
+    loading.value ||
+    builtin.value ||
     !(isNew.value
       ? draft.value.instruction.trim() || draft.value.title.trim()
-      : dirty.value) || window.confirm(phrase.value.unsaved_modal_confirm),
+      : dirty.value) ||
+    window.confirm(phrase.value.unsaved_modal_confirm),
 );
 </script>
 
