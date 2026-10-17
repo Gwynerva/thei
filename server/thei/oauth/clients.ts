@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, isNull, lt, ne, or } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import { fetchGuarded } from '../external-links/fetch';
 import { EntityPrefix } from '../entity-id';
 import { oauthError, type OAuthAnswer } from './http';
@@ -256,7 +256,8 @@ function makeRoomForUnused(kind: OAuthClient['kind'], clientId: string) {
         ne(schema.oauthClients.clientId, clientId),
       ),
     )
-    .orderBy(desc(schema.oauthClients.createdAt))
+    // Newest first; two made within one millisecond, in the order they came.
+    .orderBy(desc(schema.oauthClients.createdAt), sql`rowid desc`)
     .all();
   for (const row of unused.slice(UNUSED_MAX - 1))
     db.delete(schema.oauthClients)

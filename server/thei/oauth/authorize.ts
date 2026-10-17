@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
 import type { H3Event } from 'h3';
 import {
   API_TOKEN_SCOPES,
@@ -150,7 +150,8 @@ export async function startAuthorization(
         gt(schema.oauthAuthorizations.expiresAt, now),
       ),
     )
-    .orderBy(desc(schema.oauthAuthorizations.createdAt))
+    // Newest first; two asked within one millisecond, in the order they came.
+    .orderBy(desc(schema.oauthAuthorizations.createdAt), sql`rowid desc`)
     .all();
   for (const row of waiting.slice(PENDING_MAX - 1))
     db.delete(schema.oauthAuthorizations)
