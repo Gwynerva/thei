@@ -99,7 +99,7 @@ async function send(
       },
       {
         presets: panel.value?.templates ?? [],
-        // A check started again from its toast brings the menu back to show it.
+        // The session started shows in the menu, which stays open for it.
         started: (sessionUuid) => {
           sent.value = sessionUuid;
           open.value = true;

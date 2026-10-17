@@ -1956,14 +1956,14 @@ export default defineI18nBase({
         title: 'Relations and links between entities',
         instruction:
           'Look over the relations and links between projects, events and diary entries.\n\n' +
-          'Propose the relations that are missing, and removing the weak ones — those without good grounds. Every relation must be well grounded: relations build the graph of the whole site, and it should hold no clutter. A mention of an entity, or a link to it, does not yet make a relation. But a diary entry that plainly speaks of working on a project or of taking part in an event almost surely makes one.\n\n' +
-          'Links are simpler: look in the texts for mentions of other entities without a link and, where you are quite sure a link belongs, propose it — to the sections of projects and to particular headings too. A link that is plainly wrong or redundant, propose removing.',
+          'Propose the relations that are missing, and removing the weak ones — those without good grounds.\n\n' +
+          'Look in the texts for mentions of other entities without a link and, where you are quite sure a link belongs, propose it — to the sections of projects and to particular headings too. Propose removing links that are plainly wrong or redundant.',
       },
       tags: {
         title: 'Tag audit',
         instruction:
           'Check the tags: which entities need a fitting tag added or a needless one taken off, which tags to create or delete, and which synonyms to give tags.\n\n' +
-          'Tags are an important part of how the archive is classified, never added just to have some. A new tag is only for an important trait that surely runs through a number of entities, is not covered by other tags yet, and is interesting in itself. Propose creating or deleting a tag only on sure grounds, with examples of the entities it touches.',
+          'Propose creating or deleting a tag only on sure grounds, with examples of the entities it touches.',
       },
     },
     ai_template_copy_title: (title) => `${title} (copy)`,

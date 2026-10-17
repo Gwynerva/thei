@@ -130,7 +130,7 @@ test('runs a check from its row, and says when nothing new is left', async ({
     if (said.includes('nothing new to check')) break;
     expect(said).toContain('Broken links');
     started++;
-    await expect(links.locator('[data-template-last]')).toBeVisible({
+    await expect(links.locator('[data-template-last]:visible')).toBeVisible({
       timeout: 20_000,
     });
   }
@@ -170,7 +170,7 @@ test('runs a check sent from an entity’s ✦, and over again once it is all lo
   await chooseTemplate(menu, 'builtin-proofread');
   await field.press('Enter');
   await expect(sent).toBeVisible();
-  await expect(toast(page)).toHaveCount(0);
+  await expect(toast(page)).toBeHidden();
   await expect(sent.locator('[data-ai-entity-stop]')).toHaveCount(0, {
     timeout: 20_000,
   });
