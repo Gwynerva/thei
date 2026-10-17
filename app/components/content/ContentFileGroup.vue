@@ -135,33 +135,14 @@ function rowButtonClass(item: ContentFileGroupItem) {
       rounded-normal border border-border-1 bg-bg-2"
     data-content-file-group
   >
-    <!-- The title heads the frame, a step up from its rows, as a table's
-         head is. -->
-    <div
-      v-if="editable || title"
-      class="flex min-h-10 min-w-0 items-center bg-bg-3 px-sm py-1.5"
-      data-file-group-head
-    >
-      <ContentPlainTextField
-        v-if="editable"
-        :model-value="title"
-        :editable="true"
-        :placeholder="titlePlaceholder"
-        class="min-h-6 min-w-0 flex-1 truncate font-semibold tracking-tight
-          text-text-1 outline-none empty:before:pointer-events-none
-          empty:before:text-text-3 empty:before:content-[attr(data-placeholder)]
-          focus:before:hidden"
-        data-file-group-title
-        @update:model-value="emit('title', $event)"
-      />
-      <p
-        v-else
-        class="min-w-0 font-semibold tracking-tight text-text-1"
-        data-file-group-title
-      >
-        {{ publicText(title) }}
-      </p>
-    </div>
+    <!-- The title heads the frame, a step up from its rows. -->
+    <ContentFilesHead
+      :title
+      :editable
+      :placeholder="titlePlaceholder"
+      block="file-group"
+      @title="emit('title', $event)"
+    />
 
     <div
       ref="list"

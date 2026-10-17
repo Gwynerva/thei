@@ -113,34 +113,15 @@ const dragSort = useDragSort(
       bg-bg-2"
     data-content-gallery
   >
-    <!-- The title heads the gallery, a step up from it, as a group of
-         files has its own: only while edited, or when there is one. -->
-    <div
-      v-if="editable || title"
-      class="flex min-h-10 min-w-0 items-center border-b border-border-1 bg-bg-3
-        px-sm py-1.5"
-      data-gallery-head
-    >
-      <ContentPlainTextField
-        v-if="editable"
-        :model-value="title"
-        :editable="true"
-        :placeholder="titlePlaceholder"
-        class="min-h-6 min-w-0 flex-1 truncate font-semibold tracking-tight
-          text-text-1 outline-none empty:before:pointer-events-none
-          empty:before:text-text-3 empty:before:content-[attr(data-placeholder)]
-          focus:before:hidden"
-        data-gallery-title
-        @update:model-value="emit('title', $event)"
-      />
-      <p
-        v-else
-        class="min-w-0 font-semibold tracking-tight text-text-1"
-        data-gallery-title
-      >
-        {{ publicText(title) }}
-      </p>
-    </div>
+    <!-- The title heads the gallery as a group of files has its own. -->
+    <ContentFilesHead
+      :title
+      :editable
+      :placeholder="titlePlaceholder"
+      block="gallery"
+      class="border-b border-border-1"
+      @title="emit('title', $event)"
+    />
     <div ref="tileRoot" class="flex flex-wrap items-start gap-xs p-xs sm:p-sm">
       <AssetTile
         v-for="item in items"
@@ -208,9 +189,10 @@ const dragSort = useDragSort(
     <!-- A tile switches the picture at once: its frame already has the
          picture's proportions, and the picture loads into it. The card
          itself stays, so the caption is one element for every tile — the one
-         Editor.js found in the block and follows the caret in. -->
+         Editor.js found in the block and follows the caret in — a tile whose
+         file has gone missing too. -->
     <ContentMediaCard
-      v-if="activeItem?.asset.media"
+      v-if="activeItem"
       :asset="activeItem.asset"
       layout="centered"
       :caption="activeItem.caption"

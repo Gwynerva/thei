@@ -112,7 +112,7 @@ export function tidyBlockText(block: Pick<Block, 'type' | 'data'>): string {
 }
 
 /** Words as a quote is compared: case, quotes, dashes and spaces aside. */
-export function looseText(value: string): string {
+function looseText(value: string): string {
   return value
     .normalize('NFC')
     .toLowerCase()

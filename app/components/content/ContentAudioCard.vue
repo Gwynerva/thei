@@ -51,10 +51,19 @@ const shownTitle = computed(() => publicText(props.title));
 </script>
 
 <template>
-  <figure class="min-w-0" data-content-audio>
+  <!-- Alone, the recording has a frame and its caption stands under it; as a
+       row of a list, the caption is a line of the row. -->
+  <figure
+    class="min-w-0"
+    :class="{ 'flex flex-col gap-xs p-xs sm:px-sm': listed }"
+    data-content-audio
+  >
     <div
-      class="flex min-w-0 flex-col gap-xs p-xs text-text-1 sm:px-sm"
-      :class="{ 'audio-card rounded-normal border border-border-1': !listed }"
+      class="flex min-w-0 flex-col gap-xs text-text-1"
+      :class="{
+        'audio-card rounded-normal border border-border-1 p-xs sm:px-sm':
+          !listed,
+      }"
     >
       <div
         v-if="editable || shownTitle"
@@ -115,20 +124,12 @@ const shownTitle = computed(() => publicText(props.title));
       <p v-if="!editable && asset.alt" class="sr-only" data-audio-alt>
         {{ publicText(asset.alt) }}
       </p>
-      <ContentCaption
-        v-if="listed"
-        :model-value="caption"
-        :editable
-        :placeholder="captionPlaceholder"
-        class="audio-row-caption"
-        @update:model-value="emit('caption', $event)"
-      />
     </div>
     <ContentCaption
-      v-if="!listed"
       :model-value="caption"
       :editable
       :placeholder="captionPlaceholder"
+      :class="{ 'audio-row-caption': listed }"
       @update:model-value="emit('caption', $event)"
     />
   </figure>

@@ -706,7 +706,7 @@ const entityTitle = computed(() =>
 );
 const queryLine = computed(() => {
   const raw = search.query.value.trim();
-  return raw ? `«${raw}»` : phrase.value.content_link_search;
+  return raw ? phrase.value.quoted(raw) : phrase.value.content_link_search;
 });
 </script>
 

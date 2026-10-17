@@ -1,6 +1,9 @@
 <script lang="ts" setup>
-import type { ContentAssetData } from '#layers/thei/shared/content';
-import { useContentFileCard } from './content-file-card';
+import {
+  contentFileEmits,
+  contentFileProps,
+  useContentFileCard,
+} from './content-file-card';
 
 /**
  * A file as a row of a group's list: its square, then its title, its facts
@@ -10,37 +13,9 @@ import { useContentFileCard } from './content-file-card';
  * caption lies above that, and its own links stay links, while a press on
  * its words goes through to the file.
  */
-const props = withDefaults(
-  defineProps<{
-    asset: ContentAssetData;
-    title?: string;
-    caption?: string;
-    editable?: boolean;
-    href?: string;
-    fallbackTitle?: string;
-    editLabel?: string;
-    titlePlaceholder?: string;
-    captionPlaceholder?: string;
-    openable?: boolean;
-  }>(),
-  {
-    title: '',
-    caption: '',
-    editable: false,
-    href: undefined,
-    fallbackTitle: '',
-    editLabel: '',
-    titlePlaceholder: '',
-    captionPlaceholder: '',
-  },
-);
+const props = defineProps(contentFileProps);
 
-const emit = defineEmits<{
-  edit: [];
-  title: [value: string];
-  caption: [value: string];
-  open: [];
-}>();
+const emit = defineEmits(contentFileEmits);
 
 const { viewable, mode, resolvedTitle, details, actionIcon } =
   useContentFileCard(props);
@@ -62,50 +37,34 @@ const { viewable, mode, resolvedTitle, details, actionIcon } =
     />
 
     <div class="flex min-h-12 min-w-0 flex-1 flex-col justify-center gap-0.5">
-      <ContentPlainTextField
-        v-if="editable"
-        :model-value="title"
-        :editable="true"
+      <ContentFileWords
+        :title
+        :editable
         :placeholder="fallbackTitle || titlePlaceholder"
-        class="min-h-6 truncate font-semibold tracking-tight outline-none
-          empty:before:pointer-events-none empty:before:text-text-3
-          empty:before:content-[attr(data-placeholder)] focus:before:hidden"
-        @update:model-value="emit('title', $event)"
-      />
-      <component
-        :is="mode === 'open' ? 'button' : mode === 'link' ? 'a' : 'span'"
-        v-else
-        :type="mode === 'open' ? 'button' : undefined"
-        :href="mode === 'link' ? sitePath(href) : undefined"
-        :target="mode === 'link' && viewable ? '_blank' : undefined"
-        :rel="mode === 'link' ? 'noopener noreferrer' : undefined"
-        :download="mode === 'link' && !viewable ? '' : undefined"
-        class="truncate text-left font-semibold tracking-tight text-text-1
-          no-underline transition-colors outline-none"
-        :class="
-          mode !== 'static' &&
-          `cursor-pointer group-hocus:text-accent after:absolute after:inset-0
-          focus-visible:after:ring-2 focus-visible:after:ring-accent
-          focus-visible:after:ring-inset`
-        "
-        @click="mode === 'open' ? emit('open') : undefined"
+        :alt="asset.alt"
+        :details
+        @title="emit('title', $event)"
       >
-        {{ resolvedTitle }}
-      </component>
-      <!-- What the file is, for whoever cannot see it: its window shows it. -->
-      <span v-if="!editable && asset.alt" class="sr-only">{{
-        publicText(asset.alt)
-      }}</span>
-
-      <span
-        v-if="details.length"
-        class="flex min-w-0 items-center gap-1.5 text-xs text-text-3"
-      >
-        <template v-for="(detail, index) in details" :key="index">
-          <span v-if="index" aria-hidden="true">·</span>
-          <span class="truncate">{{ detail }}</span>
-        </template>
-      </span>
+        <component
+          :is="mode === 'open' ? 'button' : mode === 'link' ? 'a' : 'span'"
+          :type="mode === 'open' ? 'button' : undefined"
+          :href="mode === 'link' ? sitePath(href) : undefined"
+          :target="mode === 'link' && viewable ? '_blank' : undefined"
+          :rel="mode === 'link' ? 'noopener noreferrer' : undefined"
+          :download="mode === 'link' && !viewable ? '' : undefined"
+          class="truncate text-left font-semibold tracking-tight text-text-1
+            no-underline transition-colors outline-none"
+          :class="
+            mode !== 'static' &&
+            `cursor-pointer group-hocus:text-accent after:absolute after:inset-0
+            focus-visible:after:ring-2 focus-visible:after:ring-accent
+            focus-visible:after:ring-inset`
+          "
+          @click="mode === 'open' ? emit('open') : undefined"
+        >
+          {{ resolvedTitle }}
+        </component>
+      </ContentFileWords>
 
       <ContentCaption
         :model-value="caption"

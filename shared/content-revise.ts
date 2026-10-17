@@ -32,7 +32,7 @@ export function plainOfHtml(html: string): string {
 }
 
 /** A correction as a prepared edit: what it puts in each kind of field. */
-export function correctionEdit(part: Correction): PreparedTextEdit {
+function correctionEdit(part: Correction): PreparedTextEdit {
   return {
     find: part.find,
     replace: part.replace,
@@ -97,7 +97,7 @@ export function orderChoices(
  * found it leading. Each is found anew by where it leads and its words, so
  * one taken off moves no other.
  */
-export function applyRelinks(
+function applyRelinks(
   data: ContentOutputData,
   parts: readonly Relink[],
 ): { data: ContentOutputData; problems: Map<string, string> } {

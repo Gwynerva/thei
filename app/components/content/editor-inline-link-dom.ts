@@ -100,7 +100,7 @@ export function unwrapNestedLinks(link: HTMLAnchorElement) {
 }
 
 /** The link a range lies wholly inside, if any. */
-export function linkAroundRange(range: Range): HTMLAnchorElement | undefined {
+function linkAroundRange(range: Range): HTMLAnchorElement | undefined {
   const node = range.commonAncestorContainer;
   const element = node instanceof Element ? node : node.parentElement;
   return element?.closest('a') ?? undefined;

@@ -279,6 +279,22 @@ describe('editing markdown: serialize', () => {
     ]);
   });
 
+  it('gives a copied file line an id of its own', () => {
+    const { blocks } = normalizeContentData({
+      blocks: parseEditMarkdownToBlocks(
+        ':::files\n::file[One]{#f1 asset="a-1"}\n\n::file[Copy]{#f1 asset="a-1"}\n:::',
+      ).blocks,
+    } as never);
+    expect(
+      (blocks[0]!.data.items as { id: string; caption: string }[]).map(
+        ({ id, caption }) => [id, caption],
+      ),
+    ).toEqual([
+      ['f1', 'One'],
+      ['f1-2', 'Copy'],
+    ]);
+  });
+
   it('reads a recording in a group as a file of it', () => {
     const parsed = parseEditMarkdownToBlocks(
       ':::files\n::audio[Голос]{#r asset="a-1"}\n\n::media{asset="a-2"}\n:::',
@@ -292,6 +308,228 @@ describe('editing markdown: serialize', () => {
         },
       },
     ]);
+  });
+});
+
+describe('editing markdown: words that look like syntax', () => {
+  const BACKSLASH = '\\';
+  /** Inline markup whose every character means something to Markdown. */
+  const tricky = [
+    ':hint[x]{note="y"} literal',
+    ':start',
+    'a::b and a :b',
+    '*stars* _under_ `code` ~~no~~ ~one~',
+    '&amp;lt;b&amp;gt; not bold &amp;amp; &amp;#91;',
+    '&lt;b&gt;not a tag&lt;/b&gt;',
+    '![not](a picture) and [not](a link)',
+    '# not a heading',
+    '&gt; not a quote',
+    '- not a list',
+    '1. not a list',
+    `a${BACKSLASH}b ends ${BACKSLASH}`,
+    'x {a=1} } {#id}',
+    'a [b] c ] d [ e',
+    'see <abbr data-content-hint="RFC [draft">spec</abbr> and <abbr data-content-hint="] *x* :hint[y]">term</abbr>',
+    'see <a href="https://example.com/a(b)" data-content-link="external" data-content-note="why [1] ] *so*">link [1]</a>',
+    '<a data-content-link="entity" data-entity-type="project" data-entity-id="p-1" data-content-note="see ]">the game</a>',
+  ];
+  /** Plain words, as a title or a link block's note holds them. */
+  const plain = [
+    ':hint[x]{note="y"}',
+    '*x* _y_ `z` ~~w~~',
+    'a ] b [ c } d {',
+    'T "q" &amp; it’s',
+    'a &lt;b&gt; &amp;lt;',
+    `x${BACKSLASH}y`,
+    '#1',
+  ];
+
+  function readBack(blocks: unknown[]) {
+    const stored = normalizeContentData({ blocks } as never);
+    const parsed = parseEditMarkdownToBlocks(contentToEditMarkdown(stored));
+    const written = normalizeContentData({ blocks: parsed.blocks } as never);
+    return {
+      stored: stored.blocks,
+      written: written.blocks,
+      merged: mergeEditedBlocks(stored.blocks, written.blocks),
+      warnings: parsed.warnings,
+    };
+  }
+
+  const fileBlocks = (caption: string) => [
+    {
+      type: 'contentMedia',
+      data: { asset: asset('a-1'), layout: 'centered', caption },
+    },
+    {
+      type: 'contentGallery',
+      data: {
+        title: 'Pictures',
+        items: [
+          { id: 'g1', asset: asset('a-2'), caption },
+          { id: 'g2', asset: asset('a-3'), caption: 'second' },
+        ],
+      },
+    },
+    {
+      type: 'contentAudio',
+      data: { asset: asset('a-4'), title: 'Voice', caption },
+    },
+    {
+      type: 'contentAttachment',
+      data: { asset: asset('a-5'), title: 'Paper', caption },
+    },
+    {
+      type: 'contentFileGroup',
+      data: {
+        title: 'Papers',
+        items: [
+          { id: 'f1', asset: asset('a-6'), title: 'One', caption },
+          { id: 'f2', asset: asset('a-7'), title: 'Two', caption: 'second' },
+        ],
+      },
+    },
+    { type: 'quote', data: { text: 'Words', caption, alignment: 'left' } },
+    { type: 'paragraph', data: { text: caption } },
+  ];
+
+  it.each(tricky)('reads every caption back as it was: %s', (caption) => {
+    const { stored, written, merged, warnings } = readBack(fileBlocks(caption));
+    expect(warnings).toEqual([]);
+    expect(written.map((block) => block.data)).toEqual(
+      stored.map((block) => block.data),
+    );
+    expect(merged).toEqual(stored);
+  });
+
+  it.each(plain)('reads every title and note back as it was: %s', (words) => {
+    const { stored, written, warnings } = readBack([
+      { type: 'header', data: { text: words, level: 2 } },
+      { type: 'contentAudio', data: { asset: asset('a-1'), title: words } },
+      {
+        type: 'contentAttachment',
+        data: { asset: asset('a-2'), title: words },
+      },
+      {
+        type: 'contentGallery',
+        data: { title: words, items: [{ id: 'g1', asset: asset('a-3') }] },
+      },
+      {
+        type: 'contentFileGroup',
+        data: {
+          title: words,
+          items: [{ id: 'f1', asset: asset('a-4'), title: words }],
+        },
+      },
+      {
+        type: 'externalLink',
+        data: { url: 'https://example.com/', note: words },
+      },
+      {
+        type: 'entityLink',
+        data: { entityType: 'event', entityId: 'e-1', note: words },
+      },
+    ]);
+    expect(warnings).toEqual([]);
+    expect(written.map((block) => block.data)).toEqual(
+      stored.map((block) => block.data),
+    );
+  });
+
+  it('keeps a group whole when a caption’s hint has a bracket in its note', () => {
+    const { stored, merged } = readBack([
+      {
+        id: 'group',
+        type: 'contentFileGroup',
+        data: {
+          title: 'Docs',
+          items: [
+            {
+              id: 'f1',
+              asset: asset('a-1'),
+              title: 'One',
+              caption: 'see <abbr data-content-hint="RFC [draft">spec</abbr>',
+            },
+            { id: 'f2', asset: asset('a-2'), title: 'Two', caption: 'kept' },
+          ],
+        },
+      },
+      {
+        id: 'lone',
+        type: 'contentAttachment',
+        data: {
+          asset: asset('a-3'),
+          caption: 'see <abbr data-content-hint="a ] b">spec</abbr>',
+        },
+      },
+    ]);
+    expect(merged).toEqual(stored);
+  });
+});
+
+describe('editing markdown: marks side by side', () => {
+  function roundTrip(text: string) {
+    const stored = normalizeContentData({
+      blocks: [{ id: 'p', type: 'paragraph', data: { text } }],
+    });
+    const markdown = contentToEditMarkdown(stored);
+    const written = normalizeContentData({
+      blocks: parseEditMarkdownToBlocks(markdown).blocks,
+    } as never).blocks;
+    return {
+      markdown,
+      text: written[0]?.data.text,
+      merged: mergeEditedBlocks(stored.blocks, written),
+      stored: stored.blocks,
+    };
+  }
+
+  it('writes two of the same mark side by side as one', () => {
+    for (const [text, markdown] of [
+      ['<b>a</b><b>b</b>', '**ab**'],
+      ['<i>a</i><i>b</i>', '*ab*'],
+      ['<s>a</s><s>b</s>', '~~ab~~'],
+      ['<i><b>a</b></i><i><b>b</b></i>', '***ab***'],
+    ] as const) {
+      const result = roundTrip(text);
+      expect(result.markdown).toBe(markdown);
+      // What was stored stays: the two read the same.
+      expect(result.merged).toEqual(result.stored);
+    }
+  });
+
+  it('writes marks as tags where their stars would run together', () => {
+    for (const text of [
+      '<b>Note:</b><i>text</i>',
+      '<b><i>a</i></b><i>b</i>',
+      'é<s>:x</s>',
+      '<b>Ура!</b>🎉 и 😀<i>.x</i>',
+      'a<br><b>Note:</b><i>text</i>',
+    ]) {
+      const result = roundTrip(text);
+      expect(result.markdown).toContain('<');
+      expect(result.text).toBe(text);
+    }
+    expect(roundTrip('<b>Note:</b><i>text</i>').markdown).toBe(
+      '<b>Note:</b><i>text</i>',
+    );
+  });
+
+  it('keeps stars where they read back as they are', () => {
+    expect(roundTrip('<b>bold</b><i>italic</i> and <s>gone</s>').markdown).toBe(
+      '**bold***italic* and ~~gone~~',
+    );
+  });
+
+  it('never reads a colon after a mark as a hint', () => {
+    for (const text of ['<b>:hint</b>', '<b>a</b>:hint x', '<i>:hint[x]</i>'])
+      expect(roundTrip(text).text).toBe(text);
+  });
+
+  it('keeps a hint inside a hint whose note has a bracket', () => {
+    const text =
+      '<abbr data-content-hint="outer">a <abbr data-content-hint="x ] y">b</abbr></abbr>';
+    expect(roundTrip(text).text).toBe(text);
   });
 });
 

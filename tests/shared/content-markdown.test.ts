@@ -290,6 +290,46 @@ describe('a file’s description in the Markdown copy', () => {
     );
   });
 
+  it('takes a caption’s words for the alt, and the caption after it when it holds a link', () => {
+    const picture = (caption: string) =>
+      render({
+        type: 'contentMedia',
+        data: {
+          asset: { assetUuid: 'p', media: { src: '/events/e/content/p.webp' } },
+          caption,
+        },
+      });
+    expect(picture('Shot [1] by a\\b')).toBe(
+      '![Shot \\[1\\] by a\\\\b](https://example.com/events/e/content/p.webp)',
+    );
+    expect(
+      picture(
+        'From <a href="https://example.com/" data-content-link="external">the "site"</a> ]',
+      ),
+    ).toBe(
+      '![From the «site» \\]](https://example.com/events/e/content/p.webp)\n\n' +
+        'From [the «site»](https://example.com/) ]',
+    );
+  });
+
+  it('keeps a bracket in a file’s title or a link’s words from closing the link', () => {
+    expect(
+      render({
+        type: 'contentAttachment',
+        data: {
+          title: 'Report ] [draft',
+          asset: { assetUuid: 't', assetUrl: '/events/e/content/t.pdf' },
+        },
+      }),
+    ).toBe('[Report \\] \\[draft](https://example.com/events/e/content/t.pdf)');
+    expect(
+      inlineToMarkdown(
+        'see <a href="https://example.com/">note ] here</a>',
+        options,
+      ),
+    ).toBe('see [note \\] here](https://example.com/)');
+  });
+
   it('is the title of a file’s and a recording’s link', () => {
     expect(
       render({

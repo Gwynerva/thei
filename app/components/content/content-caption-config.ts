@@ -1,20 +1,14 @@
 import type { SanitizerConfig } from '@editorjs/editorjs';
 
-export const CONTENT_CAPTION_SANITIZE = {
-  b: true,
-  strong: true,
-  i: true,
-  em: true,
-  a: {
-    href: true,
-    target: true,
-    rel: true,
-    'data-content-link': true,
-    'data-entity-type': true,
-    'data-entity-id': true,
-    'data-entity-fragment': true,
-  },
-} as const;
+/**
+ * What a caption keeps when Editor.js cleans a block — as it is pasted, cut,
+ * converted or merged: exactly what the inline tools keep, a link with its
+ * note and a hint among it, since a caption takes the marks a paragraph
+ * takes. Editor.js lays a field's own rules over the inline tools' ones, so
+ * an empty rule is theirs as they are; a rule for a tag here would replace
+ * theirs, and whatever it left out would be gone from every caption moved.
+ */
+export const CONTENT_CAPTION_SANITIZE = {} as const;
 
 /**
  * What Editor.js keeps of each field of a block that shows files as it

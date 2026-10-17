@@ -262,7 +262,7 @@ export function contentBlockFiles(block: ContentOutputBlock): unknown[] {
 
 /** What a text gives one of its files, as stored: titles plain, a caption inline HTML. */
 export interface ContentFileWords {
-  /** The title of the list the file is in: a group's. */
+  /** The title of the list the file is in: a gallery's or a group's. */
   group?: string;
   title?: string;
   caption?: string;
@@ -893,9 +893,11 @@ function normalizeBlockData(
     case 'contentGallery':
       return {
         title: optionalHeadingText(data.title),
-        items: Array.isArray(data.items)
-          ? data.items.map(normalizeGalleryItem).filter(Boolean)
-          : [],
+        items: withUniqueIds(
+          Array.isArray(data.items)
+            ? data.items.map(normalizeGalleryItem).filter(isPresent)
+            : [],
+        ),
       };
 
     // A recording is shaped as a file is — a plain title, and a caption with
@@ -911,9 +913,11 @@ function normalizeBlockData(
     case 'contentFileGroup':
       return {
         title: optionalHeadingText(data.title),
-        items: Array.isArray(data.items)
-          ? data.items.map(normalizeFileGroupItem).filter(Boolean)
-          : [],
+        items: withUniqueIds(
+          Array.isArray(data.items)
+            ? data.items.map(normalizeFileGroupItem).filter(isPresent)
+            : [],
+        ),
       };
 
     case 'externalLink':
@@ -1349,9 +1353,32 @@ function withLinkNote<T extends object>(data: T, value: unknown) {
   return note ? { ...data, note } : data;
 }
 
-function optionalNormalizedInlineHtml(value: unknown): string | undefined {
-  const text = normalizeContentInlineHtml(value);
-  return text || undefined;
+/**
+ * The items of a gallery or a group, each under an id of its own. A model
+ * copying a line of one copies its `#id` too, and two items under one id
+ * would be taken out, changed and moved as one. The later of them takes the
+ * id with a number after it, so that the same list always comes out the same
+ * and a text read twice is not taken for a changed one.
+ */
+function withUniqueIds<T extends { id: string }>(items: T[]): T[] {
+  const taken = new Set(items.map((item) => item.id));
+  const given = new Set<string>();
+  return items.map((item) => {
+    if (!given.has(item.id)) {
+      given.add(item.id);
+      return item;
+    }
+    let number = 2;
+    while (taken.has(`${item.id}-${number}`)) number++;
+    const id = `${item.id}-${number}`;
+    taken.add(id);
+    given.add(id);
+    return { ...item, id };
+  });
+}
+
+function isPresent<T>(value: T | null | undefined): value is T {
+  return value !== null && value !== undefined;
 }
 
 function stringValue(value: unknown): string {

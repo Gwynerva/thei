@@ -74,6 +74,44 @@ describe('tidying a text', () => {
     ]);
   });
 
+  it('reads back files whose captions look like syntax, and marks side by side', () => {
+    const tricky = normalizeContentData({
+      blocks: [
+        {
+          type: 'contentFileGroup',
+          data: {
+            items: [
+              {
+                id: 'f1',
+                asset: { assetUuid: 'a-1' },
+                caption:
+                  'see <abbr data-content-hint="RFC [draft">spec</abbr> *x*',
+              },
+              { id: 'f2', asset: { assetUuid: 'a-2' }, caption: 'kept' },
+            ],
+          },
+        },
+        {
+          type: 'contentMedia',
+          data: {
+            asset: { assetUuid: 'a-3' },
+            layout: 'centered',
+            caption: '&lt;b&gt; and :hint[x]',
+          },
+        },
+        {
+          type: 'paragraph',
+          data: { text: '<b>a</b><b>b</b>, <b>Note:</b><i>x</i>' },
+        },
+      ],
+    });
+    expect(
+      plan(contentToEditMarkdown(tricky), [], [], tricky.blocks).problems,
+    ).toEqual([
+      'Nothing to tidy: the text is in order as it stands. Leave no suggestion.',
+    ]);
+  });
+
   it('takes comments alone, pointed at their words', () => {
     const result = plan(
       contentToEditMarkdown(entry),

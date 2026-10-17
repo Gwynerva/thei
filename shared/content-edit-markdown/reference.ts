@@ -10,7 +10,7 @@ export const EDITING_MARKDOWN_REFERENCE = `\
 Every text (a diary entry's body, a project's description, a section, an event, a page, private notes) is read and written as Markdown with a few additions. It is the stored text, exactly as the owner typed it — not typeset.
 
 Text:
-- Paragraphs, \`## heading\` and \`### subheading\` (no other levels), \`**bold**\`, \`*italic*\`, \`~~strikethrough~~\`, a line break as a backslash at the end of a line.
+- Paragraphs, \`## heading\` and \`### subheading\` (no other levels), \`**bold**\`, \`*italic*\`, \`~~strikethrough~~\`, a line break as a backslash at the end of a line. Where those marks would run together, a text has its marks as tags instead — \`<b>…</b>\`, \`<i>…</i>\`, \`<s>…</s>\` — and they mean the same.
 - Lists: \`- item\`, \`1. item\` (a list may start at another number), \`- [ ] task\` / \`- [x] done\`; nest by indenting. A list keeps one kind at every level. A numbered list counted otherwise sits inside \`:::list{counter="lower-roman"}\` … \`:::\` — the counters are lower-roman, upper-roman, lower-alpha and upper-alpha.
 - \`> quote\`. A quote with a caption or centred: \`:::quote[Caption]{align="center"}\` … \`:::\`.
 - \`---\` between blocks: a divider.

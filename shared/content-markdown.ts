@@ -122,7 +122,7 @@ function renderBlock(
       const url = data.url;
       if (!url) return '';
       const title = data.title || url;
-      return `[${title}](${url}${linkTitle(data.note, options)})`;
+      return `[${bracketed(title)}](${url}${linkTitle(data.note, options)})`;
     }
     case 'integration': {
       const url = contentIntegrationUrl(
@@ -135,7 +135,7 @@ function renderBlock(
       const url = data.url ?? data.href;
       const title = data.title ? typeset(data.title, options) : url;
       return url
-        ? `[${title}](${options.absolute(url)}${linkTitle(data.note, options)})`
+        ? `[${bracketed(title)}](${options.absolute(url)}${linkTitle(data.note, options)})`
         : '';
     }
     case 'privateSectionPlaceholder':
@@ -172,7 +172,7 @@ function renderFile(
   const length =
     recording && duration > 0 ? ` (${formatMediaTime(duration)})` : '';
   return {
-    link: `[${title}](${options.absolute(url)}${linkTitle(data.asset?.alt, options)})${length}`,
+    link: `[${bracketed(title)}](${options.absolute(url)}${linkTitle(data.asset?.alt, options)})${length}`,
     caption: inlineToMarkdown(data.caption, options),
   };
 }
@@ -186,14 +186,37 @@ function renderMedia(
   if (!src) return '';
   const text = inlineToMarkdown(caption, options);
   // The file's description is what the picture shows: its alt, and the
-  // caption follows as words of its own.
-  const alt =
+  // caption follows as words of its own. Without one the caption's words
+  // are the alt, and the caption follows only when it holds more than its
+  // words — a link, a mark, a hint — which an alt cannot.
+  const description =
     typeof asset?.alt === 'string'
       ? typeset(asset.alt.replace(/\s+/g, ' ').trim(), options)
       : '';
-  if (!alt) return `![${text}](${options.absolute(src)})`;
-  const image = `![${alt.replace(/[[\]\\]/g, '\\$&')}](${options.absolute(src)})`;
-  return text ? `${image}\n\n${text}` : image;
+  const alt = description || inlinePlainText(caption, options);
+  const image = `![${bracketed(alt)}](${options.absolute(src)})`;
+  return text && text !== alt ? `${image}\n\n${text}` : image;
+}
+
+/** Words between the brackets of a link or a picture, whose own would close them. */
+function bracketed(text: string): string {
+  return text.replace(/[[\]\\]/g, '\\$&');
+}
+
+/** Inline HTML as the words it shows, with the typography it is shown in. */
+function inlinePlainText(
+  value: unknown,
+  options: ContentMarkdownOptions,
+): string {
+  if (typeof value !== 'string' || !value) return '';
+  const html = options.format
+    ? normalizeInlineMarkup(value, options.format)
+    : value;
+  return decodeEntities(
+    html.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, ''),
+  )
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function renderList(
@@ -268,7 +291,7 @@ export function inlineToMarkdown(
             note && decodeEntities(note),
             options,
           ).replace(/&/g, '&amp;');
-          return `[${text.replace(/<[^>]+>/g, '')}](${
+          return `[${bracketed(text.replace(/<[^>]+>/g, ''))}](${
             href.startsWith('/') ? options.absolute(href) : href
           }${title})`;
         },

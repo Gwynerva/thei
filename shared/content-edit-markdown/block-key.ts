@@ -19,9 +19,10 @@ export function newEditBlockId(): string {
 
 /**
  * What a block says, with the differences that say nothing taken out: the
- * spelling of the same markup, a line break at either end of a text, a bare
- * ampersand, the meta an ordered list is assumed to have. Two blocks with the
- * same key are the same block for a reader.
+ * spelling of the same markup, a mark closed and opened again right away, a
+ * line break at either end of a text, a bare ampersand, the meta an ordered
+ * list is assumed to have. Two blocks with the same key are the same block
+ * for a reader.
  */
 export function editBlockKey(
   block: Pick<ContentOutputBlock, 'type' | 'data' | 'tunes'>,
@@ -55,9 +56,17 @@ function canonicalValue(value: unknown): unknown {
 }
 
 export function canonicalMarkup(value: string): string {
-  return value
+  let markup = value
     .replace(/<(\/?)strong>/g, '<$1b>')
-    .replace(/<(\/?)em>/g, '<$1i>')
+    .replace(/<(\/?)em>/g, '<$1i>');
+  // `<b>a</b><b>b</b>` is `<b>ab</b>`, which is how Markdown writes it; and
+  // `<b><i>a</i></b><b><i>b</i></b>` is `<b><i>ab</i></b>`.
+  let joined: string;
+  do {
+    joined = markup;
+    markup = markup.replace(/<\/(b|i|s)><\1>/g, '');
+  } while (markup !== joined);
+  return markup
     .replace(/&(?!(?:[a-z]+|#\d+|#x[0-9a-f]+);)/gi, '&amp;')
     .replace(/^(?:<br>)+|(?:<br>)+$/g, '');
 }

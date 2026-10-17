@@ -43,7 +43,8 @@ neutral — and in square icon-only sizes.
   to another block.
 - A group of files in a text is one frame of rows with hairlines between
   (`app/components/content/ContentFileGroup.vue`), headed by its title on
-  `bg-bg-3`, as a table's head is. A row ends with its grip, then its remove
+  `bg-bg-3`, as a table's head is — the head a gallery has too
+  (`app/components/content/ContentFilesHead.vue`). A row ends with its grip, then its remove
   button, as `app/components/SortableList.vue`'s rows do; both show where the
   pointer or the focus is, and always under a finger
   (`pointer-coarse:opacity-100`), level with the file's square. The frame

@@ -1,38 +1,17 @@
 <script lang="ts" setup>
-import type { ContentAssetData } from '#layers/thei/shared/content';
-import { useContentFileCard } from './content-file-card';
+import {
+  contentFileEmits,
+  contentFileProps,
+  useContentFileCard,
+} from './content-file-card';
 
-const props = withDefaults(
-  defineProps<{
-    asset: ContentAssetData;
-    title?: string;
-    caption?: string;
-    editable?: boolean;
-    href?: string;
-    fallbackTitle?: string;
-    editLabel?: string;
-    titlePlaceholder?: string;
-    captionPlaceholder?: string;
-    openable?: boolean;
-  }>(),
-  {
-    title: '',
-    caption: '',
-    editable: false,
-    href: undefined,
-    fallbackTitle: '',
-    editLabel: '',
-    titlePlaceholder: '',
-    captionPlaceholder: '',
-  },
-);
+/**
+ * A file alone in a text, as a card: its square, its title and its facts,
+ * the whole card opening the file; the caption under it.
+ */
+const props = defineProps(contentFileProps);
 
-const emit = defineEmits<{
-  edit: [];
-  title: [value: string];
-  caption: [value: string];
-  open: [];
-}>();
+const emit = defineEmits(contentFileEmits);
 
 const { viewable, mode, resolvedTitle, details, actionIcon } =
   useContentFileCard(props);
@@ -71,37 +50,21 @@ const { viewable, mode, resolvedTitle, details, actionIcon } =
         :is="editable ? 'div' : 'span'"
         class="flex min-w-0 flex-1 flex-col gap-0.5"
       >
-        <ContentPlainTextField
-          v-if="editable"
-          :model-value="title"
-          :editable="true"
+        <ContentFileWords
+          :title
+          :editable
           :placeholder="fallbackTitle || titlePlaceholder"
-          class="min-h-6 truncate font-semibold tracking-tight outline-none
-            empty:before:pointer-events-none empty:before:text-text-3
-            empty:before:content-[attr(data-placeholder)] focus:before:hidden"
-          @update:model-value="emit('title', $event)"
-        />
-        <span
-          v-else
-          class="truncate font-semibold tracking-tight transition-colors"
-          :class="{ 'group-hocus:text-accent': mode !== 'static' }"
+          :alt="asset.alt"
+          :details
+          @title="emit('title', $event)"
         >
-          {{ resolvedTitle }}
-        </span>
-        <!-- What the file is, for whoever cannot see it: its window shows it. -->
-        <span v-if="!editable && asset.alt" class="sr-only">{{
-          publicText(asset.alt)
-        }}</span>
-
-        <span
-          v-if="details.length"
-          class="flex min-w-0 items-center gap-1.5 text-xs text-text-3"
-        >
-          <template v-for="(detail, index) in details" :key="index">
-            <span v-if="index" aria-hidden="true">·</span>
-            <span class="truncate">{{ detail }}</span>
-          </template>
-        </span>
+          <span
+            class="truncate font-semibold tracking-tight transition-colors"
+            :class="{ 'group-hocus:text-accent': mode !== 'static' }"
+          >
+            {{ resolvedTitle }}
+          </span>
+        </ContentFileWords>
       </component>
 
       <span

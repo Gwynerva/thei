@@ -9,12 +9,17 @@ import { contentMediaAutoplays } from '#layers/thei/shared/content-media';
  * A picture or a video as a text lays it out, and what stands right under
  * it — its caption — as wide as it is. `framed`, the two share one frame on
  * the ground of a surface, as a gallery's picture and caption do.
+ *
+ * Another file in the same place changes the picture alone: what stands
+ * under it stays the element it was, so a caption being written keeps the
+ * caret, and the one caption of a gallery is the same element for every
+ * tile. A file that has gone missing leaves its frame empty, with what
+ * stands on it and under it.
  */
 const props = withDefaults(
   defineProps<{
     asset: ContentAssetData;
     layout: ContentMediaLayout;
-    alt?: string;
     rounded?: boolean;
     naturalSize?: boolean;
     framed?: boolean;
@@ -52,6 +57,16 @@ const boxStyle = computed(() =>
     : undefined,
 );
 
+// Another picture is another one to measure: nothing measured for the last
+// one carries over.
+watch(
+  () => media.value?.src,
+  () => {
+    measuredWidth.value = undefined;
+    measuredHeight.value = undefined;
+  },
+);
+
 function rememberDimensions(nextWidth: number, nextHeight: number) {
   if (media.value?.width && media.value.height) return;
   measuredWidth.value = nextWidth;
@@ -61,7 +76,6 @@ function rememberDimensions(nextWidth: number, nextHeight: number) {
 
 <template>
   <div
-    v-if="media"
     class="min-w-0"
     :class="[
       layout === 'natural' ? 'mr-auto max-w-full' : 'w-full',
@@ -76,11 +90,16 @@ function rememberDimensions(nextWidth: number, nextHeight: number) {
       :class="{
         'max-h-144': layout !== 'stretch',
         'rounded-normal': rounded && !framed,
+        'bg-bg-1': !media,
       }"
       :style="frameStyle"
       :data-content-media-layout="layout"
     >
+      <!-- Another file is another picture to load: nothing loaded for the
+           last one carries over. -->
       <Media
+        v-if="media"
+        :key="media.src"
         v-bind="media"
         :autoplay
         :loop="autoplay"
@@ -90,7 +109,6 @@ function rememberDimensions(nextWidth: number, nextHeight: number) {
         :backdrop="layout === 'centered'"
         :width
         :height
-        :alt="alt ?? media.alt"
         class="size-full bg-bg-1"
         @dimensions="rememberDimensions"
       />

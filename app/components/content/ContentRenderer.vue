@@ -22,7 +22,7 @@ import type {
   ContentGalleryItem,
 } from '#layers/thei/shared/content';
 import { AssetType } from '#layers/thei/shared/asset';
-import { isAssetPreviewable } from '#layers/thei/shared/assets/preview';
+import { contentFileOpensInViewer } from './content-file-card';
 import type { ContentFileGroupEntry } from './file-group-state';
 import {
   buildContentHeadings,
@@ -174,12 +174,7 @@ function openFileGroupItem(
       .filter(
         (file) =>
           file.asset.type !== AssetType.Audio &&
-          (file.asset.media ||
-            (file.asset.extension &&
-              isAssetPreviewable(
-                file.asset.extension,
-                file.asset.archivedOriginal,
-              ))),
+          contentFileOpensInViewer(file.asset),
       )
       .map((file) => ({
         tile: file,

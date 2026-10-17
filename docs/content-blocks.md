@@ -159,9 +159,15 @@ videos within the media limit, `contentAudio` recordings, `contentAttachment`
 and `contentFileGroup` any file. In a group a recording is played in place and
 any other file — a picture too — is shown as a file. A file's `caption`, in
 every one of these blocks, is one line of inline HTML, as a paragraph's text
-without line breaks; its `title`, and a group's, is plain text. A
-`contentAudio` and a `contentAttachment` have the same data, so either turns
-into the other as it is.
+without line breaks; its `title`, and a gallery's or a group's, is plain
+text. A `contentAudio` and a `contentAttachment` have the same data, so either
+turns into the other as it is.
+
+An item of a gallery or a group is named by its `id`, its own within the
+list: an item without one is dropped, and one whose `id` an item before it
+already has takes that `id` with the first free number after it — `f1-2` —
+so an item copied is never the same item twice, and the same list always
+comes out the same.
 
 A link block's `note` is the owner's plain-text word on why the link is there,
 like `data-content-note` inline: whitespace collapsed, ended as a caption, and
@@ -236,7 +242,10 @@ assetTotalSize }`) and nothing else;
   and never stores, is a picture's alt — `![description](url)`, its caption
   following as words of their own — and the title of an attachment's or a
   recording's link, `[title](url "description")`; without one a picture's
-  alt is its caption. A group of files is its title on a line of its own,
+  alt is its caption's words, and the caption follows them only when it
+  holds more than words — a link, a mark, a hint. A bracket in an alt, a
+  file's title or a link's words is escaped, `\]`, so that it never closes
+  the link. A group of files is its title on a line of its own,
   not a heading, and then a list: each file as it would be alone, its caption
   after it, `- [title](url) (m:ss) — caption`. A gallery is its title the
   same way, then its pictures. With `options.format` the owner's words —
@@ -296,3 +305,14 @@ names no kind and id keeps only its words, and the reader is warned. Where
 containers nest, the outer one takes more colons. A line break at either end of
 a text is left out: Markdown cannot write one there, and it breaks nothing a
 reader sees.
+
+Whatever the words of a text hold is escaped where Markdown would read it as
+syntax — in a caption and a note between a directive's brackets too, and a
+bracket in a hint's note inside them is written `&#91;` / `&#93;`. Two of the
+same mark side by side are one: `<b>a</b><b>b</b>` is written `**ab**` and
+read back `<b>ab</b>`, which a merge takes for the block it was, keeping it
+as stored. Where the stars or tildes of a text's marks would run together or
+not read as marks at all — a bold "Note:" right before italic words, a struck
+word in quotes right after a letter, an emoji beside a mark — every mark of
+that text is written as its tag,
+`<b>…</b>`, `<i>…</i>`, `<s>…</s>`, which reads back as it is.

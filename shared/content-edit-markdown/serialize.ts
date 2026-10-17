@@ -34,9 +34,7 @@ export function contentToEditMarkdown(
 
 type FlowParent = { children: RootContent[] };
 
-export function contentToEditTree(
-  data: ContentOutputData | null | undefined,
-): Root {
+function contentToEditTree(data: ContentOutputData | null | undefined): Root {
   const root: Root = { type: 'root', children: [] };
   const stack: { node: FlowParent; sectionId?: string }[] = [{ node: root }];
   for (const block of data?.blocks ?? []) {

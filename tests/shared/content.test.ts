@@ -1260,6 +1260,41 @@ describe('file captions and groups of files', () => {
     expect(contentPlainText(data)).toBe('Papers Contract Signed today');
   });
 
+  it('gives a copied file of a list an id of its own, the same every time', () => {
+    const items = (block: { data: Record<string, unknown> }) =>
+      (block.data.items as { id: string }[]).map((item) => item.id);
+    const data = normalizeContentData({
+      blocks: [
+        {
+          type: 'contentFileGroup',
+          data: {
+            items: [
+              { id: 'f1', asset: file('a-1') },
+              { id: 'f1', asset: file('a-2') },
+              { id: 'f1-2', asset: file('a-3') },
+              { id: 'f1', asset: file('a-4') },
+            ],
+          },
+        },
+        {
+          type: 'contentGallery',
+          data: {
+            items: [
+              { id: 'g', asset: file('a-1') },
+              { id: 'g', asset: file('a-1') },
+            ],
+          },
+        },
+      ],
+    });
+    expect(data.blocks.map(items)).toEqual([
+      ['f1', 'f1-3', 'f1-2', 'f1-4'],
+      ['g', 'g-2'],
+    ]);
+    // Read again, the text is the text it was.
+    expect(normalizeContentData(data)).toEqual(data);
+  });
+
   it('keys a group the same whatever order its data came in', () => {
     const group = (item: object) => ({
       blocks: [{ type: 'contentFileGroup', data: { items: [item] } }],

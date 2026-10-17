@@ -89,7 +89,7 @@ export function editedWordCount(edit: TextEdit): number {
  * a word swapped for a synonym does not — and that is a rewrite, however few
  * words it touches.
  */
-export function editSimilarity(edit: TextEdit): number {
+function editSimilarity(edit: TextEdit): number {
   // Only what changed is compared: words kept on either side would make
   // any swap look alike.
   const changed = changedWords(edit);

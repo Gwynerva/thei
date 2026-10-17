@@ -47,10 +47,7 @@ const framed = computed(
 
 <template>
   <figure class="min-w-0">
-    <!-- Another picture is another frame: nothing measured for the last one
-         carries over. -->
     <ContentMedia
-      :key="asset.media?.src"
       :asset
       :layout
       :rounded="mediaRounded"
