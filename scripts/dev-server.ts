@@ -8,6 +8,10 @@
 //   bun scripts/dev-server.ts realdata            nuxt dev on 3002, over a
 //                                                 copy of a real backup
 //                                                 (`bun scripts/realdata.ts`)
+//   bun scripts/dev-server.ts lab                 nuxt dev on 3003, the local
+//                                                 AI lab (`.ai-lab/`, never
+//                                                 committed), opened as
+//                                                 http://lab.localhost:3003
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -18,6 +22,7 @@ const targets = {
   playground: { dir: '.playground', port: 3000, fork: true },
   fixture: { dir: 'tests/e2e/fixture', port: E2E_PORT, fork: false },
   realdata: { dir: '.realdata', port: 3002, fork: true },
+  lab: { dir: '.ai-lab/site', port: 3003, fork: true },
 } as const;
 
 const root = fileURLToPath(new URL('..', import.meta.url));
