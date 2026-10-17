@@ -22,6 +22,7 @@ import { guardTool, McpToolError, toolResult } from '../result';
 import { spendWrite } from '../scope';
 import { AI_DIGEST_MAX, digestOf, writeDigest } from '../../ai/digests';
 import { sessionModel } from '../../ai/model/settings';
+import { findSession } from '../../ai/sessions/store';
 
 /**
  * Reading wide without reading everything: the digests of many entities at
@@ -114,11 +115,15 @@ export function registerDigestTools(
         if (!key) throw new McpToolError(`There is no ${ref}.`);
         if (context.session && !context.session.live())
           throw new McpToolError('The turn was stopped; nothing was kept.');
+        // The site's model is the one its turn runs with — a template's
+        // own, maybe — which the turn wrote on its session as it began.
         writeDigest(
           key,
           digest,
           context.session
-            ? (sessionModel()?.model ?? '')
+            ? (findSession(context.session.sessionUuid)?.model ??
+                sessionModel()?.model ??
+                '')
             : (context.client ?? context.principal.label),
         );
         return toolResult(`The digest of ${refOf(key)} is kept.`);

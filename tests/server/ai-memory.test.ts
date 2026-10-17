@@ -468,4 +468,61 @@ describe('digests', () => {
     expect(stale).toContain('it has changed since');
     expect(stale).not.toContain('its levels first');
   });
+
+  it('names the model that wrote it: the one its turn runs with', async () => {
+    // A template's run may answer with another model than the site's.
+    const sessionUuid = createSession({
+      origin: 'owner',
+      title: 'Run',
+      model: 'template-own-model',
+    });
+    const write = directTools({
+      event: {} as H3Event,
+      principal: { tokenUuid: 'tk-test', label: 'Test', scopes: ['read'] },
+      session: {
+        sessionUuid,
+        messageUuid: 'aim-1',
+        live: () => true,
+        signal: new AbortController().signal,
+      },
+    }).find((tool) => tool.name === 'write_digest')!;
+    await write.call({ ref: `project:${PROJECT}`, digest: 'A remake.' });
+    expect(digestOf(project)).toMatchObject({
+      text: 'A remake.',
+      model: 'template-own-model',
+    });
+  });
+
+  it('of a tag goes stale with what the tag is on', () => {
+    const TAG = 't-22222222-2222-4222-8222-222222222222';
+    const tag = { kind: 'tag' as const, id: TAG };
+    context.insert('tags', {
+      tagUuid: TAG,
+      title: 'Games',
+      normalizedTitle: 'games',
+      slug: 'games',
+      publicId: 'Games1',
+    });
+    const usage = (containerType: string, containerId: string) =>
+      context.insert('tag-usages', {
+        tagUuid: TAG,
+        containerType,
+        containerId,
+        sortOrder: 0,
+      });
+    usage('project', PROJECT);
+    writeDigest(tag, 'Games: one remake so far.', 'test');
+    expect(digestOf(tag)).toMatchObject({ fresh: true });
+
+    // Tagging an event moves the event's version, not the tag's.
+    usage('event', EVENT);
+    expect(digestOf(tag)).toMatchObject({ fresh: false });
+    // Taken off again, the tag reads as it did.
+    context.rawDb
+      .prepare(
+        "DELETE FROM `tag-usages` WHERE containerType = 'event' AND tagUuid = ?",
+      )
+      .run(TAG);
+    expect(digestOf(tag)).toMatchObject({ fresh: true });
+  });
 });
