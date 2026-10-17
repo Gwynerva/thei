@@ -3,6 +3,7 @@ import {
   releaseHistoryHolds,
   touchReleasedAssets,
 } from '../../content/history';
+import { releaseSettledHolds } from '../actions/release';
 import { dropBatches } from '../templates/coverage';
 import { publishSession } from './bus';
 import { releaseSessionFiles } from './files';
@@ -15,7 +16,9 @@ import { releaseSessionFiles } from './files';
  * archive, it is purged unless pinned: deleted whole, as the owner deletes
  * one — what was said and proposed goes, the versions of texts and the
  * files its actions held are let go, and so are the entities it concerned.
- * What its actions applied stays applied.
+ * What its actions applied stays applied. What an applied action holds for
+ * an undo that can no longer happen is let go before that, in a pinned
+ * session too (`../actions/release.ts`).
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -133,12 +136,25 @@ export function deleteSession(sessionUuid: string, now = Date.now()) {
   publishSession(sessionUuid, { type: 'session' });
 }
 
-/** Archives and purges sessions as their time comes: called every hour. */
-export function maintainAiSessions(now = Date.now()) {
+/**
+ * Archives and purges sessions as their time comes, and lets go of what
+ * applied actions held for an undo that can no longer happen: called every
+ * hour. The letting go reads the entities, so it goes on after this
+ * returns; the promise says when it is done, and never fails.
+ */
+export function maintainAiSessions(now = Date.now()): Promise<void> {
   try {
     archiveQuietSessions(now);
     purgeArchivedSessions(now);
   } catch (error) {
     THEI_SERVER.console.error('[AI] Keeping sessions failed:', error);
   }
+  return releaseSettledHolds(now).then(
+    () => undefined,
+    (error) =>
+      THEI_SERVER.console.error(
+        '[AI] Letting go of what actions held failed:',
+        error,
+      ),
+  );
 }

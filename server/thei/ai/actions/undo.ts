@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, or } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm';
 import type {
   ContentOwnerType,
   ContentSlot,
@@ -55,12 +55,17 @@ import type { ActionRow, ActionUndo } from './types';
  * cannot be told for sure is refused rather than guessed. A deletion is final.
  */
 
-/** What undoing it did to the version of its form, kept for later undos. */
+export type UndoState = 'ready' | 'changed' | 'gone' | 'final' | 'undone';
+
+/**
+ * What undoing it did to the version of its form, kept for later undos —
+ * or, once it could no longer be undone and let go of what it held, how it
+ * stood then: it stays so, since what an undo would put back may be gone.
+ */
 export type StoredUndo = ActionUndo & {
   undone?: { at: number; before?: number; after?: number };
+  released?: { at: number; state: Exclude<UndoState, 'ready' | 'undone'> };
 };
-
-export type UndoState = 'ready' | 'changed' | 'gone' | 'final' | 'undone';
 
 /**
  * Tags as they were, made again by their titles where they are gone: a
@@ -100,15 +105,10 @@ function ownerVersionsOf(undo: StoredUndo) {
 }
 
 /**
- * Whether only actions have changed what `made` made since: from the
- * version `made` left, each step — an action applied or undone on its form —
- * began at the version the one before it left, and the last left the version
- * it is at now. A change by anyone else — the owner's own form, a relation
- * drawn from the other side — leaves a version no step began at, and the
- * chain ends short of now. Steps that change no version, or began before,
- * lead nowhere and are passed over.
+ * The actions that changed a form, undone since or not: those on its
+ * entity, and on a project's sections.
  */
-function onlyActionsSince(made: ActionRow, owner: EntityKey): boolean {
+function formActions(owner: EntityKey): ActionRow[] {
   const { db, schema } = THEI_SERVER.useDb();
   const sections =
     owner.kind === 'project'
@@ -120,10 +120,7 @@ function onlyActionsSince(made: ActionRow, owner: EntityKey): boolean {
           .map((section) => section.id)
       : [];
   const t = schema.aiActions;
-  // Only the actions on its form: the entity, and a project's sections. An
-  // action applied before it may have been undone after it, so none is
-  // left out by its clock.
-  const rows = db
+  return db
     .select()
     .from(t)
     .where(
@@ -143,6 +140,21 @@ function onlyActionsSince(made: ActionRow, owner: EntityKey): boolean {
       ),
     )
     .all() as ActionRow[];
+}
+
+/**
+ * Whether only actions have changed what `made` made since: from the
+ * version `made` left, each step — an action applied or undone on its form —
+ * began at the version the one before it left, and the last left the version
+ * it is at now. A change by anyone else — the owner's own form, a relation
+ * drawn from the other side — leaves a version no step began at, and the
+ * chain ends short of now. Steps that change no version, or began before,
+ * lead nowhere and are passed over.
+ */
+function onlyActionsSince(made: ActionRow, owner: EntityKey): boolean {
+  // An action applied before it may have been undone after it, so none is
+  // left out by its clock.
+  const rows = formActions(owner);
   let chain = ownerVersionsOf(made.undo as StoredUndo).after;
   if (chain === undefined) return false;
   const steps: { before?: number; after?: number }[] = [];
@@ -181,6 +193,7 @@ export async function undoState(row: ActionRow): Promise<UndoState> {
   const undo = row.undo as StoredUndo | null;
   if (!undo) return row.state === 'undone' ? 'undone' : 'final';
   if (undo.undone || row.state === 'undone') return 'undone';
+  if (undo.released) return undo.released.state;
   if (undo.kind === 'final') return 'final';
   if (undo.kind === 'form' && !undo.before) return 'final';
   switch (undo.kind) {
@@ -235,6 +248,49 @@ export async function undoState(row: ActionRow): Promise<UndoState> {
       return onlyActionsSince(row, owner) ? 'ready' : 'changed';
     }
   }
+}
+
+/** Where an action may be undone: applied, or applied in part and waiting. */
+const UNDOABLE_STATES: ActionRow['state'][] = ['applied', 'pending'];
+
+/**
+ * Whether an action changed since may yet read as it left things: a later
+ * action on the same form, or a relation drawn to it from the other end,
+ * that may itself be undone could put back what it changed. Anything else
+ * — the owner's own edit — has moved on for good, and so has a made entity
+ * changed by anyone but actions: its version went where no undo leads.
+ */
+export async function undoMayComeBack(row: ActionRow): Promise<boolean> {
+  const undo = row.undo as StoredUndo | null;
+  const changed: EntityKey | undefined =
+    undo?.kind === 'form'
+      ? entityTargetOf(row)
+      : undo?.kind === 'text'
+        ? ({ kind: undo.ownerType, id: undo.ownerId } as EntityKey)
+        : undefined;
+  const face = changed && entityFace(formOwnerOf(changed) ?? changed);
+  if (!face) return false;
+  const { db, schema } = THEI_SERVER.useDb();
+  const t = schema.aiActions;
+  const drawnTo = db
+    .select()
+    .from(t)
+    .where(
+      and(
+        inArray(t.state, UNDOABLE_STATES),
+        eq(t.kind, 'relation'),
+        isNotNull(t.undo),
+        sql`json_extract(${t.payload}, '$.other') = ${face.ref}`,
+      ),
+    )
+    .all() as ActionRow[];
+  for (const other of [...formActions(face.key), ...drawnTo]) {
+    if (other.actionUuid === row.actionUuid) continue;
+    if (!UNDOABLE_STATES.includes(other.state)) continue;
+    if ((other.decidedAt ?? 0) < (row.decidedAt ?? 0)) continue;
+    if ((await undoState(other)) === 'ready') return true;
+  }
+  return false;
 }
 
 /**
@@ -485,10 +541,18 @@ export async function undoActionHeld(
 ): Promise<ActionTarget | undefined> {
   const row =
     findAction(actionUuid) ?? fail(`There is no action ${actionUuid}.`);
+  return withEntityLocks(undoLocks(row), () => undoAction(actionUuid));
+}
+
+/**
+ * The locks an undo of an action takes: those of its target, or, for what
+ * it made, of the form that holds it.
+ */
+export function undoLocks(row: ActionRow): string[] {
   const undo = row.undo as StoredUndo | null;
   const key =
     undo?.kind === 'create'
       ? (formOwnerOf(undo.created) ?? undo.created)
       : targetOf(row);
-  return withEntityLocks(actionLocks(row, key), () => undoAction(actionUuid));
+  return actionLocks(row, key);
 }
