@@ -12,6 +12,7 @@ type AdminSystemInfo = {
 };
 
 const humanSize = useHumanSize();
+const liveNow = useLiveNow();
 const [
   { data: systemInfo, error: systemError },
   { data: disk },
@@ -33,7 +34,9 @@ const isPrivate = computed(
   () => systemInfo.value?.siteAccessLevel === 'private',
 );
 const lastBackupAt = computed(() => backup.value?.lastBackup?.completedAt);
-const backupStale = computed(() => isBackupStale(lastBackupAt.value));
+const backupStale = computed(() =>
+  isBackupStale(lastBackupAt.value, liveNow.value),
+);
 
 // The disk is a small donut: a circle of circumference 100, so each segment's
 // dash length is simply its share of the disk in percent.

@@ -1,4 +1,4 @@
-export default defineNuxtPlugin(() => {
+export default defineNuxtPlugin((nuxtApp) => {
   const liveNow = useState<number>('live-now');
 
   if (import.meta.server) {
@@ -11,5 +11,11 @@ export default defineNuxtPlugin(() => {
     setTimeout(updateLiveNow, 1000);
   }
 
-  updateLiveNow();
+  // Hydration reads the server's clock: a client clock set before it would
+  // turn "just now" into "1 minute ago" on the way and break hydration.
+  if (nuxtApp.isHydrating && liveNow.value) {
+    nuxtApp.hooks.hookOnce('app:suspense:resolve', updateLiveNow);
+  } else {
+    updateLiveNow();
+  }
 });
