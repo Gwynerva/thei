@@ -68,7 +68,7 @@ async function load(keepTyped = false) {
   }
 }
 
-provideFileAi({
+const fileAi = provideFileAi({
   ref: () => `asset:${props.assetUuid}`,
   offers: () => offers.value,
   form: () => form,
@@ -111,7 +111,10 @@ async function save(): Promise<boolean> {
       },
     });
     settle(saved);
-    // What was proposed is settled against the description saved.
+    // A proposal taken into the field and corrected there counts as
+    // applied with the words saved; what was proposed is then settled
+    // against the description saved.
+    await fileAi.saved();
     if (offers.value.length) await load();
     return true;
   } catch (caught) {

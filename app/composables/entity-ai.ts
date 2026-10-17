@@ -15,6 +15,7 @@ import {
 } from '#layers/thei/shared/relation';
 import type { TagEditItem } from '#layers/thei/shared/tag';
 import { namesTag } from '#layers/thei/shared/ai-actions';
+import { actionTexts } from '#layers/thei/shared/ai-action-texts';
 
 /**
  * The AI around one entity's form: what it remembers of the entity, the
@@ -59,6 +60,12 @@ export interface EntityAi {
   comment: (offer: AiEntityOffer, text: string) => Promise<void>;
   /** Edits taken in a text's editor, told to their sessions once saved. */
   noteTaken: (taken: Record<string, Record<string, string>>) => void;
+  /**
+   * The form was saved: proposals taken into it are told with their words
+   * as saved, which they count as applied with when the owner corrected
+   * them there.
+   */
+  saved: () => Promise<void>;
   remember: (text: string) => Promise<void>;
 }
 
@@ -143,6 +150,49 @@ interface Take {
   keys: string[];
   after: string;
   undo: () => void;
+}
+
+/**
+ * The words of a proposal taken into a form, as the saved form holds them,
+ * by the keys its texts go by: what the owner may have corrected there.
+ */
+function savedWords(
+  action: AiActionItem,
+  form: Record<string, unknown>,
+): Record<string, string> | undefined {
+  const values: Record<string, string> = {};
+  for (const text of actionTexts(action.kind, action.payload)) {
+    const field =
+      action.kind === 'field'
+        ? String((action.payload as { field?: unknown }).field)
+        : action.kind === 'describe'
+          ? 'description'
+          : action.kind === 'update' && text.key.startsWith('changes.')
+            ? text.key.slice('changes.'.length)
+            : undefined;
+    if (!field || !(field in form)) continue;
+    const value = form[field];
+    values[text.key] = Array.isArray(value)
+      ? value.map(String).join('\n')
+      : String(value ?? '');
+  }
+  return Object.keys(values).length ? values : undefined;
+}
+
+/** Tells the sessions of proposals taken into a form what the form saved. */
+async function tellTakenWords(
+  took: readonly AiActionItem[],
+  form: Record<string, unknown> | undefined,
+) {
+  if (!form) return;
+  await Promise.all(
+    took.map((action) => {
+      const values = savedWords(action, form);
+      return values
+        ? aiApi.takenWith(action.actionUuid, values).catch(() => undefined)
+        : undefined;
+    }),
+  );
 }
 
 /** The fields as a take compares them. */
@@ -358,9 +408,22 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
         () => options.version?.(),
         (now, before) => {
           if (now === before) return;
+          // Saved by the owner — not read again for being outdated — what
+          // was taken is told as saved.
+          const took = outdated.value
+            ? []
+            : [...taken.value.keys()].flatMap(
+                (id) =>
+                  panel.value?.offers.find(
+                    (offer) => offer.action.actionUuid === id,
+                  )?.action ?? [],
+              );
+          const form = options.form?.() as Record<string, unknown> | undefined;
           taken.value = new Map();
           outdated.value = false;
-          void tellTaken().then(refresh);
+          void Promise.all([tellTaken(), tellTakenWords(took, form)]).then(
+            refresh,
+          );
         },
       );
     });
@@ -518,6 +581,8 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
     reject,
     comment,
     remember,
+    // A form tells what it took as its version moves, saved.
+    saved: async () => {},
     noteTaken: (taken) => {
       for (const [actionUuid, parts] of Object.entries(taken))
         takenInTexts.set(actionUuid, {
@@ -639,6 +704,16 @@ export function provideFileAi(options: FileAiOptions): EntityAi {
       }
     },
     noteTaken: () => {},
+    async saved() {
+      await tellTakenWords(
+        [...taken.value.keys()].flatMap(
+          (id) =>
+            options.offers().find((offer) => offer.action.actionUuid === id)
+              ?.action ?? [],
+        ),
+        options.form(),
+      );
+    },
     remember: async () => {},
   };
   provide(KEY, ai);

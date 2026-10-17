@@ -4,7 +4,7 @@ import type { AiEntityType, AiMessagePart } from '#layers/thei/shared/ai';
 import { findTemplate } from '../templates/store';
 import { findEntity, refOf, type EntityKey } from '../../entity-kinds';
 import { actionDef } from '../actions/registry';
-import { findAction, targetOf } from '../actions/rows';
+import { findAction, sessionActions, targetOf } from '../actions/rows';
 import { targetRef } from '../actions/target';
 import { startTurn } from '../runner/queue';
 import { publishSession } from './bus';
@@ -15,6 +15,7 @@ import {
   insertMessage,
   linkSessionEntities,
   refreshSessionCounts,
+  sessionMessages,
 } from './store';
 import { cleanSessionTitle, titleFromWords } from './names';
 import {
@@ -38,6 +39,34 @@ function messageText(text: string): string {
   const trimmed = text.trim();
   if (trimmed.length > MESSAGE_MAX) refused('The message is too long');
   return trimmed;
+}
+
+/**
+ * The owner's corrections of the model's proposals it has not heard of yet:
+ * told with the owner's next words, so it writes in their manner from then
+ * on. Each is told once — by its id in what the owner's messages carried.
+ */
+function correctionsNote(sessionUuid: string): string {
+  const told = sessionMessages(sessionUuid)
+    .filter((message) => message.role === 'owner')
+    .flatMap((message) => message.transcript)
+    .map((turn) => ('text' in turn ? turn.text : ''))
+    .join('\n');
+  const rows = sessionActions(sessionUuid).filter(
+    (row) =>
+      row.proposed !== null &&
+      row.proposed !== undefined &&
+      (row.state === 'pending' || row.state === 'applied') &&
+      !told.includes(row.actionUuid),
+  );
+  if (!rows.length) return '';
+  const summary = (kind: string, payload: unknown) =>
+    actionDef(kind as never).summary(payload as never);
+  const lines = rows.map(
+    (row) =>
+      `${row.actionUuid}: you proposed ${summary(row.kind, row.proposed)}; they made it ${summary(row.kind, row.payload)}`,
+  );
+  return `(Thei: the owner corrected your words before applying them — ${lines.join('; ')}. Write in their manner from now on.)`;
 }
 
 /** The entities a message names: links to them, as the composer makes them. */
@@ -130,7 +159,9 @@ export function postOwnerMessage(
   }
   for (const file of files) parts.push({ type: 'file', ...file });
   if (message.brief) said = message.brief;
-  said = [said, sessionFilesNote(files)].filter(Boolean).join('\n\n');
+  said = [said, sessionFilesNote(files), correctionsNote(sessionUuid)]
+    .filter(Boolean)
+    .join('\n\n');
 
   const { db, schema } = THEI_SERVER.useDb();
   const row = db.transaction((tx) => {

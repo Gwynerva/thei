@@ -7,6 +7,7 @@ import {
   type RelationWord,
 } from '#layers/thei/shared/relation';
 import { relationWordIcon } from '#layers/thei/shared/relation-display';
+import { libraryAssetDetailsModal } from '#layers/thei/app/modals/asset-library/details-modal';
 
 /**
  * What one action says, in its row: the kind's words, the entities it
@@ -56,6 +57,12 @@ const relation = computed(() => {
 });
 
 const fieldWords = computed(() => fieldName(String(payload.value.field)));
+
+/** The file a description is proposed for, in the library's window of it. */
+function openFile() {
+  if (props.action.file)
+    void openModal(libraryAssetDetailsModal, { asset: props.action.file });
+}
 /**
  * What a change of a form says: each field in words, and the new words of a
  * short text — a button, a status line — where it sets them.
@@ -322,15 +329,28 @@ const createTitle = computed(() => {
     </template>
 
     <!-- A file described: the file itself, small, so the words can be
-         checked against it -->
+         checked against it, and opened for a closer look — but in its own
+         window, where it is open already. -->
     <template v-else-if="action.kind === 'describe'">
       <b v-if="!plain">{{ kindWords }}</b>
-      <span
-        v-if="action.file?.media"
-        class="size-8 shrink-0 overflow-hidden rounded-sm bg-bg-3"
+      <button
+        v-if="action.file && showTarget"
+        type="button"
+        class="shrink-0 cursor-pointer rounded-sm transition-opacity
+          hocus:opacity-85"
+        :aria-label="phrase.ai_action_open_file"
+        :data-title-popup="phrase.ai_action_open_file"
         data-action-file
-        ><Media v-bind="action.file.media" class="size-full"
-      /></span>
+        @click="openFile"
+      >
+        <ContentFileTile :asset="action.file as never" small />
+      </button>
+      <ContentFileTile
+        v-else-if="action.file"
+        :asset="action.file as never"
+        small
+        data-action-file
+      />
       <AiEntityChip v-if="showTarget" :entity="action.target" />
     </template>
 

@@ -46,13 +46,27 @@ attention.
 - A proposal is drawn as its session's card draws it
   (`app/components/ai/AiActionRow.vue`): what, why, where it came from, and
   its buttons.
-- The card's buttons are square and of one rank: comment and decline are the
-  same neutral square; only accept is in the accent. A change that cannot be
+- The card's buttons are square and of one rank: correct, comment and decline
+  are the same neutral square; only accept is in the accent. A change that cannot be
   undone — a deletion — is accepted with a button in the error colours.
 - What the form cannot take opens in its session (the `ai-chat` icon); a text
   edit opens on the review screen of the text's own editor.
 - An accepted proposal is laid into the form and counts as applied once the
-  form is saved.
+  form is saved — with the owner's words, when they corrected it in the form
+  before saving.
+- Where a proposal is applied as it stands — its session, a memory kind at a
+  label — its words can be corrected first: the square `edit` button, or a
+  click on the words themselves, turns them into fields in the row; the
+  accept button then applies the corrected words, and Esc puts the model's
+  back (`shared/ai-action-texts.ts` says which words of each kind). Once
+  corrected it says «с вашей правкой», the model's own words in its hint.
+- A described file is shown as its tile (`ContentFileTile`), which opens the
+  library's window of the file — but in that very window.
+- A check with more to look at ends its answer with one quiet button —
+  «Дальше», or «Ещё N» when less than a batch is left — that goes on in the
+  same session. Nothing runs by itself.
+- The owner's message begun from a template carries a header naming it, as a
+  comment names the action it is about.
 
 ## Templates and models
 

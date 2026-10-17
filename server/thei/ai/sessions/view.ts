@@ -232,6 +232,7 @@ export async function actionItems(rows: ActionRow[]): Promise<AiActionItem[]> {
       ...(file ? { file } : {}),
       payload: row.payload,
       base: row.base,
+      proposed: row.proposed ?? null,
       refs: refsIn(row.payload),
       parts: row.parts as AiActionItem['parts'],
       certainty: row.certainty,

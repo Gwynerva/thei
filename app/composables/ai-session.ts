@@ -329,6 +329,23 @@ export const aiApi = {
       body: { parts },
     });
   },
+  /** The owner's words in place of the model's, by text key, before applying. */
+  editAction(actionUuid: string, values: Record<string, string>) {
+    return $fetch(`/api/admin/ai/actions/${actionUuid}/edit`, {
+      method: 'POST',
+      body: { values },
+    });
+  },
+  /**
+   * A proposal taken into a form, the form saved: its words as saved, which
+   * it counts as applied with when they are the owner's.
+   */
+  takenWith(actionUuid: string, values: Record<string, string>) {
+    return $fetch(`/api/admin/ai/actions/${actionUuid}/taken`, {
+      method: 'POST',
+      body: { values },
+    });
+  },
   reject(actionUuid: string, never = false) {
     return $fetch(`/api/admin/ai/actions/${actionUuid}/reject`, {
       method: 'POST',

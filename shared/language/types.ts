@@ -1449,6 +1449,32 @@ export type LanguagePhrases = {
   >;
   ai_notice_connection: string;
   ai_comment_on: (what: string) => string;
+  /** The hint of a proposed description's file, which opens its window. */
+  ai_action_open_file: string;
+  /** Correcting a proposal's words before applying it. */
+  ai_action_edit: string;
+  ai_action_edit_cancel: string;
+  /** Kept and applied as corrected. */
+  ai_action_edit_apply: string;
+  /** Kept as corrected, for a bundle's foot to apply. */
+  ai_action_edit_save: string;
+  /** A proposal whose words the owner corrected. */
+  ai_action_corrected: string;
+  /** What the model had proposed, in a hint. */
+  ai_action_model_words: (words: string) => string;
+  /** What each of a proposal's texts is, when it carries several. */
+  ai_action_text_roles: Record<
+    | 'description'
+    | 'text'
+    | 'fact'
+    | 'word'
+    | 'meaning'
+    | 'tag'
+    | 'note'
+    | 'note-this'
+    | 'note-other',
+    string
+  >;
   /** The header of the owner's message begun from a template or a check. */
   ai_message_template: (title: string) => string;
   /** What the owner says, and the button says, to go on with a check's run. */

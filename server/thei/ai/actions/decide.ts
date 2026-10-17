@@ -104,7 +104,7 @@ export function rejectActions(
           tx,
           row,
           row.fingerprint,
-          actionDef(row.kind).summary(row.payload as never),
+          actionDef(row.kind).summary((row.proposed ?? row.payload) as never),
           now,
         );
     }
@@ -140,7 +140,7 @@ export function neverAgain(actionUuid: string, now = Date.now()) {
       tx,
       row,
       row.fingerprint,
-      actionDef(row.kind).summary(row.payload as never),
+      actionDef(row.kind).summary((row.proposed ?? row.payload) as never),
       now,
     ),
   );

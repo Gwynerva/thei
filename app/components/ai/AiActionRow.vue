@@ -8,6 +8,10 @@ import {
   AI_ACTION_INFO,
   type AiActionKind,
 } from '#layers/thei/shared/ai-actions';
+import {
+  actionTexts,
+  type AiActionText,
+} from '#layers/thei/shared/ai-action-texts';
 
 /**
  * One action in its card. A lone one answers on its own row — comment (or
@@ -176,6 +180,86 @@ function togglePart(part: PartRow) {
 const partsOff = computed(
   () => props.inBundle && !props.picked && !props.fixed,
 );
+
+// ---- Correcting its words ------------------------------------------------------
+
+/**
+ * The words it carries that the owner may correct before applying it — in
+ * a session, or wherever it is applied as it stands; a form that takes it
+ * is corrected in the form itself.
+ */
+const texts = computed(() =>
+  actionTexts(props.action.kind, props.action.payload),
+);
+const editable = computed(
+  () =>
+    pending.value &&
+    !archived.value &&
+    props.form !== 'takes' &&
+    props.form !== 'session' &&
+    texts.value.length > 0,
+);
+const editing = ref(false);
+const saving = ref(false);
+const drafts = reactive<Record<string, string>>({});
+const editor = ref<HTMLElement>();
+
+function startEdit() {
+  if (!editable.value || editing.value) return;
+  for (const text of texts.value) drafts[text.key] = text.value;
+  editing.value = true;
+  void nextTick(() =>
+    editor.value?.querySelector<HTMLElement>('input, textarea')?.focus(),
+  );
+}
+function cancelEdit() {
+  editing.value = false;
+}
+// Decided meanwhile, or gone: nothing is left to correct.
+watch(editable, (now) => now || (editing.value = false));
+
+/**
+ * The corrected words kept on the proposal, then — for a row that answers
+ * on its own — applied as they stand; a row of a bundle waits for its foot.
+ */
+async function saveEdit() {
+  if (saving.value) return;
+  const changed = texts.value.filter(
+    (text) => (drafts[text.key] ?? text.value) !== text.value,
+  );
+  saving.value = true;
+  try {
+    if (changed.length)
+      await aiApi.editAction(
+        props.action.actionUuid,
+        Object.fromEntries(
+          changed.map((text) => [text.key, drafts[text.key]!]),
+        ),
+      );
+    editing.value = false;
+    if (!props.inBundle) emit('apply');
+  } catch (caught) {
+    showToast(errorMessage(caught, phrase.value.ai_error));
+  } finally {
+    saving.value = false;
+  }
+}
+
+/** What a text is, when a proposal carries several. */
+function textLabel(text: AiActionText) {
+  if (text.field) return fieldName(text.field);
+  return text.role ? phrase.value.ai_action_text_roles[text.role] : '';
+}
+
+/** The model's own words, once the owner corrected them. */
+const modelWords = computed(() => {
+  if (props.action.proposed === null || props.action.proposed === undefined)
+    return '';
+  return actionTexts(props.action.kind, props.action.proposed)
+    .map((text) => publicText(text.value))
+    .filter(Boolean)
+    .join(' · ');
+});
 
 // ---- What became of it --------------------------------------------------------
 
@@ -363,7 +447,49 @@ function sendComment(text: string) {
     >
       <!-- What leads the buttons: a pager of the proposals at one field. -->
       <slot name="actions-start" />
-      <template v-if="pending">
+      <!-- Correcting its words: back as it was, or kept — and applied, for
+           a row that answers on its own. -->
+      <template v-if="pending && editing">
+        <Button
+          variant="secondary"
+          size="icon-sm"
+          class="pointer-coarse:size-11"
+          :aria-label="phrase.ai_action_edit_cancel"
+          :data-title-popup="phrase.ai_action_edit_cancel"
+          data-action-edit-cancel
+          @click="cancelEdit"
+        >
+          <Icon name="close" />
+        </Button>
+        <Button
+          size="icon-sm"
+          class="pointer-coarse:size-11"
+          :disabled="saving || busy"
+          :aria-label="
+            inBundle ? phrase.ai_action_edit_save : phrase.ai_action_edit_apply
+          "
+          :data-title-popup="
+            inBundle ? phrase.ai_action_edit_save : phrase.ai_action_edit_apply
+          "
+          data-action-edit-apply
+          @click="saveEdit"
+        >
+          <Icon :name="saving ? 'loading' : 'check'" />
+        </Button>
+      </template>
+      <template v-else-if="pending">
+        <Button
+          v-if="editable"
+          variant="secondary"
+          size="icon-sm"
+          class="pointer-coarse:size-11"
+          :aria-label="phrase.ai_action_edit"
+          :data-title-popup="phrase.ai_action_edit"
+          data-action-edit
+          @click="startEdit"
+        >
+          <Icon name="edit" />
+        </Button>
         <Button
           v-if="revisable && !from"
           variant="secondary"
@@ -477,9 +603,46 @@ function sendComment(text: string) {
       </Button>
     </div>
 
+    <!-- Its words, corrected in place -->
+    <div
+      v-if="editing"
+      ref="editor"
+      class="col-start-2 col-end-4 flex min-w-0 flex-col gap-2"
+      data-action-editing
+      @keydown.esc.stop.prevent="cancelEdit"
+      @keydown.enter.ctrl.prevent="saveEdit"
+      @keydown.enter.meta.prevent="saveEdit"
+    >
+      <label
+        v-for="text in texts"
+        :key="text.key"
+        class="flex min-w-0 flex-col gap-1"
+      >
+        <span v-if="texts.length > 1" class="text-xs text-text-2">{{
+          textLabel(text)
+        }}</span>
+        <FieldInput
+          v-if="text.shape === 'line'"
+          v-model="drafts[text.key]"
+          :aria-label="textLabel(text) || phrase.ai_action_edit"
+          :data-action-text="text.key"
+        />
+        <FieldTextarea
+          v-else
+          v-model="drafts[text.key]"
+          :rows="text.shape === 'markdown' ? 8 : text.shape === 'lines' ? 4 : 3"
+          :aria-label="textLabel(text) || phrase.ai_action_edit"
+          :data-action-text="text.key"
+        />
+      </label>
+    </div>
+
     <!-- What it changes -->
     <div
-      v-if="fieldChange"
+      v-else-if="fieldChange"
+      :class="editable ? 'cursor-text' : ''"
+      :data-title-popup="editable ? phrase.ai_action_edit : undefined"
+      @click="startEdit"
       class="col-start-2 col-end-4 min-w-0 border-l-2 border-border-2 pl-2.5
         text-sm leading-normal wrap-anywhere"
     >
@@ -501,6 +664,9 @@ function sendComment(text: string) {
     </div>
     <p
       v-else-if="descriptionChange"
+      :class="editable ? 'cursor-text' : ''"
+      :data-title-popup="editable ? phrase.ai_action_edit : undefined"
+      @click="startEdit"
       class="col-start-2 col-end-4 min-w-0 border-l-2 border-border-2 pl-2.5
         text-sm leading-normal wrap-anywhere"
       data-action-description
@@ -521,6 +687,9 @@ function sendComment(text: string) {
     </p>
     <p
       v-else-if="quote"
+      :class="editable ? 'cursor-text' : ''"
+      :data-title-popup="editable ? phrase.ai_action_edit : undefined"
+      @click="startEdit"
       class="col-start-2 col-end-4 line-clamp-3 min-w-0 border-l-2 border-accent
         pl-2.5 text-sm leading-normal"
     >
@@ -628,6 +797,17 @@ function sendComment(text: string) {
       {{ action.reason }}
     </p>
     <p
+      v-if="pending && modelWords && !editing"
+      class="col-start-2 col-end-4 text-xs text-text-2"
+    >
+      <span
+        class="underline decoration-text-2/35 decoration-dotted"
+        :data-title-popup="phrase.ai_action_model_words(modelWords)"
+        data-action-corrected
+        >{{ phrase.ai_action_corrected }}</span
+      >
+    </p>
+    <p
       v-if="from"
       class="col-start-2 col-end-4 flex min-w-0 items-center gap-1 text-xs
         text-text-2"
@@ -664,7 +844,16 @@ function sendComment(text: string) {
       data-action-sub
     >
       <template v-if="action.state === 'applied'">
-        {{ appliedLine }}<template v-if="undoHint"> · {{ undoHint }}</template>
+        {{ appliedLine
+        }}<template v-if="modelWords">
+          ·
+          <span
+            class="underline decoration-text-2/35 decoration-dotted"
+            :data-title-popup="phrase.ai_action_model_words(modelWords)"
+            data-action-corrected
+            >{{ phrase.ai_action_corrected }}</span
+          ></template
+        ><template v-if="undoHint"> · {{ undoHint }}</template>
       </template>
       <template v-else-if="action.state === 'rejected'">
         <template v-if="action.never">{{

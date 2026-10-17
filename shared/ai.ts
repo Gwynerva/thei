@@ -290,6 +290,11 @@ export interface AiActionItem {
   payload: unknown;
   /** What it was made against: the value it replaces, a version. */
   base: unknown;
+  /**
+   * What the model proposed, once the owner corrected its words: `payload`
+   * is then the owner's. None while the words are the model's.
+   */
+  proposed: unknown;
   /** The other entities it names — a relation's other end, tags — by ref. */
   refs: Record<string, AiEntityRef>;
   parts: { id: string; state: string; problem?: string }[] | null;

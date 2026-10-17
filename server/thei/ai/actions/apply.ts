@@ -78,7 +78,9 @@ interface ApplyOutcome {
 }
 
 /** Where an action stands now, as its kind tells. */
-async function evaluateAction(row: ActionRow): Promise<ActionEvaluation> {
+export async function evaluateAction(
+  row: ActionRow,
+): Promise<ActionEvaluation> {
   const key = targetOf(row);
   // A file's kind tells for itself: its family outlives the file named.
   if (key && !isFileKey(key) && row.kind !== 'delete' && !entityFace(key))

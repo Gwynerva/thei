@@ -17,8 +17,8 @@ neutral — and in square icon-only sizes.
 ## Rules
 
 - One accent button per group: the main action. Everything else is neutral.
-- Buttons of one rank share one style. On an AI card, comment and decline are
-  the same neutral square; only accept is in the accent.
+- Buttons of one rank share one style. On an AI card, correct, comment and
+  decline are the same neutral square; only accept is in the accent.
 - Icon-only buttons are strictly square: a `size` of `Button`, or
   `ModalHeaderButton` with an `icon` and no words.
 - An icon-only button has an `aria-label` and a hint with the same words

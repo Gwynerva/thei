@@ -103,6 +103,8 @@ export interface ActionRow {
   undo: unknown;
   assetUuids: string[];
   appliedBy: AiAppliedBy | null;
+  /** The model's own payload, once the owner corrected its words. */
+  proposed: unknown;
   createdAt: number;
   decidedAt: number | null;
   error: string | null;
