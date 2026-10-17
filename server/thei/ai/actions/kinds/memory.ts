@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { AI_OWNER_MEMORY_MAX, type AiTerm } from '#layers/thei/shared/ai';
 import { AI_MEMORY_TEXT_MAX } from '#layers/thei/shared/ai-memory';
@@ -424,6 +424,8 @@ export const memoryCompactAction: AiActionKindDef<'memory-compact'> = {
           .select()
           .from(schema.aiMemory)
           .where(inArray(schema.aiMemory.memoryUuid, ids))
+          // Kept for the undo in their order, which puts them back so.
+          .orderBy(schema.aiMemory.createdAt, sql`rowid`)
           .all() as MemoryRow[]
       ).filter((item) => item.type === 'fact');
       if (!sameFacts(factsOf(anchor), base.facts))

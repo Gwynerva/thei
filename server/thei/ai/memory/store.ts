@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray, or } from 'drizzle-orm';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import {
   AI_ANCHOR_MEMORY_MAX,
   AI_ENTITY_TYPES,
@@ -109,12 +109,15 @@ export function anchorWhere(schema: any, anchor: MemoryAnchor) {
 
 export function anchorRows(anchor: MemoryAnchor): MemoryRow[] {
   const { db, schema } = THEI_SERVER.useDb();
-  return db
-    .select()
-    .from(schema.aiMemory)
-    .where(anchorWhere(schema, anchor))
-    .orderBy(schema.aiMemory.createdAt)
-    .all() as MemoryRow[];
+  return (
+    db
+      .select()
+      .from(schema.aiMemory)
+      .where(anchorWhere(schema, anchor))
+      // In the order they were kept, two of one millisecond as they came.
+      .orderBy(schema.aiMemory.createdAt, sql`rowid`)
+      .all() as MemoryRow[]
+  );
 }
 
 /** The characters the facts among records take; a «never» takes none. */
