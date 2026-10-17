@@ -171,9 +171,11 @@ slogan, a project's button, the descriptions of files; **File descriptions**
 describes the files of the archive that have none yet, three a run, each
 from the file and the places it is used in — a file the model cannot be
 shown is left alone, and counted as looked at until its bytes change;
-**Broken links** mends the links that lead nowhere; **Finding possible
-relations** looks for the relations projects, events and diary entries
-lack. The code keeps count of what each has looked at — a paragraph, a
+**Broken links** mends the links that lead nowhere; **Relations and links
+between entities** proposes the relations projects, events and diary
+entries lack and the removal of those without grounds, and a link where a
+text names another of them without one — at its first mention in a part of
+the text, which the code holds to. The code keeps count of what each has looked at — a paragraph, a
 short text, a file, a link, an entity, as it read then — so a run is given
 only what is new or changed since, a run's worth at a time, and with
 nothing new no session starts and nothing is spent. What a check reads is

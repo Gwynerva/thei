@@ -6,14 +6,16 @@ import type { EntityKind } from '../../../entity-kinds';
 import { digestLine, loadDocuments } from '../../../mcp/documents';
 import { changesBetween } from '../changes';
 import type { CheckItem, TemplateSource } from './index';
+import { wordsOf } from './proofread';
 import { inScope } from './scope';
 
 /**
- * «Finding possible relations»: the projects, events and diary entries it
- * has not looked over yet, or whose words changed since — eight a run, the
- * latest changed first. What it reads of one is its name, its other names and
- * its texts; a relation is what it proposes, so a relation applied, which
- * moves the entity's version, does not hand the entity back to it.
+ * «Relations and links between entities»: the projects, events and diary
+ * entries it has not looked over yet, or whose words changed since — eight a
+ * run, the latest changed first. What it reads of one is its name, its other
+ * names and the words of its texts; relations, their removal and links are
+ * what it proposes, so neither a relation applied, which moves the entity's
+ * version, nor a link it gained hands the entity back to it.
  */
 
 /** How many entities one run is given. */
@@ -27,7 +29,7 @@ const AREAS: Record<string, string> = {
   'diary-entry': 'diary entries',
 };
 
-/** Every text of these kinds, by `kind:id`, in editing Markdown. */
+/** The words of every text of these kinds, by `kind:id`. */
 function textsByOwner(): Map<string, string[]> {
   const { db, schema } = THEI_SERVER.useDb();
   const rows = db
@@ -55,7 +57,10 @@ function textsByOwner(): Map<string, string[]> {
       key,
       list
         .sort((a, b) => a.slot.localeCompare(b.slot))
-        .map((text) => `${text.slot}\n${contentToEditMarkdown(text.data)}`),
+        .map(
+          (text) =>
+            `${text.slot}\n${wordsOf(contentToEditMarkdown(text.data))}`,
+        ),
     ]),
   );
 }
@@ -104,7 +109,8 @@ export const graphSource: TemplateSource = {
 
   brief(batch) {
     return [
-      'Look for the relations these entities lack, both ways: from each of them to the rest of the archive, and from the rest of the archive to each. Read their digests and read in full what matters (read_entity), search the archive for what they name, and look at the relations they already have. A relation is the owner’s deliberate claim that two belong together — related, depends on, affects — while a mention in a text is only a link: propose a relation only where the two truly belong together, sure only when it is plain, with why. Say also which of their relations look doubtful or at odds with each other. An entity with nothing to add gets nothing.',
+      'Look for the relations these entities lack, both ways: from each of them to the rest of the archive, and from the rest of the archive to each. Read their digests and read in full what matters (read_entity), search the archive for what they name, and look at the relations they already have. A relation is the owner’s deliberate claim that two belong together — related, depends on, affects — while a mention in a text is only a link: propose a relation only where the two truly belong together, sure only when it is plain, with why. A relation of theirs without good grounds, or at odds with another, is proposed for removal — relation, op remove, never as sure — with why.',
+      'Where a text of theirs names another project, event or diary entry, a project’s section or one of its headings (outline gives them) without a link, propose the link: revise, mode proofread, corrections of category link, every word kept, at its first mention in a part of the text — only where you are sure it belongs. A link is never a reason for a relation, nor a relation for a link. An entity with nothing to add gets nothing.',
       '',
       ...batch.map((item) => item.shown),
     ].join('\n');

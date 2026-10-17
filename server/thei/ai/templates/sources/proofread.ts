@@ -93,7 +93,7 @@ function ownWords(inside: string, names: readonly string[]) {
  * its note without where it leads, of a block's attributes only the title
  * and the note it shows, the spacing set aside.
  */
-function wordsOf(paragraph: string): string {
+export function wordsOf(paragraph: string): string {
   return paragraph
     .replace(
       /\[([^\]]*)\]\(([^)]*)\)/g,

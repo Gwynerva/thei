@@ -676,6 +676,12 @@ describe('proposing over MCP', () => {
             '## Later',
             '',
             'Parapet again, on its own.',
+            '',
+            '## Last',
+            '',
+            'Parapet first here.',
+            '',
+            `And [Parapet](thei:project/${PROJECT}) linked further on.`,
           ].join('\n'),
         },
       ],
@@ -693,7 +699,12 @@ describe('proposing over MCP', () => {
     const above = await propose(handlerFor(['read']), [
       link('Then Parapet', `Then [Parapet](thei:project/${PROJECT})`),
     ]);
-    expect(above).toContain('linked already above');
+    expect(above).toContain('linked already in this part');
+    // One linked further on in the part counts too: a part links it once.
+    const later = await propose(handlerFor(['read']), [
+      link('Parapet first', `[Parapet](thei:project/${PROJECT}) first`),
+    ]);
+    expect(later).toContain('linked already in this part');
     const below = await propose(handlerFor(['read']), [
       link('Parapet again', `[Parapet](thei:project/${PROJECT}) again`),
     ]);

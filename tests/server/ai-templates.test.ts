@@ -235,7 +235,7 @@ describe('the built-in checks', () => {
       'Mistakes in the text',
       'File descriptions',
       'Broken links',
-      'Finding possible relations',
+      'Relations and links between entities',
     ]);
     const keys = Object.keys(findTemplate(id('proofread'))!);
     expect(keys).not.toContain('schedule');
@@ -543,7 +543,7 @@ describe('a ready-made request', () => {
       ['Mistakes in the text', 'proofread'],
       ['File descriptions', 'describe'],
       ['Broken links', 'links'],
-      ['Finding possible relations', 'graph'],
+      ['Relations and links between entities', 'graph'],
       ['Look over', null],
       ['Project look', null],
     ]);

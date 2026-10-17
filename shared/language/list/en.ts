@@ -1966,9 +1966,9 @@ export default defineI18nBase({
           'Find the broken internal links. For each, work out why it broke: the entity it led to was deleted, the heading it led to was removed or renamed, and so on. Try to mend it, finding a sure replacement that keeps what the link meant. Taking the link off altogether is the last resort.',
       },
       graph: {
-        title: 'Finding possible relations',
+        title: 'Relations and links between entities',
         instruction:
-          'Find the relations missing between projects, events and diary entries, and say which look doubtful. A mention is not yet a relation.',
+          'Look over the relations and links between projects, events and diary entries. Propose the relations that are missing, and removing the weak ones — those without good grounds. Every relation must be well grounded: relations build the graph of the whole site, and it should hold no clutter. A mention of an entity, or a link to it, does not yet make a relation. But a diary entry that plainly speaks of working on a project or of taking part in an event almost surely makes one. Links are simpler: look in the texts for mentions of other entities without a link and, where you are quite sure a link belongs, propose it — to the sections of projects and to particular headings too.',
       },
     },
     ai_template_copy_title: (title) => `${title} (copy)`,

@@ -226,7 +226,7 @@ test('copies a check into a request of the owner’s, opened in a new session', 
   await expect(modal).toHaveCount(0);
   const copy = page
     .locator('[data-template-row]')
-    .filter({ hasText: 'Finding possible relations (copy)' })
+    .filter({ hasText: 'Relations and links between entities (copy)' })
     .first();
   await expect(copy).toBeVisible();
   await copy.locator('[data-template-edit]').click();

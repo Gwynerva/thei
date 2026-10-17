@@ -120,10 +120,10 @@ export async function prepareLinkCorrection(
     )
   )
     return { problem: 'a text does not link to its own entity.' };
-  if (linkedAbove(data, correction.find, replaceHtml))
+  if (linkedInPart(data, correction.find, replaceHtml))
     return {
       problem:
-        'that entity is linked already above, in this part of the text: a link stands on its first mention, and again only after a heading of its own.',
+        'that entity is linked already in this part of the text: a part links an entity once, on its first mention, and again only after a heading of its own.',
     };
   return { replaceHtml };
 }
@@ -131,10 +131,10 @@ export async function prepareLinkCorrection(
 /**
  * Whether the entity a new link points to is linked already in the part of
  * the text the words stand in: from the heading of the second level before
- * them, down to their own block. A link stands on the first mention; a
- * part of its own may link again.
+ * them to the next one. A part links an entity once, on its first mention;
+ * a part of its own may link again.
  */
-function linkedAbove(data: ContentOutputData, find: string, html: string) {
+function linkedInPart(data: ContentOutputData, find: string, html: string) {
   const target = /data-entity-type="([^"]+)" data-entity-id="([^"]+)"/.exec(
     html,
   );
@@ -143,16 +143,24 @@ function linkedAbove(data: ContentOutputData, find: string, html: string) {
   const place = places.get('link');
   if (!place) return false;
   const mark = `data-entity-type="${target[1]}" data-entity-id="${target[2]}"`;
-  for (let index = place.block; index >= 0; index--) {
+  const linked = (index: number) =>
+    JSON.stringify(data.blocks[index]!.data).includes(
+      mark.replaceAll('"', '\\"'),
+    );
+  const partStarts = (index: number) => {
     const block = data.blocks[index]!;
-    if (JSON.stringify(block.data).includes(mark.replaceAll('"', '\\"')))
-      return true;
-    if (
-      index < place.block &&
-      block.type === 'header' &&
-      (block.data as { level?: number }).level === 2
-    )
-      return false;
+    return (
+      block.type === 'header' && (block.data as { level?: number }).level === 2
+    );
+  };
+  for (let index = place.block; index >= 0; index--) {
+    if (linked(index)) return true;
+    // A heading of the second level begins its part, its own words included.
+    if (partStarts(index)) break;
+  }
+  for (let index = place.block + 1; index < data.blocks.length; index++) {
+    if (partStarts(index)) break;
+    if (linked(index)) return true;
   }
   return false;
 }
