@@ -287,8 +287,12 @@ function send() {
   const kept = brought.value;
   const began = template.value;
   clear();
-  // A file that did not upload stays out of the message, and goes.
-  for (const item of kept) if (!item.asset) forget(item);
+  // Every picture's copy in the browser goes: a file that did not upload
+  // stays out of the message, and one sent is the library's now.
+  for (const item of kept) {
+    forget(item);
+    item.picture = undefined;
+  }
   brought.value = [];
   emit(
     'send',
