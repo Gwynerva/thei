@@ -152,29 +152,35 @@ export async function runTemplate(
       templateId,
       ...(scope ? { scope: scope.map(targetRef) } : {}),
     };
+    const transcript = [
+      {
+        role: 'user' as const,
+        text: brief(template, key, {
+          scope,
+          faces,
+          request: worded ? request : undefined,
+          batch: free,
+        }),
+      },
+    ];
+    // Sent with words from a composer, the run is the owner's message, as
+    // written, marked as begun from the check; run with none — from the
+    // templates' table — a note says it was started.
     insertMessage(
       tx,
       schema,
       sessionUuid,
-      {
-        role: 'note',
-        text: THEI_SERVER.phrase.ai_template_note(
-          template.title,
-          worded ? null : free.length,
-        ),
-        parts: [part],
-        transcript: [
-          {
-            role: 'user',
-            text: brief(template, key, {
-              scope,
-              faces,
-              request: worded ? request : undefined,
-              batch: free,
-            }),
+      request
+        ? { role: 'owner', text: request, parts: [part], transcript }
+        : {
+            role: 'note',
+            text: THEI_SERVER.phrase.ai_template_note(
+              template.title,
+              free.length,
+            ),
+            parts: [part],
+            transcript,
           },
-        ],
-      },
       now,
     );
     // What it is about: what the owner named; what it is given is linked as
@@ -229,13 +235,14 @@ function brief(
       CHECK_END,
     ].join('\n\n');
   return [
-    `The owner started this session from the built-in check «${template.title}» — ${template.instruction} — and asked, in their own words:`,
+    `The built-in check «${template.title}» asks: ${template.instruction}`,
+    'The owner started this session from it and wrote, in their own words — the check’s request with whatever they added or changed. Do all of what they wrote: what to look at, how much, and how.',
     run.request,
     about,
     `What this check looks at, by area:\n${Object.entries(source.areas)
       .map(([area, what]) => `- ${area}: ${what}`)
       .join('\n')}`,
-    `First call ${CHECK_BATCH_TOOL} with the areas — and the entities and files, by ref — the owner's words ask for; leave out what they do not narrow. It gives you what of that is due: only what this check has not looked at yet, as it reads now. Then do as the check says below with what it gives you, and nothing beyond what the owner asked. When the words ask for nothing this check looks at, say so and stop.`,
+    `First call ${CHECK_BATCH_TOOL} with the areas — and the entities and files, by ref — the owner's words ask for; leave out what they do not narrow. It gives you what of that is due: only what this check has not looked at yet, as it reads now. Then do with it what the check says below and what the owner's words say. When the words ask for nothing this check looks at, say so and stop.`,
     source.brief([]),
     CHECK_END,
   ].join('\n\n');

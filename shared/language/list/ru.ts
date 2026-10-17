@@ -1975,6 +1975,7 @@ export default defineI18nModule({
     },
     ai_notice_connection: 'Подключение',
     ai_comment_on: (what) => `К действию: ${what}`,
+    ai_message_template: (title) => `Шаблон «${title}»`,
     ai_answer_to: (question) => `Ответ: ${question}`,
     ai_composer_placeholder: 'Что сделать?',
     ai_composer_running: 'Можно дописать — модель учтёт',

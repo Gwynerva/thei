@@ -1449,6 +1449,8 @@ export type LanguagePhrases = {
   >;
   ai_notice_connection: string;
   ai_comment_on: (what: string) => string;
+  /** The header of the owner's message begun from a template or a check. */
+  ai_message_template: (title: string) => string;
   ai_answer_to: (question: string) => string;
   ai_composer_placeholder: string;
   ai_composer_running: string;

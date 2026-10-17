@@ -255,6 +255,12 @@ export interface AiMessageItem {
   parts: AiMessagePart[];
   /** The files of its `file` parts, as the library describes them. */
   files: AiMessageFile[];
+  /**
+   * The ready-made request the owner's words began from, as it is called
+   * now: a template's own or a built-in check. None for words of their own,
+   * and for a template gone since.
+   */
+  template: { title: string; builtin: boolean } | null;
   tokens: number;
   createdAt: number;
 }

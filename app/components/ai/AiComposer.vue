@@ -539,6 +539,34 @@ function caretAtEnd(element: HTMLElement) {
 
 /** The words a ready-made request put in last, while they stand as put. */
 let prefilled: string | undefined;
+/** What that request put in at the end of the field, to take it out again. */
+let prefilledTail = '';
+
+/**
+ * Takes `tail` off the end of the field's words, where a request put it,
+ * and says whether the words ended so; the owner's own words before it and
+ * the chips among them stay where they are.
+ */
+function takeOffTail(element: HTMLElement, tail: string): boolean {
+  const texts: Text[] = [];
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) =>
+      node.parentElement?.closest(`.${MENTION_CLASS}`)
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_ACCEPT,
+  });
+  while (walker.nextNode()) texts.push(walker.currentNode as Text);
+  const joined = texts.map((node) => node.data).join('');
+  if (!tail || !joined.endsWith(tail)) return false;
+  let rest = tail.length;
+  for (const node of texts.reverse()) {
+    if (!rest) break;
+    const take = Math.min(node.data.length, rest);
+    node.data = node.data.slice(0, node.data.length - take);
+    rest -= take;
+  }
+  return true;
+}
 
 /**
  * Words put in for the owner to go on with — a ready-made request's: into
@@ -558,8 +586,13 @@ function prefill(text: string, templateId?: string) {
       .map((node) => node.textContent ?? '')
       .join('')
       .trim();
-  // Another request's words, as they were put in: this one takes their place.
-  if (prefilled !== undefined && words() === prefilled.trim())
+  // Another request's words, as they were put in: this one takes their
+  // place, and the owner's own words before them stay.
+  if (
+    prefilled !== undefined &&
+    words() === prefilled.trim() &&
+    !takeOffTail(element, prefilledTail)
+  )
     for (const node of wordNodes()) node.remove();
   caretAtEnd(element);
   // After words, on a line of their own; after chips alone, beside them.
@@ -567,6 +600,7 @@ function prefill(text: string, templateId?: string) {
   if (!runEditCommand('insertText', typed))
     element.append(document.createTextNode(typed));
   prefilled = words();
+  prefilledTail = typed;
   updateEmpty();
   if (templateId) template.value = templateId;
 }

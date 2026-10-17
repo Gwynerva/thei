@@ -33,6 +33,7 @@ import {
   coverageOf,
 } from '../../server/thei/ai/templates/coverage';
 import { runTemplate } from '../../server/thei/ai/templates/run';
+import { messageItem } from '../../server/thei/ai/sessions/view';
 import { TEMPLATE_SOURCES } from '../../server/thei/ai/templates/sources';
 import {
   copyTemplate,
@@ -600,6 +601,11 @@ describe('a ready-made request', () => {
       templateId: own.templateId,
       title: 'Look over',
     });
+    // The message says which template its words began from.
+    expect(messageItem(sessionMessages(sessionUuid)[0]!).template).toEqual({
+      title: 'Look over',
+      builtin: false,
+    });
     await expect(runTemplate(own.templateId)).rejects.toThrow(
       /ready-made request/,
     );
@@ -626,8 +632,18 @@ describe('the owner’s words', () => {
     const sessionUuid = await run('proofread', {
       request: 'Only the titles, please.',
     });
-    expect(brief(sessionUuid!)).toContain('asked, in their own words');
+    expect(brief(sessionUuid!)).toContain('wrote, in their own words');
     expect(brief(sessionUuid!)).toContain('Only the titles, please.');
+    // The session shows the owner's message as written, begun from the check.
+    const [first] = sessionMessages(sessionUuid!);
+    expect(first).toMatchObject({
+      role: 'owner',
+      text: 'Only the titles, please.',
+    });
+    expect(messageItem(first!).template).toEqual({
+      title: findTemplate(id('proofread'))!.title,
+      builtin: true,
+    });
     // The tool's answer is the batch: the project's title, no text.
     const told = model!.requests[1]!.body.messages.find(
       (item: any) => item.role === 'tool',
@@ -648,6 +664,20 @@ describe('the owner’s words', () => {
     });
     expect(brief(sessionUuid!)).toContain('Kuzova');
     expect(brief(sessionUuid!)).not.toContain('check_batch');
+  });
+
+  it('are shown as sent even as the check says them; a run without words is a note', async () => {
+    const instruction = findTemplate(id('proofread'))!.instruction;
+    const sent = await run('proofread', { request: instruction });
+    expect(sessionMessages(sent!)[0]).toMatchObject({
+      role: 'owner',
+      text: instruction,
+    });
+    writeDiary(['Another day, with a typo: teh.']);
+    const bare = await run('proofread');
+    const [note] = sessionMessages(bare!);
+    expect(note!.role).toBe('note');
+    expect(messageItem(note!).template).toBeNull();
   });
 
   it('name entities the run is bound to, and only those', async () => {

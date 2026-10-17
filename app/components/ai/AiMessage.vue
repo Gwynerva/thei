@@ -76,6 +76,13 @@ const commentAbout = computed(() => {
   return phrase.value.ai_comment_on(actionLabel(action));
 });
 
+/** The template the owner's words began from, named as now. */
+const templateAbout = computed(() =>
+  props.message.template
+    ? phrase.value.ai_message_template(publicText(props.message.template.title))
+    : '',
+);
+
 /** What the model did on the way, said once per kind of step. */
 const stepLine = computed(() => {
   const list = steps.value;
@@ -194,6 +201,19 @@ function answer(text: string) {
         data-title-popup-clip
         >{{ commentAbout }}</span
       >
+    </p>
+    <!-- Begun from a ready-made request: which, as the picker names it. -->
+    <p
+      v-else-if="templateAbout"
+      class="flex items-center gap-1 text-xs text-text-2"
+      :data-title-popup="templateAbout"
+      data-title-popup-clipped
+      data-message-template
+    >
+      <Icon
+        :name="message.template?.builtin ? 'list-check' : 'template'"
+        class="shrink-0"
+      /><span class="truncate" data-title-popup-clip>{{ templateAbout }}</span>
     </p>
     <AiMessageFiles :files="message.files" />
     <ContentRenderer

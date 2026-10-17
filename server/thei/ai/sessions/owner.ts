@@ -68,6 +68,13 @@ export interface OwnerMessage {
   answers?: string;
   /** The action this comments on: a new version of it is due. */
   comment?: string;
+  /** Parts of its own: the template the words began from, the field asked at. */
+  parts?: AiMessagePart[];
+  /**
+   * What the model reads in place of the words alone: the words with what
+   * the site tells the model about them, which the owner does not see.
+   */
+  brief?: string;
 }
 
 /**
@@ -89,7 +96,7 @@ export function postOwnerMessage(
   if (!text && !files.length) refused('A message needs words or files');
 
   const about = [...mentionedIn(text), ...keysOf(message.about)];
-  const parts: AiMessagePart[] = [];
+  const parts: AiMessagePart[] = [...(message.parts ?? [])];
   let said = text;
   let question: { messageUuid: string; parts: AiMessagePart[] } | undefined;
   if (message.answers) {
@@ -122,6 +129,7 @@ export function postOwnerMessage(
     said = `About ${action.actionUuid} (${action.kind}${target ? ` on ${targetRef(target)}` : ''}: ${actionDef(action.kind).summary(action.payload as never)}): ${text}`;
   }
   for (const file of files) parts.push({ type: 'file', ...file });
+  if (message.brief) said = message.brief;
   said = [said, sessionFilesNote(files)].filter(Boolean).join('\n\n');
 
   const { db, schema } = THEI_SERVER.useDb();
@@ -246,7 +254,14 @@ export function startOwnerSession(
   if (input.text?.trim() || (Array.isArray(input.files) && input.files.length))
     postOwnerMessage(
       sessionUuid,
-      { text: input.text ?? '', files: input.files },
+      {
+        text: input.text ?? '',
+        files: input.files,
+        // Begun from a template, the message says so.
+        ...(template
+          ? { parts: [{ type: 'template', templateId: template.templateId }] }
+          : {}),
+      },
       now,
     );
   return sessionUuid;

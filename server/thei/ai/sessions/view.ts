@@ -15,6 +15,7 @@ import {
   type AiEntityRef,
   type AiEntityType,
   type AiMessageItem,
+  type AiMessagePart,
   type AiSessionDetail,
   type AiSessionItem,
   type AiSessionListResponse,
@@ -38,6 +39,7 @@ import { AssetType } from '#layers/thei/shared/asset';
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
 import type { ActionRow } from '../actions/types';
 import { undoState } from '../actions/undo';
+import { findTemplate } from '../templates/store';
 import { messageFromMarkdown } from '../../mcp/text-input';
 import { writingOf } from './bus';
 import { libraryFile, messageFiles } from './files';
@@ -141,6 +143,16 @@ function sessionItem(row: SessionRow, about: AiEntityRef[]): AiSessionItem {
   };
 }
 
+/** The ready-made request an owner's message began from, as it is called now. */
+function templateOf(parts: readonly AiMessagePart[]) {
+  const part = parts.find((item) => item.type === 'template');
+  const template =
+    part?.type === 'template' ? findTemplate(part.templateId) : undefined;
+  return template
+    ? { title: template.title, builtin: Boolean(template.builtin) }
+    : null;
+}
+
 export function messageItem(row: MessageRow): AiMessageItem {
   // A message being written is given with all its words so far, saved or
   // not: the page reads them itself until the message is done.
@@ -154,6 +166,7 @@ export function messageItem(row: MessageRow): AiMessageItem {
       writing === undefined && row.text ? messageFromMarkdown(row.text) : null,
     parts: row.parts,
     files: messageFiles(row.parts),
+    template: row.role === 'owner' ? templateOf(row.parts) : null,
     tokens: row.tokens,
     createdAt: row.createdAt,
   };

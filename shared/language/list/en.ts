@@ -1905,6 +1905,7 @@ export default defineI18nBase({
     },
     ai_notice_connection: 'Connection',
     ai_comment_on: (what) => `On: ${what}`,
+    ai_message_template: (title) => `Template “${title}”`,
     ai_answer_to: (question) => `Answer: ${question}`,
     ai_composer_placeholder: 'What to do?',
     ai_composer_running: 'You can add to it — the model will take it in',
