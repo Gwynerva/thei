@@ -7,12 +7,15 @@ import {
 } from '#layers/thei/shared/api-token';
 import ModalContainer from '../ModalContainer.vue';
 import ModalHeaderButton from '../ModalHeaderButton.vue';
+import ModalTitle from '../ModalTitle.vue';
+import ModalWaiting from '../ModalWaiting.vue';
 
 /**
  * One access key: what it may do, when it was made and last used, and its
  * latest sessions, with how many of the actions it proposed still wait for
  * the owner. From here it is checked, as an app holding it connects, or
- * revoked.
+ * revoked. The header is the key's name and its revoke; what the key is
+ * opens the body, with the check.
  */
 const { modalData } = defineProps<{
   modalData: { token: ApiTokenItem };
@@ -88,69 +91,82 @@ async function revoke() {
 
 <template>
   <ModalContainer class="max-w-140" data-api-token-modal>
-    <template #header
-      ><div class="flex items-start gap-xs p-sm">
-        <div class="flex min-w-0 flex-1 flex-col gap-0.5 px-xs pt-1">
-          <h2 class="flex min-w-0 items-center gap-xs text-lg font-bold">
-            <Icon
-              :name="preset ? PRESET_ICONS[preset] : 'key'"
-              class="shrink-0 text-text-3"
-              :aria-label="rights"
-            />
-            <span class="truncate">{{ publicText(token.label) }}</span>
-          </h2>
-          <p class="text-xs wrap-break-word text-text-3">
-            {{ rights }} ·
-            <template v-if="token.lastUsedAt">
-              {{ phrase.api_token_last_used }}
-              <TheiTime :datetime="token.lastUsedAt" />
-              <template v-if="token.lastClient">
-                · {{ phrase.api_token_last_client(token.lastClient) }}
-              </template>
-            </template>
-            <template v-else>{{ phrase.api_token_never_used }}</template>
-          </p>
-          <p
-            v-if="token.client"
-            class="flex items-center gap-1 text-xs wrap-break-word"
-            :class="token.client.verified ? 'text-text-3' : 'text-text-warning'"
-          >
-            <Icon
-              :name="token.client.verified ? 'check' : 'warning'"
-              class="shrink-0"
-            />{{
-              token.client.verified
-                ? phrase.api_token_signed_in_verified(
-                    token.client.name,
-                    token.client.host,
-                  )
-                : phrase.api_token_signed_in_unverified(token.client.name)
-            }}
-          </p>
+    <!-- One slim row: the key, as its shell names it, and its two buttons. -->
+    <template #header>
+      <div class="flex items-center gap-sm p-sm">
+        <ModalTitle
+          icon="key"
+          :title="publicText(token.label)"
+          class="flex-1"
+        />
+        <div class="flex items-center gap-xs">
+          <ModalHeaderButton
+            icon="delete"
+            variant="delete"
+            :label="phrase.api_token_revoke"
+            :disabled="Boolean(busy)"
+            data-api-token-revoke
+            @click="revoke"
+          />
+          <ModalHeaderButton
+            icon="close"
+            :label="phrase.close_modal"
+            @click="closeModal"
+          />
         </div>
-        <ModalHeaderButton
+      </div>
+    </template>
+    <div class="flex flex-col gap-md p-sm sm:p-md">
+      <!-- What the key is: its rights, its last use, the app it came from;
+           and, while AI is on, a check of it as an app would connect. -->
+      <div class="flex flex-col gap-xs text-sm">
+        <p class="flex items-center gap-xs font-semibold">
+          <Icon
+            :name="preset ? PRESET_ICONS[preset] : 'key'"
+            class="shrink-0 text-text-3"
+          />{{ rights }}
+        </p>
+        <p class="text-xs wrap-break-word text-text-3">
+          <template v-if="token.lastUsedAt">
+            {{ phrase.api_token_last_used }}
+            <TheiTime :datetime="token.lastUsedAt" />
+            <template v-if="token.lastClient">
+              · {{ phrase.api_token_last_client(token.lastClient) }}
+            </template>
+          </template>
+          <template v-else>{{ phrase.api_token_never_used }}</template>
+        </p>
+        <p
+          v-if="token.client"
+          class="flex items-center gap-1 text-xs wrap-break-word"
+          :class="token.client.verified ? 'text-text-3' : 'text-text-warning'"
+        >
+          <Icon
+            :name="token.client.verified ? 'check' : 'warning'"
+            class="shrink-0"
+          />{{
+            token.client.verified
+              ? phrase.api_token_signed_in_verified(
+                  token.client.name,
+                  token.client.host,
+                )
+              : phrase.api_token_signed_in_unverified(token.client.name)
+          }}
+        </p>
+        <Button
           v-if="aiEnabled"
-          :icon="busy === 'check' ? 'loading' : 'pulse'"
-          :label="phrase.ai_check"
+          variant="secondary"
+          class="mt-xs flex h-9 shrink-0 items-center gap-xs self-start
+            whitespace-nowrap pointer-coarse:h-11"
           :disabled="Boolean(busy)"
           data-api-token-check
           @click="check"
-        />
-        <ModalHeaderButton
-          icon="delete"
-          variant="delete"
-          :label="phrase.api_token_revoke"
-          :disabled="Boolean(busy)"
-          data-api-token-revoke
-          @click="revoke"
-        />
-        <ModalHeaderButton
-          icon="close"
-          :label="phrase.close_modal"
-          @click="closeModal"
-        /></div
-    ></template>
-    <div class="flex flex-col gap-md p-sm sm:p-md">
+        >
+          <Icon :name="busy === 'check' ? 'loading' : 'pulse'" />{{
+            phrase.ai_check
+          }}
+        </Button>
+      </div>
       <p v-if="error" class="text-sm text-text-error">
         <Icon name="warning" class="mr-xs" />{{ error }}
       </p>
@@ -160,10 +176,8 @@ async function revoke() {
         <h3 class="text-sm font-semibold text-text-2">
           {{ phrase.api_token_history }}
         </h3>
-        <p v-if="!activity" class="text-sm text-text-3">
-          <Icon name="loading" />
-        </p>
-        <template v-else>
+        <ModalWaiting v-if="!activity && !error" class="h-16" />
+        <template v-else-if="activity">
           <TheiLink
             v-if="activity.waiting > 0"
             to="/admin/ai/"

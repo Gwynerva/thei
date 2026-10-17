@@ -14,7 +14,7 @@
     <TheiLink
       to="/admin/ai/?tab=connection"
       class="flex items-center gap-xs font-semibold text-text-2
-        hocus:text-accent"
+        transition-colors hocus:text-accent"
     >
       <Icon name="power" />{{ phrase.ai_tab_connection }}
     </TheiLink>

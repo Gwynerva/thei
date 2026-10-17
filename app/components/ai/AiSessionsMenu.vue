@@ -24,13 +24,18 @@ const emit = defineEmits<{ close: []; stop: [sessionUuid: string] }>();
 </script>
 
 <template>
-  <!-- In a popup, which draws its surface: what starts, then the list. -->
-  <div class="flex flex-col">
-    <div class="flex flex-col gap-xs border-b border-border-1 p-sm">
+  <!-- In a popup, which draws its surface: what starts, then the list. In a
+       window too short for both, the whole menu scrolls. -->
+  <div
+    class="flex scrollbar-hover max-h-(--floating-popup-available-height)
+      flex-col overflow-y-auto overscroll-contain"
+  >
+    <div class="flex shrink-0 flex-col gap-xs border-b border-border-1 p-sm">
       <slot />
     </div>
     <div
-      class="flex scrollbar-mini max-h-80 flex-col gap-0.5 overflow-y-auto p-xs"
+      class="flex scrollbar-mini max-h-80 shrink-0 flex-col gap-0.5
+        overflow-y-auto p-xs"
       data-ai-menu-sessions
     >
       <p

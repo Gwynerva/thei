@@ -23,10 +23,9 @@ function describe(step: AiCheckStep): string {
   const data = step.data ?? {};
   const p = phrase.value;
   switch (step.id) {
+    // A check runs only while AI is on: this step only ever says so.
     case 'enabled':
-      return step.status === 'ok'
-        ? p.ai_check_enabled_ok
-        : p.ai_check_enabled_fail;
+      return p.ai_check_enabled_ok;
     case 'handshake':
       return step.status === 'ok'
         ? p.ai_check_handshake_ok(String(data.version ?? ''))
@@ -48,9 +47,7 @@ function describe(step: AiCheckStep): string {
         ? p.ai_check_public_ok
         : step.status === 'fail'
           ? p.ai_check_public_fail(Number(data.status ?? 0))
-          : step.status === 'warn'
-            ? p.ai_check_public_warn
-            : p.ai_check_public_skip;
+          : p.ai_check_public_warn;
     case 'https':
       return step.status === 'ok'
         ? p.ai_check_https_ok
@@ -62,11 +59,9 @@ function describe(step: AiCheckStep): string {
         ? p.ai_check_signin_ok
         : step.status === 'fail'
           ? p.ai_check_signin_fail(String(data.where ?? ''))
-          : step.status === 'warn'
-            ? data.where
-              ? p.ai_check_public_warn
-              : p.ai_check_signin_https
-            : p.ai_check_public_skip;
+          : data.where
+            ? p.ai_check_public_warn
+            : p.ai_check_signin_https;
     case 'clients':
       return step.status === 'ok'
         ? p.ai_check_clients_ok(

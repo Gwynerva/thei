@@ -128,6 +128,8 @@ Components:
 - [Popups](components/popups.md) — one popup for everything that opens by an
   anchor: its arrow and densities, the pressed anchor, sheets on phones, the
   z-index scale, hints, link cards and Editor.js's own menus.
+- [Toast](components/toast.md) — the short word after something is done,
+  with at most one action, under the admin bar.
 
 Patterns:
 

@@ -293,9 +293,9 @@ defineExpose({
       >
         <Icon name="minus" class="shrink-0" />
         <b class="shrink-0 font-semibold">{{ goneLabel(row.part) }}</b>
-        <span v-if="row.quote" class="min-w-0 flex-1 truncate italic"
-          >«{{ publicText(row.quote) }}»</span
-        >
+        <span v-if="row.quote" class="min-w-0 flex-1 truncate italic">{{
+          phrase.quoted(publicText(row.quote))
+        }}</span>
       </button>
 
       <div

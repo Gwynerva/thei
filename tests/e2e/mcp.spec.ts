@@ -160,9 +160,10 @@ test('the AI page turns access on and issues an access key once', async ({
   const token = page.locator('code', { hasText: /^thei_/ });
   await expect(token).toBeVisible();
   await expect(page.getByText('From the page')).toBeVisible();
-  await expect(
-    page.getByText(/claude mcp add --transport http thei/),
-  ).toBeVisible();
+  // With the header an app sends it in, to copy.
+  await expect(page.locator('[data-api-token-header]')).toContainText(
+    'Authorization: Bearer thei_',
+  );
 
   // Shown once: read again, the page lists the token but no longer holds it.
   await open(page, '/admin/ai/?tab=connection');

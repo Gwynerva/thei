@@ -355,6 +355,8 @@ test('takes proposals into the form, applied once it is saved', async ({
   await card.locator('[data-action-apply]').click();
   await expect(tagChip).toHaveCount(0);
   await expect(page.getByText(TAG, { exact: true })).toBeVisible();
+  // The card of the last chip fades out before it goes.
+  await expect(card).toHaveCount(0);
 
   const relationChip = page.locator(
     '[data-ai-offer-chips="relations"] [data-ai-offer-chip]',

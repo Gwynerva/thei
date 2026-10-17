@@ -21,21 +21,23 @@ const TABS: AiTab[] = ['sessions', 'templates', 'memory', 'connection'];
 const route = useRoute();
 const router = useRouter();
 
-/** Until AI is on, the page opens where it is turned on. */
-const firstTab = computed<AiTab>(() =>
-  aiEnabled.value ? 'sessions' : 'connection',
-);
+/**
+ * Until AI is on, the page opens where it is turned on. Decided once, as the
+ * page opens: AI turned on from there leaves the owner by the switch, to set
+ * the model up, rather than taking them away to the sessions.
+ */
+const firstTab: AiTab = aiEnabled.value ? 'sessions' : 'connection';
 
 const tab = computed<AiTab>({
   get: () =>
     TABS.includes(route.query.tab as AiTab)
       ? (route.query.tab as AiTab)
-      : firstTab.value,
+      : firstTab,
   set: (value) => {
     void router.replace({
       path: route.path,
       query: {
-        tab: value === firstTab.value ? undefined : value,
+        tab: value === firstTab ? undefined : value,
       },
     });
   },

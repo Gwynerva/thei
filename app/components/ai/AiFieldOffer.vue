@@ -123,7 +123,13 @@ const decisions = {};
       @pointerleave="left"
       @closed="closing = false"
     >
-      <div class="@container" :data-ai-offers="place">
+      <!-- A long change scrolls in a short window rather than being cut. -->
+      <div
+        class="@container scrollbar-hover
+          max-h-(--floating-popup-available-height) overflow-y-auto
+          overscroll-contain"
+        :data-ai-offers="place"
+      >
         <AiActionRow
           v-if="shown"
           :key="shown.action.actionUuid"

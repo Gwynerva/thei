@@ -22,17 +22,28 @@ const anyRunning = computed(() =>
   templates.value.some((template) => template.lastSession?.state === 'running'),
 );
 let timer: ReturnType<typeof setTimeout> | undefined;
-// Each reading of the list sets the next while a run still answers.
-watch(
-  data,
-  () => {
-    clearTimeout(timer);
-    if (anyRunning.value && import.meta.client)
-      timer = setTimeout(() => void refresh(), 4000);
-  },
-  { immediate: true },
-);
-onBeforeUnmount(() => clearTimeout(timer));
+let gone = false;
+/** Each reading of the list sets the next while a run still answers. */
+function later() {
+  clearTimeout(timer);
+  if (anyRunning.value && import.meta.client && !gone)
+    timer = setTimeout(look, 4000);
+}
+/** A look that fails leaves the list as it is, and looks again in a while. */
+async function look() {
+  try {
+    data.value = await $fetch<AiTemplateListResponse>(
+      '/api/admin/ai/templates',
+    );
+  } catch {
+    later();
+  }
+}
+watch(data, later, { immediate: true });
+onBeforeUnmount(() => {
+  gone = true;
+  clearTimeout(timer);
+});
 
 /** A ready-made request opens in a new session, its words to add to. */
 function open(template: AiTemplateItem) {

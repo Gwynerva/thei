@@ -84,7 +84,8 @@ function send(text: string) {
         {{ words.was }}
       </dt>
       <dd>
-        <template v-if="part.link.words">«{{ part.link.words }}» → </template
+        <template v-if="part.link.words"
+          >{{ phrase.quoted(part.link.words) }} → </template
         ><ReviewMark kind="removed">{{
           part.link.made
             ? phrase.ai_review_link_none
@@ -97,7 +98,8 @@ function send(text: string) {
         {{ words.will }}
       </dt>
       <dd>
-        <template v-if="part.link.words">«{{ part.link.words }}» → </template
+        <template v-if="part.link.words"
+          >{{ phrase.quoted(part.link.words) }} → </template
         ><ReviewMark kind="added"
           ><Icon v-if="part.link.made" name="link" class="mr-0.5" />{{
             part.link.to

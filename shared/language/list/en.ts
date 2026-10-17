@@ -183,6 +183,8 @@ export default defineI18nBase({
       `Unused: will be deleted after ${date}`,
     asset_library_in_history:
       'Unused, but kept while a version of some text still shows it',
+    asset_library_held_by_ai:
+      'Unused, but kept while an AI action still needs it: one waiting for you, or one that can still be undone',
     asset_library_empty: 'No matching files',
     asset_library_unused: 'Unused',
     asset_library_unused_hint:
@@ -231,12 +233,13 @@ export default defineI18nBase({
     asset_library_other_variants: 'Other variants',
     asset_library_unused_line: 'Not used',
     asset_library_history_line: 'Only in the history of texts',
+    asset_library_held_by_ai_line: 'Only in AI actions',
     asset_open_place: (title) => `Open “${title}” in a new tab`,
     asset_open_variant: 'Open this variant',
     asset_description_save: 'Save the file description',
     asset_description_saved: 'File description saved',
     asset_description_conflict:
-      'It was changed elsewhere in the meantime: this is how it reads now.',
+      'It was changed elsewhere in the meantime. Your words are still here: save again to put them in its place.',
     asset_description_too_long: (max) => `At most ${max} characters`,
     asset_description_error: 'Could not save the description.',
     asset_hash_check: 'Checking file',
@@ -601,6 +604,7 @@ export default defineI18nBase({
     sign_in_link_qr: 'QR code of the sign-in link',
     copy: 'Copy',
     copied: 'Copied',
+    quoted: (text) => `“${text}”`,
     share_links: 'Temporary access',
     share_links_description:
       'Links open this page with everything private in it, and close on their own.',
@@ -750,7 +754,7 @@ export default defineI18nBase({
     api_token_access: 'Access',
     api_token_preset_reader: 'Reader',
     api_token_preset_reader_hint:
-      'Reads everything and leaves suggestions for you to take or not. Changes nothing itself.',
+      'Reads everything and proposes changes for you to take or not. Changes nothing itself.',
     api_token_preset_editor: 'Editor',
     api_token_preset_editor_hint:
       'May do whatever you can: create, edit, upload files, publish and delete. Every change shows in its session and can be undone; a deletion cannot.',
@@ -765,8 +769,8 @@ export default defineI18nBase({
       'key is replaced, not recovered.',
     api_token_endpoint: 'Address',
     api_token_connect_hint:
-      'Give the app this address and the key (the Authorization: Bearer ' +
-      'header). For Claude Code, run:',
+      'Give the app this address and the key, which it sends in this ' +
+      'header. How each app takes them is told above.',
     ai_page: 'AI',
     ai_page_description:
       'Sessions with AI and what it does, what it remembers about you, and how apps and a model connect.',
@@ -797,7 +801,7 @@ export default defineI18nBase({
         what: 'The model answers in sessions on this page: it reads the archive and proposes actions, and you apply them.',
         how: 'It needs an API key from a service that gives access to a model.',
         pays: 'You pay that service for each answer, within a monthly limit.',
-        rights: 'Reads and suggests only.',
+        rights: 'Reads and proposes only.',
       },
     },
     api_tokens_title: 'Access keys',
@@ -823,7 +827,7 @@ export default defineI18nBase({
       ],
       'claude-code': [
         'Run the command below in a terminal.',
-        'In Claude Code, type /mcp, pick thei and “Authenticate”: a page of this site opens. Or create an access key below: its command shows at once.',
+        'In Claude Code, type /mcp, pick thei and “Authenticate”: a page of this site opens. Or create an access key below and add its header to the command with --header.',
       ],
       other: [
         'Give the app the address below.',
@@ -881,9 +885,8 @@ export default defineI18nBase({
     ai_open_page: 'Open the AI page',
     ai_instructions_placeholder:
       'I write slang on purpose. Never touch the titles of my projects.',
-    ai_check: 'Check the key',
+    ai_check: 'Check the access key',
     ai_check_enabled_ok: 'AI in Thei is on',
-    ai_check_enabled_fail: 'AI in Thei is off: turn it on above',
     ai_check_handshake_ok: (_version: string) => 'AI apps can connect',
     ai_check_handshake_fail: 'AI apps cannot connect',
     ai_check_tools_ok: (count: number) => `Tools for AI: ${count}`,
@@ -897,7 +900,6 @@ export default defineI18nBase({
       `The public address answered ${status}: check that the proxy passes /api/mcp on`,
     ai_check_public_warn:
       'The site could not reach its own public address; clients outside may still reach it',
-    ai_check_public_skip: 'Not tried from outside while access is off',
     ai_check_https_ok: 'The address is HTTPS',
     ai_check_https_warn:
       'The address is not HTTPS: Claude Code with an access key works, ' +
@@ -1813,6 +1815,7 @@ export default defineI18nBase({
       'What the model should do — as you would tell a person. For example: “Look over this entry and say what is missing…”',
     ai_template_model: 'Model',
     ai_template_model_placeholder: (model) => `As in Connection — ${model}`,
+    ai_template_model_connection: 'As in Connection',
     ai_template_model_hint:
       'Empty: the model of Connection. A strong model for reviews that need thought, a cheap one for short checks.',
     ai_template_sessions: 'Sessions of this template',
@@ -1821,7 +1824,7 @@ export default defineI18nBase({
     ai_template_delete_confirm: (title) =>
       `Delete the template “${title}”? Its sessions stay.`,
     ai_sessions_search: 'Find a session',
-    ai_sessions_filter: 'Filter: where from, waiting or not',
+    ai_sessions_filter: 'Which sessions',
     ai_sessions_filters: {
       all: { title: 'All sessions', hint: '' },
       waiting: {
@@ -1856,7 +1859,6 @@ export default defineI18nBase({
     ai_session_template: 'Template',
     ai_session_running: 'Working',
     ai_session_recent: 'Recently done',
-    ai_session_none: 'None',
     ai_session_waiting: (count) => `Waiting for your decision: ${count}`,
     ai_sessions_archive_note: 'Deleted after 30 days',
     ai_sessions_empty: 'No sessions yet',
@@ -1864,7 +1866,7 @@ export default defineI18nBase({
     ai_sessions_back: 'To sessions',
     ai_no_model_title: 'No model is set up',
     ai_no_model_text:
-      'Sessions here are answered by the model from “Connection”: a service’s key, or your own with Ollama or LM Studio. Sessions of apps over MCP are below.',
+      'Sessions here are answered by the model from “Connection”: a service’s, by its API key, or your own, with Ollama or LM Studio. Sessions of apps over MCP are below.',
     ai_no_model_action: 'Set up',
     ai_session_menu: 'Session',
     ai_session_pin: 'Pin',
@@ -1877,7 +1879,8 @@ export default defineI18nBase({
       `Delete the session “${title}”? What it applied stays, but can no longer be undone from it.`,
     ai_session_by_you: (when) => `Started by you · ${when}`,
     ai_session_via_app: (client) => `${client} over MCP`,
-    ai_session_tokens: (amount) => `${amount} tokens`,
+    ai_session_tokens: (amount) =>
+      amount === '1' ? '1 token' : `${amount} tokens`,
     ai_session_app_note:
       'Here is what the app proposed and applied. The conversation itself stayed in the app: write to it there.',
     ai_session_archived_note: 'Archived: nothing can be written here',
@@ -1907,11 +1910,12 @@ export default defineI18nBase({
       limit:
         'The month’s limit is spent. The session goes on next month, or once you raise the limit.',
       'no-model': 'No model is set up to answer.',
-      key: 'The service refused the key.',
+      key: 'The service refused the API key.',
       busy: 'The service is busy; try again later.',
       address: 'The service does not answer at its address.',
       model: 'The service does not know this model.',
       refused: 'The model declined to answer.',
+      length: 'Cut off: the answer ran out of room.',
       turns: 'Stopped: it took too many steps.',
       error: 'Something went wrong.',
     },
@@ -2309,6 +2313,27 @@ export default defineI18nBase({
       slogan: 'Tagline',
       statuses: 'Statuses',
       actionText: 'Button text',
+      access: 'Access',
+      slug: 'Address',
+      publicId: 'Public ID',
+      icon: 'Icon',
+      banner: 'Banner',
+      showcaseFiles: 'Showcase files',
+      files: 'Files',
+      links: 'Links',
+      tags: 'Tags',
+      relations: 'Relations',
+      notes: 'Notes',
+      sections: 'Sections',
+      sectionOrder: 'Order of sections',
+      private: 'Private',
+      periods: 'Dates',
+      body: 'Text',
+      date: 'Day',
+      displayName: 'Name',
+      nickname: 'Nickname',
+      about: 'About me',
+      favicon: 'Site icon',
     },
     ai_action_flag: { on: 'yes', off: 'no' },
     ai_action_create: {

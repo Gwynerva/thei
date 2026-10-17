@@ -114,11 +114,12 @@ async function decide(allow: boolean) {
 
         <template v-else-if="state === 'sign-in'">
           <p class="text-text-2">{{ phrase.oauth_sign_in_needed }}</p>
+          <!-- A link drawn as the main `Button` is, as tall as the page's. -->
           <TheiLink
             :to="signInPath"
             class="flex h-10 items-center justify-center gap-xs rounded-normal
-              bg-accent/80 px-md font-semibold text-white transition
-              hocus:bg-accent"
+              bg-accent/80 px-sm text-sm font-semibold whitespace-nowrap
+              text-white transition-colors hocus:bg-accent"
           >
             <Icon name="key" />{{ phrase.sign_in }}
           </TheiLink>

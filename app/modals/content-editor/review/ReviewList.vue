@@ -156,7 +156,7 @@ const stateOf = (part: ReviewPart) => props.decisions[part.id] ?? 'pending';
         <p class="text-sm leading-normal wrap-anywhere">
           <template v-if="part.link"
             ><template v-if="part.link.words"
-              >«{{ part.link.words }}» → </template
+              >{{ phrase.quoted(part.link.words) }} → </template
             ><ReviewMark v-if="!part.link.made" kind="removed">{{
               part.link.from
                 ? publicText(part.link.from)

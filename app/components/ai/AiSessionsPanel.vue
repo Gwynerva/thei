@@ -1,8 +1,5 @@
 <script lang="ts" setup>
-import {
-  aiModelName,
-  type AiModelSettings,
-} from '#layers/thei/shared/ai-model';
+import { aiModelName } from '#layers/thei/shared/ai-model';
 import type { AiEntityRef } from '#layers/thei/shared/ai';
 import type {
   AiComposerExpose,
@@ -26,10 +23,7 @@ const route = useRoute();
 const router = useRouter();
 
 const requestFetch = useRequestFetch();
-const { data: model, refresh: refreshModel } = await useAsyncData(
-  'ai-model',
-  () => requestFetch<AiModelSettings>('/api/admin/ai/model'),
-);
+const { data: model, refresh: refreshModel } = await useAiModel();
 const modelReady = computed(() => model.value?.state === 'ready');
 const modelName = computed(() => (model.value ? aiModelName(model.value) : ''));
 
@@ -125,6 +119,7 @@ watch(
 );
 
 const starting = ref(false);
+/** A built-in check sent from here runs over what the words and mentions name. */
 async function start(
   text: string,
   mentioned: string[],
@@ -133,41 +128,25 @@ async function start(
   templateId: string | undefined,
 ) {
   starting.value = true;
-  const refs = about.value
-    ? [...new Set([about.value.ref, ...mentioned])]
-    : mentioned;
-  // A built-in check runs over what the words and mentions name.
-  const check = presets.value.find(
-    (item) => item.templateId === templateId && item.builtin,
-  );
-  if (check) {
-    try {
-      await runAiCheck(check, {
-        about: refs,
-        request: text,
-        restore,
-        started: (sessionUuid) => {
-          open(sessionUuid);
-          void list.value?.refresh();
-        },
-      });
-    } finally {
-      starting.value = false;
-    }
-    return;
-  }
   try {
-    const { sessionUuid } = await aiApi.start({
-      text,
-      files,
-      about: refs,
-      templateId,
-    });
-    open(sessionUuid);
-    await list.value?.refresh();
-  } catch (caught) {
-    restore();
-    showToast(errorMessage(caught, phrase.value.ai_error));
+    await startAiSession(
+      {
+        text,
+        about: about.value
+          ? [...new Set([about.value.ref, ...mentioned])]
+          : mentioned,
+        files,
+        restore,
+        templateId,
+      },
+      {
+        presets: presets.value,
+        started: async (sessionUuid) => {
+          open(sessionUuid);
+          await list.value?.refresh();
+        },
+      },
+    );
   } finally {
     starting.value = false;
   }
@@ -222,15 +201,7 @@ async function deleted() {
           class="flex items-center gap-1 border-b border-border-1/70 px-1 py-1.5
             sm:hidden"
         >
-          <Button
-            variant="secondary"
-            size="icon-sm"
-            class="bg-transparent pointer-coarse:size-11"
-            :aria-label="phrase.ai_sessions_back"
-            @click="open(undefined)"
-          >
-            <Icon name="chevron-left" />
-          </Button>
+          <AiSessionsBack @click="open(undefined)" />
         </div>
         <div class="scrollbar-hover min-h-0 flex-1 overflow-y-auto">
           <div class="mx-auto flex max-w-160 flex-col gap-sm px-sm pt-lg pb-md">

@@ -464,6 +464,8 @@ export type LanguagePhrases = {
   sign_in_link_qr: string;
   copy: string;
   copied: string;
+  /** Words quoted as the language quotes them: “words”, «слова». */
+  quoted: (text: string) => string;
   share_links: string;
   share_links_description: string;
   share_link_create: string;
@@ -642,7 +644,6 @@ export type LanguagePhrases = {
   ai_instructions_placeholder: string;
   ai_check: string;
   ai_check_enabled_ok: string;
-  ai_check_enabled_fail: string;
   ai_check_handshake_ok: (version: string) => string;
   ai_check_handshake_fail: string;
   ai_check_tools_ok: (count: number) => string;
@@ -652,7 +653,6 @@ export type LanguagePhrases = {
   ai_check_public_ok: string;
   ai_check_public_fail: (status: number) => string;
   ai_check_public_warn: string;
-  ai_check_public_skip: string;
   ai_check_https_ok: string;
   ai_check_https_warn: string;
   ai_check_https_skip: string;
@@ -1370,6 +1370,8 @@ export type LanguagePhrases = {
   ai_template_instruction_placeholder: string;
   ai_template_model: string;
   ai_template_model_placeholder: (model: string) => string;
+  /** The connection's model, while its name is not known. */
+  ai_template_model_connection: string;
   ai_template_model_hint: string;
   ai_template_sessions: string;
   ai_template_copy: string;
@@ -1392,8 +1394,6 @@ export type LanguagePhrases = {
   ai_session_running: string;
   /** The dashboard's group of sessions done within the week. */
   ai_session_recent: string;
-  /** A group of sessions on the dashboard with none in it. */
-  ai_session_none: string;
   ai_session_waiting: (count: number) => string;
   ai_sessions_archive_note: string;
   ai_sessions_empty: string;
@@ -1412,6 +1412,7 @@ export type LanguagePhrases = {
   ai_session_delete_confirm: (title: string) => string;
   ai_session_by_you: (when: string) => string;
   ai_session_via_app: (client: string) => string;
+  /** An amount as `compactAmount` says it: «21», «1.2K». */
   ai_session_tokens: (amount: string) => string;
   ai_session_app_note: string;
   ai_session_archived_note: string;
@@ -1443,6 +1444,7 @@ export type LanguagePhrases = {
     | 'address'
     | 'model'
     | 'refused'
+    | 'length'
     | 'turns'
     | 'error',
     string
@@ -1705,6 +1707,7 @@ export type LanguagePhrases = {
   ai_action_relation_removed: string;
   ai_action_write_modes: Record<'new' | 'append' | 'replace', string>;
   ai_action_texts: Record<'body' | 'notes' | 'description' | 'about', string>;
+  /** Every field a form takes, as a change names it (`FORM_FIELDS`). */
   ai_action_fields: Record<
     | 'title'
     | 'summary'
@@ -1715,7 +1718,28 @@ export type LanguagePhrases = {
     | 'synonyms'
     | 'slogan'
     | 'statuses'
-    | 'actionText',
+    | 'actionText'
+    | 'access'
+    | 'slug'
+    | 'publicId'
+    | 'icon'
+    | 'banner'
+    | 'showcaseFiles'
+    | 'files'
+    | 'links'
+    | 'tags'
+    | 'relations'
+    | 'notes'
+    | 'sections'
+    | 'sectionOrder'
+    | 'private'
+    | 'periods'
+    | 'body'
+    | 'date'
+    | 'displayName'
+    | 'nickname'
+    | 'about'
+    | 'favicon',
     string
   >;
   ai_action_flag: Record<'on' | 'off', string>;

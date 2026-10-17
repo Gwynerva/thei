@@ -8,6 +8,7 @@ import type {
 } from '#layers/thei/shared/ai-memory';
 import type { AiSettings } from '#layers/thei/shared/ai-settings';
 import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';
+import { modalMotion } from '#layers/thei/app/modals/layer-motion';
 
 /**
  * What the AI keeps, in one place: «about you» — the owner's own words that
@@ -27,6 +28,12 @@ watch(query, (value) => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => (searched.value = value.trim()), 250);
 });
+/** A search that found nothing let go of: everything shows again at once. */
+function resetSearch() {
+  query.value = '';
+  clearTimeout(searchTimer);
+  searched.value = '';
+}
 
 const { data: index, refresh } = await useAsyncData(
   'ai-memory',
@@ -225,9 +232,10 @@ async function toggle(ref: string) {
   if (row && before !== undefined)
     window.scrollBy(0, row.getBoundingClientRect().top - before);
   if (previous) requestAnimationFrame(() => (previous.style.transition = ''));
+  // Let go of once the row has opened, at the site's one transition.
   setTimeout(() => {
     if (list) list.style.minHeight = '';
-  }, 300);
+  }, modalMotion().duration);
 }
 </script>
 
@@ -446,9 +454,14 @@ async function toggle(ref: string) {
       </div>
     </section>
 
-    <p v-if="nothingFound" class="text-center text-sm text-text-3">
-      {{ phrase.admin_search_no_results }}
-    </p>
+    <AdminEmptyList
+      v-if="nothingFound"
+      icon="brain"
+      :title="phrase.admin_search_no_results"
+      :description="phrase.admin_search_no_results_description"
+      searching
+      @reset-search="resetSearch"
+    />
 
     <AiTermPopup
       v-model:open="termOpen"

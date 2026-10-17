@@ -24,7 +24,7 @@ const tokens = ref<ApiTokenItem[]>([]);
 const connect = ref<ApiTokenListResponse['connect']>();
 const busy = ref(false);
 const error = ref('');
-const { copied, copyText } = useClipboardCopy<'token' | 'command'>();
+const { copied, copyText } = useClipboardCopy<'token' | 'header'>();
 
 /**
  * Held only until the page is left: the server keeps the hash, so this is the
@@ -76,11 +76,12 @@ function accessOf(token: ApiTokenItem) {
 }
 
 const endpoint = computed(() => site.resolve('/api/mcp'));
-const command = computed(() =>
-  fresh.value
-    ? `claude mcp add --transport http thei ${endpoint.value} ` +
-      `--header "Authorization: Bearer ${fresh.value.token}"`
-    : '',
+/**
+ * What any app sends the key in, whoever made it; how each app is given it
+ * is the guide's to say, above.
+ */
+const header = computed(() =>
+  fresh.value ? `Authorization: Bearer ${fresh.value.token}` : '',
 );
 
 async function act(run: () => Promise<unknown>): Promise<boolean> {
@@ -92,9 +93,7 @@ async function act(run: () => Promise<unknown>): Promise<boolean> {
     await load().catch(() => {});
     return true;
   } catch (caught) {
-    error.value =
-      (caught as { data?: { message?: string } }).data?.message ??
-      (caught instanceof Error ? caught.message : String(caught));
+    error.value = errorMessage(caught, phrase.value.error_title);
     return false;
   } finally {
     busy.value = false;
@@ -144,6 +143,14 @@ function chipHint(token: ApiTokenItem) {
   return token.client
     ? `${accessOf(token).title} · ${phrase.value.api_token_signed_in(token.client.name)}`
     : accessOf(token).title;
+}
+
+/** A chip's hint: its name, whole, as the chip may cut it, then the rest. */
+function chipPopup(token: ApiTokenItem) {
+  return titlePopup(
+    { text: publicText(token.label), bold: true },
+    { text: chipHint(token), italic: true },
+  );
 }
 
 async function openToken(token: ApiTokenItem) {
@@ -236,17 +243,18 @@ async function create() {
         <code
           class="scrollbar-mini min-w-0 flex-1 overflow-x-auto rounded-normal
             bg-bg-3 p-xs text-xs break-all"
-          >{{ command }}</code
+          data-api-token-header
+          >{{ header }}</code
         >
         <Button
           variant="secondary"
           size="icon"
           class="pointer-coarse:size-11"
           :aria-label="phrase.copy"
-          :data-title-popup="copied === 'command' ? phrase.copied : phrase.copy"
-          @click="copyText('command', command)"
+          :data-title-popup="copied === 'header' ? phrase.copied : phrase.copy"
+          @click="copyText('header', header)"
         >
-          <Icon :name="copied === 'command' ? 'check' : 'files'" />
+          <Icon :name="copied === 'header' ? 'check' : 'files'" />
         </Button>
       </div>
     </div>
@@ -267,7 +275,7 @@ async function create() {
           hocus:text-accent"
         :class="recency(token)"
         :aria-label="`${publicText(token.label)} · ${chipHint(token)}`"
-        :data-title-popup="chipHint(token)"
+        v-bind="chipPopup(token)"
         :data-api-token="token.tokenUuid"
         @click="openToken(token)"
       >

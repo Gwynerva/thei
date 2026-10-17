@@ -37,8 +37,14 @@ watch(toast, async (value) => {
   } else if (popover.matches(':popover-open')) popover.hidePopover();
 });
 
+/**
+ * Pointed at or focused, it stays. Once it is fading out it is no longer
+ * held: nothing would ever take it away, and it would stay in the top layer
+ * unseen, catching the pointer.
+ */
 function hold(on: boolean) {
   held = on;
+  if (leaving.value) return;
   if (on && timer) clearTimeout(timer);
   else schedule();
 }
@@ -62,7 +68,7 @@ onBeforeUnmount(() => timer && clearTimeout(timer));
       max-w-[calc(100vw-2rem)] items-center justify-center gap-x-md gap-y-1
       rounded-normal border-0 bg-text-1 px-md py-sm text-sm text-bg-1 shadow-lg
       shadow-shadow-2 transition-opacity"
-    :class="leaving ? 'opacity-0' : 'opacity-100'"
+    :class="leaving ? 'pointer-events-none opacity-0' : 'opacity-100'"
     data-toast
     @mouseenter="hold(true)"
     @mouseleave="hold(false)"
@@ -74,8 +80,10 @@ onBeforeUnmount(() => timer && clearTimeout(timer));
       <button
         v-if="toast.action"
         type="button"
-        class="-my-2 cursor-pointer bg-transparent px-1 py-2 font-bold
-          whitespace-nowrap text-bg-accent pointer-coarse:min-h-11"
+        class="-my-2 cursor-pointer rounded-sm bg-transparent px-1 py-2
+          font-bold whitespace-nowrap text-bg-accent transition
+          focus-visible:ring-2 focus-visible:ring-bg-accent
+          pointer-coarse:min-h-11 hocus:underline"
         @click="act"
       >
         {{ toast.action.label }}

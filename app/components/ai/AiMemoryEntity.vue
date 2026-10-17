@@ -34,11 +34,7 @@ const kind = computed(
     ] ?? entity.value.type,
 );
 /** A diary entry is called by its day, anything else by its title. */
-const name = computed(() =>
-  entity.value.type === 'diary-entry'
-    ? entityListName({ date: entity.value.title })
-    : entityListName({ title: entity.value.title, entityId: entity.value.id }),
-);
+const name = computed(() => aiEntityName(entity.value));
 const panelId = useId();
 const { engaged, events: mediaEvents } = useMediaInteraction();
 </script>
@@ -84,11 +80,7 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
         class="relative col-start-2 row-span-2 row-start-1 flex items-center
           gap-1.5"
       >
-        <span
-          class="inline-flex h-5 min-w-5 items-center justify-center
-            rounded-full bg-bg-3 px-1.5 text-xs font-semibold text-text-2"
-          >{{ items.length }}</span
-        >
+        <AiCount :count="items.length" tone="neutral" />
         <Icon
           name="chevron-right"
           class="text-text-3 transition-transform motion-reduce:transition-none"
@@ -100,8 +92,7 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
     <!-- The window it opens into: its own scroll, at most 16rem. -->
     <div
       :id="panelId"
-      class="grid transition-[grid-template-rows] duration-200
-        motion-reduce:transition-none"
+      class="grid transition-[grid-template-rows] motion-reduce:transition-none"
       :class="open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'"
       :inert="!open || undefined"
       data-memory-entity-panel
@@ -127,8 +118,8 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
           <TheiLink
             :to="entity.path"
             class="flex h-8 items-center gap-1 rounded-normal px-xs text-sm
-              text-text-2 pointer-coarse:h-11 hocus:bg-accent/10
-              hocus:text-accent"
+              text-text-2 transition-colors pointer-coarse:h-11
+              hocus:bg-accent/10 hocus:text-accent"
             >{{ phrase.ai_memory_open }} <Icon name="chevron-right"
           /></TheiLink>
         </div>

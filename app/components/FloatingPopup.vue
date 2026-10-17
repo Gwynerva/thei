@@ -23,8 +23,8 @@ defineOptions({ inheritAttrs: false });
  * It draws the surface itself; what it holds draws none of its own. Its
  * `density` gives what it holds the room around it, one of three: `compact`
  * for rows of icons, `list` for menus, lists and pickers, `card` for text
- * and forms. `none` leaves the room to a content that scrolls inside itself
- * and keeps its own.
+ * and forms — and scrolls it when the window is too short for it. `none`
+ * leaves the room to a content that scrolls inside itself and keeps its own.
  *
  * It is rendered in the `<dialog>` its anchor is in, or the body: a modal
  * is a `<dialog>` in the top layer, and a popup in the body would open
@@ -36,13 +36,9 @@ const props = withDefaults(
     placement?: Placement;
     fallbackPlacements?: Placement[];
     shiftCrossAxis?: boolean;
-    /** Between the anchor and the tip of the arrow. */
-    offset?: number;
-    viewportPadding?: number;
     maxWidth?: string;
     closeOnOutside?: boolean;
     closeOnEscape?: boolean;
-    outsideIgnore?: Array<HTMLElement | null>;
     fitContent?: boolean;
     density?: 'none' | 'compact' | 'list' | 'card';
     arrow?: boolean;
@@ -52,8 +48,6 @@ const props = withDefaults(
   {
     placement: 'bottom-end',
     shiftCrossAxis: false,
-    offset: POPUP_GAP,
-    viewportPadding: POPUP_VIEWPORT_PADDING,
     maxWidth: '20rem',
     closeOnOutside: true,
     closeOnEscape: true,
@@ -151,8 +145,8 @@ const {
     open,
     placement: () => props.placement,
     fallbackPlacements: () => props.fallbackPlacements,
-    gap: () => props.offset,
-    padding: () => props.viewportPadding,
+    gap: () => POPUP_GAP,
+    padding: () => POPUP_VIEWPORT_PADDING,
     shiftCrossAxis: () => props.shiftCrossAxis,
     arrowSize: () => (props.arrow ? POPUP_ARROW_SIZE.popup : undefined),
     onRoom: (room, element) => {
@@ -219,7 +213,6 @@ function onDocumentPointerDown(event: PointerEvent) {
   if (!(target instanceof Node)) return;
   if (floatingElement.value?.contains(target) || withinFamily(target)) return;
   if (props.anchor instanceof Node && props.anchor.contains(target)) return;
-  if (props.outsideIgnore?.some((element) => element?.contains(target))) return;
   noteClosingPress(event);
   emit('dismiss', 'outside');
   close();
@@ -388,11 +381,19 @@ defineExpose({ element: floatingElement });
           ></div>
           <!-- The room the popup has is what it holds may take; a block, so
                a content of a fixed width centres in a sheet and any other
-               stretches. -->
+               stretches. With room of its own around what it holds, the
+               popup scrolls it when the window is short; a content that
+               scrolls inside itself keeps its own room and its scroll. -->
           <div
-            class="max-h-(--floating-popup-available-height) overflow-hidden
-              rounded-[inherit]"
-            :class="[DENSITY[density], sheet && '*:mx-auto']"
+            class="max-h-(--floating-popup-available-height) rounded-[inherit]"
+            :class="[
+              DENSITY[density],
+              sheet && '*:mx-auto',
+              density === 'none'
+                ? 'overflow-hidden'
+                : `scrollbar-hover overflow-x-hidden overflow-y-auto
+                  overscroll-contain`,
+            ]"
           >
             <slot></slot>
           </div>

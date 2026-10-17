@@ -135,11 +135,24 @@ export function actionLabel(action: AiActionItem): string {
   const kind = actionName(action);
   const target = action.target;
   if (!target) return kind;
-  return `${kind} · ${
-    target.type === 'diary-entry'
-      ? entityListName({ date: target.title })
-      : publicText(target.title)
-  }`;
+  return `${kind} · ${aiEntityName(target)}`;
+}
+
+/**
+ * What an entity the AI names is called: a diary entry by its day, said as
+ * the lists say it, anything else by its title as the owner wrote it — or by
+ * its id while it has none. The kind is its `type`, or the start of its ref.
+ */
+export function aiEntityName(entity: {
+  type?: string;
+  ref?: string;
+  id?: string;
+  title: string;
+}): string {
+  const type = entity.type ?? entity.ref?.split(':')[0];
+  return type === 'diary-entry' && /^\d{4}-\d{2}-\d{2}$/.test(entity.title)
+    ? entityListName({ date: entity.title })
+    : entityListName({ title: entity.title, entityId: entity.id });
 }
 
 /**
@@ -168,12 +181,9 @@ export function sessionSource(item: Pick<AiSessionItem, 'origin' | 'client'>): {
   return { icon: 'person', label: phrase.value.ai_session_you };
 }
 
-/** An amount of tokens, short: 41K, 1.2M. */
+/** An amount of tokens, short as every count is: 41K, 1.2M. */
 export function compactAmount(value: number): string {
-  return new Intl.NumberFormat(language.value.code, {
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(value);
+  return formatCompactNumber(value, language.value.code);
 }
 
 /** The words of editing Markdown, its marks and addresses dropped, on one line. */

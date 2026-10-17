@@ -7,6 +7,7 @@ import {
   type AiSessionItem,
 } from '#layers/thei/shared/ai';
 import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';
+import type { SelectOption } from '#layers/thei/app/components/field/FieldSelect.vue';
 
 /**
  * The owner's sessions, grouped by where they stand — pinned, waiting for
@@ -33,7 +34,7 @@ const emit = defineEmits<{
 type Filter = 'all' | 'waiting' | 'applied' | 'rejected' | 'app' | 'template';
 const FILTER_ICONS: Record<Filter, IconName> = {
   all: 'list-unordered',
-  waiting: 'done-all',
+  waiting: 'action-click',
   applied: 'check',
   rejected: 'close',
   app: 'key',
@@ -99,8 +100,13 @@ async function load(options: { fresh?: boolean } = {}) {
     if (!tail.length) next.value = page.next;
     loaded.value = true;
     setAiWaiting(page.waiting);
-  } catch {
-    // The list stays as it was; the next refresh tries again.
+  } catch (caught) {
+    // AI was turned off elsewhere: the page hears it, and asks no more.
+    // Anything else leaves the list as it was; the next refresh tries again.
+    if ((caught as { statusCode?: number }).statusCode === 404) {
+      stopFollowing();
+      setAiEnabled(false);
+    }
   } finally {
     if (ticket === reading) loading.value = false;
   }
@@ -137,6 +143,10 @@ watch([filter, () => props.modelReady, () => props.about?.ref], () =>
 
 // The list follows what happens in sessions without a stream of its own.
 let timer: ReturnType<typeof setInterval> | undefined;
+function stopFollowing() {
+  if (timer) clearInterval(timer);
+  timer = undefined;
+}
 onMounted(() => {
   void load();
   timer = setInterval(() => {
@@ -144,7 +154,7 @@ onMounted(() => {
   }, 5000);
 });
 onBeforeUnmount(() => {
-  if (timer) clearInterval(timer);
+  stopFollowing();
   if (typing) clearTimeout(typing);
 });
 defineExpose({ refresh: load });
@@ -176,11 +186,24 @@ const groups = computed(() => {
 
 // ---- The filter -----------------------------------------------------------------
 
-const filterOpen = ref(false);
-const filterButton = ref<HTMLElement>();
-function choose(value: Filter) {
-  filter.value = value;
-  filterOpen.value = false;
+/** What the list may be narrowed to, the whole of it first. */
+const filterOptions = computed<SelectOption<Filter>[]>(() =>
+  (Object.keys(FILTER_ICONS) as Filter[]).map((key, index) => ({
+    value: key,
+    label: phrase.value.ai_sessions_filters[key].title,
+    icon: FILTER_ICONS[key],
+    hint: phrase.value.ai_sessions_filters[key].hint || undefined,
+    divider: index === 0,
+  })),
+);
+
+/** Narrowed, and nothing found: the way back to the whole list. */
+const searching = computed(
+  () => Boolean(query.value.trim()) || filter.value !== 'all',
+);
+function resetSearch() {
+  query.value = '';
+  filter.value = 'all';
 }
 
 const spending = computed(() => {
@@ -217,44 +240,31 @@ const spending = computed(() => {
     :aria-label="phrase.ai_tab_sessions"
     data-session-list
   >
-    <div class="flex items-center gap-1.5 px-2.5 pt-2.5 pb-1">
-      <label class="relative min-w-0 flex-1">
-        <Icon
-          name="search"
-          class="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2
-            text-sm text-text-3"
-        />
-        <input
-          v-model="query"
-          type="search"
-          class="h-9 w-full rounded-normal border border-transparent bg-bg-2
-            pr-9 pl-7 text-sm outline-none focus:border-border-2
-            pointer-coarse:h-11 pointer-coarse:pr-12"
-          :placeholder="phrase.ai_sessions_search"
-          :aria-label="phrase.ai_sessions_search"
-          data-session-search
-        />
-        <span class="absolute top-1/2 right-0.5 inline-flex -translate-y-1/2">
-          <button
-            ref="filterButton"
-            type="button"
-            class="flex size-8 cursor-pointer items-center justify-center
-              rounded-md bg-transparent transition pointer-coarse:size-11
-              popup-open:bg-bg-3 popup-open:text-accent hocus:text-accent"
-            :class="filter === 'all' ? 'text-text-3' : 'text-accent'"
-            aria-haspopup="listbox"
-            :aria-expanded="filterOpen"
-            :aria-label="phrase.ai_sessions_filter"
-            :data-title-popup="phrase.ai_sessions_filter"
-            data-session-filter
-            @click="filterOpen = !filterOpen"
-          >
-            <Icon name="filter" />
-          </button>
-        </span>
-      </label>
+    <!-- The list's toolbar: the search, growing, and a new session; the
+         filter beside them on a phone, by its icon, and under them in the
+         narrow column of a desktop. -->
+    <div class="flex flex-wrap items-center gap-1.5 px-2.5 pt-2.5 pb-1">
+      <FieldInput
+        v-model="query"
+        type="search"
+        :placeholder="phrase.ai_sessions_search"
+        :aria-label="phrase.ai_sessions_search"
+        wrapper-class="min-w-0 flex-1"
+        class="h-10 min-w-0! text-sm pointer-coarse:h-11"
+        data-session-search
+      />
+      <FieldSelect
+        v-model="filter"
+        :options="filterOptions"
+        :label="phrase.ai_sessions_filter"
+        filter
+        compact
+        collapsible
+        class="sm:order-last sm:w-full"
+        data-session-filter
+      />
       <Button
-        size="icon"
+        size="icon-lg"
         class="bg-bg-accent! text-accent! pointer-coarse:size-11
           hocus:bg-accent! hocus:text-white! dark:hocus:text-bg-1!"
         :aria-label="phrase.ai_session_new"
@@ -303,11 +313,12 @@ const spending = computed(() => {
           }}</b
         >
         <span>{{ phrase.ai_no_model_text }}</span>
+        <!-- A link drawn as the main `Button` is. -->
         <TheiLink
           to="/admin/ai/?tab=connection"
-          class="flex h-8 items-center gap-1.5 self-start rounded-normal
-            bg-accent/80 px-sm text-sm font-semibold text-white dark:text-bg-1
-            pointer-coarse:h-11 hocus:bg-accent"
+          class="flex h-9 shrink-0 items-center gap-xs self-start rounded-normal
+            bg-accent/80 px-sm text-sm font-semibold whitespace-nowrap
+            text-white transition-colors pointer-coarse:h-11 hocus:bg-accent"
           ><Icon name="power" />{{ phrase.ai_no_model_action }}</TheiLink
         >
       </div>
@@ -333,8 +344,10 @@ const spending = computed(() => {
           :key="item.sessionUuid"
           type="button"
           class="grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto]
-            items-center gap-x-1.5 rounded-md px-2 py-1.5 text-left transition
-            pointer-coarse:px-2.5 pointer-coarse:py-2.5"
+            items-center gap-x-1.5 rounded-sm px-2 py-1.5 text-left transition
+            focus-visible:ring-2 focus-visible:ring-accent
+            focus-visible:ring-inset pointer-coarse:px-2.5
+            pointer-coarse:py-2.5"
           :class="
             item.sessionUuid === selected
               ? 'bg-bg-accent'
@@ -379,21 +392,26 @@ const spending = computed(() => {
         </button>
       </template>
 
-      <p
-        v-if="!groups.length && loaded && !loading"
-        class="px-2 pt-md text-center text-sm text-text-3"
-      >
-        {{
-          query.trim() || filter !== 'all'
-            ? phrase.admin_search_no_results
-            : phrase.ai_sessions_empty
-        }}
-      </p>
+      <template v-if="!groups.length && loaded && !loading">
+        <AdminEmptyList
+          v-if="searching"
+          icon="ai-chat"
+          :title="phrase.admin_search_no_results"
+          :description="phrase.admin_search_no_results_description"
+          searching
+          class="mx-1 mt-1.5"
+          @reset-search="resetSearch"
+        />
+        <p v-else class="px-2 pt-md text-center text-sm text-text-3">
+          {{ phrase.ai_sessions_empty }}
+        </p>
+      </template>
       <button
         v-if="next !== undefined"
         type="button"
-        class="mt-1 w-full cursor-pointer rounded-md bg-transparent py-2 text-sm
-          text-text-2 hocus:text-accent"
+        class="mt-1 w-full cursor-pointer rounded-sm bg-transparent py-2 text-sm
+          text-text-2 transition-colors focus-visible:ring-2
+          focus-visible:ring-accent focus-visible:ring-inset hocus:text-accent"
         @click="more"
       >
         {{ phrase.ai_sessions_more }}
@@ -436,49 +454,5 @@ const spending = computed(() => {
         ></div>
       </div>
     </div>
-
-    <FloatingPopup
-      v-model:open="filterOpen"
-      :anchor="filterButton ?? null"
-      placement="bottom-end"
-      max-width="18rem"
-      density="list"
-    >
-      <div
-        role="listbox"
-        class="flex flex-col gap-0.5"
-        data-session-filter-menu
-      >
-        <button
-          v-for="(item, key) in phrase.ai_sessions_filters"
-          :key="key"
-          type="button"
-          role="option"
-          :aria-selected="filter === key"
-          class="grid popup-item grid-cols-[auto_1fr_auto] items-center gap-y-0"
-          :data-session-filter-option="key"
-          @click="choose(key as Filter)"
-        >
-          <Icon
-            :name="FILTER_ICONS[key as Filter]"
-            class="row-span-2"
-            :class="filter === key ? 'text-accent' : 'text-text-2'"
-          />
-          <b
-            class="text-sm font-semibold"
-            :class="{ 'text-accent': filter === key }"
-            >{{ item.title }}</b
-          >
-          <Icon
-            name="check"
-            class="row-span-2 text-accent"
-            :class="{ invisible: filter !== key }"
-          />
-          <span v-if="item.hint" class="col-start-2 text-xs text-text-3">{{
-            item.hint
-          }}</span>
-        </button>
-      </div>
-    </FloatingPopup>
   </aside>
 </template>

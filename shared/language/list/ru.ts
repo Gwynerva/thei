@@ -226,6 +226,8 @@ export default defineI18nModule({
       `Не используется: будет удалён после ${date}`,
     asset_library_in_history:
       'Не используется, но хранится, пока его показывает версия какого-то текста',
+    asset_library_held_by_ai:
+      'Не используется, но хранится, пока он нужен действию ИИ: ждущему вашего решения или такому, которое ещё можно отменить',
     asset_library_empty: 'Подходящих файлов нет',
     asset_library_unused: 'Неиспользуемые',
     asset_library_unused_hint:
@@ -274,12 +276,13 @@ export default defineI18nModule({
     asset_library_other_variants: 'Другие варианты',
     asset_library_unused_line: 'Не используется',
     asset_library_history_line: 'Только в истории текстов',
+    asset_library_held_by_ai_line: 'Только в действиях ИИ',
     asset_open_place: (title) => `Открыть «${title}» в новой вкладке`,
     asset_open_variant: 'Открыть этот вариант',
     asset_description_save: 'Сохранить описание файла',
     asset_description_saved: 'Описание файла сохранено',
     asset_description_conflict:
-      'Его изменили в другом месте: вот какое оно сейчас.',
+      'Его изменили в другом месте. Ваш текст остался в поле: сохраните ещё раз, и он заменит то, что там теперь.',
     asset_description_too_long: (max) => `Не больше ${max} символов`,
     asset_description_error: 'Не удалось сохранить описание файла.',
     asset_hash_check: 'Проверка файла',
@@ -658,6 +661,7 @@ export default defineI18nModule({
     sign_in_link_qr: 'QR-код ссылки для входа',
     copy: 'Копировать',
     copied: 'Скопировано',
+    quoted: (text) => `«${text}»`,
     share_links: 'Временный доступ',
     share_links_description:
       'Ссылки открывают эту страницу вместе со всем приватным и сами закрываются в срок.',
@@ -827,8 +831,8 @@ export default defineI18nModule({
       'потерянный заменяют, а не восстанавливают.',
     api_token_endpoint: 'Адрес',
     api_token_connect_hint:
-      'Укажите приложению этот адрес и ключ (заголовок Authorization: ' +
-      'Bearer). Для Claude Code выполните:',
+      'Укажите приложению этот адрес и ключ — он передаётся в этом ' +
+      'заголовке. Как это делается в каждом приложении, сказано выше.',
     ai_page: 'ИИ',
     ai_page_description:
       'Сессии с ИИ и его действия, что он помнит о вас, подключение приложений и модели.',
@@ -885,7 +889,7 @@ export default defineI18nModule({
       ],
       'claude-code': [
         'Выполните команду ниже в терминале.',
-        'В Claude Code наберите /mcp, выберите thei и «Authenticate» — откроется страница этого сайта. Или создайте ключ доступа ниже: команда с ним появится сразу.',
+        'В Claude Code наберите /mcp, выберите thei и «Authenticate» — откроется страница этого сайта. Или создайте ключ доступа ниже и добавьте его заголовок к команде через --header.',
       ],
       other: [
         'Укажите приложению адрес ниже.',
@@ -944,9 +948,8 @@ export default defineI18nModule({
     ai_open_page: 'Открыть страницу ИИ',
     ai_instructions_placeholder:
       'Сленг пишу намеренно. Названия проектов не трогать.',
-    ai_check: 'Проверить ключ',
+    ai_check: 'Проверить ключ доступа',
     ai_check_enabled_ok: 'ИИ в Thei включён',
-    ai_check_enabled_fail: 'ИИ в Thei выключен: включите его выше',
     ai_check_handshake_ok: (_version: string) => 'ИИ-приложения подключаются',
     ai_check_handshake_fail: 'ИИ-приложения не могут подключиться',
     ai_check_tools_ok: (count: number) => `Инструментов для ИИ: ${count}`,
@@ -960,7 +963,6 @@ export default defineI18nModule({
       `Публичный адрес ответил ${status}: проверьте, что прокси пропускает /api/mcp`,
     ai_check_public_warn:
       'Сайт не смог достучаться до своего публичного адреса; клиенты снаружи всё равно могут его видеть',
-    ai_check_public_skip: 'Снаружи не проверялось: доступ выключен',
     ai_check_https_ok: 'Адрес работает по HTTPS',
     ai_check_https_warn:
       'Адрес не HTTPS: Claude Code с ключом доступа работает, а коннекторам ' +
@@ -1877,6 +1879,7 @@ export default defineI18nModule({
       'Что сделать модели — как сказали бы человеку. Например: «Посмотри эту запись и скажи, чего в ней не хватает…»',
     ai_template_model: 'Модель',
     ai_template_model_placeholder: (model) => `Как в «Подключении» — ${model}`,
+    ai_template_model_connection: 'Как в «Подключении»',
     ai_template_model_hint:
       'Пусто — модель из «Подключения». Сильная модель — для разборов, где надо думать, дешёвая — для коротких проверок.',
     ai_template_sessions: 'Сессии этого шаблона',
@@ -1885,7 +1888,7 @@ export default defineI18nModule({
     ai_template_delete_confirm: (title) =>
       `Удалить шаблон «${title}»? Его сессии останутся.`,
     ai_sessions_search: 'Найти сессию',
-    ai_sessions_filter: 'Фильтр: откуда, ждут ли',
+    ai_sessions_filter: 'Какие сессии',
     ai_sessions_filters: {
       all: { title: 'Все сессии', hint: '' },
       waiting: { title: 'Ждут вас', hint: 'Есть нерешённое или вопрос' },
@@ -1914,7 +1917,6 @@ export default defineI18nModule({
     ai_session_template: 'Шаблон',
     ai_session_running: 'Работает',
     ai_session_recent: 'Недавно завершены',
-    ai_session_none: 'Нет',
     ai_session_waiting: (count) => `Ждут решения: ${count}`,
     ai_sessions_archive_note: 'Старше 30 дней удаляются',
     ai_sessions_empty: 'Сессий пока нет',
@@ -1922,7 +1924,7 @@ export default defineI18nModule({
     ai_sessions_back: 'К сессиям',
     ai_no_model_title: 'Модель не настроена',
     ai_no_model_text:
-      'Здесь разговаривает модель из «Подключения»: ключ сервиса или своя, Ollama и LM Studio. Сессии приложений через MCP — ниже.',
+      'Здесь разговаривает модель из «Подключения»: модель сервиса по ключу API или своя, в Ollama и LM Studio. Сессии приложений через MCP — ниже.',
     ai_no_model_action: 'Настроить',
     ai_session_menu: 'Сессия',
     ai_session_pin: 'Закрепить',
@@ -1935,7 +1937,11 @@ export default defineI18nModule({
       `Удалить сессию «${title}»? Применённое останется, но отменить его отсюда будет нельзя.`,
     ai_session_by_you: (when) => `Начата вами · ${when}`,
     ai_session_via_app: (client) => `${client} через MCP`,
-    ai_session_tokens: (amount) => `${amount} токенов`,
+    ai_session_tokens: (amount) =>
+      // «1,2 тыс.» is followed by «токенов» whatever the number.
+      /^\d+$/.test(amount)
+        ? plural(Number(amount), 'токен', 'токена', 'токенов')
+        : `${amount} токенов`,
     ai_session_app_note:
       'Здесь — то, что приложение предложило и применило. Сам разговор остался в приложении: писать ему — там.',
     ai_session_archived_note: 'Сессия в архиве: писать в неё нельзя',
@@ -1968,11 +1974,12 @@ export default defineI18nModule({
       limit:
         'Месячный лимит исчерпан. Сессия продолжится в следующем месяце или когда вы поднимете лимит.',
       'no-model': 'Модель для ответа не настроена.',
-      key: 'Сервис не принял ключ.',
+      key: 'Сервис не принял ключ API.',
       busy: 'Сервис занят — попробуйте позже.',
       address: 'Сервис не отвечает по своему адресу.',
       model: 'Сервис не знает такой модели.',
       refused: 'Модель отказалась отвечать.',
+      length: 'Оборвано: ответу не хватило места.',
       turns: 'Остановлено: слишком много шагов.',
       error: 'Что-то пошло не так.',
     },
@@ -2377,6 +2384,27 @@ export default defineI18nModule({
       slogan: 'Слоган',
       statuses: 'Статусы',
       actionText: 'Текст кнопки',
+      access: 'Доступ',
+      slug: 'Адрес',
+      publicId: 'Публичный ID',
+      icon: 'Иконка',
+      banner: 'Баннер',
+      showcaseFiles: 'Файлы витрины',
+      files: 'Файлы',
+      links: 'Ссылки',
+      tags: 'Теги',
+      relations: 'Связи',
+      notes: 'Заметки',
+      sections: 'Разделы',
+      sectionOrder: 'Порядок разделов',
+      private: 'Приватный',
+      periods: 'Даты',
+      body: 'Текст',
+      date: 'День',
+      displayName: 'Имя',
+      nickname: 'Псевдоним',
+      about: 'Обо мне',
+      favicon: 'Иконка сайта',
     },
     ai_action_flag: { on: 'да', off: 'нет' },
     ai_action_create: {

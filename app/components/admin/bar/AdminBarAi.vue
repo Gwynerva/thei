@@ -19,6 +19,13 @@ watch(open, async (opened) => {
   sessions.value = await aiApi.waitingSessions();
 });
 
+/** A new session, about the entity in hand when there is one. */
+const startLabel = computed(() =>
+  entity.value?.title
+    ? phrase.value.ai_entity_new_session(aiEntityName(entity.value))
+    : phrase.value.ai_session_new,
+);
+
 function start(about?: string) {
   open.value = false;
   void navigateTo(newSessionLocation({ about }));
@@ -56,7 +63,7 @@ function start(about?: string) {
   >
     <AiSessionsMenu
       :heading="phrase.ai_bar_waiting_title(waiting)"
-      heading-icon="done-all"
+      heading-icon="action-click"
       :sessions
       :empty="waiting ? undefined : phrase.ai_bar_nothing_waits"
       :more="{ to: '/admin/ai/', label: phrase.ai_bar_all_sessions }"
@@ -66,19 +73,13 @@ function start(about?: string) {
       <Button
         class="flex h-9 items-center justify-center gap-xs font-semibold
           pointer-coarse:h-11"
+        :data-title-popup="startLabel"
+        data-title-popup-clipped
         data-ai-bar-start
         @click="start(entity?.ref)"
       >
         <Icon name="ai-chat" class="shrink-0" />
-        <span class="truncate">{{
-          entity?.title
-            ? phrase.ai_entity_new_session(
-                entity.ref.startsWith('diary-entry:')
-                  ? entityListName({ date: entity.title })
-                  : publicText(entity.title),
-              )
-            : phrase.ai_session_new
-        }}</span>
+        <span class="truncate" data-title-popup-clip>{{ startLabel }}</span>
       </Button>
       <Button
         v-if="entity"

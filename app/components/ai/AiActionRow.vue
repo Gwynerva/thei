@@ -288,7 +288,8 @@ function sendComment(text: string) {
       :aria-checked="picked"
       :aria-label="phrase.ai_action_pick"
       class="-m-1.5 flex cursor-pointer items-center justify-center self-start
-        bg-transparent p-1.5 pointer-coarse:-m-2.5 pointer-coarse:p-2.5"
+        rounded-sm bg-transparent p-1.5 focus-visible:ring-2
+        focus-visible:ring-accent pointer-coarse:-m-2.5 pointer-coarse:p-2.5"
       data-action-pick
       @click="emit('pick')"
     >
@@ -321,7 +322,7 @@ function sendComment(text: string) {
     <span
       v-else
       class="flex size-7 shrink-0 items-center justify-center self-start
-        rounded-md"
+        rounded-normal"
       :class="
         action.state === 'applied'
           ? 'bg-bg-success text-text-success'
@@ -415,12 +416,13 @@ function sendComment(text: string) {
           >
             <Icon name="chevron-right" />
           </Button>
+          <!-- A link drawn as the accent square of a `Button` is. -->
           <TheiLink
             v-else-if="from && form === 'session'"
             :to="sessionPath"
             class="flex size-8 shrink-0 items-center justify-center
-              rounded-normal bg-accent/80 text-base text-white transition-colors
-              pointer-coarse:size-11 hocus:bg-accent"
+              rounded-normal bg-accent/80 p-1 text-base text-white
+              transition-colors pointer-coarse:size-11 hocus:bg-accent"
             :aria-label="phrase.ai_offer_in_session"
             :data-title-popup="phrase.ai_offer_in_session"
             data-action-session
@@ -557,14 +559,15 @@ function sendComment(text: string) {
           :aria-checked="partOn(part)"
           :aria-label="part.label"
           class="-m-1 flex shrink-0 cursor-pointer items-center justify-center
-            bg-transparent p-1 pointer-coarse:-m-2 pointer-coarse:p-2"
+            rounded-sm bg-transparent p-1 focus-visible:ring-2
+            focus-visible:ring-accent pointer-coarse:-m-2 pointer-coarse:p-2"
           :disabled="partsOff"
           data-part-pick
           @click="togglePart(part)"
         >
           <span
             class="flex size-4 items-center justify-center rounded-sm
-              border-[1.5px]"
+              border-[1.5px] transition"
             :class="
               partOn(part)
                 ? 'border-accent bg-accent text-white dark:text-bg-1'
@@ -635,10 +638,15 @@ function sendComment(text: string) {
       <TheiLink
         :to="sessionPath"
         class="inline-flex min-w-0 items-center gap-1 underline
-          decoration-text-2/35 underline-offset-2 hocus:text-accent"
+          decoration-text-2/35 underline-offset-2 transition-colors
+          hocus:text-accent"
+        :data-title-popup="sessionTitle(from)"
+        data-title-popup-clipped
       >
         <Icon name="ai-chat" class="shrink-0" />
-        <span class="truncate">«{{ sessionTitle(from) }}»</span>
+        <span class="truncate" data-title-popup-clip>{{
+          phrase.quoted(sessionTitle(from))
+        }}</span>
       </TheiLink>
       <span class="shrink-0">· {{ shortWhen(action.createdAt) }}</span>
     </p>

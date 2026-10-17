@@ -6,7 +6,13 @@ import {
   SYNONYM_SEPARATOR,
   synonymIdentity,
 } from '#layers/thei/shared/synonyms';
-import type { TitlePopupAttrs } from '#layers/thei/app/composables/title-popup-content';
+import {
+  isTitlePopupGap,
+  readTitlePopup,
+  titlePopup,
+  TITLE_POPUP_GAP,
+  type TitlePopupAttrs,
+} from '#layers/thei/app/composables/title-popup-content';
 
 /**
  * The other names something is known by — a tag, a project, an event, a
@@ -90,16 +96,43 @@ function remove(index: number) {
   synonyms.value = synonyms.value.filter((_, item) => item !== index);
   inputElement.value?.focus();
 }
+
+/**
+ * A suggestion's hint: the word itself first, whole, as a chip may cut it,
+ * then what its own hint says of it. With nothing to say of it, the word
+ * alone, only when it is cut.
+ */
+function suggestionPopup(suggestion: {
+  word: string;
+  popup?: TitlePopupAttrs;
+}) {
+  const said = readTitlePopup(
+    suggestion.popup?.['data-title-popup'],
+    suggestion.popup?.['data-title-popup-rich'],
+  );
+  if (!said?.length)
+    return { ...titlePopup(suggestion.word), 'data-title-popup-clipped': '' };
+  return titlePopup(
+    { text: suggestion.word, bold: true },
+    TITLE_POPUP_GAP,
+    ...said.map((line) =>
+      isTitlePopupGap(line)
+        ? line
+        : line.spans.map((span) => ({ ...span, clamp: line.clamp })),
+    ),
+  );
+}
 </script>
 
 <template>
   <Field>
     <FieldLabel>{{ phrase.synonyms }}</FieldLabel>
+    <!-- A field as every field is: its border turns stronger under the
+         pointer and in focus. -->
     <div
       class="flex min-h-12 cursor-text flex-wrap items-center gap-2
-        rounded-normal border-2 border-dashed border-border-2 bg-bg-1 p-sm
-        transition focus-within:border-accent hover:border-border-3
-        focus-within:hover:border-accent"
+        rounded-normal border-2 border-border-1 bg-bg-1 p-sm transition
+        focus-within:border-border-3 hocus:border-border-3"
       @click.self="inputElement?.focus()"
     >
       <span
@@ -107,13 +140,19 @@ function remove(index: number) {
         :key="synonymIdentity(synonym)"
         class="inline-flex h-8 max-w-full items-center gap-1 rounded-sm border
           border-border-1 bg-bg-3 pr-1 pl-xs text-xs leading-none font-semibold"
+        :data-title-popup="synonym"
+        data-title-popup-clipped
       >
-        <span class="min-w-0 truncate">{{ synonym }}</span>
+        <span class="min-w-0 truncate" data-title-popup-clip>{{
+          synonym
+        }}</span>
         <button
           type="button"
-          class="shrink-0 cursor-pointer leading-none transition
+          class="shrink-0 cursor-pointer rounded-sm leading-none transition
+            focus-visible:ring-2 focus-visible:ring-accent
             hocus:text-text-error"
           :aria-label="phrase.synonym_remove(synonym)"
+          :data-title-popup="phrase.synonym_remove(synonym)"
           @click="remove(index)"
         >
           <Icon name="close" />
@@ -156,11 +195,13 @@ function remove(index: number) {
             text-xs leading-none font-semibold text-text-2 transition
             hocus:border-accent hocus:text-accent"
           :aria-label="phrase.synonym_suggestion_add(suggestion.word)"
-          v-bind="suggestion.popup"
+          v-bind="suggestionPopup(suggestion)"
           @click="commit(suggestion.word)"
         >
           <Icon name="plus-circle" class="shrink-0" />
-          <span class="min-w-0 truncate">{{ suggestion.word }}</span>
+          <span class="min-w-0 truncate" data-title-popup-clip>{{
+            suggestion.word
+          }}</span>
         </button>
       </div>
     </div>

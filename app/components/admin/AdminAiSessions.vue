@@ -110,13 +110,10 @@ onBeforeUnmount(() => {
               text-text-3"
           >
             {{ group.title }}
-            <span
+            <AiCount
               v-if="group.key === 'waiting' && waiting"
-              class="inline-flex h-5 min-w-5 items-center justify-center
-                rounded-full bg-accent px-1.5 text-xs font-bold text-white
-                dark:text-bg-1"
-              >{{ waiting }}</span
-            >
+              :count="waiting"
+            />
             <Icon
               v-if="group.key === 'running'"
               name="loading"

@@ -424,6 +424,19 @@ test('keeps a part left as it was in reach, and closing keeps the word on it', a
         .join();
     })
     .toContain(`${left}:kept`);
+
+  // Declined, it no longer waits in the entry's editor for the tests after.
+  const detail = await (
+    await page.request.get(`/api/admin/ai/sessions/${sessionUuid}`)
+  ).json();
+  expect(
+    (
+      await page.request.post(
+        `/api/admin/ai/actions/${detail.actions[0].actionUuid}/reject`,
+        { data: {} },
+      )
+    ).ok(),
+  ).toBe(true);
 });
 
 test('goes through a new order, a repeat dropped and a heading left out', async ({

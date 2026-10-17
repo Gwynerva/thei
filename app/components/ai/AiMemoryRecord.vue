@@ -149,7 +149,7 @@ async function save() {
             query: { session: item.session.sessionUuid },
           }"
           class="underline decoration-text-2/35 underline-offset-2
-            hocus:text-accent"
+            transition-colors hocus:text-accent"
           >{{ sessionTitle(item.session) }}</TheiLink
         >
         <template v-else>{{ phrase.ai_memory_by_you }}</template>

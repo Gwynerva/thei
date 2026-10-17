@@ -8,6 +8,14 @@ import type { AiPresetItem } from '#layers/thei/shared/ai-template';
  */
 defineProps<{ presets: readonly AiPresetItem[]; heading: string }>();
 const emit = defineEmits<{ choose: [preset: AiPresetItem] }>();
+
+/** A chip's hint: its name, whole, and its words, cut to a few lines. */
+function presetPopup(preset: AiPresetItem) {
+  return titlePopup(
+    { text: publicText(preset.title), bold: true },
+    { text: publicText(preset.instruction), italic: true, clamp: true },
+  );
+}
 </script>
 
 <template>
@@ -23,7 +31,7 @@ const emit = defineEmits<{ choose: [preset: AiPresetItem] }>();
         class="flex h-7 max-w-full min-w-0 items-center gap-1 px-2 text-xs
           pointer-coarse:h-11"
         :data-ai-preset="preset.templateId"
-        :data-title-popup="publicText(preset.instruction)"
+        v-bind="presetPopup(preset)"
         @click="emit('choose', preset)"
       >
         <Icon

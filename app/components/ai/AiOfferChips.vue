@@ -48,14 +48,9 @@ function chipOf(offer: AiEntityOffer): {
   const word: RelationWord = fromHere
     ? payload.relation
     : RELATION_WORD_FROM_OTHER_END[payload.relation as RelationWord];
-  const name = end
-    ? end.type === 'diary-entry'
-      ? entityListName({ date: end.title })
-      : publicText(end.title)
-    : '';
   return {
     icon: relationWordIcon(word),
-    label: name,
+    label: end ? aiEntityName(end) : '',
     removal: payload.op === 'remove',
   };
 }
@@ -76,12 +71,20 @@ const shownOffer = shallowRef<typeof openOffer.value>();
 watch(openOffer, (offer) => {
   if (offer) shownOffer.value = offer;
 });
+/**
+ * A card put away is still fading out: with the last chip decided, the
+ * chips' row stays until it has gone, or the card would vanish with it.
+ */
+const closing = ref(false);
+watch(popupOpen, (now, before) => {
+  if (before && !now) closing.value = true;
+});
 const decisions = {};
 </script>
 
 <template>
   <div
-    v-if="ai && offers.length"
+    v-if="ai && (offers.length || closing)"
     class="flex flex-wrap items-center gap-1.5"
     :data-ai-offer-chips="place"
   >
@@ -103,6 +106,8 @@ const decisions = {};
       :aria-label="phrase.ai_offer_chip(chipOf(offer).label)"
       :aria-expanded="opened === offer.action.actionUuid"
       aria-haspopup="dialog"
+      :data-title-popup="chipOf(offer).label"
+      data-title-popup-clipped
       :data-ai-offer-chip="offer.action.actionUuid"
       @click="
         opened =
@@ -113,7 +118,9 @@ const decisions = {};
     >
       <Icon name="sparkles" class="shrink-0" />
       <Icon :name="chipOf(offer).icon" class="shrink-0" />
-      <span class="truncate">{{ chipOf(offer).label }}</span>
+      <span class="truncate" data-title-popup-clip>{{
+        chipOf(offer).label
+      }}</span>
     </button>
 
     <FloatingPopup
@@ -123,8 +130,16 @@ const decisions = {};
       "
       placement="bottom-start"
       max-width="26rem"
+      @closed="closing = false"
     >
-      <div v-if="shownOffer" class="@container" data-ai-offer-card>
+      <!-- A long change scrolls in a short window rather than being cut. -->
+      <div
+        v-if="shownOffer"
+        class="@container scrollbar-hover
+          max-h-(--floating-popup-available-height) overflow-y-auto
+          overscroll-contain"
+        data-ai-offer-card
+      >
         <AiActionRow
           :action="shownOffer.action"
           :from="shownOffer.session"

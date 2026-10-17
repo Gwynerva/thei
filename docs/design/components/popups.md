@@ -59,6 +59,10 @@ it has a width of its own.
   and forms. `none`, the default, is for a content that scrolls inside itself
   and keeps its own room, as the select's list does. The room at the popup's
   edge equals the gap between the blocks inside it.
+- **Nothing is cut off.** With a density, the popup scrolls what it holds
+  when the window is too short for it. With `none`, the content scrolls
+  itself within `--floating-popup-available-height`, as the select's list,
+  the ✦ menus (`AiSessionsMenu`) and a proposal at a label do.
 - **Rows of a menu are `popup-item`:** one height, one rounding, one shade
   under the pointer; a row that deletes shades with
   `[--popup-item-hover:var(--color-bg-error)]`. The row Enter would choose is
@@ -116,10 +120,9 @@ it has a width of its own.
 | `arrow`                           | On unless turned off.                                                                 |
 | `complex`                         | A sheet on a phone.                                                                   |
 | `closeOnOutside`, `closeOnEscape` | On unless turned off, as a link card does, whose closing is the hints'.               |
-| `outsideIgnore`                   | Elements a click in counts as inside.                                                 |
-| `offset`, `viewportPadding`       | 3px from the anchor to the arrow's tip, 8px from the window's edge.                   |
 
-It emits `opened` once it is drawn in place, so the focus can go in;
+Its tip stands 3px from the anchor and the popup 8px from the window's edge,
+the same for every popup (`POPUP_GAP`, `POPUP_VIEWPORT_PADDING`). It emits `opened` once it is drawn in place, so the focus can go in;
 `dismiss` with `outside` or `escape` the moment it is put away without a
 choice, before the click goes on to wherever it was aimed; and `closed` once
 it has gone. It gives what it holds the room left on the screen as

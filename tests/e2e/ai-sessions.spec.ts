@@ -516,7 +516,7 @@ test('the list finds a session by what was said in it', async ({ page }) => {
   // The filter and the session's menu open whole, on top.
   await search.fill('');
   await page.locator('[data-session-filter]').click();
-  await expectPopupUsable(page, page.locator('[data-session-filter-menu]'));
+  await expectPopupUsable(page, page.locator('[data-select-popup]'));
   await page.keyboard.press('Escape');
   await page.locator(`[data-session-item="${sessionUuid}"]`).click();
   await page.locator('[data-session-menu]').click();

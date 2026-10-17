@@ -44,6 +44,8 @@ function openFile(asset: AssetVariantInfo) {
         class="flex max-w-60 min-w-0 cursor-pointer items-center gap-2
           rounded-normal bg-bg-1/60 py-1.5 pr-3 pl-2.5 text-left
           transition-colors hocus:bg-bg-1"
+        :data-title-popup="file.name"
+        data-title-popup-clipped
         data-message-file
         @click="openFile(file.asset)"
       >
@@ -52,7 +54,9 @@ function openFile(asset: AssetVariantInfo) {
           class="shrink-0 text-lg text-text-2"
         />
         <span class="flex min-w-0 flex-col">
-          <span class="truncate text-xs font-semibold">{{ file.name }}</span>
+          <span class="truncate text-xs font-semibold" data-title-popup-clip>{{
+            file.name
+          }}</span>
           <span class="text-2xs text-text-2"
             >{{ file.asset.extension.toUpperCase() }} ·
             {{ humanSize(file.asset.size) }}</span
@@ -63,11 +67,15 @@ function openFile(asset: AssetVariantInfo) {
         v-else
         class="flex max-w-60 min-w-0 items-center gap-2 rounded-normal border
           border-dashed border-border-2 py-1.5 pr-3 pl-2.5 text-text-3"
+        :data-title-popup="file.name"
+        data-title-popup-clipped
         data-message-file="gone"
       >
-        <Icon name="missing" class="shrink-0 text-lg" />
+        <Icon name="face-dead" class="shrink-0 text-lg" />
         <span class="flex min-w-0 flex-col">
-          <span class="truncate text-xs">{{ file.name }}</span>
+          <span class="truncate text-xs" data-title-popup-clip>{{
+            file.name
+          }}</span>
           <span class="text-2xs">{{ phrase.ai_message_file_gone }}</span>
         </span>
       </span>

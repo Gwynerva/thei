@@ -78,6 +78,7 @@ function usePreset(preset: AiPresetItem) {
   composer.value?.prefill(preset.instruction, preset.templateId);
 }
 
+/** A built-in check sent from here runs on the entity, narrowed by the words. */
 async function send(
   text: string,
   mentioned: string[],
@@ -87,43 +88,26 @@ async function send(
 ) {
   if (!ai?.ref.value || sending.value) return;
   sending.value = true;
-  const about = [...new Set([ai.ref.value, ...mentioned])];
-  // A built-in check runs on the entity, narrowed by the words.
-  const check = panel.value?.templates.find(
-    (item) => item.templateId === templateId && item.builtin,
-  );
-  if (check) {
-    try {
-      await runAiCheck(check, {
-        about,
-        request: text,
+  try {
+    await startAiSession(
+      {
+        text,
+        about: [...new Set([ai.ref.value, ...mentioned])],
+        files,
         restore,
-        // Started again from the toast, the menu comes back to show it.
+        templateId,
+      },
+      {
+        presets: panel.value?.templates ?? [],
+        // A check started again from its toast brings the menu back to show it.
         started: (sessionUuid) => {
           sent.value = sessionUuid;
           open.value = true;
           nameEntity();
           void ai.refresh();
         },
-      });
-    } finally {
-      sending.value = false;
-    }
-    return;
-  }
-  try {
-    const { sessionUuid } = await aiApi.start({
-      text,
-      files,
-      about,
-      templateId,
-    });
-    sent.value = sessionUuid;
-    nameEntity();
-    void ai.refresh();
-  } catch (caught) {
-    restore();
-    showToast(errorMessage(caught, phrase.value.ai_error));
+      },
+    );
   } finally {
     sending.value = false;
   }
@@ -249,12 +233,14 @@ function openFull() {
             }"
             class="flex min-h-9 min-w-0 flex-1 items-center gap-xs px-2 py-1.5
               text-sm pointer-coarse:min-h-11"
+            :data-title-popup="sessionTitle(sentSession)"
+            data-title-popup-clipped
             @click="open = false"
           >
             <AiRunningDots v-if="sentSession.state === 'running'" />
             <Icon v-else name="sparkles" class="shrink-0 text-accent" />
-            <span class="min-w-0 flex-1 truncate">{{
-              publicText(sentSession.title)
+            <span class="min-w-0 flex-1 truncate" data-title-popup-clip>{{
+              sessionTitle(sentSession)
             }}</span>
             <b
               v-if="sentSession.waiting"
@@ -273,12 +259,14 @@ function openFull() {
             @click="stop(sentSession.sessionUuid)"
           />
         </div>
-        <div class="flex gap-1">
+        <!-- Side by side while their words fit, one under the other when
+             they do not. -->
+        <div class="flex flex-wrap gap-1">
           <Button
             v-if="ai.ref.value !== 'profile'"
             variant="secondary"
-            class="flex h-9 flex-1 items-center justify-center gap-xs
-              bg-transparent pointer-coarse:h-11"
+            class="flex h-9 shrink-0 grow items-center justify-center gap-xs
+              bg-transparent whitespace-nowrap pointer-coarse:h-11"
             data-ai-entity-remember
             @click="remember"
           >
@@ -288,8 +276,8 @@ function openFull() {
           </Button>
           <Button
             variant="secondary"
-            class="flex h-9 flex-1 items-center justify-center gap-xs
-              bg-transparent pointer-coarse:h-11"
+            class="flex h-9 shrink-0 grow items-center justify-center gap-xs
+              bg-transparent whitespace-nowrap pointer-coarse:h-11"
             data-ai-entity-start
             @click="openFull"
           >

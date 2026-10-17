@@ -36,7 +36,10 @@ Icons with fixed meanings:
 | `sparkles`                                                      | AI: the ✦ of a form and of the admin bar, a proposal at a label, the AI page.                                |
 | `ai-chat`                                                       | An AI session: a speech bubble with the sparkle in it.                                                       |
 | `history`                                                       | The past: a text's drafts and versions, the undo of an applied AI action, the archive of sessions, "rewind". |
-| `face-dead`                                                     | Nothing there: a search with no results, a session that is gone.                                             |
+| `undo`                                                          | Bringing back from the archive: a session the owner archived, to be written in again.                        |
+| `face-dead`                                                     | Nothing there: a search with no results, a session or a file that is gone.                                   |
+| `done-all`                                                      | Accepting at once all that an AI is sure of: the sure parts of a text edit, in its card and on its review.   |
+| `action-click`                                                  | A call to act: a project's action button, and what waits for the owner's decision in AI.                     |
 | `loading`                                                       | Work in progress.                                                                                            |
 | `missing`                                                       | Drawn in place of a name the sprite does not know.                                                           |
 

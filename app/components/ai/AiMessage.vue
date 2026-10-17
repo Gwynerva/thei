@@ -109,7 +109,7 @@ const stepLine = computed(() => {
       icon: 'search',
       text: said.search(
         searched
-          .map((step) => (step.detail ? `«${step.detail}»` : ''))
+          .map((step) => (step.detail ? phrase.value.quoted(step.detail) : ''))
           .filter(Boolean)
           .slice(0, 3)
           .join(', '),
@@ -158,6 +158,7 @@ const NOTICE_ICONS = {
   address: 'warning',
   model: 'warning',
   refused: 'warning',
+  length: 'warning',
   turns: 'warning',
   error: 'warning',
 } as const;
@@ -175,7 +176,7 @@ function answer(text: string) {
   <div
     v-if="message.role === 'owner'"
     class="ai-owner relative isolate mr-2 flex max-w-[min(34rem,85%)] flex-col
-      gap-1.5 self-end rounded-[1rem] rounded-br-none px-3.5 py-2.5 text-sm
+      gap-1.5 self-end rounded-normal rounded-br-none px-3.5 py-2.5 text-sm
       leading-normal"
     :style="{ '--ai-sent': JSON.stringify(sent) }"
     :data-message="message.messageUuid"
@@ -184,11 +185,15 @@ function answer(text: string) {
     <p
       v-if="comment"
       class="flex items-center gap-1 text-xs text-text-2"
+      :data-title-popup="commentAbout"
+      data-title-popup-clipped
       data-message-comment
     >
-      <Icon name="comment" class="shrink-0" /><span class="truncate">{{
-        commentAbout
-      }}</span>
+      <Icon name="comment" class="shrink-0" /><span
+        class="truncate"
+        data-title-popup-clip
+        >{{ commentAbout }}</span
+      >
     </p>
     <AiMessageFiles :files="message.files" />
     <ContentRenderer
@@ -262,7 +267,6 @@ function answer(text: string) {
       v-if="question"
       class="flex flex-col gap-2 rounded-normal border border-accent/45 bg-bg-2
         px-3 py-2.5"
-      :class="{ answered: question.answer }"
       data-question
     >
       <p class="flex items-center gap-1.5 text-xs font-bold text-accent">
@@ -339,8 +343,8 @@ function answer(text: string) {
             )
           "
           to="/admin/ai/?tab=connection"
-          class="self-start rounded-normal bg-bg-3 px-sm py-1 text-sm
-            font-semibold text-text-2 transition hocus:bg-accent/25
+          class="self-start rounded-normal bg-bg-3 px-sm py-xs text-sm
+            font-semibold text-text-2 transition-colors hocus:bg-accent/25
             hocus:text-accent"
           >{{ phrase.ai_notice_connection }}</TheiLink
         >

@@ -6,11 +6,13 @@ import {
 } from '#layers/thei/shared/ai-template';
 import {
   aiModelName,
-  type AiModelSettings,
   type AiModelsResponse,
 } from '#layers/thei/shared/ai-model';
+import type { SelectOption } from '#layers/thei/app/components/field/FieldSelect.vue';
 import ModalContainer from '../ModalContainer.vue';
 import ModalHeaderButton from '../ModalHeaderButton.vue';
+import ModalTitle from '../ModalTitle.vue';
+import ModalWaiting from '../ModalWaiting.vue';
 
 /**
  * One template's settings: its request in the owner's words and which model
@@ -31,7 +33,8 @@ interface Draft {
 }
 
 const detail = ref<AiTemplateDetail>();
-const connection = ref<AiModelSettings>();
+/** What the connection answers with, read as the AI page reads it. */
+const { data: connection } = useAiModel();
 const models = ref<string[]>([]);
 const draft = ref<Draft>({
   title: '',
@@ -74,15 +77,11 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
-  // What the connection answers with, and the models its service offers.
-  void $fetch<AiModelSettings>('/api/admin/ai/model')
-    .then((settings) => (connection.value = settings))
-    .catch(() => {});
 });
 
 /**
  * The models the connection's service offers, asked for when the owner
- * reaches for the field, not on every opening: asking sends the key.
+ * reaches for the field, not on every opening: asking sends the API key.
  */
 let modelsAsked = false;
 function modelsWanted() {
@@ -99,6 +98,41 @@ function modelsWanted() {
 const connectionModel = computed(() =>
   connection.value ? aiModelName(connection.value) : '',
 );
+
+/**
+ * The model as the select shows it, once the service has listed its own:
+ * the connection's, one of the listed, or «another» with a field of its own
+ * for a name the service did not list.
+ */
+const OTHER = 'other';
+const otherModel = ref(false);
+const modelChoice = computed({
+  get: () => {
+    const value = draft.value.model;
+    return otherModel.value || (value && !models.value.includes(value))
+      ? OTHER
+      : value;
+  },
+  set: (choice: string) => {
+    otherModel.value = choice === OTHER;
+    if (choice !== OTHER) draft.value.model = choice;
+  },
+});
+const modelOptions = computed<SelectOption[]>(() => [
+  {
+    value: '',
+    label: connectionModel.value
+      ? phrase.value.ai_template_model_placeholder(connectionModel.value)
+      : phrase.value.ai_template_model_connection,
+    divider: true,
+  },
+  ...models.value.map((model, index) => ({
+    value: model,
+    label: model,
+    divider: index === models.value.length - 1,
+  })),
+  { value: OTHER, label: phrase.value.ai_model_other },
+]);
 
 async function save() {
   if (busy.value) return;
@@ -207,19 +241,18 @@ useModalCloseGuard(
   <ModalContainer ref="modalContainer" class="max-w-140" data-template-modal>
     <template #header
       ><div class="flex items-center gap-xs p-sm">
-        <h2
-          class="flex min-w-0 flex-1 items-center gap-xs px-xs text-lg
-            font-bold"
-        >
-          <Icon name="template" class="shrink-0 text-text-3" />
-          <span class="truncate">{{
+        <!-- As its shell draws it, so that what arrives only fills it in. -->
+        <ModalTitle
+          icon="template"
+          :title="
             isNew
               ? phrase.ai_template_modal_new
               : builtin && template
                 ? publicText(template.title)
                 : phrase.ai_template_modal_title
-          }}</span>
-        </h2>
+          "
+          class="flex-1"
+        />
         <ModalHeaderButton
           icon="close"
           :label="phrase.close_modal"
@@ -237,18 +270,16 @@ useModalCloseGuard(
         >
       </div></template
     >
-    <div v-if="loading" class="p-md text-text-3">
-      <Icon name="loading" />
-    </div>
+    <ModalWaiting v-if="loading" class="h-32" />
     <div v-else class="flex flex-col gap-md p-sm sm:p-md">
       <p v-if="error" class="text-sm text-text-error">
         <Icon name="warning" class="mr-xs" />{{ error }}
       </p>
 
+      <!-- On the modal's own ground: a note, and the check's words quoted. -->
       <p
         v-if="builtin"
-        class="flex items-start gap-xs rounded-normal bg-bg-3 px-3 py-2.5
-          text-xs leading-normal text-text-2"
+        class="flex items-start gap-xs text-xs leading-normal text-text-2"
       >
         <Icon name="hint" class="mt-0.5 shrink-0" />{{
           phrase.ai_template_builtin_note
@@ -271,8 +302,7 @@ useModalCloseGuard(
         }}</FieldLabel>
         <p
           v-if="builtin && template"
-          class="rounded-normal border border-border-1 bg-bg-1 px-3 py-2.5
-            leading-normal"
+          class="border-l-2 border-border-2 pl-sm leading-normal"
         >
           {{ publicText(template.instruction) }}
         </p>
@@ -287,22 +317,38 @@ useModalCloseGuard(
         />
       </Field>
 
+      <!-- Typed until the service has listed its models, then chosen. -->
       <Field>
         <FieldLabel>{{ phrase.ai_template_model }}</FieldLabel>
+        <template v-if="models.length">
+          <FieldSelect
+            v-model="modelChoice"
+            :options="modelOptions"
+            wide
+            data-template-model
+          />
+          <FieldInput
+            v-if="modelChoice === OTHER"
+            v-model="draft.model"
+            autocomplete="off"
+            no-typography
+            :placeholder="phrase.ai_model_id_placeholder"
+            data-template-model-other
+          />
+        </template>
         <FieldInput
+          v-else
           v-model="draft.model"
-          :list="models.length ? 'ai-template-models' : undefined"
-          @focusin="modelsWanted"
+          autocomplete="off"
+          no-typography
           :placeholder="
             connectionModel
               ? phrase.ai_template_model_placeholder(connectionModel)
               : ''
           "
           data-template-model
+          @focusin="modelsWanted"
         />
-        <datalist id="ai-template-models">
-          <option v-for="name in models" :key="name" :value="name"></option>
-        </datalist>
         <FieldHint>{{ phrase.ai_template_model_hint }}</FieldHint>
       </Field>
 
@@ -320,7 +366,8 @@ useModalCloseGuard(
       <div v-if="template" class="flex flex-wrap items-center gap-xs">
         <Button
           variant="secondary"
-          class="flex h-9 items-center gap-xs pointer-coarse:h-11"
+          class="flex h-9 shrink-0 items-center gap-xs whitespace-nowrap
+            pointer-coarse:h-11"
           :disabled="Boolean(busy) || dirty"
           data-template-run-now
           @click="run"
@@ -333,8 +380,8 @@ useModalCloseGuard(
         </Button>
         <Button
           variant="secondary"
-          class="flex h-9 items-center gap-xs bg-transparent
-            pointer-coarse:h-11"
+          class="flex h-9 shrink-0 items-center gap-xs bg-transparent
+            whitespace-nowrap pointer-coarse:h-11"
           :disabled="Boolean(busy)"
           data-template-copy
           @click="copy"
@@ -346,7 +393,8 @@ useModalCloseGuard(
         <Button
           v-if="!builtin"
           variant="delete"
-          class="ml-auto flex h-9 items-center gap-xs pointer-coarse:h-11"
+          class="ml-auto flex h-9 shrink-0 items-center gap-xs whitespace-nowrap
+            pointer-coarse:h-11"
           :disabled="Boolean(busy)"
           data-template-delete
           @click="remove"

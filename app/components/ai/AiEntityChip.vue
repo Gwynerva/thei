@@ -26,16 +26,12 @@ const linkable = computed(
 );
 
 const icon = computed(() => aiEntityIcon(props.entity?.type ?? props.kind));
-const label = computed(() => {
-  const title = props.entity?.title || props.title || props.entity?.ref || '';
-  // A diary entry is named by its day, said the way the picker says it.
-  if (
-    (props.entity?.type ?? props.kind) === 'diary-entry' &&
-    /^\d{4}-\d{2}-\d{2}$/.test(title)
-  )
-    return entityDisplayTitle({ title: '', date: title });
-  return publicText(title);
-});
+const label = computed(() =>
+  aiEntityName({
+    type: props.entity?.type ?? props.kind,
+    title: props.entity?.title || props.title || props.entity?.ref || '',
+  }),
+);
 </script>
 
 <template>
@@ -56,6 +52,8 @@ const label = computed(() => {
     class="inline-flex h-6.5 max-w-full min-w-0 items-center gap-1 rounded-sm
       px-2 text-xs font-medium"
     :class="fresh ? 'bg-bg-accent text-accent' : 'bg-bg-3 text-text-2'"
+    :data-title-popup="label"
+    data-title-popup-clipped
     data-ai-entity
   >
     <Icon
@@ -63,6 +61,6 @@ const label = computed(() => {
       class="shrink-0 text-sm"
       :class="fresh ? 'text-accent' : 'text-text-3'"
     />
-    <span class="truncate">{{ label }}</span>
+    <span class="truncate" data-title-popup-clip>{{ label }}</span>
   </span>
 </template>

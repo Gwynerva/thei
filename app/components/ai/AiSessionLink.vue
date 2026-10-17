@@ -15,6 +15,8 @@ defineProps<{ item: AiSessionItem }>();
     class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5
       rounded-sm px-2 py-1.5 transition-colors pointer-coarse:min-h-11
       hocus:bg-bg-accent"
+    :data-title-popup="sessionTitle(item)"
+    data-title-popup-clipped
     :data-session-link="item.sessionUuid"
   >
     <span
@@ -23,7 +25,9 @@ defineProps<{ item: AiSessionItem }>();
     >
       <Icon :name="sessionSource(item).icon" />
     </span>
-    <span class="truncate text-sm font-semibold">{{ sessionTitle(item) }}</span>
+    <span class="truncate text-sm font-semibold" data-title-popup-clip>{{
+      sessionTitle(item)
+    }}</span>
     <span class="flex min-w-0 flex-wrap gap-1 text-xs text-text-2">
       <AiPill v-if="item.waiting">{{
         phrase.ai_session_waiting(item.waiting)
