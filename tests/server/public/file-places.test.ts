@@ -90,8 +90,17 @@ const project = (patch: Record<string, unknown> = {}) => ({
   ...patch,
 });
 
+/** Every write on the connection moves it, as SQLite's `total_changes()`. */
+let changes = 0;
+
 beforeEach(() => {
+  changes = 0;
+  // A connection of its own for each test: nothing is answered from another.
+  const rawDb = {
+    prepare: () => ({ get: () => ({ changes }) }),
+  };
   (globalThis as any).THEI_SERVER = {
+    useDb: () => ({ rawDb }),
     assets: {
       findBySlug: async (slug: string) =>
         FAMILY.find((asset) => asset.slug === slug),
@@ -249,6 +258,82 @@ it('goes from projects down to diary entries, the newest day first', async () =>
   expect(
     (await findPublicFilePlaces('photoSlug')).map((place) => place.title),
   ).toEqual(['trip', 'party', '2024-03-04', '2024-01-02']);
+});
+
+it('lists a page anyone may find, however many open by their link come first', async () => {
+  // The library names the events first; none of them may be listed.
+  placed(
+    ...Array.from({ length: 30 }, (_, index) =>
+      placement('event', `by-link-${index}`, 'content'),
+    ),
+    placement('project', 'trip', 'content'),
+  );
+  findContentEntity.mockImplementation(
+    async ({
+      entityType,
+      entityId,
+    }: {
+      entityType: string;
+      entityId: string;
+    }) =>
+      entity(
+        entityType,
+        entityId,
+        entityType === 'event'
+          ? ProjectEventAccessLevel.LinkOnly
+          : ProjectEventAccessLevel.Public,
+      ),
+  );
+  builders.buildPublicProject.mockResolvedValue(
+    project({ description: { blocks: [url('photoSlug')] } }),
+  );
+  expect(
+    (await findPublicFilePlaces('photoSlug')).map((place) => place.title),
+  ).toEqual(['trip']);
+  expect(builders.buildPublicEvent).not.toHaveBeenCalled();
+});
+
+it('builds a few pages at a time, and the first ones listed', async () => {
+  placed(
+    ...Array.from({ length: 30 }, (_, index) =>
+      placement('event', `party-${String(index).padStart(2, '0')}`, 'content'),
+    ),
+  );
+  let building = 0;
+  let most = 0;
+  builders.buildPublicEvent.mockImplementation(async () => {
+    most = Math.max(most, ++building);
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    building--;
+    return {
+      content: { blocks: [url('photoSlug')] },
+      references: { links: [], files: [] },
+    };
+  });
+  const places = await findPublicFilePlaces('photoSlug');
+  expect(places).toHaveLength(24);
+  expect(places[0]!.title).toBe('party-00');
+  expect(places.at(-1)!.title).toBe('party-23');
+  expect(builders.buildPublicEvent).toHaveBeenCalledTimes(24);
+  expect(most).toBeLessThanOrEqual(2);
+});
+
+it('answers again from what it built until something is written', async () => {
+  placed(placement('event', 'party', 'banner'));
+  builders.buildPublicEvent.mockResolvedValue({
+    bannerMedia: url('photoSlug'),
+    content: { blocks: [] },
+    references: { links: [], files: [] },
+  });
+  const first = await findPublicFilePlaces('photoSlug');
+  // Asked by the slug of another variant, it is the same file.
+  expect(await findPublicFilePlaces('cropSlug')).toEqual(first);
+  expect(builders.buildPublicEvent).toHaveBeenCalledTimes(1);
+
+  // The banner went private: the next answer is built afresh.
+  changes++;
+  placed(placement('event', 'party', 'banner', true));
+  expect(await findPublicFilePlaces('photoSlug')).toEqual([]);
 });
 
 it('leaves out a place whose page fails to build, and keeps the rest', async () => {

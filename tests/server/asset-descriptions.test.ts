@@ -10,7 +10,7 @@ import {
   readAssetDescription,
   writeAssetDescription,
 } from '../../server/thei/assets/descriptions';
-import { deleteAsset } from '../../server/thei/assets/repository/delete';
+import { deleteAssetRow } from '../helpers/delete-asset';
 import { deleteStoredAsset } from '../../server/thei/assets/storage';
 import { listLibraryAssets } from '../../server/thei/assets/library';
 import { buildPublicSearchIndex } from '../../server/thei/public/search-index';
@@ -220,13 +220,24 @@ describe('a file’s description', () => {
       ).map((row) => row.familyUuid);
 
     // A variant goes; the original still carries the description.
-    await deleteAsset('a-photo-small');
+    deleteAssetRow('a-photo-small');
     expect(kept()).toEqual(['af-notes', 'af-photo']);
     // Cleanup takes the last file of the family, and the description with it.
     expect(await deleteStoredAsset('a-photo', Date.now() + 1)).toBe(true);
     expect(kept()).toEqual(['af-notes']);
     expect(await deleteStoredAsset('a-notes', Date.now() + 1)).toBe(true);
     expect(kept()).toEqual([]);
+  });
+
+  it('is searched as typed: what looks like markup in it is words', () => {
+    writeAssetDescription('a-notes', 'Seats x<y and y>z, R&amp;D', {
+      expectedUpdatedAt: null,
+    });
+    const found = (q: string) =>
+      listLibraryAssets({ q }).items.map((item) => item.asset.assetUuid);
+    expect(found('and')).toEqual(['a-notes']);
+    expect(found('x<y')).toEqual(['a-notes']);
+    expect(found('R&amp;D')).toEqual(['a-notes']);
   });
 
   it('finds a file in the library, and an entity in the site’s search', () => {
@@ -446,6 +457,17 @@ describe('files over MCP', () => {
     );
     expect(notes).toContain('none yet');
     expect(notes).toContain('only the owner reads it');
+    expect(notes).toContain('cleanup takes it a day after');
+
+    // Used nowhere, but an applied AI action could put it back on undo.
+    context.rawDb
+      .prepare(
+        "INSERT INTO `ai-actions` (actionUuid, sessionUuid, kind, payload, certainty, state, fingerprint, assetUuids, createdAt) VALUES ('aia-1', 's', 'update', '{}', 'sure', 'applied', 'f', '[\"a-notes\"]', 1)",
+      )
+      .run();
+    const held = text(await reader.get('read_file')!.call({ file: 'a-notes' }));
+    expect(held).toContain('an AI action still needs it');
+    expect(held).not.toContain('cleanup takes it a day after');
   });
 
   it('reads a file with what its places say of it', async () => {
@@ -465,6 +487,16 @@ describe('files over MCP', () => {
               layout: 'centered',
               caption: 'Grandmother <b>at</b> the dacha',
               asset: { assetUuid: 'a-photo' },
+            },
+          },
+          {
+            id: 'g',
+            type: 'contentGallery',
+            data: {
+              title: 'Summer days',
+              items: [
+                { id: 'gi', asset: { assetUuid: 'a-photo' }, caption: 'Again' },
+              ],
             },
           },
         ],
@@ -493,7 +525,10 @@ describe('files over MCP', () => {
     for (const [containerId, refs] of [
       [
         'c-project',
-        [{ blockId: 'm', blockType: 'contentMedia', isPrivate: false }],
+        [
+          { blockId: 'm', blockType: 'contentMedia', isPrivate: false },
+          { blockId: 'g', blockType: 'contentGallery', isPrivate: false },
+        ],
       ],
       [
         'c-notes',
@@ -532,6 +567,10 @@ describe('files over MCP', () => {
     expect(read).toContain('## What its places say');
     expect(read).toContain(
       `- project:${PROJECT} — Parapet, its description, under “Summer”: captioned “Grandmother at the dacha”\n  before: “We went in June.”`,
+    );
+    // A gallery's title is told as a gallery's.
+    expect(read).toContain(
+      `- project:${PROJECT} — Parapet, its description, under “Summer”: in the gallery “Summer days”, captioned “Again”`,
     );
     // The owner's notes are theirs alone, and say so.
     expect(read).toContain(

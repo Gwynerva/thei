@@ -87,6 +87,14 @@ onMounted(() => {
   );
 });
 
+/** What is kept now is what the field holds. */
+function settle(saved: AssetDescription) {
+  take(saved);
+  if (!props.embedded)
+    notice.value = { text: phrase.value.asset_description_saved };
+  emit('saved', saved);
+}
+
 /** Saves what was typed; true once nothing is left unsaved. */
 async function save(): Promise<boolean> {
   if (!loaded.value || tooLong.value) return false;
@@ -102,10 +110,7 @@ async function save(): Promise<boolean> {
         expectedUpdatedAt: version.value,
       },
     });
-    take(saved);
-    if (!props.embedded)
-      notice.value = { text: phrase.value.asset_description_saved };
-    emit('saved', saved);
+    settle(saved);
     // What was proposed is settled against the description saved.
     if (offers.value.length) await load();
     return true;
@@ -114,7 +119,13 @@ async function save(): Promise<boolean> {
     const current = (caught as { data?: { data?: AssetDescription } }).data
       ?.data;
     if (status === 409 && current) {
-      take(current);
+      // The words typed stay, now over the version changed elsewhere: a
+      // second save puts them in its place. Words it already reads are kept.
+      take(current, true);
+      if (!dirty.value) {
+        settle(current);
+        return true;
+      }
       notice.value = {
         text: phrase.value.asset_description_conflict,
         error: true,

@@ -5,6 +5,7 @@ import type {
   AssetPlacement,
   AssetSource,
 } from '#layers/thei/shared/asset-library';
+import type { ContentFileBlockType } from '#layers/thei/shared/content';
 import { richTextToPlainText } from '#layers/thei/shared/rich-text';
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
 import { READS } from '../annotations';
@@ -14,7 +15,7 @@ import { FILES_META, guardTool, McpToolError, toolResult } from '../result';
 import { aboutFileDescription } from '../text-about';
 import { siteUrl } from '../../site-url';
 import { getAssetUsages, listLibraryAssets } from '../../assets/library';
-import { readAssetDescription } from '../../assets/descriptions';
+import { describeFiles, readAssetDescription } from '../../assets/descriptions';
 import { filePlaceWords, type FilePlaceWords } from '../../assets/place-words';
 import { libraryFile, modelFiles } from '../../ai/sessions/files';
 import type { StreamFile } from '../../ai/model/stream';
@@ -90,11 +91,18 @@ const WHERE: Record<string, string> = {
   status: 'a status',
 };
 
+/** What the list a file is in is called, by its block. */
+const LISTS: Partial<Record<ContentFileBlockType, string>> = {
+  contentGallery: 'the gallery',
+  contentFileGroup: 'the group of files',
+};
+
 /** What one place says of a file: its words, then the text around it. */
 function placeWordsLines(place: FilePlaceWords): string[] {
   const { words } = place;
+  const list = (place.block && LISTS[place.block]) ?? 'the list';
   const said = [
-    ...(words.group ? [`in the group “${plain(words.group)}”`] : []),
+    ...(words.group ? [`in ${list} “${plain(words.group)}”`] : []),
     ...(words.title ? [`titled “${plain(words.title)}”`] : []),
     ...(words.caption ? [`captioned “${plain(words.caption)}”`] : []),
   ];
@@ -154,7 +162,9 @@ export function fileFacts(assetUuid: string): string {
       : [
           usages.inHistory
             ? 'Used nowhere now; a version of some text still shows it.'
-            : 'Used nowhere: cleanup takes it a day after it was last touched.',
+            : usages.heldByAi
+              ? 'Used nowhere now; an AI action still needs it — one waiting for the owner, or applied and still undoable — and cleanup keeps it while it does.'
+              : 'Used nowhere: cleanup takes it a day after it was last touched.',
         ]),
     ...(placeWords.length
       ? [
@@ -226,15 +236,16 @@ export function registerLibraryTools(
     ({ query, type, page }) =>
       guardTool(() => {
         const found = listLibraryAssets({ q: query, type, page });
-        if (!found.items.length) return toolResult({}, 'Nothing found.');
-        const descriptions = new Map(
-          found.items.map((item) => [
-            item.asset.assetUuid,
-            readAssetDescription(item.asset.assetUuid)?.text ?? '',
-          ]),
+        if (!found.items.length)
+          return toolResult(
+            found.total
+              ? `The page ${found.page} is past the end: ${found.total} found, ${found.pageCount} page${found.pageCount === 1 ? '' : 's'}.`
+              : 'Nothing found.',
+          );
+        const descriptions = describeFiles(
+          found.items.map((item) => item.asset.assetUuid),
         );
         return toolResult(
-          {},
           [
             `${found.total} found; page ${found.page} of ${found.pageCount}.`,
             ...found.items.map((item) => {
@@ -261,7 +272,7 @@ export function registerLibraryTools(
       }),
       annotations: READS,
     },
-    ({ file }) => guardTool(() => toolResult({}, fileFacts(file))),
+    ({ file }) => guardTool(() => toolResult(fileFacts(file))),
   );
 
   server.registerTool(
@@ -328,7 +339,6 @@ export function registerLibraryTools(
         );
         const url = siteUrl(context.event, `/api/mcp/download/${ticket}`);
         return toolResult(
-          { url, expiresAt },
           `GET ${url} before ${new Date(expiresAt).toISOString()}: ${fileLine(found)}, e.g.\ncurl --fail -o '${found.assetUuid}.${found.extension}' '${url}'`,
         );
       }),

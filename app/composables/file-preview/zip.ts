@@ -15,6 +15,13 @@ export interface ArchiveFile {
   file: Blob;
 }
 
+/**
+ * How much larger than what it unpacks to a deflated file may be: data it
+ * cannot shrink is kept in stored blocks of a few bytes' header each, which
+ * add far less than this to a file of the sizes a preview reads.
+ */
+const DEFLATE_SLACK = 65536;
+
 export interface ZipEntryReadOptions {
   signal?: AbortSignal;
   /**
@@ -39,13 +46,15 @@ export async function readZipEntry(
   signal?.throwIfAborted();
   if (!isZipEntryReadable(entry, head ? Infinity : maxBytes))
     throw new ZipReadError(entry.size > maxBytes ? 'too-large' : 'unsupported');
+  // No more is fetched than `maxBytes` can come from: deflate never makes
+  // data much larger, so a little past it packed unpacks to at least that
+  // much. A whole file packed larger than that unpacks larger than it too,
+  // whatever the archive claims of it, and is refused before it is fetched.
+  const packedLimit = maxBytes + (entry.method === 0 ? 0 : DEFLATE_SLACK);
+  if (!head && entry.packedSize > packedLimit)
+    throw new ZipReadError('too-large');
   const start = await zipEntryDataStart(source, entry);
-  // For a start, no more is fetched than it can take: deflate never makes
-  // data much larger, so a little past `maxBytes` packed unpacks to at
-  // least that much.
-  const fetched = head
-    ? Math.min(entry.packedSize, maxBytes + (entry.method === 0 ? 0 : 65536))
-    : entry.packedSize;
+  const fetched = Math.min(entry.packedSize, packedLimit);
   const cut = fetched < entry.packedSize;
   const packed = await source.read(start, start + fetched, signal);
   if (entry.method === 0) return packed;

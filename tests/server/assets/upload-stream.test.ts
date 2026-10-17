@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -7,6 +7,7 @@ import { Readable } from 'node:stream';
 import {
   readUploadHeader,
   stageUploadBody,
+  stageUploadStream,
 } from '../../../server/thei/assets/upload-stream';
 
 let root = '';
@@ -74,6 +75,37 @@ describe('stageUploadBody', () => {
       () => null,
     );
     expect(leftovers).toBeNull();
+  });
+
+  it('takes every chunk as it comes, never copying it', async () => {
+    const body = randomBytes(64 * 1024);
+    // Plain views over one larger buffer, as a download's stream gives them.
+    const backing = new Uint8Array(body.length + 32);
+    backing.set(body, 16);
+    const views: Uint8Array[] = [];
+    for (let offset = 0; offset < body.length; offset += 5000)
+      views.push(
+        new Uint8Array(
+          backing.buffer,
+          16 + offset,
+          Math.min(5000, body.length - offset),
+        ),
+      );
+    const from = vi.spyOn(Buffer, 'from');
+    try {
+      const staged = await stageUploadStream(Readable.from(views), {
+        maxSizeBytes: body.length,
+        path: join(root, 'views.bin'),
+      });
+      expect(await readFile(staged.path)).toEqual(body);
+      expect(staged.hash).toBe(createHash('sha256').update(body).digest('hex'));
+      // Each view is wrapped over its own bytes: none is copied whole.
+      expect(
+        from.mock.calls.filter(([source]) => source instanceof Uint8Array),
+      ).toEqual([]);
+    } finally {
+      from.mockRestore();
+    }
   });
 
   it('rejects an empty body', async () => {

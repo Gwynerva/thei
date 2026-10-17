@@ -8,6 +8,7 @@ import {
   AssetType,
   assetMetaDimensions,
 } from '#layers/thei/shared/asset';
+import type { IconName } from '#thei/icons';
 import { describeAssetRecipe } from '#layers/thei/shared/asset-recipe';
 import {
   assetSourceKey,
@@ -68,11 +69,6 @@ const audioMeta = computed(() =>
     ? asset.value.meta
     : undefined,
 );
-
-/**
- * A video's preview, made again from a frame that shows it. Only videos
- * have one worth remaking: an image's preview is the image, smaller.
- */
 const dimensions = computed(() => assetMetaDimensions(asset.value.meta));
 /** A browser opens the file in a tab of its own; any other is downloaded. */
 const opensInTab = computed(
@@ -104,6 +100,29 @@ const usageGroups = computed(() => {
 });
 const usagesShown = computed(
   () => data.value?.asset.assetUuid === shownUuid.value,
+);
+/**
+ * A file used nowhere, in one line: what keeps it from cleanup — a text's
+ * history, an AI action — or that cleanup takes it.
+ */
+const unused = computed((): { icon: IconName; line: string; hint: string } =>
+  data.value?.inHistory
+    ? {
+        icon: 'history',
+        line: phrase.value.asset_library_history_line,
+        hint: phrase.value.asset_library_in_history,
+      }
+    : data.value?.heldByAi
+      ? {
+          icon: 'sparkles',
+          line: phrase.value.asset_library_held_by_ai_line,
+          hint: phrase.value.asset_library_held_by_ai,
+        }
+      : {
+          icon: 'minus',
+          line: phrase.value.asset_library_unused_line,
+          hint: phrase.value.asset_library_unused_hint,
+        },
 );
 /** Every variant but the one in view: that one is the window itself. */
 const otherVariants = computed(() =>
@@ -187,8 +206,11 @@ const humanSize = useHumanSize();
             :archived-original="archivedOriginal"
           />
         </AssetPanelSection>
+        <!-- The description is the family's: read and saved through the file
+             the window opened with, it stays as typed while the window turns
+             to another variant. -->
         <AssetPanelSection>
-          <FileDescriptionField :asset-uuid="asset.assetUuid" />
+          <FileDescriptionField :asset-uuid="modalData.asset.assetUuid" />
         </AssetPanelSection>
         <AssetPanelSection
           :title="phrase.asset_library_usage"
@@ -221,24 +243,12 @@ const humanSize = useHumanSize();
             class="flex items-center gap-1.5 text-text-3"
             data-asset-unused
           >
-            <Icon :name="data?.inHistory ? 'history' : 'minus'" />
-            {{
-              data?.inHistory
-                ? phrase.asset_library_history_line
-                : phrase.asset_library_unused_line
-            }}
+            <Icon :name="unused.icon" />
+            {{ unused.line }}
             <span
               class="ml-auto flex cursor-help"
-              :aria-label="
-                data?.inHistory
-                  ? phrase.asset_library_in_history
-                  : phrase.asset_library_unused_hint
-              "
-              :data-title-popup="
-                data?.inHistory
-                  ? phrase.asset_library_in_history
-                  : phrase.asset_library_unused_hint
-              "
+              :aria-label="unused.hint"
+              :data-title-popup="unused.hint"
               ><Icon name="question"
             /></span>
           </p>
@@ -308,6 +318,12 @@ const humanSize = useHumanSize();
                 name="history"
                 class="shrink-0 text-text-3"
                 :data-title-popup="phrase.asset_library_in_history"
+              />
+              <Icon
+                v-else-if="variant.heldByAi"
+                name="sparkles"
+                class="shrink-0 text-text-3"
+                :data-title-popup="phrase.asset_library_held_by_ai"
               />
               <Icon name="chevron-right" class="shrink-0 text-text-3" />
             </button>

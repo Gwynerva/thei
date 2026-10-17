@@ -12,7 +12,6 @@ import { findProjectByPublicId } from './projects/repository/find-by-public-id';
 import { findProjectByUuid } from './projects/repository/find-by-id';
 import { createProject } from './projects/repository/create';
 import { updateProject } from './projects/repository/update';
-import { deleteProject } from './projects/repository/delete';
 import { listProjects } from './projects/repository/list';
 import { countEvents } from './events/repository/count';
 import { findEventByUuid } from './events/repository/find-by-id';
@@ -51,7 +50,6 @@ import { findShowcaseAssets } from './assets/repository/usages/find-showcase';
 import { findOtherAssets } from './assets/repository/usages/find-other';
 import { findOtherAssetsForContainer } from './assets/repository/usages/find-other';
 import { updateAssetUsage } from './assets/repository/usages/update';
-import { deleteAsset } from './assets/repository/delete';
 import { assetFilePath } from './assets/file-path';
 import {
   buildContentFieldValue,
@@ -129,7 +127,6 @@ export const THEI_SERVER = {
     findByUuid: findProjectByUuid,
     create: createProject,
     update: updateProject,
-    delete: deleteProject,
     list: listProjects,
   },
   events: {
@@ -172,7 +169,6 @@ export const THEI_SERVER = {
     findBySlug: findAssetBySlug,
     touch: touchAsset,
     findOrphaned: findOrphanedAssets,
-    delete: deleteAsset,
     usages: {
       attach: attachAssetUsage,
       detach: detachAssetUsage,

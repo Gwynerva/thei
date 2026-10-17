@@ -58,7 +58,7 @@ import {
   buildPublicTagMedia,
   buildPublicPageMedia,
 } from '../assets/urls';
-import { describedText } from '../assets/descriptions';
+import { readFamilyDescriptions } from '../assets/descriptions';
 import { resolveEntityIconMedia } from '../media/generated-icon';
 import {
   listProjectSections,
@@ -414,6 +414,10 @@ export async function buildPublicProject(
     getExternalLinkList({ type: 'project', id: project.projectUuid }),
   ]);
   const { usages, sections: visibleSections, relations, status } = head;
+  // What each file of the showcase and of the files is, read at once.
+  const alts = readFamilyDescriptions(
+    [...head.showcase, ...rawFiles].map(({ asset }) => asset.familyUuid),
+  );
   const showcase = await Promise.all(
     head.showcase.map(async ({ asset, meta }) => {
       if (!own && usageIsPrivate(meta))
@@ -423,11 +427,13 @@ export async function buildPublicProject(
         );
       const item = meta as ShowcaseAssetUsageMeta | null;
       const href = `${buildProjectUrl(project.humanReadableSlug, project.publicId)}media/showcase-asset/${asset.slug}.${asset.extension}`;
+      const alt = alts.get(asset.familyUuid) ?? '';
       return buildPublicAssetDescriptor(
         asset,
         href,
-        await buildPublicProjectMedia(project, asset, 'showcase-asset'),
+        await buildPublicProjectMedia(project, asset, 'showcase-asset', alt),
         item?.role === 'showcase-asset' ? (item.caption ?? '') : '',
+        alt,
       );
     }),
   );
@@ -442,6 +448,7 @@ export async function buildPublicProject(
             project,
             asset,
             meta as OtherAssetUsageMeta | null,
+            alts.get(asset.familyUuid) ?? '',
           ),
     ),
   );
@@ -609,6 +616,9 @@ export async function buildPublicEvent(
     resolvePublicRelated({ type: 'event', id: stored.eventUuid }, viewer),
   ]);
   const media = bannerMedia ?? bodyMedia!;
+  const alts = readFamilyDescriptions(
+    rawFiles.map(({ asset }) => asset.familyUuid),
+  );
   const files = await Promise.all(
     rawFiles.map(({ asset, meta }) => {
       if (!own && usageIsPrivate(meta))
@@ -632,7 +642,7 @@ export async function buildPublicEvent(
         extension: asset.extension,
         size: asset.size,
         archivedOriginal: archivedOriginalFromMeta(asset.meta),
-        ...publicAltOf(asset),
+        ...publicAlt(alts.get(asset.familyUuid)),
       } satisfies PublicFile;
     }),
   );
@@ -845,9 +855,9 @@ export async function buildPublicTags(
   tags: TagItem[],
 ): Promise<PublicTagSummary[]> {
   const { db, schema } = THEI_SERVER.useDb();
-  return Promise.all(
-    tags.map(async (tag) => {
-      const icon = db
+  const icons = tags.map(
+    (tag) =>
+      db
         .select({ asset: schema.assets })
         .from(schema.assetUsages)
         .innerJoin(
@@ -861,14 +871,26 @@ export async function buildPublicTags(
             eq(schema.assetUsages.role, 'icon'),
           ),
         )
-        .get();
+        .get()?.asset,
+  );
+  // What every icon is, read at once: the list of tags shows them all.
+  const alts = readFamilyDescriptions(
+    icons.flatMap((icon) => (icon ? [icon.familyUuid] : [])),
+  );
+  return Promise.all(
+    tags.map(async (tag, index) => {
+      const icon = icons[index];
       return {
         title: tag.title,
         slug: tag.slug,
         publicId: tag.publicId,
         description: tag.description,
         iconMedia: icon
-          ? await buildPublicTagMedia(tag, icon.asset)
+          ? await buildPublicTagMedia(
+              tag,
+              icon,
+              alts.get(icon.familyUuid) ?? '',
+            )
           : undefined,
       };
     }),
@@ -894,9 +916,11 @@ export async function buildPublicTagListItems(
   }));
 }
 
-/** A file's description, where a public page shows the file. */
-function publicAltOf(asset: { familyUuid: string }): { alt?: string } {
-  const alt = describedText(asset);
+/**
+ * A file's description, where a public page shows the file: read with those
+ * of the other files of the page (`readFamilyDescriptions`).
+ */
+function publicAlt(alt: string | undefined): { alt?: string } {
   return alt ? { alt } : {};
 }
 
@@ -904,6 +928,7 @@ function buildPublicDirectFile(
   project: ProjectRow,
   asset: any,
   meta: OtherAssetUsageMeta | null,
+  alt: string,
 ): PublicFile {
   return {
     key: asset.slug,
@@ -917,7 +942,7 @@ function buildPublicDirectFile(
     extension: asset.extension,
     size: asset.size,
     archivedOriginal: archivedOriginalFromMeta(asset.meta),
-    ...publicAltOf(asset),
+    ...publicAlt(alt),
   };
 }
 
@@ -926,18 +951,17 @@ function buildPublicAssetDescriptor(
   href: string,
   media: Awaited<ReturnType<typeof buildPublicProjectMedia>> | undefined,
   title: string,
-  description?: string,
+  alt: string,
 ): PublicFile {
   return {
     key: asset.slug,
     title: richTextToPlainText(title),
-    description: description ? richTextToPlainText(description) : undefined,
     href,
     extension: asset.extension,
     size: asset.size,
     media,
     archivedOriginal: archivedOriginalFromMeta(asset.meta),
-    ...publicAltOf(asset),
+    ...publicAlt(alt),
   };
 }
 

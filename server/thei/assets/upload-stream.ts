@@ -73,8 +73,12 @@ export async function stageUploadStream(
     await pipeline(
       body,
       async function* (source) {
-        for await (const chunk of source) {
-          const bytes = Buffer.from(chunk as Uint8Array);
+        for await (const chunk of source as AsyncIterable<Uint8Array>) {
+          // Taken as it comes: a request gives Buffers, and any other bytes
+          // are read in place, never copied.
+          const bytes = Buffer.isBuffer(chunk)
+            ? chunk
+            : Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
           size += bytes.length;
           if (size > options.maxSizeBytes) {
             // Stop reading rather than draining the rest of a file that is

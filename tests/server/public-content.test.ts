@@ -18,6 +18,8 @@ import { OWNER, STRANGER } from '../../server/thei/access-links/viewer';
 vi.mock('../../server/thei/assets/descriptions', async (original) => ({
   ...(await original<typeof import('../../server/thei/assets/descriptions')>()),
   describedText: () => '',
+  describeFiles: () => new Map(),
+  readFamilyDescriptions: () => new Map(),
 }));
 
 afterEach(() => {

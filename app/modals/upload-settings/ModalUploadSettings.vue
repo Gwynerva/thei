@@ -750,7 +750,11 @@ const variantItems = computed(() =>
     // One this very editor is placing is not going anywhere.
     ...(variant.usageCount
       ? {}
-      : { deleteAfter: variant.deleteAfter, inHistory: variant.inHistory }),
+      : {
+          deleteAfter: variant.deleteAfter,
+          inHistory: variant.inHistory,
+          heldByAi: variant.heldByAi,
+        }),
     isCurrent: variant.assetUuid === sourceAsset?.assetUuid,
     detail: variantDetail(variant.settings),
     recipe: describeAssetRecipe(variant.settings, variant.meta, phrase.value),

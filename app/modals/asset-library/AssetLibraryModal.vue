@@ -85,6 +85,7 @@ function tileTitle(item: AssetLibraryItem) {
     selectionErrorLabel(item.selectionError),
     item.deleteAfter ? assetDeletionLabel(item.deleteAfter) : undefined,
     item.inHistory ? phrase.value.asset_library_in_history : undefined,
+    item.heldByAi ? phrase.value.asset_library_held_by_ai : undefined,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -380,6 +381,7 @@ onBeforeUnmount(() => {
                       size: item.asset.size,
                       pendingDeletion: Boolean(item.deleteAfter),
                       inHistory: item.inHistory,
+                      heldByAi: item.heldByAi,
                       warning: selectionErrorLabel(item.selectionError),
                     }"
                     class="aspect-square w-full"

@@ -16,6 +16,8 @@ withDefaults(
     pendingDeletion?: boolean;
     /** Unused, but kept while a version of some text still shows it. */
     inHistory?: boolean;
+    /** Unused, but kept while an AI action still needs it. */
+    heldByAi?: boolean;
     /** Why the asset cannot be chosen here, shown as a warning badge. */
     warning?: string;
   }>(),
@@ -55,6 +57,14 @@ const chip = 'bg-black/30 text-xs leading-none text-white backdrop-blur-sm';
           data-asset-in-history
         >
           <Icon name="history" />
+        </span>
+        <span
+          v-if="heldByAi"
+          :class="chip"
+          class="rounded-full p-1"
+          data-asset-held-by-ai
+        >
+          <Icon name="sparkles" />
         </span>
         <span
           v-if="warning"

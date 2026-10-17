@@ -58,8 +58,9 @@ The library's window:
   chip's left edge, after a mirrored arrow going down to it and the project's
   icon. A chip opens the place's editor in a new tab.
 - A file nothing uses says so in one quiet line with an icon and a «?» hint —
-  when it goes, or that a text's history still keeps it — never with a count
-  of nothing.
+  when it goes, that a text's history still keeps it, or that an AI action
+  still needs it — never with a count of nothing. Its tile and its row among
+  the variants carry the same mark: a bin, the history icon or the sparkles.
 - «Другие варианты» lists every variant but the one open; a row turns the
   window to its variant in place.
 
@@ -129,7 +130,10 @@ A visitor's window:
   pictures; `server/thei/public/file-places.ts` finds a visitor's places,
   answered at `/api/files/<slug>/places`: the library says where the file is
   placed, and each place is kept only when anyone may list it and the
-  stranger's own build of its page carries the file.
+  stranger's own build of its page carries the file. The first two dozen
+  listable places are built, two pages at a time for the whole site
+  (`server/thei/assets/queue.ts`), and the answer is kept for the family
+  until anything is written to the database, ten minutes at most.
 
 ```vue
 <AssetPanelSection

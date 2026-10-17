@@ -1,7 +1,11 @@
 import { eq } from 'drizzle-orm';
-import { forgetFamilyDescriptions } from '../descriptions';
+import { forgetFamilyDescriptions } from '../../server/thei/assets/descriptions';
 
-export async function deleteAsset(assetUuid: string) {
+/**
+ * Takes an asset row away as cleanup would once nothing holds it, without
+ * its file: what goes with the last file of a family goes with it.
+ */
+export function deleteAssetRow(assetUuid: string) {
   const { db, schema } = THEI_SERVER.useDb();
   db.transaction((tx) => {
     const row = tx

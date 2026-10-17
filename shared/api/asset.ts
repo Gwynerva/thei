@@ -107,6 +107,8 @@ export type AssetVariantWithUsage = AssetVariantInfo & {
   deleteAfter?: number;
   /** Unused, but kept while a version of some text still shows it. */
   inHistory?: true;
+  /** Unused, but kept while an AI action still needs it. */
+  heldByAi?: true;
 };
 
 export interface AssetVariantsResponse {

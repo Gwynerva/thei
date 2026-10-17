@@ -8,6 +8,8 @@ import { findExternalLink } from '../../server/thei/external-links/repository';
 vi.mock('../../server/thei/assets/descriptions', async (original) => ({
   ...(await original<typeof import('../../server/thei/assets/descriptions')>()),
   describedText: () => '',
+  describeFiles: () => new Map(),
+  readFamilyDescriptions: () => new Map(),
 }));
 vi.mock('../../server/thei/external-links/repository', () => ({
   findExternalLink: vi.fn(),

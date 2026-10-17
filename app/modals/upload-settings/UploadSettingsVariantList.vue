@@ -19,6 +19,8 @@ export interface UploadSettingsVariantListItem {
   deleteAfter?: number;
   /** Unused, but kept while a version of some text still shows it. */
   inHistory?: boolean;
+  /** Unused, but kept while an AI action still needs it. */
+  heldByAi?: boolean;
   isCurrent: boolean;
   /** A word or two on what sets it apart: "Unprocessed", "Medium quality". */
   detail?: string;
@@ -120,6 +122,13 @@ const humanSize = useHumanSize();
         class="shrink-0 text-text-3"
         :data-title-popup="phrase.asset_library_in_history"
         data-asset-in-history
+      />
+      <Icon
+        v-else-if="item.heldByAi"
+        name="sparkles"
+        class="shrink-0 text-text-3"
+        :data-title-popup="phrase.asset_library_held_by_ai"
+        data-asset-held-by-ai
       />
     </button>
   </div>

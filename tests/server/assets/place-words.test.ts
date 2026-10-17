@@ -49,6 +49,7 @@ describe('what a text says of a file', () => {
       ]),
     ).toEqual([
       {
+        block: 'contentMedia',
         heading: 'At the dacha',
         words: { title: undefined, caption: 'Grandmother <i>and</i> me' },
         before: 'We came in June.',
@@ -71,6 +72,7 @@ describe('what a text says of a file', () => {
       paragraph('p1', 'Later.'),
     ]);
     expect(place).toEqual({
+      block: 'contentAudio',
       heading: 'Recordings',
       words: { title: 'The talk', caption: undefined },
       isPrivate: false,
@@ -96,6 +98,27 @@ describe('what a text says of a file', () => {
       { group: 'Tickets', title: 'There', caption: undefined },
       { group: 'Tickets', title: undefined, caption: 'And back' },
     ]);
+    expect(found.map((place) => place.block)).toEqual([
+      'contentFileGroup',
+      'contentFileGroup',
+    ]);
+  });
+
+  it('says a gallery’s title is a gallery’s', () => {
+    const [place] = places([
+      {
+        id: 'g',
+        type: 'contentGallery',
+        data: {
+          title: 'Summer days',
+          items: [{ id: 'i1', asset: asset('a-photo'), caption: 'The lake' }],
+        },
+      },
+    ]);
+    expect(place).toMatchObject({
+      block: 'contentGallery',
+      words: { group: 'Summer days', caption: 'The lake' },
+    });
   });
 
   it('reads a public place only with the public text around it', () => {
@@ -117,6 +140,7 @@ describe('what a text says of a file', () => {
     ];
     expect(places(blocks)).toEqual([
       {
+        block: 'contentMedia',
         heading: 'Public',
         words: { title: undefined, caption: undefined },
         after: 'Said to everyone.',

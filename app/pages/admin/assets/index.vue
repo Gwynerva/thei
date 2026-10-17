@@ -119,6 +119,7 @@ onMounted(() => {
           size: item.asset.size,
           pendingDeletion: Boolean(item.deleteAfter),
           inHistory: item.inHistory,
+          heldByAi: item.heldByAi,
         }"
         :aria-label="assetFileLabel(item.asset)"
         :data-title-popup="
@@ -126,7 +127,9 @@ onMounted(() => {
             ? assetDeletionLabel(item.deleteAfter)
             : item.inHistory
               ? phrase.asset_library_in_history
-              : assetFileLabel(item.asset)
+              : item.heldByAi
+                ? phrase.asset_library_held_by_ai
+                : assetFileLabel(item.asset)
         "
         class="aspect-square w-full cursor-pointer"
         @focus="focusedAssetUuid = item.asset.assetUuid"

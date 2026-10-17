@@ -19,6 +19,7 @@ import {
   type AssetLibraryFacets,
   type AssetLibraryResponse,
   type AssetLibrarySourceFilter,
+  type AssetUsagesResponse,
 } from '../../../shared/asset-library';
 import { normalizeAssetExtension } from '../../../shared/assets/formats';
 import { dayQueryRank, parseDayQuery } from '../../../shared/day-query';
@@ -56,7 +57,7 @@ WITH sources AS (
   UNION ALL SELECT 'diary-entry',diaryUuid,date,'',date,'',updatedAt,access='private','','','','' FROM "diary-entries"
   UNION ALL SELECT 'tag',tagUuid,title,description,slug,publicId,0,0,'','','','' FROM tags
   UNION ALL SELECT 'profile',profileId,displayName,slogan,'','',0,0,'','','','' FROM profiles
-  UNION ALL SELECT 'ai-session',sessionUuid,title,'','','',lastActiveAt,1,'','','','' FROM "ai-sessions" WHERE purgedAt IS NULL
+  UNION ALL SELECT 'ai-session',sessionUuid,title,'','','',lastActiveAt,1,'','','','' FROM "ai-sessions"
   UNION ALL SELECT 'project-section',se.sectionUuid,se.title,se.summary,se.humanReadableSlug,se.publicId,se.updatedAt,
     (se.isPrivate OR p.access='private'),p.projectUuid,p.title,p.humanReadableSlug,p.publicId
     FROM "project-content-sections" se JOIN projects p ON p.projectUuid=se.projectUuid
@@ -111,7 +112,7 @@ function siteTextMatchSql(scoped: boolean) {
     )
     OR EXISTS (
       SELECT 1 FROM "asset-descriptions" d WHERE d.familyUuid=a.familyUuid
-      AND instr(asset_search_text(d.text),?)>0
+      AND instr(asset_search_plain(d.text),?)>0
     ))`;
 }
 const registered = new WeakSet<Database.Database>();
@@ -126,6 +127,14 @@ function connection() {
         normalizeAdminSearchText(
           typeof value === 'string' ? richTextToPlainText(value) : '',
         ),
+    );
+    // A file's description is plain text: what looks like markup in it is
+    // words, and is searched as typed.
+    context.rawDb.function(
+      'asset_search_plain',
+      { deterministic: true },
+      (value: unknown) =>
+        normalizeAdminSearchText(typeof value === 'string' ? value : ''),
     );
     // Asked once per diary placement with the same query each time, so the
     // query is read once.
@@ -545,7 +554,7 @@ export function listSourceAssets(
   const { ids, ...page } = pageIds(from, [type, id, ...args], query, 48);
   return { ...page, items: readItems(ids, query, `${type}:${id}`) };
 }
-export function getAssetUsages(id: string) {
+export function getAssetUsages(id: string): AssetUsagesResponse {
   const item = readItems([id])[0];
   if (!item?.asset.settings)
     throw createError({ statusCode: 404, message: 'Asset not found' });
@@ -555,6 +564,7 @@ export function getAssetUsages(id: string) {
     counts: item.counts,
     entityCount: item.entityCount,
     ...(item.inHistory ? { inHistory: item.inHistory } : {}),
+    ...(item.heldByAi ? { heldByAi: item.heldByAi } : {}),
   };
 }
 

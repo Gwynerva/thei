@@ -7,6 +7,7 @@ import type {
 } from '#layers/thei/shared/api/public';
 import { STRANGER } from '../access-links/viewer';
 import { readPlacements } from '../assets/library';
+import { withPublicPageSlot } from '../assets/queue';
 import { findContentEntity } from '../content-entities';
 import { listProjectSections } from '../projects/content-sections';
 import {
@@ -126,17 +127,17 @@ function shows(part: unknown, slugs: string[]) {
   return slugs.some((slug) => text.includes(`/${slug}.`));
 }
 
+/** A place anyone may find, with the entity that says so. */
+interface ListedPlace {
+  kind: PublicFilePlaceKind;
+  id: string;
+  entity: NonNullable<Awaited<ReturnType<typeof findContentEntity>>>;
+}
+
 async function placeOf(
-  kind: PublicFilePlaceKind,
-  id: string,
+  { kind, id, entity }: ListedPlace,
   slugs: string[],
 ): Promise<PublicFilePlace | undefined> {
-  const entity = await findContentEntity(
-    { entityType: kind, entityId: id },
-    STRANGER,
-  );
-  // A page anyone may find: one open by its link is for those given it.
-  if (!entity || !canListPublicEntity(entity.access, false)) return undefined;
   const uses = new Set<AssetRole>();
   for (const [role, part] of await pageParts(kind, id))
     if (shows(part, slugs)) uses.add(role);
@@ -152,7 +153,10 @@ async function placeOf(
   };
 }
 
-function comparePlaces(left: PublicFilePlace, right: PublicFilePlace) {
+function comparePlaces(
+  left: Pick<PublicFilePlace, 'kind' | 'title'>,
+  right: Pick<PublicFilePlace, 'kind' | 'title'>,
+) {
   const byKind =
     PLACE_KINDS.indexOf(left.kind) - PLACE_KINDS.indexOf(right.kind);
   if (byKind) return byKind;
@@ -160,6 +164,25 @@ function comparePlaces(left: PublicFilePlace, right: PublicFilePlace) {
   if (left.kind === 'diary-entry') return right.title.localeCompare(left.title);
   return left.title.localeCompare(right.title);
 }
+
+/**
+ * Answers kept between requests, by family: each window a visitor opens asks
+ * for one, and building it is the heaviest read a stranger can ask for. An
+ * answer holds while the database is as it was — every write on the
+ * connection moves `total_changes()` — and goes after a while anyway, since
+ * some pages follow the calendar.
+ */
+const ANSWER_TTL_MS = 10 * 60 * 1000;
+const ANSWER_LIMIT = 200;
+const answers = new Map<
+  string,
+  {
+    at: number;
+    db: object;
+    changes: number;
+    places: Promise<PublicFilePlace[]>;
+  }
+>();
 
 /**
  * The pages a file is shown on, for the window a visitor opens it in.
@@ -177,7 +200,33 @@ export async function findPublicFilePlaces(
 ): Promise<PublicFilePlace[]> {
   const asset = slug ? await THEI_SERVER.assets.findBySlug(slug) : undefined;
   if (!asset) return [];
-  const family = await THEI_SERVER.assets.findByFamilyUuid(asset.familyUuid);
+  const { rawDb } = THEI_SERVER.useDb();
+  const { changes } = rawDb
+    .prepare('SELECT total_changes() AS changes')
+    .get() as { changes: number };
+  const key = asset.familyUuid;
+  const now = Date.now();
+  const cached = answers.get(key);
+  if (
+    cached &&
+    cached.db === rawDb &&
+    cached.changes === changes &&
+    now - cached.at < ANSWER_TTL_MS
+  )
+    return await cached.places;
+  const places = familyPlaces(asset.familyUuid);
+  answers.delete(key);
+  answers.set(key, { at: now, db: rawDb, changes, places });
+  if (answers.size > ANSWER_LIMIT) answers.delete(answers.keys().next().value!);
+  // A failure is not remembered: the next request tries again.
+  places.catch(() => {
+    if (answers.get(key)?.places === places) answers.delete(key);
+  });
+  return await places;
+}
+
+async function familyPlaces(familyUuid: string): Promise<PublicFilePlace[]> {
+  const family = await THEI_SERVER.assets.findByFamilyUuid(familyUuid);
   const slugs = family.map((member) => member.slug);
   const candidates = new Map<
     string,
@@ -192,10 +241,34 @@ export async function findPublicFilePlaces(
           kind: source.type,
           id: source.id,
         });
+  // Only a page anyone may find is built — one open by its link is for those
+  // given it — so a page that cannot be listed never takes the room of one
+  // that can. The pages built are the first ones listed.
+  const listed = (
+    await Promise.all(
+      [...candidates.values()].map(async ({ kind, id }) => {
+        const entity = await findContentEntity(
+          { entityType: kind, entityId: id },
+          STRANGER,
+        ).catch(() => undefined);
+        return entity && canListPublicEntity(entity.access, false)
+          ? { kind, id, entity }
+          : undefined;
+      }),
+    )
+  )
+    .filter((place) => place !== undefined)
+    .sort((left, right) =>
+      comparePlaces(
+        { kind: left.kind, title: left.entity.title },
+        { kind: right.kind, title: right.entity.title },
+      ),
+    )
+    .slice(0, MAX_PLACES);
   const places = await Promise.all(
-    [...candidates.values()]
-      .slice(0, MAX_PLACES)
-      .map(({ kind, id }) => placeOf(kind, id, slugs).catch(() => undefined)),
+    listed.map((place) =>
+      withPublicPageSlot(() => placeOf(place, slugs)).catch(() => undefined),
+    ),
   );
-  return places.filter((place) => place !== undefined).sort(comparePlaces);
+  return places.filter((place) => place !== undefined);
 }

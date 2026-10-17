@@ -135,24 +135,34 @@ const entry = shallowRef<OpenedFile>();
 const entryMedia =
   useTemplateRef<InstanceType<typeof AssetModalPreviewMedia>>('entryMedia');
 let removeEntryLayer: (() => void) | undefined;
+/** Moves on each close: an opening that outlived it sets nothing up. */
+let entryRun = 0;
 
 async function openEntry(opened: ArchiveFile) {
   closeEntry();
+  const mine = entryRun;
   const media = getAssetMediaKind(opened.extension);
-  const typed = new Blob([opened.file], {
-    type: getAssetMimeType(opened.extension),
-  });
+  // An SVG of an archive is shown from a data address: one of the site's
+  // own, a blob, would run its scripts as the site if opened in a tab.
+  const svg =
+    media !== 'other' && opened.extension === 'svg'
+      ? await svgDataUrl(opened.file)
+      : undefined;
+  // The window closed, went on to another file or opened another of the
+  // archive while the SVG was read: no address and no layer outlive it.
+  if (mine !== entryRun) return;
   entry.value = {
     ...opened,
     media,
-    // An SVG of an archive is shown from a data address: one of the site's
-    // own, a blob, would run its scripts as the site if opened in a tab.
     src:
       media === 'other'
         ? undefined
-        : opened.extension === 'svg'
-          ? await svgDataUrl(opened.file)
-          : URL.createObjectURL(typed),
+        : (svg ??
+          URL.createObjectURL(
+            new Blob([opened.file], {
+              type: getAssetMimeType(opened.extension),
+            }),
+          )),
     download: URL.createObjectURL(
       new Blob([opened.file], { type: 'application/octet-stream' }),
     ),
@@ -162,6 +172,7 @@ async function openEntry(opened: ArchiveFile) {
 }
 
 function closeEntry() {
+  entryRun++;
   const opened = entry.value;
   if (opened?.src?.startsWith('blob:')) URL.revokeObjectURL(opened.src);
   if (opened) URL.revokeObjectURL(opened.download);

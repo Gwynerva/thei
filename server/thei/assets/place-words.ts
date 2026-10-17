@@ -3,8 +3,10 @@ import {
   contentBlockFileWords,
   contentBlockIsInPrivateSection,
   contentBlockTextParts,
+  isContentFileBlockType,
   normalizeContentData,
   normalizedContentPrivateSectionRanges,
+  type ContentFileBlockType,
   type ContentFileWords,
   type ContentOutputData,
 } from '#layers/thei/shared/content';
@@ -24,6 +26,8 @@ const EXCERPT = 280;
 
 /** One place of a file in a text. */
 export interface FileTextPlace {
+  /** The block the file is in: what a list's title in `words` is the title of. */
+  block: ContentFileBlockType;
   /** The heading the file stands under. */
   heading?: string;
   words: ContentFileWords;
@@ -49,7 +53,8 @@ export function fileTextPlaces(
   const places: FileTextPlace[] = [];
   blocks.forEach((block, index) => {
     const found = contentBlockFileWords(block, assetUuid);
-    if (!found.length) return;
+    if (!found.length || !isContentFileBlockType(block.type)) return;
+    const type = block.type;
     const isPrivate = contentBlockIsInPrivateSection(ranges, index);
     const readable = (other: number) =>
       isPrivate || !contentBlockIsInPrivateSection(ranges, other);
@@ -74,6 +79,7 @@ export function fileTextPlaces(
     const after = near(1);
     for (const words of found)
       places.push({
+        block: type,
         ...(heading ? { heading } : {}),
         words,
         ...(before ? { before: ending(before) } : {}),

@@ -71,6 +71,11 @@ export interface AssetLibraryItem {
    * cleanup keeps it for as long as that version lives.
    */
   inHistory?: true;
+  /**
+   * Unused, but an AI action still needs it — one waiting for the owner, or
+   * applied and still undoable — so cleanup keeps it while that action does.
+   */
+  heldByAi?: true;
   counts: AssetUsageCounts;
   entityCount: number;
   roles: AssetRole[];
@@ -159,6 +164,8 @@ export interface AssetUsagesResponse {
   entityCount: number;
   /** Unused, but kept while a version of some text still shows it. */
   inHistory?: true;
+  /** Unused, but kept while an AI action still needs it. */
+  heldByAi?: true;
 }
 export interface AssetSelectionConstraints {
   acceptedExtensions?: string[] | '*';

@@ -32,7 +32,7 @@ import {
   buildPublicDiaryContentMedia,
   buildPublicProfileMedia,
 } from '../assets/urls';
-import { describedText } from '../assets/descriptions';
+import { describedText, describeFiles } from '../assets/descriptions';
 import { createExternalLinkLoader } from '../external-links/repository';
 import { canResolveContentEntityLink } from '../content-links/access';
 import {
@@ -257,6 +257,8 @@ async function hydratePublicContentData(
     privateSectionRanges.map((range) => [range.startIndex, range]),
   );
   const assetCache = new Map<string, any>();
+  // What every file of the text is, read at once rather than file by file.
+  const descriptions = describeFiles(collectContentAssetUuids(normalized));
   const loadExternalLink = createExternalLinkLoader();
   const entityLinkCache = new Map<string, EntityLinkAccess>();
 
@@ -336,6 +338,7 @@ async function hydratePublicContentData(
       return undefined;
     const asset = await THEI_SERVER.assets.findByUuid(assetUuid);
     if (!asset) return undefined;
+    const alt = descriptions.get(assetUuid) ?? describedText(asset);
     const baseUrl =
       entity.type === 'profile'
         ? `/profile/media/profile/profile/content/${asset.slug}.${asset.extension}`
@@ -354,14 +357,15 @@ async function hydratePublicContentData(
               'profile',
               'profile',
               'content',
+              alt,
             )
           : entity.type === 'event'
-            ? await buildPublicEventContentMedia(entity, asset)
+            ? await buildPublicEventContentMedia(entity, asset, alt)
             : entity.type === 'page'
-              ? await buildPublicPageContentMedia(entity, asset)
+              ? await buildPublicPageContentMedia(entity, asset, alt)
               : entity.type === 'diary-entry'
-                ? await buildPublicDiaryContentMedia(entity, asset)
-                : await buildPublicProjectContentMedia(entity, asset)
+                ? await buildPublicDiaryContentMedia(entity, asset, alt)
+                : await buildPublicProjectContentMedia(entity, asset, alt)
         : undefined;
     const hydrated = {
       // Public renderers only need a stable local key. Never expose the
@@ -380,7 +384,7 @@ async function hydratePublicContentData(
         asset.type === AssetType.Other
           ? archivedOriginalFromMeta(asset.meta)
           : undefined,
-      alt: describedText(asset) || undefined,
+      alt: alt || undefined,
     };
     assetCache.set(assetUuid, hydrated);
     return hydrated;
