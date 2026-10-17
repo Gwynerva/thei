@@ -1951,9 +1951,9 @@ export default defineI18nBase({
       'Ask about the archive, have something written up, proofread or put in order. The AI proposes actions; nothing changes until you apply them.',
     ai_template_builtins: {
       proofread: {
-        title: 'Fixing text mistakes',
+        title: 'Mistakes in the text',
         instruction:
-          'Proofread the texts: fix clear mistakes where they stand, in my own words and voice, and leave whatever is doubtful to me. Only what was not proofread yet, or changed since.',
+          'Find and fix obvious mistakes in the text. Where in doubt, comment and leave the choice to me. Only what was not proofread yet or changed since. Do not correct the author’s style of telling or the swearing. You check that the text is written correctly, not its “propriety”, “beauty”, “conciseness” or other subjective criteria!',
       },
       describe: {
         title: 'File descriptions',

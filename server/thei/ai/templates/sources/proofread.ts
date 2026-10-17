@@ -24,7 +24,7 @@ import { entitiesOf, inScope, withSections } from './scope';
 import { shortTexts, touchedKeys, type ShortText } from './short-texts';
 
 /**
- * «Fixing text mistakes»: whatever the owner typed that it has not
+ * «Mistakes in the text»: whatever the owner typed that it has not
  * proofread yet, as it reads now — the paragraphs of the texts, with the
  * captions and titles of their pictures and files, and every short text
  * beside them: titles, summaries, reminders, the names of dated stretches,

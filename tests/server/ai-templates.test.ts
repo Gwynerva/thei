@@ -232,7 +232,7 @@ describe('the built-in checks', () => {
     ]);
     const builtins = listTemplates().filter((template) => template.builtin);
     expect(builtins.map((template) => template.title)).toEqual([
-      'Fixing text mistakes',
+      'Mistakes in the text',
       'File descriptions',
       'Fixing broken links',
       'Finding possible relations',
@@ -374,7 +374,7 @@ describe('a run', () => {
       paragraph('n1', 'A page nobody proofread.'),
     ]);
     const scoped = await run('proofread', { about: [`diary-entry:${DAY}`] });
-    expect(findSession(scoped!)!.title).toBe(`Fixing text mistakes · ${DAY}`);
+    expect(findSession(scoped!)!.title).toBe(`Mistakes in the text · ${DAY}`);
     expect(brief(scoped!)).toContain('Kuzova');
     expect(brief(scoped!)).not.toContain('nobody proofread');
     expect([...coverageOf(id('proofread')).keys()]).toEqual([
@@ -540,7 +540,7 @@ describe('a ready-made request', () => {
     expect(
       panel.templates.map((item) => [item.title, item.builtin ?? null]),
     ).toEqual([
-      ['Fixing text mistakes', 'proofread'],
+      ['Mistakes in the text', 'proofread'],
       ['File descriptions', 'describe'],
       ['Fixing broken links', 'links'],
       ['Finding possible relations', 'graph'],

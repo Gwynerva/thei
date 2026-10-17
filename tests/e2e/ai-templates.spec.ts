@@ -102,7 +102,7 @@ test('lists the four checks and the owner’s requests, no schedule anywhere', a
   for (const key of ['proofread', 'describe', 'links', 'graph'])
     await expect(row(page, `builtin-${key}`)).toBeVisible();
   await expect(row(page, 'builtin-proofread')).toContainText(
-    'Fixing text mistakes',
+    'Mistakes in the text',
   );
   await expect(list.getByRole('switch')).toHaveCount(0);
   await row(page, 'builtin-graph').locator('[data-template-edit]').click();
@@ -162,7 +162,7 @@ test('runs a check sent from an entity’s ✦, and looks at it again when asked
   await field.press('Enter');
   const sent = menu.locator('[data-ai-entity-sent]');
   await expect(sent).toContainText(
-    `Fixing text mistakes · Harbour night ${run}`,
+    `Mistakes in the text · Harbour night ${run}`,
   );
   await expect(sent.locator('[data-ai-entity-stop]')).toHaveCount(0, {
     timeout: 20_000,
@@ -171,7 +171,7 @@ test('runs a check sent from an entity’s ✦, and looks at it again when asked
   await check.click();
   await field.press('Enter');
   await expect(toast(page)).toContainText(
-    '“Fixing text mistakes”: nothing new to check',
+    '“Mistakes in the text”: nothing new to check',
   );
   await expect(field).toContainText('Proofread the texts');
   await toast(page).getByRole('button', { name: 'Check again' }).click();

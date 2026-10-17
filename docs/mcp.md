@@ -162,7 +162,7 @@ A **template** is a request that starts a session; none runs by itself, and
 every one is offered everywhere: on the **Templates** tab, on a new session
 and in every entity's ✦.
 
-The built-in ones are **checks**: **Fixing text mistakes** proofreads
+The built-in ones are **checks**: **Mistakes in the text** proofreads
 whatever the owner typed — the texts, with the captions and titles of their
 pictures and files, and every short text beside them: titles, summaries,
 reminders, what a dated stretch is called, status lines, notes on links and
