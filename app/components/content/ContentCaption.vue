@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { normalizeContentMediaCaption } from '#layers/thei/shared/content';
+import { normalizeContentCaption } from '#layers/thei/shared/content';
 
 const props = withDefaults(
   defineProps<{
@@ -38,7 +38,7 @@ useSmartTypography(() => (props.editable ? root.value : undefined));
 
 function sync() {
   if (!root.value) return;
-  const value = normalizeContentMediaCaption(root.value.innerHTML);
+  const value = normalizeContentCaption(root.value.innerHTML);
   if (value !== props.modelValue) emit('update:modelValue', value);
 }
 
@@ -67,7 +67,7 @@ function onPaste(event: ClipboardEvent) {
 
 function onBlur() {
   if (!root.value) return;
-  const value = normalizeContentMediaCaption(root.value.innerHTML);
+  const value = normalizeContentCaption(root.value.innerHTML);
   // An emptied caption drops the `<br>` a browser leaves behind, so that its
   // placeholder shows again. Anything else stays as it is: the blur may be a
   // link popup taking the focus, with the selection it will wrap in here.
@@ -80,7 +80,7 @@ watch(shown, (value) => {
   if (
     props.editable &&
     element &&
-    normalizeContentMediaCaption(element.innerHTML) === value
+    normalizeContentCaption(element.innerHTML) === value
   )
     return;
   html.value = value;

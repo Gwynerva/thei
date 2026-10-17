@@ -1,33 +1,29 @@
 <script lang="ts" setup>
-import { debounce } from 'perfect-debounce';
 import {
   CONTENT_ENTITY_TYPES,
   type ContentEntityType,
 } from '#layers/thei/shared/content-link';
 import {
   CONTENT_ENTITY_SEARCH_LIMIT,
-  CONTENT_ENTITY_SUGGEST_TEXT_LIMIT,
   type ContentEntityChoice,
   type ContentEntitySearchItem,
 } from '#layers/thei/shared/admin/content-entity-search';
-import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
+import {
+  contentEntityKey,
+  useActiveRow,
+  useContentEntitySearch,
+} from '#layers/thei/app/composables/content-entity-search';
 
 /**
- * The picker for anything content can link to or relate with: a search
- * field and a short list of matches, each with its picture along the right
- * edge, its kind's glyph, its title and what it belongs to.
+ * The picker for anything content can relate with: a search field and a
+ * short list of matches, each with its picture along the right edge, its
+ * kind's glyph, its title and what it belongs to. A link is made with the
+ * link picker instead (`link-picker/`), which goes on into the entity.
  *
  * A picker that applies its choice at once just listens to `select`. One that
  * waits for a confirmation passes the current choice as `chosen`: it stays
  * pinned at the top of the list, marked, whatever the query, and picking it
  * again says the choice is made (`confirm`).
- *
- * It is the surface of its popup, and the `footer` slot is for whatever the
- * popup wants below the list — a note field, say — on that same surface.
- *
- * A picker opened over some text passes it as `suggest`: until something is
- * typed, the list starts with what the text names. The text never goes into
- * the field, so typing searches just as it would without it.
  */
 const props = withDefaults(
   defineProps<{
@@ -36,7 +32,6 @@ const props = withDefaults(
     publicOnly?: boolean;
     limit?: number;
     chosen?: ContentEntityChoice;
-    suggest?: string;
   }>(),
   {
     entityTypes: () => [...CONTENT_ENTITY_TYPES],
@@ -48,96 +43,34 @@ const emit = defineEmits<{
   select: [item: ContentEntitySearchItem];
   confirm: [];
 }>();
-const query = ref('');
-const results = ref<ContentEntitySearchItem[]>([]);
-const loading = ref(false);
-const error = ref(false);
-/** The row the arrow keys are on; none until they are used. */
-const activeIndex = ref(-1);
+const { query, results, loading, error, refresh } = useContentEntitySearch({
+  entityTypes: () => props.entityTypes,
+  exclude: () => props.exclude,
+  publicOnly: () => props.publicOnly,
+  limit: () => props.limit,
+});
 const input = ref<HTMLInputElement>();
-const listId = useId();
-let version = 0;
 
 type Row = { item: ContentEntityChoice; result?: ContentEntitySearchItem };
 
 const rows = computed<Row[]>(() => {
   const chosen = props.chosen;
   const found = results.value
-    .filter((item) => !chosen || itemKey(item) !== itemKey(chosen))
+    .filter(
+      (item) => !chosen || contentEntityKey(item) !== contentEntityKey(chosen),
+    )
     .map((result) => ({ item: result, result }));
   return chosen ? [{ item: chosen }, ...found] : found;
 });
-
-const search = debounce(async (current: number) => {
-  if (current !== version) return;
-  const text = query.value.trim();
-  const suggest = text
-    ? undefined
-    : Array.from(props.suggest?.trim() ?? '')
-        .slice(0, CONTENT_ENTITY_SUGGEST_TEXT_LIMIT)
-        .join('') || undefined;
-  try {
-    const response = await $fetch<ContentEntitySearchItem[]>(
-      '/api/admin/content-entities',
-      {
-        query: {
-          query: text,
-          suggest,
-          entityTypes: props.entityTypes.join(','),
-          exclude: props.exclude.join(','),
-          publicOnly: props.publicOnly ? 'true' : undefined,
-          limit: props.limit,
-        },
-      },
-    );
-    if (current !== version) return;
-    results.value = response;
-    activeIndex.value = -1;
-  } catch {
-    if (current === version) {
-      results.value = [];
-      error.value = true;
-    }
-  } finally {
-    if (current === version) loading.value = false;
-  }
-}, 180);
-
-function queue() {
-  const current = ++version;
-  loading.value = true;
-  error.value = false;
-  void search(current);
-}
-
-function itemKey(item: Pick<ContentEntityChoice, 'entityType' | 'entityId'>) {
-  return `${item.entityType}:${item.entityId}`;
-}
-
-function optionId(index: number) {
-  return `${listId}-${index}`;
-}
-
-function secondary(item: ContentEntityChoice) {
-  return [item.parent?.title, item.summary].filter(Boolean).join(' · ');
-}
+const { listId, activeIndex, optionId, move, pointAt, current } = useActiveRow(
+  () => rows.value.length,
+  results,
+);
 
 function isChosen(item: ContentEntityChoice) {
-  return Boolean(props.chosen && itemKey(props.chosen) === itemKey(item));
-}
-
-function move(step: number) {
-  const count = rows.value.length;
-  if (!count) return;
-  activeIndex.value = (activeIndex.value + step + count) % count;
-  document
-    .getElementById(optionId(activeIndex.value))
-    ?.scrollIntoView({ block: 'nearest' });
-}
-
-/** The mouse takes the row it is over; a finger only picks what it taps. */
-function pointAt(event: PointerEvent, index: number) {
-  if (event.pointerType === 'mouse') activeIndex.value = index;
+  return Boolean(
+    props.chosen && contentEntityKey(props.chosen) === contentEntityKey(item),
+  );
 }
 
 function pick(row: Row) {
@@ -145,25 +78,19 @@ function pick(row: Row) {
   else emit('confirm');
 }
 
-/** Enter takes the row the arrows are on, or the first one. */
 function choose() {
-  const row = rows.value[Math.max(0, activeIndex.value)];
+  const row = rows.value[current()];
   if (row) pick(row);
 }
 
-watch(query, queue);
-onMounted(queue);
-onUnmounted(() => {
-  version++;
-});
+onMounted(refresh);
 defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
 </script>
 
 <template>
   <section
     class="flex max-h-(--floating-popup-available-height) min-h-0 flex-col
-      gap-xs overflow-hidden rounded-normal border border-border-1 bg-bg-2 p-xs
-      text-text-1"
+      gap-xs overflow-hidden p-xs text-text-1"
     role="dialog"
   >
     <div class="relative">
@@ -200,80 +127,20 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
       role="listbox"
       class="flex scrollbar-hover min-h-0 flex-col gap-1 overflow-y-auto"
     >
-      <MediaInteraction
+      <ContentEntityRow
         v-for="(row, index) in rows"
-        :key="itemKey(row.item)"
-        v-slot="{ engaged, events }"
-      >
-        <button
-          v-on="events"
-          :id="optionId(index)"
-          type="button"
-          role="option"
-          :aria-selected="isChosen(row.item)"
-          class="group relative flex min-h-12 w-full shrink-0 cursor-pointer
-            items-center overflow-hidden rounded-sm bg-bg-1 text-left
-            transition-colors hocus:bg-bg-3"
-          :class="{
-            'bg-bg-3': index === activeIndex,
-            'entity-search-chosen': isChosen(row.item),
-          }"
-          @pointerenter="pointAt($event, index)"
-          @click="pick(row)"
-        >
-          <MediaEdge
-            :media="row.item.previewMedia"
-            side="right"
-            fade="preview"
-            playback="interaction"
-            :engaged
-            class="w-24"
-          />
-          <!-- A truncated line clips its own halo, which draws a hard seam
-               across the picture: each gets room for the halo all round. -->
-          <span
-            class="relative flex min-w-0 flex-1 flex-col gap-0.5 py-1 pr-16
-              pl-xs text-halo-bg-1"
-          >
-            <span class="flex min-w-0 items-center gap-1 text-sm font-semibold"
-              ><Icon
-                :name="entityTypeIcon(row.item.entityType)"
-                :aria-label="entityTypeLabel(row.item.entityType)"
-                role="img"
-                class="shrink-0 text-xs text-text-2"
-              /><span class="-m-[0.75em] min-w-0 truncate p-[0.75em]">{{
-                entityDisplayTitle(row.item)
-              }}</span></span
-            >
-            <span
-              v-if="secondary(row.item)"
-              class="-m-[0.75em] block truncate p-[0.75em] text-xs text-text-3"
-              :class="{ italic: row.item.date }"
-              >{{ secondary(row.item) }}</span
-            >
-          </span>
-        </button>
-      </MediaInteraction>
+        :id="optionId(index)"
+        :key="contentEntityKey(row.item)"
+        :item="row.item"
+        :active="index === activeIndex"
+        :chosen="isChosen(row.item)"
+        secondary
+        @point="pointAt($event, index)"
+        @pick="pick(row)"
+      />
     </div>
     <p v-else-if="!loading" class="py-1 text-center text-xs text-text-3">
       {{ error ? phrase.search_entity_error : phrase.search_entity_no_results }}
     </p>
-    <slot name="footer"></slot>
   </section>
 </template>
-
-<style scoped>
-/*
- * The choice a confirming picker holds, marked in the accent. An outline is
- * drawn over the picture along the edge, where an inset shadow would not be.
- */
-.entity-search-chosen {
-  background-color: color-mix(
-    in oklab,
-    var(--color-accent) 12%,
-    var(--color-bg-1)
-  );
-  outline: 1.5px solid var(--color-accent);
-  outline-offset: -1.5px;
-}
-</style>

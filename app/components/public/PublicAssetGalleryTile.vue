@@ -18,7 +18,7 @@ const { engaged, events } = useMediaInteraction();
       rounded-normal border-2 border-white/15 bg-black/16 shadow-md transition
       sm:size-30 hocus:-translate-y-0.5 hocus:border-white/35 hocus:bg-black/24
       hocus:shadow-xl"
-    :aria-label="publicText(item.title) || phrase.asset"
+    :aria-label="publicText(item.title) || publicText(item.alt) || phrase.asset"
     :data-title-popup="publicText(item.title) || phrase.asset"
     v-on="events"
     @click="emit('open')"

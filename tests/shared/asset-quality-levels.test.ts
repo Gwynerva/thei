@@ -7,7 +7,6 @@ import {
   assetQualityLevelOf,
   AVIF_QUALITY_BY_LEVEL,
   interpolateByQualityLevel,
-  isAssetQualityStop,
   VIDEO_AUDIO_BITRATE_BY_LEVEL,
   VIDEO_BITRATE_FACTOR_BY_LEVEL,
 } from '../../shared/asset-quality-levels';
@@ -22,8 +21,6 @@ describe('asset quality levels', () => {
       'maximum',
     ]);
     expect(ASSET_QUALITY_STOPS).toEqual([...ASSET_QUALITY_LEVELS, 'lossless']);
-    expect(isAssetQualityStop('lossless')).toBe(true);
-    expect(isAssetQualityStop('best')).toBe(false);
   });
 
   it('stands for stored qualities that rise with the level', () => {

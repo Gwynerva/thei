@@ -13,7 +13,6 @@ import {
 } from '../../shared/life';
 import {
   lifeGapDuration,
-  lifeGapDays,
   lifeGapStyle,
   lifePointIsVisible,
   mergeLifeBoundaryPoints,
@@ -376,8 +375,21 @@ describe('Life point construction', () => {
 
 describe('Life gaps', () => {
   it('measures date gaps directionally in UTC days', () => {
-    expect(lifeGapDays('2026-08-22', '2026-08-21')).toBe(1);
-    expect(lifeGapDays('2026-09-10', '2026-08-22')).toBe(19);
+    expect(lifeGapDuration('2026-08-22', '2026-08-21')).toEqual({
+      years: 0,
+      months: 0,
+      days: 1,
+    });
+    expect(lifeGapDuration('2026-09-10', '2026-08-22')).toEqual({
+      years: 0,
+      months: 0,
+      days: 19,
+    });
+    expect(lifeGapDuration('2026-08-21', '2026-08-22')).toEqual({
+      years: 0,
+      months: 0,
+      days: 0,
+    });
   });
 
   it('splits gaps into exact clamped UTC calendar parts', () => {

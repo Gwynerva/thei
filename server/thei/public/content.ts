@@ -6,6 +6,8 @@ import {
   ContentValidationError,
   collectContentAssetUuids,
   contentBlockIsInPrivateSection,
+  hydrateContentBlockFiles,
+  isContentFileBlockType,
   normalizedContentPrivateSectionRanges,
   normalizeContentData,
   summarizeContentData,
@@ -22,14 +24,15 @@ import { audioDescriptorFromMeta } from '#layers/thei/shared/audio';
 import { buildProjectUrl } from '#layers/thei/shared/project-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
+import { archivedOriginalFromMeta } from '#layers/thei/shared/asset';
 import {
-  archivedOriginalFromMeta,
   buildPublicEventContentMedia,
   buildPublicProjectContentMedia,
   buildPublicPageContentMedia,
   buildPublicDiaryContentMedia,
   buildPublicProfileMedia,
 } from '../assets/urls';
+import { describedText, describeFiles } from '../assets/descriptions';
 import { createExternalLinkLoader } from '../external-links/repository';
 import { canResolveContentEntityLink } from '../content-links/access';
 import {
@@ -254,6 +257,8 @@ async function hydratePublicContentData(
     privateSectionRanges.map((range) => [range.startIndex, range]),
   );
   const assetCache = new Map<string, any>();
+  // What every file of the text is, read at once rather than file by file.
+  const descriptions = describeFiles(collectContentAssetUuids(normalized));
   const loadExternalLink = createExternalLinkLoader();
   const entityLinkCache = new Map<string, EntityLinkAccess>();
 
@@ -333,6 +338,7 @@ async function hydratePublicContentData(
       return undefined;
     const asset = await THEI_SERVER.assets.findByUuid(assetUuid);
     if (!asset) return undefined;
+    const alt = descriptions.get(assetUuid) ?? describedText(asset);
     const baseUrl =
       entity.type === 'profile'
         ? `/profile/media/profile/profile/content/${asset.slug}.${asset.extension}`
@@ -351,14 +357,15 @@ async function hydratePublicContentData(
               'profile',
               'profile',
               'content',
+              alt,
             )
           : entity.type === 'event'
-            ? await buildPublicEventContentMedia(entity, asset)
+            ? await buildPublicEventContentMedia(entity, asset, alt)
             : entity.type === 'page'
-              ? await buildPublicPageContentMedia(entity, asset)
+              ? await buildPublicPageContentMedia(entity, asset, alt)
               : entity.type === 'diary-entry'
-                ? await buildPublicDiaryContentMedia(entity, asset)
-                : await buildPublicProjectContentMedia(entity, asset)
+                ? await buildPublicDiaryContentMedia(entity, asset, alt)
+                : await buildPublicProjectContentMedia(entity, asset, alt)
         : undefined;
     const hydrated = {
       // Public renderers only need a stable local key. Never expose the
@@ -377,6 +384,7 @@ async function hydratePublicContentData(
         asset.type === AssetType.Other
           ? archivedOriginalFromMeta(asset.meta)
           : undefined,
+      alt: alt || undefined,
     };
     assetCache.set(assetUuid, hydrated);
     return hydrated;
@@ -396,27 +404,8 @@ async function hydratePublicContentData(
         (await entityLinkAccess(entityType, entityId)) === 'restricted'
       )
         return { ...block, data: { entityType, restricted: true } };
-    } else if (
-      block.type === 'contentMedia' ||
-      block.type === 'contentAudio' ||
-      block.type === 'contentAttachment'
-    ) {
-      const assetUuid = (block.data as any).asset?.assetUuid;
-      data.asset = assetUuid ? await hydrateAsset(assetUuid) : null;
-    } else if (block.type === 'contentGallery') {
-      const items = Array.isArray((block.data as any).items)
-        ? (block.data as any).items
-        : [];
-      data.items = (
-        await Promise.all(
-          items.map(async (item: any) => {
-            const asset = item?.asset?.assetUuid
-              ? await hydrateAsset(item.asset.assetUuid)
-              : undefined;
-            return asset ? { ...item, asset } : undefined;
-          }),
-        )
-      ).filter(Boolean);
+    } else if (isContentFileBlockType(block.type)) {
+      Object.assign(data, await hydrateContentBlockFiles(block, hydrateAsset));
     } else if (block.type === 'externalLink') {
       const url = (block.data as any).url;
       const link = url ? await loadExternalLink(url) : undefined;

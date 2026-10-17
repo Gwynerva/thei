@@ -559,31 +559,40 @@ interface GuardedFetchOptions {
   maxBytes: number;
   deadline: number;
   userAgent?: string;
+  /** How many redirects to follow; none for an address that must answer itself. */
+  maxRedirects?: number;
+  /** Stops the exchange before its deadline. */
+  signal?: AbortSignal;
 }
 
 /**
  * The one way anything here reaches the network. Redirects are followed by
- * hand so every hop passes the address guard, the body is read up to the
- * limit and no further, and the deadline bounds the whole exchange. Throws
- * an `ExternalLinkFetchError` that says which kind of failure it was.
+ * hand so every hop passes the address guard, and the deadline bounds the
+ * whole exchange. The body is left unread, for the caller to read within its
+ * own limit — to memory, or to a file. Throws an `ExternalLinkFetchError`
+ * that says which kind of failure it was.
  */
-export async function fetchGuarded(
+export async function openGuarded(
   value: string,
   {
     accept,
-    maxBytes,
     deadline,
     userAgent = BOT_USER_AGENT,
-  }: GuardedFetchOptions,
-): Promise<GuardedResponse> {
+    maxRedirects = MAX_REDIRECTS,
+    signal,
+  }: Omit<GuardedFetchOptions, 'maxBytes'>,
+): Promise<{ response: Response; url: string }> {
   let url = guardedUrl(value);
   for (let redirects = 0; ; redirects += 1) {
+    signal?.throwIfAborted();
     await withDeadline(assertPublicUrl(url), deadline);
     let response: Response;
     try {
       response = await fetch(url, {
         redirect: 'manual',
-        signal: deadlineSignal(deadline),
+        signal: signal
+          ? AbortSignal.any([deadlineSignal(deadline), signal])
+          : deadlineSignal(deadline),
         headers: {
           accept,
           'accept-language': 'en,ru;q=0.9',
@@ -599,30 +608,38 @@ export async function fetchGuarded(
     if (response.status >= 300 && response.status < 400) {
       await response.body?.cancel().catch(() => {});
       const location = response.headers.get('location');
-      if (!location || redirects >= MAX_REDIRECTS)
+      if (!location || redirects >= maxRedirects)
         throw new ExternalLinkFetchError('unsupported', 'Bad redirect');
       url = guardedUrl(new URL(location, url).href);
       continue;
     }
-    const finalUrl = response.url || url.href;
-    if (!response.ok) {
-      await response.body?.cancel().catch(() => {});
-      return {
-        ok: false,
-        status: response.status,
-        headers: response.headers,
-        url: finalUrl,
-        bytes: new Uint8Array(),
-      };
-    }
+    return { response, url: response.url || url.href };
+  }
+}
+
+/** A guarded fetch with its body read to memory, up to `maxBytes`. */
+export async function fetchGuarded(
+  value: string,
+  options: GuardedFetchOptions,
+): Promise<GuardedResponse> {
+  const { response, url } = await openGuarded(value, options);
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
     return {
-      ok: true,
+      ok: false,
       status: response.status,
       headers: response.headers,
-      url: finalUrl,
-      bytes: await readLimited(response, maxBytes),
+      url,
+      bytes: new Uint8Array(),
     };
   }
+  return {
+    ok: true,
+    status: response.status,
+    headers: response.headers,
+    url,
+    bytes: await readLimited(response, options.maxBytes),
+  };
 }
 
 function guardedUrl(value: string) {

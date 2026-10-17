@@ -4,11 +4,8 @@ import ruModule, { plural } from '../../../../shared/language/list/ru';
 const { normalize } = ruModule;
 
 describe('normalize', () => {
-  it('replaces ... with ellipsis', () => {
-    expect(normalize!('Подождите...')).toBe('Подождите\u2026');
-  });
-
-  it('replaces -- with em dash', () => {
+  // What the general step does is checked in general-normalize.test.ts.
+  it('applies the general step first', () => {
     expect(normalize!('один -- два')).toBe('один\u00a0\u2014 два');
   });
 
@@ -25,8 +22,6 @@ describe('Editor.js phrases', () => {
   it('provides Russian block names and controls', () => {
     expect(ruModule.phrases.content_editor_i18n).toMatchObject({
       text: 'Текст',
-      media: 'Медиа',
-      gallery: 'Галерея',
       file: 'Файл',
       add: 'Добавить',
       click_to_delete: 'Точно удалить?',

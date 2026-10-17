@@ -65,11 +65,10 @@ Either kind of `<a>` may carry `data-content-note="…"`: the owner's words abou
 why the link is there, stored trimmed and ended as a caption (see "Endings"
 below); an empty note is no attribute.
 It never stands in for what the target says of itself: the target's own title
-and description are shown, and the note under them — in the popup over the
-link and in the sidebar. A link block carries the same kind of note in its
-data (see below), shown as the last line of its card. When the same address is attached by hand too, the sidebar
-lists it once if only one of them has a note or both say the same, and twice
-if they say different things.
+and description are shown, and the note under them, in the popup over the
+link. A link block carries the same kind of note in its data (see below),
+shown as the last line of its card. The sidebar of a public page lists only
+what the owner attached by hand, never what the text links to.
 
 An entity link names its target by kind and uuid, never by address, so it
 survives the site moving to another domain. The kinds are those of
@@ -99,9 +98,15 @@ attribute. The link opens its target's address with `#` and the fragment
 appended; whether the target still has that place is not checked, and a
 browser simply opens the page when it does not.
 
+A heading's place is the anchor its page gives it (`contentHeadingAnchors`
+in `shared/content-headings.ts`): the headings a stranger reads are numbered
+first and the private ones after them, so the owner and a stranger read the
+same anchors, and the fixed anchors of a page — `project-description`,
+`project-sections`, `related-entities` — are never a heading's.
+
 An address of this very site is never stored as an external link when the
 editor can tell what it opens: pasted into an empty paragraph, pasted over
-selected text or typed as an external link, it is stored as an entity link
+selected text or written in the link popup, it is stored as an entity link
 instead, with the address's `#…` as its fragment.
 
 A target the reader may not open arrives without its uuid:
@@ -127,21 +132,42 @@ an HTML document is.
 | `list`                   | `{ style: 'unordered' \| 'ordered' \| 'checklist', items, meta }`; an item is `{ content, items, meta }` and nests |
 | `delimiter`              | `{}`                                                                                                               |
 | `contentMedia`           | `{ asset, layout: 'centered' \| 'natural' \| 'stretch', caption }`                                                 |
-| `contentGallery`         | `{ items: [{ id, asset, caption }] }` — an item without an `id` is dropped                                         |
-| `contentAudio`           | `{ asset, title, caption }` — an audio file, played in place; both plain text, as a file's                         |
+| `contentGallery`         | `{ title, items: [{ id, asset, caption }] }` — an item without an `id` is dropped                                  |
+| `contentAudio`           | `{ asset, title, caption }` — an audio file, played in place                                                       |
 | `contentAttachment`      | `{ asset, title, caption }` — any file, shown as a download                                                        |
+| `contentFileGroup`       | `{ title, items: [{ id, asset, title, caption }] }` — files listed together, each shown as it would be alone       |
 | `externalLink`           | `{ url, note? }` — rendered as a preview card                                                                      |
 | `integration`            | `{ provider: 'youtube', videoId, … }`, see `shared/content-integrations.ts`                                        |
 | `entityLink`             | `{ entityType, entityId, fragment?, note? }` — a card for something on this site; see inline markup                |
 | `privateSectionBoundary` | `{ sectionId, edge: 'start' \| 'end' }`                                                                            |
 
+The editor's link block is stored as what it was pointed at: an
+`entityLink` for something on this site, an `integration` for an address a
+block of its own takes (a video), and an `externalLink` for any other
+address. One nothing was chosen for is not stored.
+
 `asset` is `{ assetUuid }` when stored. What a reader receives is hydrated: the
 asset carries its media descriptor and address, or is `null` when the reader
-may not see it. A recording's asset also carries `audio: { duration, peaks,
-channels? }` — its length in seconds and up to 128 loudness values from 0 to
-100 — which is what its player draws before it loads anything. A
-`contentAudio` block holds only audio files; it and a `contentAttachment` have
-the same data, so either turns into the other as it is.
+may not see it; a file of a list the reader may not see is left out of it. A
+recording's asset also carries `audio: { duration, peaks, channels? }` — its
+length in seconds and up to 128 loudness values from 0 to 100 — which is what
+its player draws before it loads anything.
+
+What each block holds is declared once, in `CONTENT_FILE_BLOCKS`
+(`shared/content.ts`): `contentMedia` and `contentGallery` show pictures and
+videos within the media limit, `contentAudio` recordings, `contentAttachment`
+and `contentFileGroup` any file. In a group a recording is played in place and
+any other file — a picture too — is shown as a file. A file's `caption`, in
+every one of these blocks, is one line of inline HTML, as a paragraph's text
+without line breaks; its `title`, and a gallery's or a group's, is plain
+text. A `contentAudio` and a `contentAttachment` have the same data, so either
+turns into the other as it is.
+
+An item of a gallery or a group is named by its `id`, its own within the
+list: an item without one is dropped, and one whose `id` an item before it
+already has takes that `id` with the first free number after it — `f1-2` —
+so an item copied is never the same item twice, and the same list always
+comes out the same.
 
 A link block's `note` is the owner's plain-text word on why the link is there,
 like `data-content-note` inline: whitespace collapsed, ended as a caption, and
@@ -166,12 +192,14 @@ The last mark of a caption or a heading is settled where a block is
 normalized (`shared/terminal-punctuation.ts`), never while it is typed:
 
 - A caption — `contentMedia.caption`, a gallery item's `caption`,
-  `quote.caption`, the `caption` of `contentAudio` and `contentAttachment`,
-  a link block's `note` and `data-content-note` — ends without a full stop
-  when it is one sentence, of any length, and with a mark when it has several:
-  a full stop is added after a last sentence left open.
-- A heading — `header.text`, the `title` of `contentAudio` and
-  `contentAttachment` — never ends with a full stop.
+  `quote.caption`, the `caption` of `contentAudio`, `contentAttachment` and a
+  file of a `contentFileGroup`, a link block's `note` and
+  `data-content-note` — ends without a full stop when it is one sentence, of
+  any length, and with a mark when it has several: a full stop is added after
+  a last sentence left open.
+- A heading — `header.text`, the `title` of `contentAudio`,
+  `contentAttachment`, a `contentGallery`, a `contentFileGroup` and each of
+  its files — never ends with a full stop.
 - Both keep `?`, `!`, `…` and `...` as typed, and the full stop that closes an
   abbreviation or an initial ("1990 г.", "и т. д.", "А. С."). Spaces before
   the last mark, a doubled full stop and a trailing comma or semicolon go.
@@ -209,9 +237,82 @@ assetTotalSize }`) and nothing else;
   with its fragment: `[text](https://…/pages/cv/#skills)`. A
   recording is a link to its file followed by its length,
   `[title](url) (m:ss)`, named `options.audioLabel` when it has no title, and
-  then its caption. With `options.format` the owner's words — text, captions,
-  attachment and recording titles, hints, link notes, entity link titles —
+  then its caption. A file's own description (`shared/asset-description.ts`),
+  which the public content carries as `asset.alt` for a file shown publicly
+  and never stores, is a picture's alt — `![description](url)`, its caption
+  following as words of their own — and the title of an attachment's or a
+  recording's link, `[title](url "description")`; without one a picture's
+  alt is its caption's words, and the caption follows them only when it
+  holds more than words — a link, a mark, a hint. A bracket in an alt, a
+  file's title or a link's words is escaped, `\]`, so that it never closes
+  the link. A group of files is its title on a line of its own,
+  not a heading, and then a list: each file as it would be alone, its caption
+  after it, `- [title](url) (m:ss) — caption`. A gallery is its title the
+  same way, then its pictures. With `options.format` the owner's words —
+  text, captions, group and gallery titles,
+  attachment and recording titles, hints, link notes, entity link titles,
+  file descriptions —
   get the typography of the site's
   language, as on the page; markup, addresses, file names and the titles of
   other sites stay as they are. None of it is stored: the content keeps what
   was typed.
+- `contentToEditMarkdown(data)` in `shared/content-edit-markdown/serialize.ts`
+  — the stored document as editing Markdown, which is how an AI client reads
+  a text over MCP and writes one back (see "Editing Markdown" below).
+
+## Editing Markdown
+
+The public Markdown copy leaves things out and typesets the rest. Editing
+Markdown is the other kind: everything a document holds, exactly as stored,
+in a form a model reads and writes well. Whatever it writes reads back into
+the same blocks. `shared/content-edit-markdown/reference.ts` explains it to the
+model; it changes with this table.
+
+It is CommonMark with directives, strikethrough and task list items, and
+nothing else: a bare address stays text.
+
+| Stored                          | Editing Markdown                                                   |
+| ------------------------------- | ------------------------------------------------------------------ |
+| `paragraph`                     | a paragraph; a `<br>` is a backslash at the end of a line          |
+| `header` level 2 / 3            | `## text` / `### text`                                             |
+| `quote`, no caption, left       | `> text`                                                           |
+| `quote` with caption or centred | `:::quote[caption]{align="center"}` … `:::`                        |
+| `list`                          | `-`, `1.` (from `meta.start`), `- [ ]` / `- [x]`; nested by indent |
+| `list` with another counter     | the list inside `:::list{counter="lower-roman"}` … `:::`           |
+| `delimiter`                     | `---`                                                              |
+| `contentMedia`                  | `::media[caption]{asset="a-…" layout="centered"}`                  |
+| `contentGallery`                | `:::gallery{title="…"}` with `::media[caption]{#id asset="a-…"}`   |
+| `contentAudio`                  | `::audio[caption]{asset="a-…" title="…"}`                          |
+| `contentAttachment`             | `::file[caption]{asset="a-…" title="…"}`                           |
+| `contentFileGroup`              | `:::files{title="…"}` with a `::file` line per file (below)        |
+| `externalLink`                  | `::link[note]{url="…"}`                                            |
+| `entityLink`                    | `::card[note]{to="thei:<kind>/<id>#fragment"}`                     |
+| `integration`                   | `::embed{url="…"}`, the provider's canonical address               |
+| a private section               | `:::private{#sectionId}` … `:::` around its blocks                 |
+| `tunes.spoiler`                 | consecutive spoiler blocks inside `:::spoiler` … `:::`             |
+
+A file of a group is `::file[caption]{#id asset="a-…" title="…"}`, whatever
+its kind; `::audio` is read there too. Every file's caption takes the inline
+markup below; a title is plain words.
+
+Inline: `**bold**`, `*italic*`, `~~strikethrough~~`, `[text](https://… "note")`
+for an external link, `[text](/path)` for a relative one,
+`[text](thei:<kind>/<id>#fragment "note")` for an entity link, and
+`:hint[text]{note="…"}` for a hint. A diary entry may also be named by its day
+on the way in, `thei:diary-entry/2026-10-14`: the server turns the day into the
+entry's uuid, and it is always written back by uuid. A `thei:` address that
+names no kind and id keeps only its words, and the reader is warned. Where
+containers nest, the outer one takes more colons. A line break at either end of
+a text is left out: Markdown cannot write one there, and it breaks nothing a
+reader sees.
+
+Whatever the words of a text hold is escaped where Markdown would read it as
+syntax — in a caption and a note between a directive's brackets too, and a
+bracket in a hint's note inside them is written `&#91;` / `&#93;`. Two of the
+same mark side by side are one: `<b>a</b><b>b</b>` is written `**ab**` and
+read back `<b>ab</b>`, which a merge takes for the block it was, keeping it
+as stored. Where the stars or tildes of a text's marks would run together or
+not read as marks at all — a bold "Note:" right before italic words, a struck
+word in quotes right after a letter, an emoji beside a mark — every mark of
+that text is written as its tag,
+`<b>…</b>`, `<i>…</i>`, `<s>…</s>`, which reads back as it is.

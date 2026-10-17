@@ -101,7 +101,6 @@ function save(
 beforeEach(async () => {
   context = await freshTestDb();
   Object.assign(context.server, {
-    useDb: () => context,
     assets: { findByUuid: vi.fn(async () => undefined) },
     projects: { findByUuid: vi.fn(async () => undefined) },
   });

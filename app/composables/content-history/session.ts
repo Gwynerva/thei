@@ -18,6 +18,7 @@ import {
   type ContentHistoryHint,
   type ContentHistoryIndexResponse,
   type ContentHistoryStats,
+  type ContentHistoryStored,
 } from '#layers/thei/shared/content-history';
 import { cloneSerializable } from '#layers/thei/app/composables/serializable-state';
 import { cleanEditorSnapshot } from '#layers/thei/app/composables/editor-output';
@@ -360,8 +361,10 @@ export function createEditorHistorySession(
     )
       queue[queue.length - 1] = write;
     else queue.push(write);
+    // Over the limit, a plain write goes first; never one that keeps the text
+    // as it was before a restore or a large drop, nor a draft taken over.
     while (queue.length > QUEUE_LIMIT) {
-      const plain = queue.findIndex((item) => !item.hint);
+      const plain = queue.findIndex((item) => !item.hint && !item.sealed);
       if (plain < 0 || plain === queue.length - 1) break;
       queue.splice(plain, 1);
     }
@@ -425,8 +428,10 @@ export function createEditorHistorySession(
           refused = false;
           lastSyncedAt.value = now();
           retryIndex = 0;
-          if (fieldRef.value && isSameField(write.field))
+          if (fieldRef.value && isSameField(write.field)) {
             applyOthers(response.others);
+            if (response.stored !== undefined) stored.value = response.stored;
+          }
           // The other tabs of this browser offer the draft as it grows.
           announceContentHistoryChange(write.field, 'other-tabs');
         } catch (error) {
@@ -609,6 +614,11 @@ export function createEditorHistorySession(
     fieldRef.value = next;
   }
 
+  /** Saved: what was restored stays, with no undo of it offered any more. */
+  function forgetRestore() {
+    lastRestore.value = undefined;
+  }
+
   /** Puts back the text the last restore replaced. */
   async function undoRestore() {
     const previous = lastRestore.value;
@@ -617,21 +627,12 @@ export function createEditorHistorySession(
     return restore(previous.data, { remember: false });
   }
 
-  /** Runs a change that empties the editor, keeping what it held. */
-  function clear(action: () => Promise<void>) {
-    return replace(
-      'before-clear',
-      async () => {
-        await action();
-      },
-      false,
-    );
-  }
-
   // --- Drafts of other tabs -------------------------------------------------
 
   /** Drafts other tabs keep of this field, newest first. */
   const others = shallowRef<ContentHistoryEntryMeta[]>([]);
+  /** The text saved now, as the server said with the last draft it took. */
+  const stored = shallowRef<ContentHistoryStored | null>(null);
   /** Unsent text another tab left in this browser. */
   const localOffer =
     shallowRef<Extract<EditorHistoryOffer, { kind: 'local' }>>();
@@ -845,7 +846,7 @@ export function createEditorHistorySession(
     for (const unbind of unbinds.splice(0)) unbind();
   }
 
-  /** Stops everything without sending; for editors that keep no history. */
+  /** Stops everything without sending anything, as a tab that is killed. */
   function destroy() {
     destroyed = true;
     closed = true;
@@ -864,6 +865,7 @@ export function createEditorHistorySession(
     status: readonly(status),
     lastSyncedAt: readonly(lastSyncedAt),
     offer,
+    stored: readonly(stored),
     lastRestore: computed(() => lastRestore.value),
     needsUnloadGuard,
     initialize,
@@ -873,7 +875,7 @@ export function createEditorHistorySession(
     currentKey: () => currentKey,
     restore,
     undoRestore,
-    clear,
+    forgetRestore,
     loadOffers,
     dismissOffer,
     clearOffer,

@@ -1,0 +1,945 @@
+import {
+  contentBlockTextParts,
+  type ContentOutputBlock,
+  type ContentOutputData,
+} from './content';
+import type { AiRevisePart, AiRevisePartState } from './ai-actions';
+import type { ProofreadCategory, TidyItem } from './ai-revise';
+import {
+  blockChanges,
+  blockFileChanges,
+  type BlockChange,
+  type BlockFileChange,
+} from './content-block-changes';
+import { diffContentBlocks, type ContentTextDiffPart } from './content-diff';
+import { newEditBlockId } from './content-edit-markdown/block-key';
+import { escapeHtmlText } from './content-edit-markdown/html';
+import {
+  placeTextEdits,
+  type TextEditPlace,
+} from './content-edit-markdown/patch-core';
+import { alignTidyBase, tidyRemovalStays } from './content-edit-markdown/tidy';
+import {
+  applyRevise,
+  orderChoices,
+  takenParts,
+  type Correction,
+  type Relink,
+} from './content-revise';
+import {
+  contentLinkFrom,
+  locateContentEntityLinks,
+  markContentLink,
+  retargetContentLink,
+  type LocatedContentLink,
+} from './content-link-locate';
+import { parseTheiLinkUrl } from './content-edit-markdown/links';
+
+/**
+ * A change to a text, seen part by part before it is made: an AI's edit of
+ * it, or another version of it — a draft, a version from the history —
+ * against the text as it is. Each part is taken or left as it is, and
+ * nothing changes until the result is taken. One model drives every way of
+ * showing it: the text as it will read, what goes and what comes, and a list.
+ */
+
+/** The owner's word on a part: none yet, taken, or left as it is. */
+export type ReviewDecision = 'pending' | 'accepted' | 'kept';
+
+export const REVIEW_VIEWS = ['read', 'diff', 'list'] as const;
+export type ReviewView = (typeof REVIEW_VIEWS)[number];
+
+/**
+ * Characters no text holds, set around a part's words in a text being shown,
+ * for the page to find them once it is drawn: the part's id between `open`
+ * and `id`, and, where both states are shown, what is now after `was` and
+ * what comes after `becomes`, up to `close`.
+ */
+export const REVIEW_MARK = {
+  open: '',
+  id: '',
+  was: '',
+  becomes: '',
+  close: '',
+} as const;
+
+export type ReviewPartKind =
+  | ProofreadCategory
+  /** Of a version: a block it has otherwise, has only, or has not. */
+  | 'changed'
+  | 'added'
+  | 'removed'
+  /**
+   * Of a new order: a heading or a delimiter added, a repeat dropped, a
+   * paragraph split, the blocks moved.
+   */
+  | 'heading'
+  | 'delimiter'
+  | 'removal'
+  | 'split'
+  | 'order';
+
+export interface ReviewPart {
+  id: string;
+  kind: ReviewPartKind;
+  /** Taken with the sure ones at once; an unsure one is the owner's call. */
+  sure: boolean;
+  reason: string;
+  /** Words in a line: what they are, what they become, the words around. */
+  words?: { before: string; after: string; around: [string, string] };
+  /** A whole block's words compared, for a block another version rewrote. */
+  diff?: ContentTextDiffPart[];
+  /**
+   * A whole block that comes or goes: its words, for a line about it — or,
+   * with none, what it holds. Of a block changed elsewhere than in its
+   * words, how it would read.
+   */
+  quote?: string;
+  /** Of a block changed elsewhere than in its words, how it reads now. */
+  before?: string;
+  /** Of a block another version has otherwise: what changed but its words. */
+  changes?: BlockChange[];
+  /** Of a block of files: each of them, as it stays, comes or goes. */
+  files?: BlockFileChange[];
+  /** Of a new order: how many blocks it moves. */
+  moved?: number;
+  /** Of a paragraph split: how many it becomes. */
+  pieces?: number;
+  /**
+   * A link mended: its words, where it leads now — none when what it led to
+   * is gone — and where it would, none taking it off. A link `made` is put
+   * on words that had none.
+   */
+  link?: { words: string; from?: string; to?: string; made?: boolean };
+  /** A whole block: its mark is on the margin, not in a line. */
+  whole: boolean;
+  /** Words outside the running text: a caption, a title, a note. */
+  aside: boolean;
+  /** Where words outside the running text stand. */
+  place?: 'caption' | 'file' | 'link';
+  /** The heading it stands under, for a list grouped by them. */
+  heading?: string;
+  /** Inside a private part of the text. */
+  private: boolean;
+  /** Settled already — made, or no longer in the text: shown, not decided. */
+  settled?: 'applied' | 'stale';
+}
+
+/** One row of the text as a review shows it. */
+export type ReviewRow =
+  | {
+      type: 'block';
+      block: ContentOutputBlock;
+      /** Parts in it shown on its margin: words outside its running text. */
+      parts: string[];
+      /** The part the whole block is: drawn tinted as it is decided. */
+      part?: string;
+      /** A block a version rewrote, shown as its words compared. */
+      diff?: ContentTextDiffPart[];
+      /** Shown as it is now, struck: what a part would take away. */
+      was?: boolean;
+    }
+  /**
+   * A block folded to a line in the text as it will read: one a part takes
+   * away, or one a part would bring and the owner left out.
+   */
+  | { type: 'gone'; part: string; quote: string }
+  | { type: 'edge'; edge: 'start' | 'end' };
+
+export interface ContentReview {
+  parts: ReviewPart[];
+  rows(
+    decisions: Readonly<Record<string, ReviewDecision>>,
+    view: ReviewView,
+  ): ReviewRow[];
+  /** The text with the parts taken. */
+  result(
+    decisions: Readonly<Record<string, ReviewDecision>>,
+  ): ContentOutputData;
+  /**
+   * What else a decision decides, for parts that stand on one another: a
+   * new order's heading taken takes its moves, the moves left as they were
+   * leave the rest as it is.
+   */
+  implied?(
+    decisions: Readonly<Record<string, ReviewDecision>>,
+    id: string,
+    decision: ReviewDecision,
+  ): Record<string, ReviewDecision>;
+}
+
+/** Blocks whose words are drawn as a run of text, where a mark can stand. */
+const RUNNING_TEXT = new Set(['paragraph', 'header', 'quote', 'list']);
+
+/** Where words outside the running text stand, by their block. */
+const ASIDE_PLACES: Record<string, ReviewPart['place']> = {
+  contentMedia: 'caption',
+  contentGallery: 'caption',
+  contentAudio: 'file',
+  contentAttachment: 'file',
+  contentFileGroup: 'file',
+  externalLink: 'link',
+  entityLink: 'link',
+};
+/** Words around a correction, shown with it. */
+const AROUND = 40;
+
+function tail(text: string) {
+  const words = text.replace(/\s+/g, ' ');
+  if (words.length <= AROUND) return words;
+  const cut = words.slice(-AROUND);
+  return `…${cut.slice(cut.indexOf(' ') + 1)}`;
+}
+
+function head(text: string) {
+  const words = text.replace(/\s+/g, ' ');
+  if (words.length <= AROUND) return words;
+  const cut = words.slice(0, AROUND);
+  return `${cut.slice(0, cut.lastIndexOf(' '))}…`;
+}
+
+function blockWords(block: ContentOutputBlock) {
+  return contentBlockTextParts(block).join(' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * For each block, the heading it stands under, whether it is private, and
+ * the private section it is in.
+ */
+function outline(blocks: ContentOutputBlock[]) {
+  let heading: string | undefined;
+  let section: string | undefined;
+  return blocks.map((block) => {
+    if (block.type === 'privateSectionBoundary') {
+      const data = block.data as { edge?: string; sectionId?: string };
+      section = data.edge === 'end' ? undefined : (data.sectionId ?? '');
+    }
+    const place = {
+      heading,
+      private: section !== undefined,
+      ...(section !== undefined ? { section } : {}),
+    };
+    if (block.type === 'header') heading = blockWords(block);
+    return block.type === 'header' ? { ...place, heading } : place;
+  });
+}
+
+/** A piece of the text a review makes, and the private section it falls in. */
+interface Placed<T> {
+  item: T;
+  /** The private section it is in; none for a public piece. */
+  section?: string;
+}
+
+/**
+ * Pieces in order, with the edges of private sections drawn around each run
+ * of private ones: a piece is never out of the section it is in, and two
+ * runs never share a section's id.
+ */
+function withPrivateEdges<T>(
+  pieces: readonly Placed<T>[],
+  edge: (sectionId: string, side: 'start' | 'end') => T,
+): T[] {
+  const out: T[] = [];
+  const used = new Set<string>();
+  let run: { source: string; id: string } | undefined;
+  for (const piece of pieces) {
+    if (run && piece.section !== run.source) {
+      out.push(edge(run.id, 'end'));
+      run = undefined;
+    }
+    if (piece.section !== undefined && !run) {
+      let id = piece.section || newEditBlockId();
+      while (used.has(id)) id = newEditBlockId();
+      used.add(id);
+      run = { source: piece.section, id };
+      out.push(edge(id, 'start'));
+    }
+    out.push(piece.item);
+  }
+  if (run) out.push(edge(run.id, 'end'));
+  return out;
+}
+
+function edgeOf(block: ContentOutputBlock): 'start' | 'end' {
+  return (block.data as { edge?: string }).edge === 'end' ? 'end' : 'start';
+}
+
+/** The start of a part's mark: its id, set off. */
+const markOpen = (id: string) => `${REVIEW_MARK.open}${id}${REVIEW_MARK.id}`;
+
+// ---- An AI's corrections of words ---------------------------------------------
+
+/** The stored markup a correction puts where its words stand. */
+function replacementFor(part: Correction, place: TextEditPlace) {
+  return place.html
+    ? part.replaceHtml
+    : place.escaped
+      ? escapeHtmlText(part.replacePlain)
+      : part.replacePlain;
+}
+
+/** The owner's word on a part, as the shared rules read it. */
+const decisionIn =
+  (decisions: Readonly<Record<string, ReviewDecision>>) => (id: string) =>
+    decisions[id] ?? 'pending';
+
+/** Where a relink's link stands in the text, while it leads where it did. */
+function relinkPlaces(base: ContentOutputData, relinks: readonly Relink[]) {
+  const order = new Map(
+    locateContentEntityLinks(base).map((link, index) => [link.id, index]),
+  );
+  const places = new Map<string, { link: LocatedContentLink; index: number }>();
+  for (const part of relinks) {
+    const link = contentLinkFrom(base, part);
+    if (link) places.set(part.id, { link, index: order.get(link.id)! });
+  }
+  return places;
+}
+
+/**
+ * An AI's corrections of a text's words, and its mending of links that lead
+ * nowhere, over the text as it is. A correction whose words no longer stand
+ * in it once, or a link that leads elsewhere since, is shown as settled,
+ * with what the action says of it.
+ */
+export function proofreadReview(
+  base: ContentOutputData,
+  parts: readonly AiRevisePart[],
+  states: ReadonlyMap<string, AiRevisePartState> = new Map(),
+): ContentReview {
+  const corrections = parts.filter(
+    (part): part is Correction => part.type === 'correction',
+  );
+  const waiting = corrections.filter((part) => {
+    const state = states.get(part.id);
+    return state !== 'applied' && state !== 'stale';
+  });
+  const { places } = placeTextEdits(base, waiting, (_id, stored) => stored);
+  const layout = outline(base.blocks);
+  const relinks = parts.filter(
+    (part): part is Relink => part.type === 'relink',
+  );
+  const linkPlaces = relinkPlaces(
+    base,
+    relinks.filter((part) => {
+      const state = states.get(part.id);
+      return state !== 'applied' && state !== 'stale';
+    }),
+  );
+
+  const reviewParts: ReviewPart[] = corrections.map((part) => {
+    const place = places.get(part.id);
+    const state = states.get(part.id);
+    const block = place ? base.blocks[place.block] : undefined;
+    return {
+      id: part.id,
+      kind: part.category,
+      sure: part.certainty === 'sure',
+      reason: part.reason,
+      words: {
+        before: part.find,
+        after: part.replacePlain,
+        around: place ? [tail(place.before), head(place.after)] : ['', ''],
+      },
+      // A link made keeps its words: what changes is where they lead.
+      ...(part.category === 'link'
+        ? {
+            link: {
+              words: part.replacePlain,
+              ...(part.toTitle ? { to: part.toTitle } : {}),
+              made: true,
+            },
+          }
+        : {}),
+      whole: false,
+      aside: Boolean(block && !RUNNING_TEXT.has(block.type)),
+      ...(block && ASIDE_PLACES[block.type]
+        ? { place: ASIDE_PLACES[block.type] }
+        : {}),
+      heading: place ? layout[place.block]?.heading : undefined,
+      private: place ? Boolean(layout[place.block]?.private) : false,
+      ...(state === 'applied' || state === 'stale'
+        ? { settled: state }
+        : place
+          ? {}
+          : { settled: 'stale' as const }),
+    };
+  });
+  for (const part of relinks) {
+    const place = linkPlaces.get(part.id);
+    const state = states.get(part.id);
+    const block = place ? base.blocks[place.link.block] : undefined;
+    reviewParts.push({
+      id: part.id,
+      kind: 'link',
+      sure: part.certainty === 'sure',
+      reason: part.reason,
+      link: {
+        words: part.words,
+        ...(part.fromTitle ? { from: part.fromTitle } : {}),
+        ...(part.toTitle ? { to: part.toTitle } : {}),
+      },
+      whole: false,
+      aside: Boolean(block && !RUNNING_TEXT.has(block.type)),
+      // A link block is the link itself: no note of it is meant.
+      ...(block && block.type !== 'entityLink' && ASIDE_PLACES[block.type]
+        ? { place: ASIDE_PLACES[block.type] }
+        : {}),
+      heading: place ? layout[place.link.block]?.heading : undefined,
+      private: place?.link.private ?? false,
+      ...(state === 'applied' || state === 'stale'
+        ? { settled: state }
+        : place
+          ? {}
+          : { settled: 'stale' as const }),
+    });
+  }
+  // In the order they stand in the text; what is settled after the rest.
+  const standing = (id: string) => {
+    const place = places.get(id);
+    const link = linkPlaces.get(id);
+    return place
+      ? place.block * 1_000_000 + place.before.length
+      : link
+        ? link.link.block * 1_000_000 + link.index
+        : Number.MAX_SAFE_INTEGER;
+  };
+  reviewParts.sort((left, right) => standing(left.id) - standing(right.id));
+  const placed = waiting.filter((part) => places.has(part.id));
+  const placedRelinks = relinks.filter((part) => linkPlaces.has(part.id));
+  const asideOf = new Map(
+    reviewParts.filter((part) => part.aside).map((part) => [part.id, part]),
+  );
+
+  return {
+    parts: reviewParts,
+    rows(decisions, view) {
+      const aside = new Map<number, string[]>();
+      const { data } = placeTextEdits(base, placed, (id, stored, place) => {
+        const part = placed.find((each) => each.id === id)!;
+        const kept = decisions[id] === 'kept';
+        const after = replacementFor(part, place);
+        if (asideOf.has(id)) {
+          aside.set(place.block, [...(aside.get(place.block) ?? []), id]);
+          return kept ? stored : after;
+        }
+        if (kept) return `${markOpen(id)}${stored}${REVIEW_MARK.close}`;
+        return view === 'diff'
+          ? `${markOpen(id)}${REVIEW_MARK.was}${stored}${REVIEW_MARK.becomes}${after}${REVIEW_MARK.close}`
+          : `${markOpen(id)}${after}${REVIEW_MARK.close}`;
+      });
+      // A link mended keeps its words: they are marked, and lead where they
+      // would — later links in a field first, so none moves another's place.
+      let shown = data;
+      for (const part of [...placedRelinks].sort(
+        (left, right) =>
+          linkPlaces.get(right.id)!.index - linkPlaces.get(left.id)!.index,
+      )) {
+        const { link } = linkPlaces.get(part.id)!;
+        const block = link.block;
+        if (asideOf.has(part.id)) {
+          aside.set(block, [...(aside.get(block) ?? []), part.id]);
+          if (decisions[part.id] === 'kept') continue;
+        } else
+          shown = markContentLink(
+            shown,
+            link.id,
+            (inner) => `${markOpen(part.id)}${inner}${REVIEW_MARK.close}`,
+          );
+        if (decisions[part.id] === 'kept') continue;
+        const to = part.to ? parseTheiLinkUrl(part.to) : null;
+        if (to !== undefined)
+          shown = retargetContentLink(shown, link.id, to) ?? shown;
+      }
+      return shown.blocks.map((block, index): ReviewRow =>
+        block.type === 'privateSectionBoundary'
+          ? { type: 'edge', edge: edgeOf(block) }
+          : { type: 'block', block, parts: aside.get(index) ?? [] },
+      );
+    },
+    result(decisions) {
+      const all = [...placed, ...placedRelinks];
+      const taken = new Set(
+        all
+          .filter((part) => decisions[part.id] === 'accepted')
+          .map((part) => part.id),
+      );
+      if (!taken.size) return base;
+      return (
+        applyRevise(base, { mode: 'proofread', parts: all }, taken)?.data ??
+        base
+      );
+    },
+  };
+}
+
+// ---- Another version of the text -----------------------------------------------
+
+/**
+ * Another version of a text against it as it is: each block the version
+ * rewrote, has and the text has not, or has not and the text has, is a part
+ * — taken from the version, or left as it is now. Private sections follow
+ * the blocks: a block private now stays private, a block taken from the
+ * version is private if it was there, and the edges are drawn around what
+ * the text ends with, so a part taken never makes a private block public.
+ */
+export function versionReview(
+  current: ContentOutputData,
+  version: ContentOutputData,
+  options: {
+    formatText?: (text: string) => string;
+    /**
+     * What a block holds besides its words, in a line: its files, or its
+     * kind for one that holds nothing else; empty when its words say it all.
+     */
+    describeBlock?: (block: ContentOutputBlock) => string;
+  } = {},
+): ContentReview {
+  const items = diffContentBlocks(current, version, options);
+  const describe = (block: ContentOutputBlock) =>
+    options.describeBlock?.(block) ?? '';
+  const quoteOf = (block: ContentOutputBlock) =>
+    blockWords(block) || describe(block);
+  /**
+   * A block changed elsewhere than in its words — a file added to it, one
+   * replaced — reads as it is and as it would be: by its words where they
+   * differ, else by what it holds.
+   */
+  const changedQuotes = (
+    previous: ContentOutputBlock,
+    block: ContentOutputBlock,
+  ): Pick<ReviewPart, 'quote' | 'before'> => {
+    const before = quoteOf(previous);
+    const quote = quoteOf(block);
+    if (before !== quote) return { before, quote };
+    const held = describe(previous);
+    const holds = describe(block);
+    return held && holds && held !== holds
+      ? { before: held, quote: holds }
+      : { quote };
+  };
+  const versionPlaces = outline(version.blocks);
+  const currentPlaces = outline(current.blocks);
+  const parts: ReviewPart[] = [];
+  const partOf = new Map<number, string>();
+  /** For each item, where it stands now and where it stands in the version. */
+  const places: {
+    now?: ReturnType<typeof outline>[number];
+    then?: ReturnType<typeof outline>[number];
+  }[] = [];
+  let versionIndex = 0;
+  let currentIndex = 0;
+  items.forEach((item, index) => {
+    const now =
+      item.kind !== 'added' ? currentPlaces[currentIndex++] : undefined;
+    const then =
+      item.kind !== 'removed' ? versionPlaces[versionIndex++] : undefined;
+    places.push({ now, then });
+    if (item.kind === 'same' || item.block.type === 'privateSectionBoundary')
+      return;
+    const at = item.kind === 'removed' ? now : then;
+    const id = `v${index}`;
+    partOf.set(index, id);
+    const files =
+      item.kind === 'added'
+        ? blockFileChanges(undefined, item.block)
+        : item.kind === 'removed'
+          ? blockFileChanges(item.block, undefined)
+          : blockFileChanges(item.previous, item.block);
+    const changes =
+      item.kind === 'changed' ? blockChanges(item.previous, item.block) : [];
+    // A change nothing names, and no words to show it by, is still said.
+    if (item.kind === 'changed' && !item.words && !changes.length)
+      changes.push({ what: 'other' });
+    parts.push({
+      id,
+      kind: item.kind,
+      sure: true,
+      reason: '',
+      ...(item.kind !== 'changed'
+        ? { quote: quoteOf(item.block) }
+        : item.words
+          ? { diff: item.words, quote: quoteOf(item.block) }
+          : changedQuotes(item.previous, item.block)),
+      ...(changes.length ? { changes } : {}),
+      ...(files.length ? { files } : {}),
+      whole: true,
+      aside: false,
+      heading: at?.heading,
+      private: Boolean(now?.private || then?.private),
+    });
+  });
+
+  /** The section a block falls in: now's, or the version's for one taken. */
+  const sectionOf = (index: number, taken: boolean) => {
+    const { now, then } = places[index]!;
+    if (now?.private) return now.section;
+    return taken && then?.private ? then.section : undefined;
+  };
+
+  /**
+   * The text's pieces as the decisions leave them, `shown` taking every part
+   * not kept, as the text will read.
+   */
+  function pieces<T>(
+    decisions: Readonly<Record<string, ReviewDecision>>,
+    shown: boolean,
+    piece: (
+      item: (typeof items)[number],
+      id: string | undefined,
+      taken: boolean,
+    ) => T[],
+  ): Placed<T>[] {
+    const out: Placed<T>[] = [];
+    items.forEach((item, index) => {
+      if (item.block.type === 'privateSectionBoundary') return;
+      const id = partOf.get(index);
+      const taken = id
+        ? shown
+          ? decisions[id] !== 'kept'
+          : decisions[id] === 'accepted'
+        : true;
+      const section = sectionOf(index, taken && item.kind !== 'removed');
+      for (const each of piece(item, id, taken))
+        out.push({ item: each, ...(section !== undefined ? { section } : {}) });
+    });
+    return out;
+  }
+
+  return {
+    parts,
+    rows(decisions, view) {
+      // A part left as it is keeps its place, to be gone back to.
+      const placed = pieces<ReviewRow>(decisions, true, (item, id) => {
+        if (!id) return [{ type: 'block', block: item.block, parts: [] }];
+        const kept = decisions[id] === 'kept';
+        if (item.kind === 'changed') {
+          if (kept)
+            return [
+              { type: 'block', block: item.previous, parts: [], part: id },
+            ];
+          if (view === 'diff' && item.words)
+            return [
+              {
+                type: 'block',
+                block: item.block,
+                parts: [],
+                part: id,
+                diff: item.words,
+              },
+            ];
+          if (view === 'diff')
+            return [
+              {
+                type: 'block',
+                block: item.previous,
+                parts: [],
+                part: id,
+                was: true,
+              },
+              { type: 'block', block: item.block, parts: [], part: id },
+            ];
+          return [{ type: 'block', block: item.block, parts: [], part: id }];
+        }
+        if (item.kind === 'added')
+          return kept
+            ? [{ type: 'gone', part: id, quote: quoteOf(item.block) }]
+            : [{ type: 'block', block: item.block, parts: [], part: id }];
+        if (kept)
+          return [{ type: 'block', block: item.block, parts: [], part: id }];
+        if (view === 'diff')
+          return [
+            {
+              type: 'block',
+              block: item.block,
+              parts: [],
+              part: id,
+              was: true,
+            },
+          ];
+        return [{ type: 'gone', part: id, quote: quoteOf(item.block) }];
+      });
+      return withPrivateEdges(placed, (_id, side) => ({
+        type: 'edge',
+        edge: side,
+      }));
+    },
+    result(decisions) {
+      const placed = pieces<ContentOutputBlock>(
+        decisions,
+        false,
+        (item, _id, taken) => {
+          if (item.kind === 'same') return [item.block];
+          if (item.kind === 'changed')
+            return [taken ? item.block : item.previous];
+          if (item.kind === 'added') return taken ? [item.block] : [];
+          return taken ? [] : [item.block];
+        },
+      );
+      // An edge of a section the text or the version has is that very block.
+      const edges = new Map<string, ContentOutputBlock>();
+      for (const block of [...version.blocks, ...current.blocks])
+        if (block.type === 'privateSectionBoundary') {
+          const data = block.data as { sectionId?: string; edge?: string };
+          edges.set(`${data.sectionId ?? ''}:${edgeOf(block)}`, block);
+        }
+      // A block taken twice — moved in the version and kept where it is
+      // now — stands twice, each under an id of its own.
+      const ids = new Set<string>();
+      const blocks = withPrivateEdges(
+        placed,
+        (sectionId, edge): ContentOutputBlock =>
+          edges.get(`${sectionId}:${edge}`) ??
+          ({
+            type: 'privateSectionBoundary',
+            data: { sectionId, edge },
+          } as ContentOutputBlock),
+      ).map((block) => {
+        if (!block.id) return block;
+        if (!ids.has(block.id)) {
+          ids.add(block.id);
+          return block;
+        }
+        let id = newEditBlockId();
+        while (ids.has(id)) id = newEditBlockId();
+        ids.add(id);
+        return { ...block, id };
+      });
+      return { ...current, blocks: blocks as ContentOutputBlock[] };
+    },
+  };
+}
+
+// ---- An AI's new order of the owner's own blocks -------------------------------
+
+type OrderPlan = { keys: string[]; items: TidyItem[] };
+
+/**
+ * An AI's new order of a text's own blocks: headings and delimiters added, a
+ * literal repeat dropped, a paragraph split, the blocks moved. Every piece of
+ * it stands on the moves, when there are any: left as it was, the order
+ * leaves the whole text as it is. A text changed too far since the order was
+ * made shows it settled.
+ */
+export function orderReview(
+  base: ContentOutputData,
+  parts: readonly AiRevisePart[],
+  plan: OrderPlan,
+  states: ReadonlyMap<string, AiRevisePartState> = new Map(),
+): ContentReview {
+  const aligned = alignTidyBase(base.blocks, plan.keys);
+  const order = parts.find((part) => part.type === 'order');
+  const moved = new Set(order?.type === 'order' ? order.moved : []);
+  const byItem = new Map<number, string>();
+  const bySplit = new Map<number, string>();
+  for (const part of parts)
+    if (
+      part.type === 'heading' ||
+      part.type === 'delimiter' ||
+      part.type === 'removal'
+    )
+      byItem.set(part.item, part.id);
+    else if (part.type === 'split') bySplit.set(part.from, part.id);
+  const sourceOf = (from: number) =>
+    aligned ? base.blocks[aligned.map[from]!] : undefined;
+
+  const reviewParts: ReviewPart[] = parts.flatMap((part): ReviewPart[] => {
+    if (part.type === 'correction' || part.type === 'relink') return [];
+    const state = states.get(part.id);
+    const source = part.type === 'split' ? sourceOf(part.from) : undefined;
+    return [
+      {
+        id: part.id,
+        kind: part.type,
+        sure: part.certainty === 'sure',
+        reason: part.reason,
+        ...(part.type === 'heading'
+          ? { quote: part.text }
+          : part.type === 'removal'
+            ? { quote: part.quote }
+            : source
+              ? { quote: blockWords(source) }
+              : {}),
+        ...(part.type === 'order' ? { moved: part.moved.length } : {}),
+        ...(part.type === 'split'
+          ? {
+              pieces: plan.items.filter(
+                (item) => item.type === 'part' && item.from === part.from,
+              ).length,
+            }
+          : {}),
+        whole: true,
+        aside: false,
+        private: false,
+        ...(state === 'applied' || state === 'stale'
+          ? { settled: state }
+          : aligned
+            ? {}
+            : { settled: 'stale' as const }),
+      },
+    ];
+  });
+
+  /** As the text will read: every part not kept stands in it. */
+  const shownChoices = (decisions: Readonly<Record<string, ReviewDecision>>) =>
+    orderChoices(parts, (part) => decisions[part.id] !== 'kept');
+
+  /** Where the blocks the order moves stand in the text as it is. */
+  const movedHere = new Set(
+    aligned && order?.type === 'order'
+      ? order.moved.map((from) => aligned.map[from])
+      : [],
+  );
+  /**
+   * The text as it is. With the order left as it was, the blocks it would
+   * move keep its mark, to be gone back to.
+   */
+  const plainRows = (orderLeft: boolean): ReviewRow[] =>
+    base.blocks.map((block, index): ReviewRow =>
+      block.type === 'privateSectionBoundary'
+        ? { type: 'edge', edge: edgeOf(block) }
+        : {
+            type: 'block',
+            block,
+            parts: [],
+            ...(orderLeft && order && movedHere.has(index)
+              ? { part: order.id }
+              : {}),
+          },
+    );
+  /** The parts that stand on the order's moves. */
+  const onTheOrder = reviewParts.filter(
+    (part) => part.kind !== 'order' && !part.settled,
+  );
+
+  return {
+    parts: reviewParts,
+    rows(decisions, view) {
+      if (!aligned) return plainRows(false);
+      if (order && decisions[order.id] === 'kept') return plainRows(true);
+      const { skip = [], keep = [], whole = [] } = shownChoices(decisions);
+      // A paragraph changed since it was split stays whole, as it applies.
+      for (const item of plan.items)
+        if (item.type === 'part' && aligned.changed[item.from])
+          whole.push(item.from);
+      const rows: ReviewRow[] = [];
+      const placedWhole = new Set<number>();
+      plan.items.forEach((item, index) => {
+        if (item.type === 'heading' || item.type === 'delimiter') {
+          // Left out, it stays a line to go back to.
+          if (skip.includes(index)) {
+            const left = byItem.get(index);
+            if (left)
+              rows.push({
+                type: 'gone',
+                part: left,
+                quote: item.type === 'heading' ? item.text : '',
+              });
+            return;
+          }
+          rows.push({
+            type: 'block',
+            block: (item.type === 'heading'
+              ? {
+                  type: 'header',
+                  data: { text: escapeHtmlText(item.text), level: item.level },
+                }
+              : { type: 'delimiter', data: {} }) as ContentOutputBlock,
+            parts: [],
+            part: byItem.get(index),
+          });
+          return;
+        }
+        const source = sourceOf(item.from)!;
+        if (source.type === 'privateSectionBoundary') {
+          rows.push({ type: 'edge', edge: edgeOf(source) });
+          return;
+        }
+        const kept = item.type === 'part' && whole.includes(item.from);
+        if (kept) {
+          if (placedWhole.has(item.from)) return;
+          placedWhole.add(item.from);
+        }
+        const piece =
+          item.type === 'part' && !kept
+            ? ({
+                ...source,
+                data: { ...source.data, text: item.html },
+              } as ContentOutputBlock)
+            : source;
+        const removal = byItem.get(index);
+        // A block changed since the order was made stays, as it applies.
+        if (
+          item.removed &&
+          removal &&
+          !keep.includes(index) &&
+          !(
+            item.type === 'block' &&
+            tidyRemovalStays(source, Boolean(aligned.changed[item.from]))
+          )
+        ) {
+          rows.push(
+            view === 'diff'
+              ? {
+                  type: 'block',
+                  block: piece,
+                  parts: [],
+                  part: removal,
+                  was: true,
+                }
+              : { type: 'gone', part: removal, quote: blockWords(piece) },
+          );
+          return;
+        }
+        // A part left as it is marks what it left: the repeat that stays,
+        // the paragraph kept whole.
+        const left =
+          removal && decisions[removal] === 'kept' ? removal : undefined;
+        const splitId =
+          item.type === 'part' ? bySplit.get(item.from) : undefined;
+        const split =
+          splitId && (!kept || decisions[splitId] === 'kept')
+            ? splitId
+            : undefined;
+        rows.push({
+          type: 'block',
+          block: piece,
+          parts: [],
+          part:
+            left ??
+            split ??
+            (order && moved.has(item.from) ? order.id : undefined),
+        });
+      });
+      return rows;
+    },
+    implied(decisions, id, decision) {
+      if (!order || reviewParts.find((part) => part.id === order.id)?.settled)
+        return {};
+      // The moves left as they were leave every part that stands on them.
+      if (id === order.id && decision === 'kept')
+        return Object.fromEntries(
+          onTheOrder
+            .filter((part) => decisions[part.id] !== 'kept')
+            .map((part) => [part.id, 'kept' as const]),
+        );
+      // A part taken takes the moves it stands on.
+      if (
+        id !== order.id &&
+        decision === 'accepted' &&
+        decisions[order.id] !== 'accepted'
+      )
+        return { [order.id]: 'accepted' };
+      return {};
+    },
+    result(decisions) {
+      if (!aligned) return base;
+      const taken = takenParts({ parts }, decisionIn(decisions));
+      if (!taken.size) return base;
+      return (
+        applyRevise(base, { mode: 'order', parts, plan }, taken)?.data ?? base
+      );
+    },
+  };
+}

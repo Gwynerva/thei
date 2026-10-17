@@ -103,7 +103,8 @@ function draftTime(value: number) {
   }).format(value);
 }
 
-function openEditor() {
+/** Opens the editor — on an AI's edit of the text, when one is named. */
+function openEditor(review?: string) {
   const field = historyField.value;
   void openModal(contentEditorModal, {
     title: props.titleLabel,
@@ -112,8 +113,22 @@ function openEditor() {
     onSave: (value) => emit('update:modelValue', value),
     onSaved: () => emit('saved'),
     current: () => props.modelValue,
+    review,
+    onTaken: (taken) => ai?.noteTaken(taken),
   });
 }
+
+const ai = useEntityAi();
+
+/**
+ * The AI's edits of this text wait at the label of its field, and open here,
+ * over the text.
+ */
+const field = useFieldAi();
+watchEffect((onCleanup) => {
+  if (field && props.contentSlot)
+    onCleanup(field.claim(`text:${props.contentSlot}`, openEditor));
+});
 const { engaged, events: mediaEvents } = useMediaInteraction();
 </script>
 
@@ -127,7 +142,7 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
       border-border-1 bg-bg-1 p-xs text-left transition sm:p-sm
       hocus:border-border-3 hocus:bg-bg-3"
     v-on="mediaEvents"
-    @click="openEditor"
+    @click="openEditor()"
   >
     <ContentMediaEdge v-if="preview.media" :media="preview.media" :engaged />
 

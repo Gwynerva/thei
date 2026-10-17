@@ -10,7 +10,7 @@ import type {
   ProjectActionTarget,
 } from '../project-action';
 import type { MediaDescriptor } from '../media';
-import type { ArchivedOriginalFileMeta } from '../asset';
+import type { ArchivedOriginalFileMeta, AssetRole } from '../asset';
 import type { RelationEntityType, RelationType } from '../relation';
 import type { PublicSearchFilters } from '../public-search';
 import type { StatusHistoryItem } from '../status';
@@ -116,7 +116,18 @@ export type PublicSearchResponse = PaginatedResponse<PublicEntitySummary> & {
 export type PublicAssetDescriptor = {
   key: string;
   title: string;
+  /** The caption of the place it is shown in, as plain text. */
   description?: string;
+  /**
+   * The caption a text gives the file, as the inline markup it is stored in;
+   * shown with its marks, links and hints in place of `description`.
+   */
+  caption?: string;
+  /**
+   * The file's own description: what it shows or is about, the same
+   * wherever it is placed. As typed; formatted where it is drawn.
+   */
+  alt?: string;
   href: string;
   extension: string;
   size: number;
@@ -125,6 +136,30 @@ export type PublicAssetDescriptor = {
 };
 
 export type PublicFile = PublicAssetDescriptor;
+
+/** The pages a file's window may send a visitor on to. */
+export type PublicFilePlaceKind = Extract<
+  ContentEntityType,
+  'project' | 'project-section' | 'event' | 'page' | 'diary-entry'
+>;
+
+/**
+ * Another page a file is shown on, as a visitor's window of the file lists
+ * it: a page anyone may find, where a stranger sees the file. Titles as
+ * typed.
+ */
+export type PublicFilePlace = {
+  kind: PublicFilePlaceKind;
+  /** A diary entry's day, which is its title. */
+  title: string;
+  href: string;
+  /** What stands for the page on a card: its icon, banner or first picture. */
+  media?: MediaDescriptor;
+  /** The project a section belongs to. */
+  parent?: { title: string; href: string };
+  /** How the file is shown there, each way once. */
+  uses: AssetRole[];
+};
 
 export type PublicReferenceLink = {
   kind: 'external' | ContentEntityType;
@@ -146,24 +181,13 @@ export type PublicReferenceLink = {
   iconMedia?: MediaDescriptor;
 };
 
-export type PublicReferenceGroup = {
+/**
+ * The links and files the owner attached to a project or an event by hand,
+ * as its sidebar lists them. What its text links to is read in the text.
+ */
+export type PublicReferences = {
   links: PublicReferenceLink[];
   files: (PublicFile | PublicSecretReference)[];
-};
-
-/**
- * One kind of reference, split by where it was added. `shared` holds what was
- * both attached by hand and mentioned in the content.
- */
-export type PublicReferenceSplit<T> = {
-  shared: T[];
-  manual: T[];
-  content: T[];
-};
-
-export type PublicReferences = {
-  links: PublicReferenceSplit<PublicReferenceLink>;
-  files: PublicReferenceSplit<PublicFile | PublicSecretReference>;
 };
 
 export type PublicAction = {
@@ -240,7 +264,6 @@ export type PublicProjectSectionResponse = PublicProjectSection & {
   /** `updatedAt` only when the section was edited on a later day. */
   chronology: { createdAt: string; updatedAt?: string };
   project: PublicSectionParent;
-  references: PublicReferences;
   /** Set by the page's own route; the Markdown representation has none. */
   neighbours?: PublicNeighbours;
 };
@@ -317,7 +340,6 @@ export type PublicDiaryResponse = {
   /** What stands for the entry in a card: its first picture, or its icon. */
   media: MediaDescriptor;
   content: PublicContentOutputData;
-  references: PublicReferences;
   related: PublicRelatedCounts;
   /** Set by the page's own route; the Markdown representation has none. */
   neighbours?: PublicNeighbours;

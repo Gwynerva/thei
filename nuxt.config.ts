@@ -60,19 +60,17 @@ export default defineNuxtConfig({
         `${currentDir}/**/node_modules/**/*`,
       ],
     },
+    serverTsConfig: {
+      compilerOptions: {
+        verbatimModuleSyntax: true,
+      },
+    },
   },
   nitro: {
     plugins: ['#layers/thei/server/thei/plugin.ts'],
     externals: {
       external: ['sharp'],
       traceInclude: [harfbuzzWasm],
-    },
-    typescript: {
-      tsConfig: {
-        compilerOptions: {
-          verbatimModuleSyntax: true,
-        },
-      },
     },
   },
   vite: {

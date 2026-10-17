@@ -2,15 +2,20 @@
 import type EditorJS from '@editorjs/editorjs';
 import {
   PrivateSectionBoundaryTool,
+  ContentAttachmentTool,
   ContentAudioTool,
+  ContentFileGroupTool,
   ContentMediaTool,
   ContentGalleryTool,
+  type ContentEditorPickedFiles,
+  type ContentEditorUploads,
 } from '#layers/thei/app/components/content/editor-tools';
 import { ContentDelimiterTool } from '#layers/thei/app/components/content/editor-delimiter-tool';
 import { bindEditorGutterClick } from '#layers/thei/app/composables/editor-gutter-click';
 import { bindEditorCurrentBlock } from '#layers/thei/app/composables/editor-current-block';
 import { bindEditorLinkPaste } from '#layers/thei/app/composables/editor-link-paste';
-import { bindEditorMediaPaste } from '#layers/thei/app/composables/editor-media-paste';
+import { bindEditorFilePaste } from '#layers/thei/app/composables/editor-file-paste';
+import { bindEditorPlainFields } from '#layers/thei/app/composables/editor-plain-fields';
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
 import { createEditorPrivatePattern } from '#layers/thei/app/composables/editor-private-pattern';
 import { readCleanEditorOutput } from '#layers/thei/app/composables/editor-output';
@@ -22,7 +27,9 @@ import {
   launchPendingFileEditor,
 } from '#layers/thei/app/composables/asset-wizard';
 import { ASSET_UPLOAD_LIMITS } from '#layers/thei/shared/asset-upload-limits';
+import { AssetType } from '#layers/thei/shared/asset';
 import {
+  anyFileExtensionProfile,
   audioExtensionProfile,
   imageExtensionProfile,
   videoExtensionProfile,
@@ -47,74 +54,69 @@ let unbindGutterClick: (() => void) | undefined;
 let unbindCurrentBlock: (() => void) | undefined;
 const picture = (id: string): ContentAssetData => ({
   assetUuid: id,
+  type: AssetType.Image,
   extension: 'svg',
+  size: 1,
   media: {
     kind: 'image',
     src: '/slow-image.svg',
     previewSrc: '/slow-image.svg',
   },
 });
-/** The picker of a media block, open until "Choose picture" answers it. */
+/** The picker of a file block, open until "Choose picture" answers it. */
 let answerPick: ((asset: ContentAssetData | null) => void) | undefined;
 const picking = ref(false);
 /** Pasted files are stored for real, through the fixture's own server. */
 const uploadErrors = ref<string[]>([]);
 const pendingUploads = ref(0);
-const mediaToolConfig = {
-  pickAsset: () =>
-    new Promise<ContentAssetData | null>((resolve) => {
-      picking.value = true;
-      answerPick = resolve;
-    }),
-  pickAssets: async () => ({ assets: [], uploads: [] }),
-  editAsset: async () => undefined,
-  uploads: {
+/** New files go up as the editor sends them, to the limits of their block. */
+function uploadsTo(
+  accept: Parameters<typeof acceptedExtensionsFromAccept>[0],
+  sizeLimitPolicy: 'media' | 'file',
+): ContentEditorUploads {
+  const maxSize = ASSET_UPLOAD_LIMITS[sizeLimitPolicy];
+  return {
     constraints: {
-      maxSize: ASSET_UPLOAD_LIMITS.media,
-      sizeLimitPolicy: 'media' as const,
-      acceptedExtensions: acceptedExtensionsFromAccept([
-        imageExtensionProfile,
-        videoExtensionProfile,
-      ]),
+      maxSize,
+      sizeLimitPolicy,
+      acceptedExtensions: acceptedExtensionsFromAccept(accept),
     },
-    editPending: async (
-      pending: Parameters<typeof launchPendingFileEditor>[0],
-    ) => {
+    editPending: async (pending) => {
       const edited = await launchPendingFileEditor(pending, {
-        sizeLimitPolicy: 'media',
-        maxSize: ASSET_UPLOAD_LIMITS.media,
+        accept,
+        sizeLimitPolicy,
+        maxSize,
       });
       return edited ? contentAssetFromVariant(edited) : undefined;
     },
-    track: (delta: 1 | -1) => {
+    track: (delta) => {
       pendingUploads.value += delta;
     },
-  },
-};
-/** Recordings go up as the editor sends them: a file's limit, sound only. */
-const audioToolConfig = {
-  ...mediaToolConfig,
-  uploads: {
-    ...mediaToolConfig.uploads,
-    constraints: {
-      maxSize: ASSET_UPLOAD_LIMITS.file,
-      sizeLimitPolicy: 'file' as const,
-      acceptedExtensions: acceptedExtensionsFromAccept(audioExtensionProfile),
-    },
-    editPending: async (
-      pending: Parameters<typeof launchPendingFileEditor>[0],
-    ) => {
-      const edited = await launchPendingFileEditor(pending, {
-        accept: audioExtensionProfile,
-        sizeLimitPolicy: 'file',
-        maxSize: ASSET_UPLOAD_LIMITS.file,
-      });
-      return edited ? contentAssetFromVariant(edited) : undefined;
-    },
-  },
-};
+  };
+}
+const fileToolConfig = (uploads: ContentEditorUploads) => ({
+  pickFiles: () =>
+    new Promise<ContentEditorPickedFiles>((resolve) => {
+      picking.value = true;
+      answerPick = (asset) =>
+        resolve({ assets: asset ? [asset] : [], files: [] });
+    }),
+  editAsset: async () => undefined,
+  uploads,
+});
+const mediaToolConfig = fileToolConfig(
+  uploadsTo([imageExtensionProfile, videoExtensionProfile], 'media'),
+);
+/** Recordings: a file's limit, sound only. */
+const audioToolConfig = fileToolConfig(
+  uploadsTo(audioExtensionProfile, 'file'),
+);
+const anyFileToolConfig = fileToolConfig(
+  uploadsTo(anyFileExtensionProfile, 'file'),
+);
 let unbindLinkPaste: (() => void) | undefined;
-let unbindMediaPaste: (() => void) | undefined;
+let unbindFilePaste: (() => void) | undefined;
+let unbindPlainFields: (() => void) | undefined;
 let cleanupPrivatePattern: (() => void) | undefined;
 let sections: ReturnType<typeof createEditorPrivateSections>;
 let snapshots: ReturnType<typeof createEditorHistorySession>;
@@ -166,7 +168,9 @@ const initial: ContentOutputData = {
       data: {
         asset: {
           assetUuid: 'fixture',
+          type: AssetType.Image,
           extension: 'svg',
+          size: 1,
           media: {
             kind: 'image',
             src: '/slow-image.svg',
@@ -227,7 +231,18 @@ onMounted(async () => {
       },
       contentAudio: {
         class: ContentAudioTool as any,
+        inlineToolbar: true,
         config: audioToolConfig,
+      },
+      contentAttachment: {
+        class: ContentAttachmentTool as any,
+        inlineToolbar: true,
+        config: anyFileToolConfig,
+      },
+      contentFileGroup: {
+        class: ContentFileGroupTool as any,
+        inlineToolbar: true,
+        config: anyFileToolConfig,
       },
       delimiter: ContentDelimiterTool as any,
       quote: { class: Quote as any, inlineToolbar: true },
@@ -249,9 +264,11 @@ onMounted(async () => {
     linkBlocks: new Set(['paragraph']),
     findEntity: (url) => findEntityByInternalUrl(url, site),
   });
-  unbindMediaPaste = bindEditorMediaPaste(holder.value!, editor, {
-    audio: true,
+  unbindFilePaste = bindEditorFilePaste(holder.value!, editor, {
+    onSkipped: (skipped) =>
+      uploadErrors.value.push(...skipped.map(({ name }) => name)),
   });
+  unbindPlainFields = bindEditorPlainFields(holder.value!, editor);
   sections = createEditorPrivateSections(editor, { suppressionDuration: 20 });
   cleanupPrivatePattern = createEditorPrivatePattern(holder.value!);
   snapshots = createEditorHistorySession({
@@ -305,13 +322,13 @@ function remove() {
   if (index !== undefined) editor.blocks.delete(index);
 }
 /**
- * A media block the way the toolbox adds one: a placeholder whose fields
- * Editor.js reads straight away, and a picture only once the picker answers.
+ * A file block the way the toolbox adds one: a placeholder whose fields
+ * Editor.js reads straight away, which becomes what the picker answers.
  */
-function insertMedia() {
+function insertFile() {
   const block = editor.blocks.insert(
-    'contentMedia',
-    { layout: 'centered', autoOpen: true },
+    'contentAttachment',
+    { autoOpen: true },
     undefined,
     editor.blocks.getBlocksCount(),
     true,
@@ -329,7 +346,8 @@ onBeforeUnmount(() => {
   unbindGutterClick?.();
   unbindCurrentBlock?.();
   unbindLinkPaste?.();
-  unbindMediaPaste?.();
+  unbindFilePaste?.();
+  unbindPlainFields?.();
   cleanupPrivatePattern?.();
   sections?.destroy();
   snapshots?.destroy();
@@ -356,7 +374,7 @@ onBeforeUnmount(() => {
       <button @click="editor.blocks.move(6, 1)">Invalid move</button>
       <button @click="editor.blocks.move(2, 4)">Valid move</button>
       <button @click="restore">Restore</button>
-      <button @click="insertMedia">Insert media</button>
+      <button @click="insertFile">Insert file</button>
       <button :disabled="!picking" @click="choosePicture">
         Choose picture
       </button>

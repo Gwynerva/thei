@@ -60,60 +60,6 @@ export function trimCurrentInlineSelection(): Range | undefined {
   return next;
 }
 
-export interface InlineLinkRect {
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-  width: number;
-  height: number;
-  x: number;
-  y: number;
-}
-
-export function translateInlineLinkRect(
-  rect: InlineLinkRect,
-  originalTrackerRect: Pick<InlineLinkRect, 'left' | 'top'>,
-  currentTrackerRect: Pick<InlineLinkRect, 'left' | 'top'>,
-): DOMRect {
-  const left = currentTrackerRect.left + rect.left - originalTrackerRect.left;
-  const top = currentTrackerRect.top + rect.top - originalTrackerRect.top;
-  return DOMRect.fromRect({
-    x: left,
-    y: top,
-    width: rect.width,
-    height: rect.height,
-  });
-}
-
-export function copyInlineLinkRect(rect: DOMRect): InlineLinkRect {
-  return {
-    left: rect.left,
-    top: rect.top,
-    right: rect.right,
-    bottom: rect.bottom,
-    width: rect.width,
-    height: rect.height,
-    x: rect.x,
-    y: rect.y,
-  };
-}
-
-export function inlineLinkPopupAnchorRect(
-  rect: InlineLinkRect,
-): InlineLinkRect {
-  return {
-    left: rect.left,
-    top: rect.top,
-    right: rect.left,
-    bottom: rect.top,
-    width: 0,
-    height: 0,
-    x: rect.left,
-    y: rect.top,
-  };
-}
-
 function editableRoot(node: Node): HTMLElement | undefined {
   const element = node instanceof Element ? node : node.parentElement;
   return element?.closest<HTMLElement>('[contenteditable="true"]') ?? undefined;

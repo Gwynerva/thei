@@ -30,6 +30,7 @@ const props = withDefaults(
       editable?: boolean;
       pendingDeletion?: boolean;
       inHistory?: boolean;
+      heldByAi?: boolean;
       warning?: string;
     };
   }>(),

@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  dayQueryRank,
-  matchesDayQuery,
-  parseDayQuery,
-} from '../../shared/day-query';
+import { dayQueryRank, parseDayQuery } from '../../shared/day-query';
 
 const days = [
   '2023-05-12',
@@ -169,8 +165,8 @@ describe('text that is not a day', () => {
   });
 
   it('answers a plain question about one day', () => {
-    expect(matchesDayQuery('2024-05-12', '12 мая')).toBe(true);
-    expect(matchesDayQuery('2024-05-12', '13 мая')).toBe(false);
-    expect(matchesDayQuery('2024-05-12', 'studio')).toBe(false);
+    expect(found('12 мая')).toEqual(['2024-05-12', '2023-05-12']);
+    expect(found('13 мая')).toEqual([]);
+    expect(found('studio')).toBeUndefined();
   });
 });

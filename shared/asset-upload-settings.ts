@@ -1,4 +1,3 @@
-import { AssetType } from './asset';
 import {
   clampCropRect,
   evenCropRect,
@@ -134,15 +133,6 @@ export type AssetUploadSettings =
   | AssetTransformSettings
   | AssetAudioTransformSettings
   | AssetFileZipSettings;
-
-export type AssetSettingsForType<TType extends AssetType> =
-  TType extends AssetType.Image
-    ? AssetOriginalSettings | AssetImageTransformSettings
-    : TType extends AssetType.Video
-      ? AssetOriginalSettings | AssetVideoTransformSettings
-      : TType extends AssetType.Audio
-        ? AssetOriginalSettings | AssetAudioTransformSettings
-        : AssetOriginalSettings | AssetFileZipSettings;
 
 /**
  * What a caller asks for, before it is checked against the source.

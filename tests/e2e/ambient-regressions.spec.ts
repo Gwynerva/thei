@@ -338,7 +338,7 @@ for (const width of [390, 1280]) {
   });
 }
 
-test('slow video keeps the color pulse until ready, then both layers play and follow controls', async ({
+test('slow video keeps the color pulse until ready, then plays with its backdrop drawn from its frames', async ({
   page,
 }) => {
   let release!: () => void;
@@ -364,7 +364,6 @@ test('slow video keeps the color pulse until ready, then both layers play and fo
   );
   release();
   const main = banner.locator('video[data-media-main]');
-  const backdrop = banner.locator('video[data-media-backdrop-video]');
   await expect(banner).toHaveAttribute('data-media-final-state', 'visible');
   await expect(banner.locator('[data-media-loading]')).toHaveCSS(
     'opacity',
@@ -373,15 +372,25 @@ test('slow video keeps the color pulse until ready, then both layers play and fo
   await expect
     .poll(() => main.evaluate((v: HTMLVideoElement) => v.paused))
     .toBe(false);
-  await expect
-    .poll(() => backdrop.evaluate((v: HTMLVideoElement) => v.paused))
-    .toBe(false);
-  await expect
-    .poll(() => backdrop.evaluate((v: HTMLVideoElement) => v.currentTime))
-    .toBeGreaterThan(0.1);
-  expect(
-    await backdrop.evaluate((v: HTMLVideoElement) => v.muted && !v.controls),
-  ).toBe(true);
+  // One decoder: the blurred copy is drawn from the video's own frames.
+  await expect(banner.locator('video')).toHaveCount(1);
+  const backdrop = banner.locator('[data-media-backdrop-canvas]');
+  await expect(backdrop).toHaveCount(1);
+  // Every drawing moves the mark of the latest one between the two canvases.
+  await backdrop.evaluate((element) => {
+    const counted = window as unknown as { drawings: number };
+    counted.drawings = 0;
+    new MutationObserver((changes) => {
+      counted.drawings += changes.length;
+    }).observe(element, {
+      attributes: true,
+      subtree: true,
+      attributeFilter: ['data-front'],
+    });
+  });
+  const drawings = () =>
+    page.evaluate(() => (window as unknown as { drawings: number }).drawings);
+  await expect.poll(drawings).toBeGreaterThan(0);
   await main.evaluate(async (v: HTMLVideoElement) => {
     if (!v.paused) {
       await new Promise<void>((resolve) => {
@@ -389,21 +398,17 @@ test('slow video keeps the color pulse until ready, then both layers play and fo
         v.pause();
       });
     }
-    v.currentTime = 0.5;
-    v.playbackRate = 0.5;
   });
-  await expect
-    .poll(() => backdrop.evaluate((v: HTMLVideoElement) => v.paused))
-    .toBe(true);
-  await expect
-    .poll(() => backdrop.evaluate((v: HTMLVideoElement) => v.currentTime))
-    .toBeCloseTo(0.5, 1);
-  await expect
-    .poll(() => backdrop.evaluate((v: HTMLVideoElement) => v.playbackRate))
-    .toBe(0.5);
+  // A paused video is drawn at once, then no more.
+  const paused = await drawings();
+  await page.waitForTimeout(400);
+  expect(await drawings()).toBe(paused);
+  await main.evaluate((v: HTMLVideoElement) => {
+    v.currentTime = 0.5;
+  });
+  await expect.poll(drawings).toBeGreaterThan(paused);
   await main.evaluate(async (v: HTMLVideoElement) => {
     v.currentTime = v.duration - 0.1;
-    v.playbackRate = 1;
     try {
       await v.play();
     } catch (error) {
@@ -415,9 +420,8 @@ test('slow video keeps the color pulse until ready, then both layers play and fo
   await expect
     .poll(() => main.evaluate((v: HTMLVideoElement) => v.currentTime))
     .toBeLessThan(0.5);
-  await expect
-    .poll(() => backdrop.evaluate((v: HTMLVideoElement) => v.paused))
-    .toBe(false);
+  const looped = await drawings();
+  await expect.poll(drawings).toBeGreaterThan(looped);
   await page.locator('[data-below]').scrollIntoViewIfNeeded();
   // Offscreen media stays mounted and only pauses.
   await expect(banner).toHaveAttribute('data-media-in-view', 'false');
@@ -429,9 +433,6 @@ test('slow video keeps the color pulse until ready, then both layers play and fo
   await expect
     .poll(() => main.evaluate((v: HTMLVideoElement) => v.paused))
     .toBe(false);
-  await expect
-    .poll(() => backdrop.evaluate((v: HTMLVideoElement) => v.paused))
-    .toBe(false);
   await main.evaluate(async (v: HTMLVideoElement) => {
     if (!v.paused) {
       await new Promise<void>((resolve) => {
@@ -441,12 +442,6 @@ test('slow video keeps the color pulse until ready, then both layers play and fo
     }
     v.currentTime = 0.5;
   });
-  await expect
-    .poll(() => backdrop.evaluate((v: HTMLVideoElement) => v.paused))
-    .toBe(true);
-  await expect
-    .poll(() => backdrop.evaluate((v: HTMLVideoElement) => v.currentTime))
-    .toBeCloseTo(0.5, 1);
   await page.locator('[data-below]').scrollIntoViewIfNeeded();
   await expect(banner).toHaveAttribute('data-media-in-view', 'false');
   await banner.scrollIntoViewIfNeeded();
@@ -461,9 +456,7 @@ test('slow video keeps the color pulse until ready, then both layers play and fo
   await expect
     .poll(() => main.evaluate((v: HTMLVideoElement) => v.paused))
     .toBe(false);
-  await expect
-    .poll(() => backdrop.evaluate((v: HTMLVideoElement) => v.paused))
-    .toBe(false);
+  await expect(banner.locator('[data-media-backdrop-canvas]')).toHaveCount(1);
 });
 
 test('preview failures, final failures and source changes recover without stale loading', async ({
@@ -501,7 +494,7 @@ test('preview failures, final failures and source changes recover without stale 
   releaseAmbientSlow();
 });
 
-test('reduced motion disables ambient playback and pulse; background failure leaves the main video working', async ({
+test('reduced motion disables ambient playback and pulse; the backdrop of a still video shows its poster', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -516,20 +509,28 @@ test('reduced motion disables ambient playback and pulse; background failure lea
   await expect(banner).toHaveAttribute('data-media-final-state', 'visible');
   const main = banner.locator('video[data-media-main]');
   expect(await main.evaluate((v: HTMLVideoElement) => v.paused)).toBe(true);
+  const middle = () =>
+    banner
+      .locator('[data-media-backdrop-canvas] canvas[data-front]')
+      .evaluate((canvas: HTMLCanvasElement) => [
+        ...canvas
+          .getContext('2d')!
+          .getImageData(canvas.width >> 1, canvas.height >> 1, 1, 1).data,
+      ]);
+  // At rest the video shows its poster, green and blue, and so does the copy.
+  const [red, green] = await middle();
+  expect(green).toBeGreaterThan(red! + 20);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await expect
     .poll(() => main.evaluate((v: HTMLVideoElement) => v.paused))
     .toBe(false);
-  await banner
-    .locator('video[data-media-backdrop-video]')
-    .dispatchEvent('error');
-  await expect(banner.locator('video[data-media-backdrop-video]')).toHaveCount(
-    0,
-  );
-  expect(await main.evaluate((v: HTMLVideoElement) => v.paused)).toBe(false);
-  await expect(
-    banner.locator('[data-media-preview-pair] img.media-backdrop'),
-  ).toBeVisible();
+  // Playing, the copy follows the frames, which are grey.
+  await expect
+    .poll(async () => {
+      const [red, green] = await middle();
+      return Math.abs(green! - red!);
+    })
+    .toBeLessThan(12);
 });
 
 test('a delayed backdrop decode holds the entire pair, including with a cached foreground', async ({
@@ -722,13 +723,12 @@ test('admin previews play only while hovered or focused, including nested focus'
     await expect(tile.locator('video')).toHaveCount(0);
     await tile.hover();
     const main = tile.locator('video[data-media-main]');
-    const backdrop = tile.locator('video[data-media-backdrop-video]');
     await expect
       .poll(() => main.evaluate((v: HTMLVideoElement) => v.paused))
       .toBe(false);
-    await expect
-      .poll(() => backdrop.evaluate((v: HTMLVideoElement) => v.paused))
-      .toBe(false);
+    // One decoder: the blurred copy is drawn from the video's frames.
+    await expect(tile.locator('video')).toHaveCount(1);
+    await expect(tile.locator('[data-media-backdrop-canvas]')).toHaveCount(1);
     await tile.focus();
     await page.mouse.move(0, 0);
     expect(await main.evaluate((v: HTMLVideoElement) => v.paused)).toBe(false);
@@ -742,9 +742,52 @@ test('admin previews play only while hovered or focused, including nested focus'
     await expect
       .poll(() => main.evaluate((v: HTMLVideoElement) => v.paused))
       .toBe(true);
+  }
+});
+
+test('a diary cloud decodes its video once and draws the backdrop from what the video shows', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await open(page, '/ambient-regression?banner=video');
+  const clouds = page.locator(
+    '[data-diary-cards] [data-media-variant="ambient"]',
+  );
+  await expect(clouds).toHaveCount(3);
+  await clouds.first().scrollIntoViewIfNeeded();
+  const middle = (cloud: ReturnType<Page['locator']>) =>
+    cloud
+      .locator('[data-media-backdrop-canvas] canvas[data-front]')
+      .evaluate((canvas: HTMLCanvasElement) => [
+        ...canvas
+          .getContext('2d')!
+          .getImageData(canvas.width >> 1, canvas.height >> 1, 1, 1).data,
+      ]);
+  for (const cloud of await clouds.all()) {
+    await expect(cloud).toHaveAttribute('data-media-final-state', 'visible');
+    // One decoder per cloud: its blurred copy is drawn, not a second video.
+    await expect(cloud.locator('video')).toHaveCount(1);
+    // A video at rest shows its poster, and so does its backdrop: the
+    // fixture's poster is green and blue.
+    const [red, green, , alpha] = await middle(cloud);
+    expect(alpha).toBeGreaterThan(200);
+    expect(green).toBeGreaterThan(red! + 20);
+  }
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  for (const cloud of await clouds.all()) {
+    const main = cloud.locator('video[data-media-main]');
     await expect
-      .poll(() => backdrop.evaluate((v: HTMLVideoElement) => v.paused))
+      .poll(() =>
+        main.evaluate((v: HTMLVideoElement) => !v.paused && v.currentTime > 0),
+      )
       .toBe(true);
+    // Playing, the backdrop follows the frames, which are grey.
+    await expect
+      .poll(async () => {
+        const [red, green] = await middle(cloud);
+        return Math.abs(green! - red!);
+      })
+      .toBeLessThan(12);
   }
 });
 

@@ -4,7 +4,6 @@ import {
   normalizeUrlSegment,
   normalizeUrlSegmentDraft,
   slugify,
-  urlSegmentIsValid,
 } from '../../../shared/language/slugify';
 
 describe('language slugify', () => {
@@ -43,9 +42,11 @@ describe('normalizeUrlSegment', () => {
     expect(normalizeUrlSegment(value)).toBe(expected);
   });
 
-  it('accepts what it has already normalized', () => {
-    expect(urlSegmentIsValid('привет-мир')).toBe(true);
-    expect(urlSegmentIsValid('Привет Мир')).toBe(false);
+  it('leaves what it has already normalized as it is', () => {
+    expect(normalizeUrlSegment('привет-мир')).toBe('привет-мир');
+    expect(normalizeUrlSegment('snake-case-and-dots')).toBe(
+      'snake-case-and-dots',
+    );
   });
 });
 

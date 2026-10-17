@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -55,11 +55,18 @@ describe('zipFileToPath', () => {
 
   it('produces identical archives for identical bytes', async () => {
     const input = Buffer.from('payload');
-    const first = (await zip(input, 'pdf')).archive;
-    await new Promise((resolve) => setTimeout(resolve, 2100));
-    const second = (await zip(input, '../pdf')).archive;
+    // Made a year apart: an archive stamped with the time would differ.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date(2026, 0, 1, 9, 0, 0));
+      const first = (await zip(input, 'pdf')).archive;
+      vi.setSystemTime(new Date(2027, 5, 15, 21, 30, 10));
+      const second = (await zip(input, '../pdf')).archive;
 
-    expect(second.equals(first)).toBe(true);
+      expect(second.equals(first)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('leaves no archive behind when the source cannot be read', async () => {
@@ -68,5 +75,39 @@ describe('zipFileToPath', () => {
       zipFileToPath(join(directory, 'missing.bin'), 10, 'txt', targetPath),
     ).rejects.toThrow();
     await expect(stat(targetPath)).rejects.toThrow();
+  });
+});
+
+describe('zipping a file for a request that goes away', () => {
+  it('stops, rejects with the reason and leaves no archive behind', async () => {
+    const source = join(directory, 'source.bin');
+    // Enough chunks for the loop to yield between them.
+    await writeFile(source, Buffer.alloc(6 * 1024 * 1024, 7));
+    const target = join(directory, 'out.zip');
+    const controller = new AbortController();
+
+    const zipped = zipFileToPath(source, 6 * 1024 * 1024, 'bin', target, {
+      signal: controller.signal,
+      onProgress: (progress) => {
+        if (progress > 0.01) controller.abort(new Error('closed'));
+      },
+    });
+
+    await expect(zipped).rejects.toThrow('closed');
+    await expect(stat(target)).rejects.toThrow();
+  });
+
+  it('refuses a request that is already gone', async () => {
+    const controller = new AbortController();
+    controller.abort(new Error('gone'));
+    await expect(
+      zipFileToPath(
+        join(directory, 'none'),
+        0,
+        'bin',
+        join(directory, 'out.zip'),
+        { signal: controller.signal },
+      ),
+    ).rejects.toThrow('gone');
   });
 });

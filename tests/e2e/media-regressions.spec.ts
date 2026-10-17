@@ -99,12 +99,11 @@ test('a content video in view plays through its loops without a pause', async ({
     .filter({ hasText: 'Video caption' });
   await frame.scrollIntoViewIfNeeded();
   const main = frame.locator('video[data-media-main]');
-  const backdrop = frame.locator('video[data-media-backdrop-video]');
   await expect
     .poll(() => main.evaluate((v: HTMLVideoElement) => v.paused))
     .toBe(false);
-  // Every pause shows a phone's controls over the video, so a loop, a stall or
-  // the backdrop catching up must not cause one.
+  // Every pause shows a phone's controls over the video, so neither a loop nor
+  // a stall may cause one.
   type Watched = HTMLVideoElement & { loops: number; pauses: number };
   await main.evaluate((v: Watched) => {
     let last = v.currentTime;
@@ -120,9 +119,9 @@ test('a content video in view plays through its loops without a pause', async ({
     .toBeGreaterThanOrEqual(2);
   expect(await main.evaluate((v: Watched) => v.pauses)).toBe(0);
   expect(await main.evaluate((v: HTMLVideoElement) => v.paused)).toBe(false);
-  expect(await backdrop.evaluate((v: HTMLVideoElement) => v.paused)).toBe(
-    false,
-  );
+  // Its blurred copy is drawn from its frames: one decoder.
+  await expect(frame.locator('video')).toHaveCount(1);
+  await expect(frame.locator('[data-media-backdrop-canvas]')).toHaveCount(1);
 });
 
 test('content video controls work inline; showcase videos still open a modal', async ({
@@ -208,12 +207,13 @@ test('modal labels use captions and preserve file descriptions', async ({
   await expect(header).not.toHaveText('');
   await close(page);
   // A file with nothing to show is downloaded rather than opened, and says
-  // what it is on its own card.
-  const document = root.getByRole('link', {
-    name: 'Document title Document description',
-  });
+  // what it is on its own card; its caption stands under it, as a picture's.
+  const document = root.getByRole('link', { name: /Document title/ });
   await expect(document).toHaveAttribute('download', '');
   await expect(document).not.toHaveAttribute('target', /.+/);
+  await expect(
+    root.locator('[data-content-attachment]').getByText('Document description'),
+  ).toBeVisible();
   const listed = page.locator('[data-files]').getByRole('button');
   await listed.click();
   await expect(page.locator('dialog')).toContainText('Listed file');

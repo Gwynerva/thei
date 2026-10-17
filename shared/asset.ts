@@ -25,6 +25,7 @@ export const ASSET_CONTAINER_TYPES = [
   'asset',
   'content',
   'tag',
+  'ai-session',
 ] as const;
 export type AssetContainerType = (typeof ASSET_CONTAINER_TYPES)[number];
 
@@ -39,6 +40,8 @@ export const ASSET_ROLES = [
   'action-icon',
   'action-background',
   'action-file',
+  /** Brought into an AI session, by the owner or an app. */
+  'ai-attachment',
 ] as const;
 export type AssetRole = (typeof ASSET_ROLES)[number];
 
@@ -118,17 +121,15 @@ export interface OtherAssetMeta extends AssetMetaBase {
   archivedOriginal?: ArchivedOriginalFileMeta;
 }
 
+/** The file a variant keeps zipped, as its meta tells it, if it is one. */
+export function archivedOriginalFromMeta(
+  meta: AssetMeta | null | undefined,
+): ArchivedOriginalFileMeta | undefined {
+  return meta && 'archivedOriginal' in meta ? meta.archivedOriginal : undefined;
+}
+
 export type AssetMeta =
   ImageAssetMeta | VideoAssetMeta | AudioAssetMeta | OtherAssetMeta;
-
-export type AssetMetaForType<TType extends AssetType> =
-  TType extends AssetType.Image
-    ? ImageAssetMeta
-    : TType extends AssetType.Video
-      ? VideoAssetMeta
-      : TType extends AssetType.Audio
-        ? AudioAssetMeta
-        : OtherAssetMeta;
 
 export interface ShowcaseAssetUsageMeta {
   role: 'showcase-asset';

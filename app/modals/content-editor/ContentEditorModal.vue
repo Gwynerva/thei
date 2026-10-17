@@ -1,16 +1,16 @@
 <script lang="ts" setup>
 import type EditorJS from '@editorjs/editorjs';
+import type { VirtualElement } from '@floating-ui/vue';
 import type {
   API,
+  BlockAPI,
   BlockMutationEvent,
+  EditorConfig,
   InlineToolConstructable,
   OutputData,
   ToolConstructable,
 } from '@editorjs/editorjs';
-import type {
-  AssetReplaceResult,
-  AssetVariantsResponse,
-} from '#layers/thei/shared/api/asset';
+import type { AssetReplaceResult } from '#layers/thei/shared/api/asset';
 import {
   ContentValidationError,
   collectContentAssetSizeMap,
@@ -25,15 +25,19 @@ import {
   type ContentSummary,
 } from '#layers/thei/shared/content';
 import {
-  launchAssetWizard,
   acceptedExtensionsFromAccept,
   contentAssetFromVariant,
-  launchAssetBatchWizard,
   launchAssetEditor,
   launchPendingFileEditor,
+  pickAssetFiles,
   type AssetWizardOptions,
 } from '#layers/thei/app/composables/asset-wizard';
-import { bindEditorMediaPaste } from '#layers/thei/app/composables/editor-media-paste';
+import { bindEditorFilePaste } from '#layers/thei/app/composables/editor-file-paste';
+import { bindEditorPlainFields } from '#layers/thei/app/composables/editor-plain-fields';
+import {
+  prepareContentFiles,
+  skippedContentFilesMessage,
+} from '#layers/thei/app/composables/content-files';
 import {
   anyFileExtensionProfile,
   audioExtensionProfile,
@@ -49,24 +53,27 @@ import ContentStats from '#layers/thei/app/components/content/ContentStats.vue';
 import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';
 import ContentInlineLinkControls from '#layers/thei/app/components/content/ContentInlineLinkControls.vue';
 import ContentHintControls from '#layers/thei/app/components/content/ContentHintControls.vue';
-import ContentEntitySearchPopup from '#layers/thei/app/components/content/ContentEntitySearchPopup.vue';
-import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
+import type {
+  ContentLinkPick,
+  ContentLinkTarget,
+} from '#layers/thei/app/components/content/link-picker/types';
 import {
   ContentAttachmentTool,
   ContentAudioTool,
   ContentBoldTool,
+  ContentFileGroupTool,
   ContentHintTool,
   ContentStrikeTool,
   ContentGalleryTool,
   ContentItalicTool,
-  ContentEntityLinkTool,
-  ContentExternalInlineLinkTool,
+  ContentLinkTool,
   ContentMediaTool,
   ExternalLinkTool,
   IntegrationTool,
   entityLinkToolWithPaste,
   PrivateSectionBoundaryTool,
   type ContentEditorAssetKind,
+  type ContentEditorPickedFiles,
   type ContentEditorUploads,
 } from '#layers/thei/app/components/content/editor-tools';
 import type {
@@ -83,9 +90,28 @@ import {
 } from '#layers/thei/app/components/content/editor-spoiler-tune';
 import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
 import { createEditorBlockDrag } from '#layers/thei/app/composables/editor-block-drag';
+import {
+  bindEditorBlockToolbox,
+  editorToolboxEntries,
+  insertToolboxBlock,
+  orderToolboxEntries,
+  storeToolboxOrder,
+  storedToolboxOrder,
+  type EditorToolboxEntry,
+} from '#layers/thei/app/composables/editor-block-toolbox';
+import ContentBlockToolbox from '#layers/thei/app/components/content/ContentBlockToolbox.vue';
+import {
+  editableFieldOf,
+  selectRange,
+} from '#layers/thei/app/components/content/editor-edit-commands';
 import { bindEditorGutterClick } from '#layers/thei/app/composables/editor-gutter-click';
 import { bindEditorCurrentBlock } from '#layers/thei/app/composables/editor-current-block';
 import { bindEditorLinkPaste } from '#layers/thei/app/composables/editor-link-paste';
+import { bindEditorAtLink } from '#layers/thei/app/composables/editor-at-link';
+import { bindEditorInlineBoundary } from '#layers/thei/app/composables/editor-inline-boundary';
+import { bindEditorTextDrop } from '#layers/thei/app/composables/editor-text-drop';
+import { bindEditorTextPaste } from '#layers/thei/app/composables/editor-text-paste';
+import { bindEditorNativeUndo } from '#layers/thei/app/composables/editor-native-undo';
 import { bindEditorKeyboardBoundary } from '#layers/thei/app/composables/editor-keyboard-boundary';
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
 import { createEditorPrivatePattern } from '#layers/thei/app/composables/editor-private-pattern';
@@ -112,15 +138,31 @@ import {
   isNewContentOwnerRef,
   type ContentHistoryEntryMeta,
   type ContentHistoryField,
+  type ContentHistoryStoredResponse,
 } from '#layers/thei/shared/content-history';
 import ContentHistoryPanel from '#layers/thei/app/components/content/ContentHistoryPanel.vue';
-import ContentRestoreBar from '#layers/thei/app/components/content/ContentRestoreBar.vue';
 import {
   offerRestoreTarget,
   type RestoreTarget,
 } from '#layers/thei/app/composables/content-history/restore-target';
-import ContentHistoryDiff from '#layers/thei/app/components/content/ContentHistoryDiff.vue';
-import { historyTime } from '#layers/thei/app/composables/content-history/time-labels';
+import {
+  historyTime,
+  useHistoryTimeLabels,
+} from '#layers/thei/app/composables/content-history/time-labels';
+import type { AiActionItem, AiTextReviews } from '#layers/thei/shared/ai';
+import {
+  versionReview,
+  type ContentReview as ContentReviewModel,
+  type ReviewDecision,
+} from '#layers/thei/shared/content-review';
+import {
+  describeReviewBlock,
+  partComment,
+  storedDecisions,
+  textEditReview,
+} from './review/review';
+import ContentReview from './review/ContentReview.vue';
+import ContentEditorNotices from './ContentEditorNotices.vue';
 
 const props = defineProps<{
   modalData: {
@@ -151,6 +193,16 @@ const props = defineProps<{
      * is still open; this is how the editor shows that time without reopening.
      */
     current?: () => ContentFieldModelValue | null | undefined;
+    /**
+     * An AI's edit of this text to go through at once: the editor opens on
+     * its review, from the proposal under the field.
+     */
+    review?: string;
+    /**
+     * The AI's edits taken here, handed to the form with the text: the form
+     * tells their sessions once it is saved, and only then.
+     */
+    onTaken?: (taken: Record<string, Record<string, ReviewDecision>>) => void;
   };
 }>();
 
@@ -162,11 +214,17 @@ const updatedAt = computed(
       : undefined) ?? props.modalData.value?.updatedAt,
 );
 let cleanupSmartTypography: (() => void) | undefined;
-let cleanupMediaPaste: (() => void) | undefined;
+let cleanupFilePaste: (() => void) | undefined;
+let cleanupPlainFields: (() => void) | undefined;
 let cleanupGutterClick: (() => void) | undefined;
 let cleanupCurrentBlock: (() => void) | undefined;
 let cleanupLinkPaste: (() => void) | undefined;
+let cleanupAtLink: (() => void) | undefined;
+let cleanupInlineBoundary: (() => void) | undefined;
 let cleanupKeyboardBoundary: (() => void) | undefined;
+let cleanupTextDrop: (() => void) | undefined;
+let cleanupTextPaste: (() => void) | undefined;
+let cleanupNativeUndo: (() => void) | undefined;
 /**
  * Editor.js switches to its mobile layout at this width — its own constant,
  * not the project's breakpoint — and the styling follows the same switch, so
@@ -198,32 +256,32 @@ externalLinks.seed(
     .map((block) => block.data as Partial<ExternalLink>),
 );
 const internalSite = useInternalUrlSite();
-const entityPickerOpen = ref(false);
-const entityPickerAnchor = ref<HTMLElement>();
-const entityPicker = useTemplateRef<{ focus: () => void }>('entityPicker');
-let entityPickerResolve: ((item?: ContentEntitySearchItem) => void) | undefined;
+/** The grid of blocks the "+" opens, and the block it opened beside. */
+const toolboxOpen = ref(false);
+const toolboxAnchor = shallowRef<VirtualElement>();
+const toolboxEntries = shallowRef<EditorToolboxEntry[]>([]);
+const toolboxOrder = ref(storedToolboxOrder());
+const orderedToolbox = computed(() =>
+  orderToolboxEntries(toolboxEntries.value, toolboxOrder.value),
+);
+const toolbox = useTemplateRef<{ focus: () => void }>('toolbox');
+let toolboxBlock: BlockAPI | undefined;
+let blockToolbox: ReturnType<typeof bindEditorBlockToolbox> | undefined;
+
+const linkPickerOpen = ref(false);
+const linkPicker = useTemplateRef<{ focus: () => void }>('linkPicker');
+const linkPickerAnchor = ref<HTMLElement>();
+const linkPickerInitial = shallowRef<ContentLinkTarget>();
+/** Each opening is a picker of its own, fresh. */
+const linkPickerOpening = ref(0);
+let linkPickerResolve: ((pick?: ContentLinkPick) => void) | undefined;
 const saving = ref(false);
 const errorMessage = ref<string | undefined>();
 const historyPopupOpen = ref(false);
-const historyButton = useTemplateRef<HTMLElement>('historyButton');
+/** The history's button itself, which its popup points at and marks open. */
+const historyTrigger = useTemplateRef<{ $el: HTMLElement }>('historyTrigger');
+const historyButton = computed(() => historyTrigger.value?.$el ?? null);
 const restoredLabel = ref('');
-/** What a restore is being confirmed for, in the header's third row. */
-const restoring = shallowRef<{ target: RestoreTarget; fromList: boolean }>();
-/**
- * While a restore is being confirmed, the text is shown read-only in the
- * editor's place, marked with what the restore would change. The editor
- * itself is left alone and is back as it was when the question is gone.
- */
-const diff = shallowRef<{
-  current: ContentOutputData;
-  version: ContentOutputData;
-}>();
-
-function showDiff(version: ContentOutputData | undefined) {
-  diff.value = version
-    ? { current: editorSession.current(), version }
-    : undefined;
-}
 const initialData = normalizeContentData(props.modalData.value?.data);
 const openedKey = contentSemanticKey(initialData);
 const opened = { data: initialData, key: openedKey };
@@ -255,6 +313,13 @@ const headerSummary = ref<ContentSummary>({
 let editor: EditorJS | undefined;
 /** Set once the modal is on its way out, so an editor still loading stops. */
 let disposed = false;
+/**
+ * The text shows once the editor takes input as it should. Editor.js shows
+ * its blocks before it binds their keys, at the first idle moment, and the
+ * paste, undo and typing handlers are bound after that: words pasted or
+ * typed sooner would go in behind their back, uncleaned and past Ctrl+Z.
+ */
+const editorReady = ref(false);
 let editorAcceptsChanges = false;
 let transientEntitySelections = 0;
 let cleanupEditorDrag: (() => void) | undefined;
@@ -263,26 +328,73 @@ let cleanupEditorPrivatePattern: (() => void) | undefined;
 let editorPrivateSections:
   ReturnType<typeof createEditorPrivateSections> | undefined;
 
-function pickEntity(anchor: HTMLElement) {
-  entityPickerResolve?.();
-  entityPickerAnchor.value = anchor;
-  entityPickerOpen.value = true;
-  return new Promise<ContentEntitySearchItem | undefined>((resolve) => {
-    entityPickerResolve = resolve;
+/** Where the caret was in the block when the grid opened over it. */
+let toolboxCaret: Range | undefined;
+
+function openToolbox(anchor: VirtualElement, block: BlockAPI) {
+  toolboxBlock = block;
+  const selection = window.getSelection();
+  const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
+  toolboxCaret =
+    range && block.holder.contains(range.startContainer)
+      ? range.cloneRange()
+      : undefined;
+  toolboxAnchor.value = anchor;
+  toolboxOpen.value = true;
+}
+
+async function toolboxPicked(entry: EditorToolboxEntry) {
+  const block = toolboxBlock;
+  toolboxOpen.value = false;
+  if (editor && block) await insertToolboxBlock(editor, block, entry);
+}
+
+/**
+ * Escaped: the caret goes back where it was, or into the block the grid
+ * opened beside. Closed by a tap or a click elsewhere, the focus goes there.
+ */
+function toolboxDismissed(reason: 'outside' | 'escape') {
+  const block = toolboxBlock;
+  if (reason !== 'escape' || !editor || !block) return;
+  const caret = toolboxCaret;
+  const field = caret && editableFieldOf(caret.startContainer);
+  if (caret && field?.isConnected) {
+    field.focus({ preventScroll: true });
+    selectRange(caret);
+  } else if (editor.blocks.getById(block.id))
+    editor.caret.setToBlock(block, 'end');
+}
+
+function toolboxReordered(keys: string[]) {
+  toolboxOrder.value = keys;
+  storeToolboxOrder(keys);
+}
+
+/** The link picker beside a link block, on where it leads now. */
+function pickLink(anchor: HTMLElement, initial?: ContentLinkTarget) {
+  linkPickerResolve?.();
+  linkPickerAnchor.value = anchor;
+  linkPickerInitial.value = initial;
+  linkPickerOpening.value++;
+  linkPickerOpen.value = true;
+  return new Promise<ContentLinkPick | undefined>((resolve) => {
+    linkPickerResolve = resolve;
   });
 }
 
-function selectEntity(item: ContentEntitySearchItem) {
-  const resolve = entityPickerResolve;
-  entityPickerResolve = undefined;
-  entityPickerOpen.value = false;
-  resolve?.(item);
+function linkPicked(pick: ContentLinkPick) {
+  const resolve = linkPickerResolve;
+  linkPickerResolve = undefined;
+  linkPickerOpen.value = false;
+  resolve?.(pick);
 }
 
-function closeEntityPicker() {
-  const resolve = entityPickerResolve;
-  entityPickerResolve = undefined;
-  entityPickerAnchor.value = undefined;
+function closeLinkPicker() {
+  // Opened again while it faded: the new opening waits for its own choice.
+  if (linkPickerOpen.value) return;
+  const resolve = linkPickerResolve;
+  linkPickerResolve = undefined;
+  linkPickerAnchor.value = undefined;
   resolve?.();
 }
 
@@ -339,7 +451,7 @@ const historyStatusText = computed(() => {
 });
 const undoLabel = computed(() =>
   lastRestore.value
-    ? `${phrase.value.content_restore_undo} · ${phrase.value.content_restored(restoredLabel.value)}`
+    ? `${phrase.value.content_restore_undo} · ${phrase.value.content_taken_from(restoredLabel.value)}`
     : '',
 );
 /** When the offered draft was last written; it follows the other tab. */
@@ -374,11 +486,20 @@ function beginTransientEntitySelection() {
 function endTransientEntitySelection(persisted: boolean) {
   if (persisted) {
     transientEntitySelections = Math.max(0, transientEntitySelections - 1);
+    // A choice kept is a change, said here: Editor.js tells its changes in
+    // batches, and one that comes while another block waits for its choice
+    // is passed over whole.
+    if (editorAcceptsChanges) editorSession.recordChange();
     return;
   }
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
       transientEntitySelections = Math.max(0, transientEntitySelections - 1);
+      // A change told while the choice was open — a file that landed — was
+      // passed over. Looking again is harmless: an unchanged text keys the
+      // same, and nothing shows.
+      if (editorAcceptsChanges && !transientEntitySelections)
+        editorSession.recordChange();
     }),
   );
 }
@@ -389,52 +510,295 @@ function applyEditorData(state: EditorHistoryCurrent) {
 }
 
 function toggleHistory() {
-  if (historyPopupOpen.value) {
-    historyPopupOpen.value = false;
-    return;
+  historyPopupOpen.value = !historyPopupOpen.value;
+}
+
+// ---- Going through another version, or an AI's edit -------------------------------
+
+/**
+ * A change gone through over the editor's text, on the review screen in its
+ * place: another version of the text — a draft, a version from the history —
+ * or an AI's edit of it. What is taken lands in the editor as one change,
+ * undone at a click, and is kept as any change is: once the form is saved.
+ */
+type Review =
+  | {
+      kind: 'version';
+      target: RestoreTarget;
+      model: ContentReviewModel;
+      title: string;
+      why: string;
+    }
+  | { kind: 'ai'; action: AiActionItem; model: ContentReviewModel };
+const review = shallowRef<Review>();
+/** Each review opened is a screen of its own, its decisions its own. */
+const reviewKey = ref(0);
+const reviewBusy = ref(false);
+const reviewError = ref('');
+const { time: versionTime, dayLabel } = useHistoryTimeLabels();
+
+/**
+ * The review stands in the editor's place; Escape and Back leave it, as its
+ * close does, before they close the editor.
+ */
+function openReview(next: Review) {
+  historyPopupOpen.value = false;
+  reviewError.value = '';
+  reviewKey.value++;
+  review.value = next;
+}
+
+function closeReview() {
+  review.value = undefined;
+}
+
+/** What a version is called on its screen: its day and time, or its kind. */
+function versionLabel(target: RestoreTarget) {
+  if (target.kind === 'opened')
+    return phrase.value.content_history_opened_version;
+  if (!target.time) return '';
+  if (target.kind === 'offer')
+    return phrase.value.content_draft_notice(historyTime(target.time));
+  if (target.kind === 'stored')
+    return phrase.value.content_stored_notice(historyTime(target.time));
+  return `${dayLabel(target.time)}, ${versionTime(target.time)}`;
+}
+
+async function compareWith(target: RestoreTarget) {
+  historyPopupOpen.value = false;
+  errorMessage.value = undefined;
+  try {
+    const { data, missingAssets } = await target.load();
+    // Over the text as it is this moment: the last words typed included.
+    const now = await editorSession.synchronize();
+    if (disposed) return;
+    const model = versionReview(now, data, {
+      formatText: publicText,
+      describeBlock: describeReviewBlock,
+    });
+    if (!model.parts.length) {
+      showToast(phrase.value.content_restore_same);
+      return;
+    }
+    const reason =
+      target.kind === 'revision' && target.reason
+        ? `${phrase.value.content_history_reasons[target.reason]}. `
+        : '';
+    openReview({
+      kind: 'version',
+      target,
+      model,
+      title: phrase.value.ai_review_compare_title(versionLabel(target)),
+      why: `${reason}${phrase.value.ai_review_compare_why}${
+        missingAssets
+          ? ` ${phrase.value.content_history_missing_assets(missingAssets)}.`
+          : ''
+      }`,
+    });
+  } catch {
+    errorMessage.value = phrase.value.content_history_load_error;
   }
-  closeRestore();
-  historyPopupOpen.value = true;
+}
+
+// The text may be saved elsewhere — another device, another tab — while
+// this one is written in; it is offered to compare, as a draft is.
+const seenStoredAt = ref(
+  props.modalData.current?.()?.updatedAt ??
+    props.modalData.value?.updatedAt ??
+    0,
+);
+const storedElsewhere = computed(() => {
+  const stored = editorSession.stored.value;
+  if (!stored || stored.updatedAt <= seenStoredAt.value) return undefined;
+  if ((props.modalData.current?.()?.updatedAt ?? 0) >= stored.updatedAt)
+    return undefined;
+  if (stored.key === currentKey.value || stored.key === savedKey.value)
+    return undefined;
+  return stored;
+});
+
+function compareStored() {
+  const stored = storedElsewhere.value;
+  const field = editorSession.field();
+  if (!stored || !field) return;
+  void compareWith({
+    kind: 'stored',
+    time: stored.updatedAt,
+    load: async () => {
+      const { data } = await $fetch<ContentHistoryStoredResponse>(
+        '/api/admin/content-history/stored',
+        { query: field },
+      );
+      return { data, missingAssets: 0 };
+    },
+  });
+}
+
+function dismissStored() {
+  seenStoredAt.value = storedElsewhere.value?.updatedAt ?? seenStoredAt.value;
 }
 
 function chooseVersion(target: RestoreTarget) {
-  historyPopupOpen.value = false;
-  restoring.value = { target, fromList: true };
+  void compareWith(target);
 }
 
 function openOffer() {
   if (!draftOffer.value) return;
-  historyPopupOpen.value = false;
-  restoring.value = {
-    target: offerRestoreTarget(draftOffer.value, editorSession),
-    fromList: false,
-  };
-}
-
-function backToList() {
-  closeRestore();
-  historyPopupOpen.value = true;
-}
-
-function closeRestore() {
-  restoring.value = undefined;
-  diff.value = undefined;
+  void compareWith(offerRestoreTarget(draftOffer.value, editorSession));
 }
 
 function dismissOffer() {
-  if (restoring.value?.target.kind === 'offer') closeRestore();
   void editorSession.dismissOffer();
 }
 
-function onRestored(label: string) {
-  const offer = restoring.value?.target.offer;
-  closeRestore();
-  if (offer) editorSession.clearOffer(offer);
-  restoredLabel.value = label;
+function undoRestore() {
+  // An edit taken and put back waits again, in its session and here.
+  if (lastTaken) {
+    takenHere.delete(lastTaken);
+    const again = new Set(reviewedHere.value);
+    again.delete(lastTaken);
+    reviewedHere.value = again;
+    lastTaken = undefined;
+  }
+  void editorSession.undoRestore();
 }
 
-function undoRestore() {
-  void editorSession.undoRestore();
+// An AI's edits of this text wait in its sessions; the editor offers them.
+const aiEnabled = useAiEnabled();
+const aiReviews = shallowRef<AiActionItem[]>([]);
+/** Edits gone through in this editor: they wait for the form to be saved. */
+const reviewedHere = ref(new Set<string>());
+const waitingReviews = computed(() =>
+  aiReviews.value.filter(
+    (action) => !reviewedHere.value.has(action.actionUuid),
+  ),
+);
+/**
+ * The owner's word on each edit taken here, told to its session once the
+ * form is saved with it — or let go if the change is undone first.
+ */
+const takenHere = new Map<string, Record<string, ReviewDecision>>();
+let lastTaken: string | undefined;
+
+async function loadAiReviews() {
+  const field = props.modalData.history?.field;
+  if (!aiEnabled.value || !field || isNewContentOwnerRef(field.ownerRef))
+    return;
+  try {
+    const { actions } = await $fetch<AiTextReviews>(
+      '/api/admin/ai/texts/reviews',
+      {
+        query: {
+          ownerType: field.ownerType,
+          ownerId: field.ownerRef,
+          slot: field.slot,
+        },
+      },
+    );
+    aiReviews.value = actions;
+  } catch {
+    aiReviews.value = [];
+  }
+}
+
+/** Over the text as it is this moment: the last words typed included. */
+async function openAiReview(action: AiActionItem) {
+  const data = await editorSession.synchronize();
+  if (disposed) return;
+  openReview({ kind: 'ai', action, model: textEditReview(action, data) });
+}
+
+/**
+ * Written back to the form: what was taken here goes with the text, for the
+ * form to tell once it is saved. Saved, a take is no longer undone here.
+ */
+function handTaken() {
+  if (takenHere.size) props.modalData.onTaken?.(Object.fromEntries(takenHere));
+  takenHere.clear();
+  lastTaken = undefined;
+  editorSession.forgetRestore();
+}
+
+const reviewInitial = computed(() => {
+  const current = review.value;
+  return current?.kind === 'ai' ? storedDecisions(current.action) : undefined;
+});
+
+/** The owner's «as it was» is final: the session hears of it at once. */
+function keepParts(
+  action: AiActionItem,
+  decisions: Record<string, ReviewDecision>,
+) {
+  const kept = Object.fromEntries(
+    Object.entries(decisions).filter(([, decision]) => decision === 'kept'),
+  );
+  if (Object.keys(kept).length)
+    void aiApi.decideParts(action.actionUuid, kept).catch(() => undefined);
+}
+
+async function reviewDone(decisions: Record<string, ReviewDecision>) {
+  const current = review.value;
+  if (!current || reviewBusy.value) return;
+  reviewBusy.value = true;
+  reviewError.value = '';
+  const taken = Object.values(decisions).filter(
+    (decision) => decision === 'accepted',
+  ).length;
+  try {
+    const result = current.model.result(decisions);
+    const restored = await editorSession.restore(
+      result,
+      current.kind === 'version' && current.target.adoptRef
+        ? { adoptRef: current.target.adoptRef }
+        : {},
+    );
+    if (!restored) {
+      reviewError.value = phrase.value.content_editor_save_error;
+      return;
+    }
+    lastTaken = undefined;
+    if (current.kind === 'version') {
+      if (current.target.offer) editorSession.clearOffer(current.target.offer);
+      if (current.target.kind === 'stored' && current.target.time)
+        seenStoredAt.value = current.target.time;
+      restoredLabel.value = versionLabel(current.target);
+      showToast(phrase.value.ai_review_taken(taken), undoToast());
+    } else {
+      keepParts(current.action, decisions);
+      takenHere.set(current.action.actionUuid, decisions);
+      lastTaken = current.action.actionUuid;
+      reviewedHere.value = new Set(reviewedHere.value).add(
+        current.action.actionUuid,
+      );
+      restoredLabel.value = phrase.value.ai_review_title;
+      showToast(phrase.value.ai_review_applied(taken), undoToast());
+    }
+    closeReview();
+  } finally {
+    reviewBusy.value = false;
+  }
+}
+
+/** What was just taken can be put back at once, from its word too. */
+function undoToast() {
+  return { label: phrase.value.ai_action_undo, run: undoRestore };
+}
+
+function reviewClosed(decisions: Record<string, ReviewDecision>) {
+  const current = review.value;
+  if (current?.kind === 'ai') keepParts(current.action, decisions);
+  closeReview();
+}
+
+function reviewComment(partId: string, words: string) {
+  const current = review.value;
+  if (current?.kind !== 'ai') return;
+  void aiApi
+    .comment(
+      current.action.actionUuid,
+      partComment(current.model, partId, words),
+    )
+    .catch(() => showToast(phrase.value.ai_error));
 }
 
 useModalCloseGuard(() => {
@@ -520,7 +884,18 @@ function headerTextOffset(root: HTMLElement, node: Node, offset: number) {
   return range.toString().length;
 }
 
-onMounted(async () => {
+/** The AI's edits of this text, once read. */
+let reviewsRead: Promise<void> = Promise.resolve();
+
+/** The editor opened for one edit: its review comes up once both are ready. */
+async function openAskedReview(actionUuid: string) {
+  await reviewsRead;
+  const action = aiReviews.value.find((item) => item.actionUuid === actionUuid);
+  if (action && !disposed && !review.value) void openAiReview(action);
+}
+
+async function startEditor() {
+  reviewsRead = loadAiReviews();
   document.body.classList.add('content-editor-modal-open');
   editorLayoutQuery = window.matchMedia(EDITOR_MOBILE_LAYOUT_QUERY);
   editorLayoutQuery.addEventListener('change', applyEditorLayout);
@@ -567,6 +942,173 @@ onMounted(async () => {
     }
   }
 
+  // Bound before the editor, so its listeners stand in front of Editor.js's
+  // own drop handling on the same holder.
+  cleanupTextDrop = bindEditorTextDrop(holder.value!, {
+    closeInlineToolbar: () => editor?.inlineToolbar.close(),
+  });
+  const tools: EditorConfig['tools'] = {
+    spoiler: {
+      class: ContentSpoilerTune as unknown as ToolConstructable,
+      config: {
+        title: phrase.value.content_spoiler,
+      } satisfies ContentSpoilerTuneConfig,
+    },
+    contentBold: {
+      class: ContentBoldTool as unknown as InlineToolConstructable,
+    },
+    contentItalic: {
+      // Editor.js 2.x still types constructable render() as HTMLElement even
+      // though its current InlineTool API accepts MenuConfig.
+      class: ContentItalicTool as unknown as InlineToolConstructable,
+    },
+    contentStrike: {
+      class: ContentStrikeTool as unknown as InlineToolConstructable,
+    },
+    contentHint: {
+      class: ContentHintTool as unknown as InlineToolConstructable,
+      config: {
+        open: (request: ContentHintRequest) =>
+          hintControls.value?.open(request),
+      },
+    },
+    contentLink: {
+      class: ContentLinkTool as unknown as InlineToolConstructable,
+      config: {
+        open: (request: ContentInlineLinkRequest) =>
+          inlineLinkControls.value?.open(request),
+      },
+    },
+    paragraph: {
+      toolbox: {
+        title: phrase.value.content_editor_i18n.text,
+        icon: editorIcon('paragraph'),
+      },
+    },
+    header: {
+      class: PlainTextHeader,
+      toolbox: [
+        {
+          title: phrase.value.content_editor_i18n.heading,
+          icon: editorIcon('heading'),
+          data: { level: 2 },
+        },
+        {
+          title: phrase.value.content_editor_i18n.subheading,
+          icon: editorIcon('subheading'),
+          data: { level: 3 },
+        },
+      ],
+      inlineToolbar: false,
+      config: {
+        levels: [2, 3],
+        defaultLevel: 2,
+      },
+    },
+    list: {
+      class: TheiList,
+      toolbox: {
+        title: phrase.value.content_editor_i18n.list,
+        icon: editorIcon('list-unordered'),
+        data: { style: 'unordered' },
+      },
+      inlineToolbar: true,
+      config: {
+        defaultStyle: 'unordered',
+      },
+    },
+    quote: {
+      class: Quote,
+      inlineToolbar: true,
+      toolbox: {
+        title: phrase.value.content_editor_i18n.quote,
+        icon: editorIcon('quote'),
+      },
+    },
+    delimiter: {
+      class: ContentDelimiterTool,
+      // A divider has nothing to hide.
+      tunes: [],
+      toolbox: {
+        title: phrase.value.content_editor_i18n.delimiter,
+        icon: editorIcon('asterisk'),
+      },
+    },
+    // Every block of files is offered by one tile, the file's: what is
+    // picked there becomes whichever of them it should be. Their captions
+    // take the marks a paragraph takes.
+    contentMedia: {
+      class: ContentMediaTool,
+      inlineToolbar: true,
+      config: fileToolConfig(mediaUploads),
+    },
+    contentGallery: {
+      class: ContentGalleryTool,
+      inlineToolbar: true,
+      config: fileToolConfig(mediaUploads),
+    },
+    contentAudio: {
+      class: ContentAudioTool,
+      inlineToolbar: true,
+      config: fileToolConfig(audioUploads),
+    },
+    contentAttachment: {
+      class: ContentAttachmentTool,
+      inlineToolbar: true,
+      config: fileToolConfig(fileUploads),
+    },
+    contentFileGroup: {
+      class: ContentFileGroupTool,
+      inlineToolbar: true,
+      config: fileToolConfig(fileUploads),
+    },
+    // Before externalLink: Editor.js hands a paste to the first tool whose
+    // pattern matches, so a playable address never becomes a plain link,
+    // and an address of this site becomes a link to what it opens.
+    integration: {
+      class: IntegrationTool,
+    },
+    entityLink: {
+      class: entityLinkToolWithPaste(internalUrlPastePattern(internalSite)),
+      config: {
+        pickLink,
+        findEntityByUrl: (url: string) =>
+          findEntityByInternalUrl(url, internalSite),
+        resolver: contentLinkResolver,
+        labels: contentToolLabels(),
+        beginTransientSelection: beginTransientEntitySelection,
+        endTransientSelection: endTransientEntitySelection,
+      },
+    },
+    externalLink: {
+      class: ExternalLinkTool,
+      config: {
+        labels: contentToolLabels(),
+        links: externalLinks,
+        pickLink,
+      },
+    },
+    privateSectionBoundary: {
+      class: PrivateSectionBoundaryTool,
+      inlineToolbar: false,
+      // The edge of a section is not content; it cannot be a spoiler.
+      tunes: [],
+      toolbox: {
+        title: phrase.value.content_private_section,
+        icon: editorIcon('lock-close'),
+        data: { edge: 'start', createPair: true },
+      },
+      config: {
+        labels: contentToolLabels(),
+      },
+    },
+  };
+  toolboxEntries.value = editorToolboxEntries(
+    tools as Record<string, unknown>,
+    (title) =>
+      (editorJsI18nMessages().toolNames as Record<string, string>)[title] ??
+      title,
+  );
   editor = new Editor({
     holder: holder.value!,
     data: toEditorData(props.modalData.value?.data),
@@ -584,187 +1126,12 @@ onMounted(async () => {
       'contentItalic',
       'contentStrike',
       'contentHint',
-      'contentEntityLink',
-      'contentExternalInlineLink',
+      'contentLink',
     ],
     // What may stay in inline text is decided by each inline tool's own
     // `sanitize` and, on the way out, by `readCleanEditorOutput`; Editor.js
     // 2.31 never reads a top-level sanitizer.
-    tools: {
-      spoiler: {
-        class: ContentSpoilerTune as unknown as ToolConstructable,
-        config: {
-          title: phrase.value.content_spoiler,
-        } satisfies ContentSpoilerTuneConfig,
-      },
-      contentBold: {
-        class: ContentBoldTool as unknown as InlineToolConstructable,
-      },
-      contentItalic: {
-        // Editor.js 2.x still types constructable render() as HTMLElement even
-        // though its current InlineTool API accepts MenuConfig.
-        class: ContentItalicTool as unknown as InlineToolConstructable,
-      },
-      contentStrike: {
-        class: ContentStrikeTool as unknown as InlineToolConstructable,
-      },
-      contentHint: {
-        class: ContentHintTool as unknown as InlineToolConstructable,
-        config: {
-          open: (request: ContentHintRequest) =>
-            hintControls.value?.open(request),
-        },
-      },
-      contentEntityLink: {
-        class: ContentEntityLinkTool as unknown as InlineToolConstructable,
-        config: {
-          open: (request: ContentInlineLinkRequest) =>
-            inlineLinkControls.value?.openEntity(request),
-        },
-      },
-      contentExternalInlineLink: {
-        class:
-          ContentExternalInlineLinkTool as unknown as InlineToolConstructable,
-        config: {
-          open: (request: ContentInlineLinkRequest) =>
-            inlineLinkControls.value?.openExternal(request),
-        },
-      },
-      paragraph: {
-        toolbox: {
-          title: phrase.value.content_editor_i18n.text,
-          icon: editorIcon('paragraph'),
-        },
-      },
-      header: {
-        class: PlainTextHeader,
-        toolbox: [
-          {
-            title: phrase.value.content_editor_i18n.heading,
-            icon: editorIcon('heading'),
-            data: { level: 2 },
-          },
-          {
-            title: phrase.value.content_editor_i18n.subheading,
-            icon: editorIcon('subheading'),
-            data: { level: 3 },
-          },
-        ],
-        inlineToolbar: false,
-        config: {
-          levels: [2, 3],
-          defaultLevel: 2,
-        },
-      },
-      list: {
-        class: TheiList,
-        toolbox: {
-          title: phrase.value.content_editor_i18n.list,
-          icon: editorIcon('list-unordered'),
-          data: { style: 'unordered' },
-        },
-        inlineToolbar: true,
-        config: {
-          defaultStyle: 'unordered',
-        },
-      },
-      quote: {
-        class: Quote,
-        inlineToolbar: true,
-        toolbox: {
-          title: phrase.value.content_editor_i18n.quote,
-          icon: editorIcon('quote'),
-        },
-      },
-      delimiter: {
-        class: ContentDelimiterTool,
-        // A divider has nothing to hide.
-        tunes: [],
-        toolbox: {
-          title: phrase.value.content_editor_i18n.delimiter,
-          icon: editorIcon('asterisk'),
-        },
-      },
-      contentMedia: {
-        class: ContentMediaTool,
-        inlineToolbar: true,
-        config: {
-          pickAsset,
-          editAsset,
-          uploads,
-          labels: contentToolLabels(),
-        },
-      },
-      contentGallery: {
-        class: ContentGalleryTool,
-        inlineToolbar: true,
-        config: {
-          pickAssets,
-          editAsset,
-          uploads,
-          labels: contentToolLabels(),
-        },
-      },
-      contentAudio: {
-        class: ContentAudioTool,
-        inlineToolbar: false,
-        config: {
-          pickAsset,
-          editAsset,
-          uploads: audioUploads,
-          labels: contentToolLabels(),
-        },
-      },
-      contentAttachment: {
-        class: ContentAttachmentTool,
-        inlineToolbar: false,
-        config: {
-          pickAsset,
-          editAsset,
-          labels: contentToolLabels(),
-          audio: true,
-        },
-      },
-      // Before externalLink: Editor.js hands a paste to the first tool whose
-      // pattern matches, so a playable address never becomes a plain link,
-      // and an address of this site becomes a link to what it opens.
-      integration: {
-        class: IntegrationTool,
-      },
-      entityLink: {
-        class: entityLinkToolWithPaste(internalUrlPastePattern(internalSite)),
-        config: {
-          pickEntity,
-          findEntityByUrl: (url: string) =>
-            findEntityByInternalUrl(url, internalSite),
-          resolver: contentLinkResolver,
-          labels: contentToolLabels(),
-          beginTransientSelection: beginTransientEntitySelection,
-          endTransientSelection: endTransientEntitySelection,
-        },
-      },
-      externalLink: {
-        class: ExternalLinkTool,
-        config: {
-          labels: contentToolLabels(),
-          links: externalLinks,
-        },
-      },
-      privateSectionBoundary: {
-        class: PrivateSectionBoundaryTool,
-        inlineToolbar: false,
-        // The edge of a section is not content; it cannot be a spoiler.
-        tunes: [],
-        toolbox: {
-          title: phrase.value.content_private_section,
-          icon: editorIcon('lock-close'),
-          data: { edge: 'start', createPair: true },
-        },
-        config: {
-          labels: contentToolLabels(),
-        },
-      },
-    },
+    tools,
   });
 
   await editor.isReady;
@@ -777,6 +1144,7 @@ onMounted(async () => {
   if (disposed) return;
   editorAcceptsChanges = true;
   void editorSession.loadOffers();
+  if (props.modalData.review) void openAskedReview(props.modalData.review);
   cleanupEditorPopoverLayer = createEditorPopoverLayer(holder.value!);
   cleanupEditorDrag = createEditorBlockDrag(holder.value!, editor, {
     canMove: editorPrivateSections.canMove,
@@ -784,10 +1152,20 @@ onMounted(async () => {
   // One binding for the whole editor: the events bubble up from whichever
   // block is being typed in, and the rules read the caret, not the target.
   cleanupSmartTypography = bindSmartTypography(holder.value!);
-  cleanupMediaPaste = bindEditorMediaPaste(holder.value!, editor, {
-    audio: true,
+  cleanupFilePaste = bindEditorFilePaste(holder.value!, editor, {
+    onSkipped: (skipped) => {
+      errorMessage.value = skippedContentFilesMessage(skipped);
+    },
   });
+  cleanupPlainFields = bindEditorPlainFields(holder.value!, editor);
   cleanupGutterClick = bindEditorGutterClick(holder.value!, editor);
+  blockToolbox = bindEditorBlockToolbox(holder.value!, editor, {
+    open: openToolbox,
+  });
+  blockToolbox.hint({
+    add: phrase.value.content_block_add,
+    settings: phrase.value.content_block_settings,
+  });
   cleanupCurrentBlock = bindEditorCurrentBlock(holder.value!, editor, {
     // The blocks whose Enter is Editor.js's own: split, before, after.
     textBlocks: new Set(['paragraph', 'header', 'list', 'quote']),
@@ -797,13 +1175,28 @@ onMounted(async () => {
     holder.value!.closest('dialog') ?? document.body,
     holder.value!,
   );
+  // The heading is plain text; captions are the media blocks' own.
+  const linkBlocks = new Set(['paragraph', 'list', 'quote']);
   cleanupLinkPaste = bindEditorLinkPaste(holder.value!, editor, {
     site: internalSite,
-    // The heading is plain text; captions are the media blocks' own.
-    linkBlocks: new Set(['paragraph', 'list', 'quote']),
+    linkBlocks,
     findEntity: (url) => findEntityByInternalUrl(url, internalSite),
   });
-});
+  cleanupAtLink = bindEditorAtLink(holder.value!, editor, {
+    linkBlocks,
+    open: (request) => inlineLinkControls.value?.open(request),
+  });
+  cleanupInlineBoundary = bindEditorInlineBoundary(holder.value!);
+  // After the media and link pastes, which claim theirs first.
+  cleanupTextPaste = bindEditorTextPaste(holder.value!);
+  cleanupNativeUndo = bindEditorNativeUndo(
+    holder.value!,
+    holder.value!.closest('dialog') ?? document.body,
+  );
+}
+
+// Shown as well when starting failed halfway, so the text is still there.
+onMounted(() => startEditor().finally(() => (editorReady.value = true)));
 
 onBeforeUnmount(() => {
   disposed = true;
@@ -823,14 +1216,28 @@ onBeforeUnmount(() => {
   cleanupCurrentBlock = undefined;
   cleanupLinkPaste?.();
   cleanupLinkPaste = undefined;
+  cleanupAtLink?.();
+  cleanupAtLink = undefined;
+  cleanupInlineBoundary?.();
+  cleanupInlineBoundary = undefined;
+  cleanupTextDrop?.();
+  cleanupTextDrop = undefined;
+  cleanupTextPaste?.();
+  cleanupTextPaste = undefined;
+  cleanupNativeUndo?.();
+  cleanupNativeUndo = undefined;
+  blockToolbox?.destroy();
+  blockToolbox = undefined;
   cleanupKeyboardBoundary?.();
   cleanupKeyboardBoundary = undefined;
   cleanupEditorPopoverLayer?.();
   cleanupEditorPopoverLayer = undefined;
   cleanupSmartTypography?.();
   cleanupSmartTypography = undefined;
-  cleanupMediaPaste?.();
-  cleanupMediaPaste = undefined;
+  cleanupFilePaste?.();
+  cleanupFilePaste = undefined;
+  cleanupPlainFields?.();
+  cleanupPlainFields = undefined;
   cleanupEditorDrag?.();
   cleanupEditorDrag = undefined;
   cleanupEditorPrivatePattern?.();
@@ -841,8 +1248,15 @@ onBeforeUnmount(() => {
     'content-editor-block-dragging',
     'content-editor-modal-open',
   );
+  // Editor.js takes its blocks out at once, while the modal still fades out
+  // around them, which would fold it to its header: what was on screen stays
+  // in the holder, a still copy, until the modal is gone.
+  const still = Array.from(holder.value?.childNodes ?? [], (node) =>
+    node.cloneNode(true),
+  );
   editor?.destroy();
   editor = undefined;
+  holder.value?.replaceChildren(...still);
 });
 
 async function save() {
@@ -874,6 +1288,7 @@ async function save() {
     };
     headerSummary.value = summary;
     props.modalData.onSave(savedValue);
+    handTaken();
     await props.modalData.onSaved?.();
     // Saving the form lets drafts of the field go; the fields and the other
     // tabs look again.
@@ -894,45 +1309,45 @@ useSaveShortcut(save, {
   exclusive: true,
 });
 
-async function clearContent() {
-  if (!editor || headerSummary.value.blockCount === 0) return;
-  if (!window.confirm(phrase.value.content_editor_clear_confirm)) return;
-  const target = editor;
-  // What the editor held is kept as a version before it is emptied.
-  await editorSession.clear(async () => {
-    await target.clear();
-  });
-}
-
-async function pickAsset(kind: ContentEditorAssetKind) {
-  const asset = await launchContentAssetWizard(contentAssetOptions(kind));
-
-  return asset ? mapAsset(asset) : undefined;
-}
-
-async function pickAssets(kind: ContentEditorAssetKind) {
+/**
+ * Files picked for a text, of any kind or, for a gallery, pictures and
+ * videos: one new file opens its editor; several go in at the defaults of the
+ * blocks they land in, as pasted files do. A file the site cannot store is
+ * told of, with whatever went wrong in the picker.
+ */
+async function pickFiles(
+  kind: 'media' | 'any',
+): Promise<ContentEditorPickedFiles> {
   try {
-    const result = await launchAssetBatchWizard(contentAssetOptions(kind));
-    if (result?.errors.length) {
-      errorMessage.value = result.errors
-        .map((error) => `${error.fileName}: ${error.message}`)
-        .join(' · ');
-    }
-    return {
-      assets: result?.assets.map(mapAsset) ?? [],
-      uploads: result?.uploads ?? [],
-    };
+    const result = await pickAssetFiles({
+      ...contentAssetOptions(kind),
+      usageDelta: await buildDraftUsageDelta(),
+    });
+    const { files, skipped } = prepareContentFiles(result?.files ?? []);
+    const problems = [
+      ...(result?.errors ?? []).map(
+        (error) => `${error.fileName}: ${error.message}`,
+      ),
+      skippedContentFilesMessage(skipped),
+    ].filter(Boolean);
+    if (problems.length) errorMessage.value = problems.join(' · ');
+    return { assets: result?.assets.map(mapAsset) ?? [], files };
   } catch (error) {
     console.error(error);
     errorMessage.value = phrase.value.content_asset_pick_error;
-    return { assets: [], uploads: [] };
+    return { assets: [], files: [] };
   }
 }
 
-/** Pasted files on their way into the library; closing the editor asks first. */
+/** New files on their way into the library; closing the editor asks first. */
 const pendingUploads = ref(0);
-const uploads = pastedUploads('media');
+const mediaUploads = pastedUploads('media');
 const audioUploads = pastedUploads('audio');
+const fileUploads = pastedUploads('any');
+
+function fileToolConfig(uploads: ContentEditorUploads) {
+  return { pickFiles, editAsset, uploads, labels: contentToolLabels() };
+}
 
 function pastedUploads(kind: ContentEditorAssetKind): ContentEditorUploads {
   const options = contentAssetOptions(kind);
@@ -991,14 +1406,8 @@ async function replaceAsset(
   kind: ContentEditorAssetKind,
 ) {
   try {
-    const response = await $fetch<AssetVariantsResponse>(
-      `/api/admin/assets/${current.assetUuid}/variants`,
-    );
-    const stored = response.variants.find(
-      (variant) => variant.assetUuid === current.assetUuid,
-    );
-    if (!stored) return undefined;
-    const edited = await launchAssetEditor(stored, {
+    // The editor opens at once and fetches the file itself.
+    const edited = await launchAssetEditor(current.assetUuid, {
       ...contentAssetOptions(kind),
       usageDelta: await buildDraftUsageDelta(),
     });
@@ -1053,18 +1462,6 @@ function countContentUsageByAsset(data: ContentOutputData) {
   );
 }
 
-async function launchContentAssetWizard(
-  options: Parameters<typeof launchAssetWizard>[0],
-) {
-  try {
-    return await launchAssetWizard(options);
-  } catch (error) {
-    console.error(error);
-    errorMessage.value = phrase.value.content_asset_pick_error;
-    return undefined;
-  }
-}
-
 const mapAsset = contentAssetFromVariant;
 
 function contentAssetReplaceResult(
@@ -1092,14 +1489,21 @@ function contentToolLabels() {
     removeMedia: phrase.value.delete,
     chooseFile: phrase.value.content_choose_file,
     chooseAudio: phrase.value.content_choose_audio,
-    audioAsFile: phrase.value.content_audio_as_file,
-    audioAsPlayer: phrase.value.content_audio_as_player,
+    showAsFile: phrase.value.content_show_as_file,
+    showAsPlayer: phrase.value.content_show_as_player,
+    showAsPicture: phrase.value.content_show_as_picture,
+    makeFileGroup: phrase.value.content_make_file_group,
+    groupTitle: phrase.value.content_file_group_title,
+    galleryTitle: phrase.value.content_gallery_title,
+    addFiles: phrase.value.content_add_files,
+    removeFile: phrase.value.content_remove_file,
+    moveFile: phrase.value.content_move_file,
+    uploadAsFile: phrase.value.content_upload_as_file,
     caption: phrase.value.content_caption,
     mediaCentered: phrase.value.content_media_centered,
     mediaNatural: phrase.value.content_media_natural,
     mediaStretch: phrase.value.content_media_stretch,
     title: phrase.value.content_title,
-    description: phrase.value.content_description,
     fileWithExtension: phrase.value.content_file_with_extension,
     privateSection: phrase.value.content_private_section,
     privateSectionStart: phrase.value.content_private_section_start,
@@ -1108,6 +1512,7 @@ function contentToolLabels() {
     refreshExternalLink: phrase.value.refresh_external_link,
     linkNote: phrase.value.content_link_note_placeholder,
     chooseEntity: phrase.value.content_choose_entity,
+    changeLink: phrase.value.content_link_change,
     makeGallery: phrase.value.content_make_gallery,
     retryUpload: phrase.value.asset_upload_retry,
     cancelUpload: phrase.value.upload_cancel,
@@ -1137,15 +1542,11 @@ function editorJsI18nMessages() {
       Italic: text.italic,
       Strikethrough: phrase.value.content_strikethrough,
       Hint: phrase.value.content_hint,
-      'External link': phrase.value.content_external_link,
-      'Internal link': phrase.value.content_internal_link,
+      Link: phrase.value.content_link,
       Heading: text.heading,
       List: text.list,
       Quote: text.quote,
       Delimiter: text.delimiter,
-      Media: text.media,
-      Gallery: text.gallery,
-      Audio: text.audio,
       File: text.file,
     },
     tools: {
@@ -1185,200 +1586,219 @@ function editorJsI18nMessages() {
 </script>
 
 <template>
-  <ModalContainer ref="modalContainer" class="max-w-200">
-    <ContentInlineLinkDecorator
-      playback="interaction"
-      :root="holder"
-      :resolver="contentLinkResolver"
-    />
-    <ContentInlineLinkControls
-      ref="inlineLinkControls"
-      :teleport-to="holder?.closest('dialog') ?? undefined"
-    />
-    <ContentHintControls
-      ref="hintControls"
-      :teleport-to="holder?.closest('dialog') ?? undefined"
-    />
-    <FloatingPopup
-      v-model:open="entityPickerOpen"
-      :anchor="entityPickerAnchor ?? null"
-      placement="bottom-start"
-      :teleport-to="holder?.closest('dialog') ?? undefined"
-      @opened="entityPicker?.focus()"
-      @closed="closeEntityPicker"
+  <!-- One root: the host hides it while another modal is on top. -->
+  <div class="contents">
+    <!-- On the page's ground; on a phone it fills the screen, its foot at
+         the bottom, as the comparison in its place does. -->
+    <ModalContainer
+      v-show="!review"
+      ref="modalContainer"
+      class="grid max-w-200 grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr_auto]
+        max-sm:min-h-full"
+      ground="page"
     >
-      <ContentEntitySearchPopup ref="entityPicker" @select="selectEntity" />
-    </FloatingPopup>
-    <template #header>
-      <div class="flex flex-col gap-xs p-sm">
-        <!-- Until a restore is decided, the question is the whole header. -->
-        <template v-if="!restoring">
-          <div class="flex min-w-0 items-center gap-xs">
-            <ModalTitle
-              icon="edit"
-              :title="modalData.title || phrase.content_editor_title"
-              class="flex-1"
-            />
-            <div
-              v-if="errorMessage"
-              class="min-w-0 truncate text-sm text-text-error"
-            >
-              {{ errorMessage }}
-            </div>
-            <ModalHeaderButton
-              icon="delete"
-              variant="delete"
-              :label="phrase.clear"
-              :disabled="headerSummary.blockCount === 0"
-              @click="clearContent"
-            />
-            <ModalHeaderButton
-              icon="close"
-              :label="phrase.close_modal"
-              @click="closeModal"
-            />
-            <ModalHeaderButton
-              variant="accent"
-              :label="phrase.save"
-              :disabled="saving || !isDirty"
-              @click="save"
-            >
-              <Icon v-if="saving" name="loading" />
-              {{ isDirty ? phrase.save : phrase.saved }}
-            </ModalHeaderButton>
+      <ContentInlineLinkDecorator
+        playback="interaction"
+        :root="holder"
+        :resolver="contentLinkResolver"
+      />
+      <ContentInlineLinkControls ref="inlineLinkControls" />
+      <ContentHintControls ref="hintControls" />
+      <FloatingPopup
+        v-model:open="toolboxOpen"
+        :anchor="toolboxAnchor ?? null"
+        placement="bottom-start"
+        :fallback-placements="['top-start']"
+        fit-content
+        density="compact"
+        @opened="toolbox?.focus()"
+        @dismiss="toolboxDismissed"
+      >
+        <ContentBlockToolbox
+          ref="toolbox"
+          :entries="orderedToolbox"
+          @pick="toolboxPicked"
+          @reorder="toolboxReordered"
+        />
+      </FloatingPopup>
+      <FloatingPopup
+        v-model:open="linkPickerOpen"
+        :anchor="linkPickerAnchor ?? null"
+        placement="bottom-start"
+        complex
+        @opened="linkPicker?.focus()"
+        @closed="closeLinkPicker"
+      >
+        <ContentLinkPicker
+          ref="linkPicker"
+          :key="linkPickerOpening"
+          mode="block"
+          :initial="linkPickerInitial"
+          @apply="linkPicked"
+        />
+      </FloatingPopup>
+      <template #header>
+        <!-- One slim row: what is edited and whether it is kept, its history,
+           close and save. What waits for the owner opens the text instead. -->
+        <div class="flex min-w-0 items-center gap-xs p-sm">
+          <ModalTitle
+            icon="edit"
+            :title="modalData.title || phrase.content_editor_title"
+            class="min-w-0 flex-1"
+          />
+          <span
+            v-if="historyStatus === 'offline' || historyStatus === 'refused'"
+            class="inline-flex shrink-0 text-text-warning"
+            role="img"
+            :aria-label="historyStatusText"
+            :data-title-popup="historyStatusText"
+            data-history-status
+            ><Icon name="warning"
+          /></span>
+          <span
+            v-else-if="historyStatusText"
+            class="inline-flex shrink-0 text-text-3"
+            role="img"
+            :aria-label="historyStatusText"
+            :data-title-popup="historyStatusText"
+            data-history-status
+            ><Icon name="cloud-upload"
+          /></span>
+          <div
+            v-if="errorMessage"
+            class="min-w-0 truncate text-sm text-text-error"
+          >
+            {{ errorMessage }}
           </div>
-          <div class="flex min-w-0 items-center justify-between gap-sm">
-            <div class="flex min-w-0 items-center gap-xs">
-              <div ref="historyButton" class="flex shrink-0">
-                <ModalHeaderButton
-                  icon="history"
-                  size="compact"
-                  :label="phrase.content_history"
-                  :disabled="!hasHistory"
-                  :aria-expanded="historyPopupOpen"
-                  aria-haspopup="dialog"
-                  data-history-button
-                  @click="toggleHistory"
-                />
-              </div>
-              <ModalHeaderButton
-                v-if="lastRestore"
-                size="compact"
-                :label="undoLabel"
-                :data-title-popup="undoLabel"
-                data-restore-undo
-                @click="undoRestore"
-              >
-                <Icon name="rotate-right" class="-scale-x-100" />
-              </ModalHeaderButton>
-              <div
-                v-if="draftOffer"
-                class="flex min-w-0 shrink items-center rounded-full
-                  bg-bg-warning text-xs text-text-warning"
-                :data-draft-offer="offerUpdatedAt"
-              >
-                <button
-                  type="button"
-                  class="min-w-0 cursor-pointer truncate py-1 pr-1 pl-xs
-                    hocus:underline"
-                  :aria-label="phrase.content_draft_offer(offerTime)"
-                  :data-title-popup="phrase.content_draft_offer(offerTime)"
-                  data-draft-offer-open
-                  @click="openOffer"
-                >
-                  {{ phrase.content_draft_chip(offerTime) }}
-                </button>
-                <button
-                  type="button"
-                  class="flex shrink-0 cursor-pointer items-center rounded-full
-                    p-1 transition-colors hocus:bg-text-warning/15"
-                  :aria-label="phrase.content_draft_dismiss"
-                  :data-title-popup="phrase.content_draft_dismiss"
-                  data-draft-dismiss
-                  @click="dismissOffer"
-                >
-                  <Icon name="close" />
-                </button>
-              </div>
-              <ContentStats v-bind="headerSummary" compact class="min-w-0" />
-            </div>
-            <div class="flex shrink-0 items-center gap-1 text-xs text-text-3">
-              <span
-                v-if="
-                  historyStatus === 'offline' || historyStatus === 'refused'
-                "
-                class="inline-flex items-center gap-1 text-text-warning"
-                :data-title-popup="historyStatusText"
-                data-history-status
-              >
-                <Icon name="warning" />
-                {{
-                  historyStatus === 'offline'
-                    ? phrase.content_draft_status_offline_short
-                    : phrase.content_draft_status_refused_short
-                }}
-              </span>
-              <span
-                v-else-if="historyStatusText"
-                class="inline-flex"
-                role="img"
-                :aria-label="historyStatusText"
-                :data-title-popup="historyStatusText"
-                data-history-status
-              >
-                <Icon name="cloud-upload" />
-              </span>
-              <TheiTime v-if="updatedAt" :datetime="updatedAt" />
-              <template v-else>{{ phrase.content_never_saved }}</template>
-            </div>
-            <FloatingPopup
-              v-model:open="historyPopupOpen"
-              :anchor="historyButton"
-              placement="bottom-start"
-              :teleport-to="holder?.closest('dialog') ?? undefined"
-              fit-content
-            >
-              <div class="rounded-normal border border-border-1 bg-bg-2">
-                <ContentHistoryPanel
-                  :session="editorSession"
-                  :current="headerSummary"
-                  :current-key="currentKey"
-                  :opened="opened"
-                  @choose="chooseVersion"
-                />
-              </div>
-            </FloatingPopup>
+          <ModalHeaderButton
+            v-if="lastRestore"
+            :label="undoLabel"
+            :data-title-popup="undoLabel"
+            data-restore-undo
+            @click="undoRestore"
+          >
+            <Icon name="rotate-right" class="-scale-x-100" />
+          </ModalHeaderButton>
+          <div class="relative flex shrink-0">
+            <ModalHeaderButton
+              ref="historyTrigger"
+              icon="history"
+              :label="phrase.content_history"
+              :disabled="!hasHistory"
+              :aria-expanded="historyPopupOpen"
+              aria-haspopup="dialog"
+              data-history-button
+              @click="toggleHistory"
+            />
+            <span
+              v-if="draftOffer"
+              class="pointer-events-none absolute top-1 right-1 size-2
+                rounded-full bg-text-warning ring-2 ring-bg-2"
+              aria-hidden="true"
+            ></span>
           </div>
-        </template>
-        <ContentRestoreBar
-          v-else
-          :key="restoring.target.key"
-          :session="editorSession"
-          :target="restoring.target"
-          :from-list="restoring.fromList"
-          :current="headerSummary"
-          :current-key="currentKey"
-          :error="errorMessage"
-          @preview="showDiff"
-          @back="backToList"
-          @close="closeRestore"
-          @restored="onRestored"
+          <ModalHeaderButton
+            icon="close"
+            :label="phrase.close_modal"
+            @click="closeModal"
+          />
+          <ModalHeaderButton
+            variant="accent"
+            :label="phrase.save"
+            :disabled="saving || !isDirty"
+            data-editor-save
+            @click="save"
+          >
+            <Icon v-if="saving" name="loading" />
+            {{ isDirty ? phrase.save : phrase.saved }}
+          </ModalHeaderButton>
+        </div>
+        <FloatingPopup
+          v-model:open="historyPopupOpen"
+          :anchor="historyButton"
+          placement="bottom-end"
+          fit-content
+          complex
+        >
+          <div>
+            <ContentHistoryPanel
+              :session="editorSession"
+              :current="headerSummary"
+              :current-key="currentKey"
+              :opened="opened"
+              @choose="chooseVersion"
+            />
+          </div>
+        </FloatingPopup>
+      </template>
+
+      <div class="px-sm pt-md empty:hidden">
+        <ContentEditorNotices
+          :status="
+            historyStatus === 'offline' || historyStatus === 'refused'
+              ? historyStatus
+              : undefined
+          "
+          :offer-time="draftOffer ? offerTime : undefined"
+          :offer-at="offerUpdatedAt"
+          :stored-time="
+            storedElsewhere ? historyTime(storedElsewhere.updatedAt) : undefined
+          "
+          @compare-stored="compareStored"
+          @dismiss-stored="dismissStored"
+          :reviews="waitingReviews"
+          @compare-offer="openOffer"
+          @dismiss-offer="dismissOffer"
+          @open-review="openAiReview"
         />
       </div>
-    </template>
+      <div
+        ref="holder"
+        class="content-editor content-prose relative w-full px-sm py-md"
+        :class="{ invisible: !editorReady }"
+        @click.capture="preventEditorLinkNavigation"
+        @auxclick.capture="preventEditorLinkNavigation"
+      ></div>
+      <!-- What the text holds, and when it was last kept: the slim foot,
+           in sight however long the text. -->
+      <template #footer>
+        <div
+          class="flex min-h-9 flex-wrap items-center gap-x-3.5 gap-y-1 px-sm
+            py-xs text-xs text-text-2"
+          data-editor-foot
+        >
+          <ContentStats v-bind="headerSummary" compact class="min-w-0" />
+          <span class="inline-flex items-center gap-1 text-text-3">
+            <TheiTime v-if="updatedAt" :datetime="updatedAt" />
+            <template v-else>{{ phrase.content_never_saved }}</template>
+          </span>
+        </div>
+      </template>
+    </ModalContainer>
 
-    <ContentHistoryDiff
-      v-if="diff"
-      :current="diff.current"
-      :version="diff.version"
+    <ContentReview
+      v-if="review"
+      :key="reviewKey"
+      :review="review.model"
+      :mode="review.kind"
+      :title="review.kind === 'version' ? review.title : phrase.ai_review_title"
+      :context="modalData.title || phrase.content_editor_title"
+      :why="
+        review.kind === 'version'
+          ? review.why
+          : review.action.reason
+            ? publicText(review.action.reason)
+            : undefined
+      "
+      :initial="reviewInitial"
+      target="editor"
+      :busy="reviewBusy"
+      :error="reviewError"
+      :commentable="review.kind === 'ai'"
       :link-resolver="contentLinkResolver"
+      @close="reviewClosed"
+      @done="reviewDone"
+      @comment="reviewComment"
     />
-    <div
-      v-show="!diff"
-      ref="holder"
-      class="content-editor content-prose relative w-full px-sm py-md"
-      @click.capture="preventEditorLinkNavigation"
-      @auxclick.capture="preventEditorLinkNavigation"
-    ></div>
-  </ModalContainer>
+  </div>
 </template>

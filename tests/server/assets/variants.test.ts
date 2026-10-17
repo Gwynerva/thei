@@ -24,6 +24,7 @@ import {
   countAssetPlacementsByUuids,
 } from '../../../server/thei/assets/repository/usage-count';
 import { schema } from '../../../server/thei/db/schema';
+import { createContentHistoryTable } from '../fixtures/content-history-table';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -63,7 +64,13 @@ describe('asset variants', () => {
         meta text,
         PRIMARY KEY(assetUuid, containerType, containerId, role)
       );
+      CREATE TABLE "asset-descriptions" (
+        familyUuid text PRIMARY KEY,
+        text text NOT NULL,
+        updatedAt integer NOT NULL
+      );
     `);
+    createContentHistoryTable(rawDb);
 
     const filePath = (contentHash: string, extension: string) =>
       join(root, contentHash.slice(0, 2), `${contentHash}.${extension}`);

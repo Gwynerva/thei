@@ -239,67 +239,87 @@ function Api([string]$Method, [string]$Path, $Body = $null, [string]$What = 'A r
 
 # Downloads one file to "<target>.part" in a runspace of its own; returns 'ok',
 # 'gone' or 'fail'. The caller checks what arrived and moves it into place.
+#
+# A connection can die without a word — a router dropping it, a laptop
+# waking up — and then nothing ever arrives and nothing fails either. So
+# every wait has an end: the answer has to begin within a minute, and once
+# it has, a minute without a byte gives the transfer up. Each attempt opens
+# a connection of its own, and the next one picks up where the bytes
+# stopped, as the shell client's curl does.
 $DownloadWorker = {
   param($SiteBase, $Token, $SessionId, $Path, $Size, $Target)
   Add-Type -AssemblyName System.Net.Http
   $part = "$Target.part"
-  $client = $null
+  $silence = [TimeSpan]::FromSeconds(60)
+  $url = "$SiteBase/api/backup/session/$SessionId/file?path=$([Uri]::EscapeDataString($Path))"
+  $problem = ''
   try {
     [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($Target)) | Out-Null
-    # Only a file named by its hash can resume from an earlier attempt: the
-    # database and the config are new bytes in every session.
-    $have = 0
-    if ([IO.File]::Exists($part)) {
-      $have = (New-Object IO.FileInfo $part).Length
-      if ($have -gt $Size -or -not $Path.StartsWith('assets/')) { [IO.File]::Delete($part); $have = 0 }
-    }
-    if ($have -lt $Size -or $Size -eq 0) {
+  } catch {
+    return @{ result = 'fail'; path = $Path; status = $_.Exception.Message }
+  }
+  for ($attempt = 1; $attempt -le 4; $attempt++) {
+    $client = $null; $response = $null; $stream = $null
+    try {
+      # Only a file named by its hash can resume from an earlier attempt: the
+      # database and the config are new bytes in every session.
+      $have = 0
+      if ([IO.File]::Exists($part)) {
+        $have = (New-Object IO.FileInfo $part).Length
+        if ($have -gt $Size -or -not $Path.StartsWith('assets/')) { [IO.File]::Delete($part); $have = 0 }
+      }
+      if ($have -ge $Size -and $Size -gt 0) {
+        return @{ result = 'ok'; path = $Path; size = $Size; part = $part; target = $Target }
+      }
       $handler = New-Object Net.Http.HttpClientHandler
       $handler.AllowAutoRedirect = $false
       $client = New-Object Net.Http.HttpClient $handler
-      $client.Timeout = [TimeSpan]::FromHours(2)
+      # Read as headers arrive, this bounds only the wait for the answer to
+      # begin; the bytes are watched below.
+      $client.Timeout = $silence
       $client.DefaultRequestHeaders.Add('x-thei-backup-token', $Token)
-      $url = "$SiteBase/api/backup/session/$SessionId/file?path=$([Uri]::EscapeDataString($Path))"
-      $status = 0
-      $response = $null
-      # A blip in the connection should not cost a whole weekly run.
-      for ($attempt = 1; $attempt -le 3; $attempt++) {
-        $request = New-Object Net.Http.HttpRequestMessage ([Net.Http.HttpMethod]::Get), $url
-        if ($have -gt 0) { [void]$request.Headers.TryAddWithoutValidation('Range', "bytes=$have-") }
-        try {
-          $response = $client.SendAsync($request, [Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
-          $status = [int]$response.StatusCode
-          if ($status -lt 500) { break }
-          $response.Dispose(); $response = $null
-        } catch {
-          if ($attempt -eq 3) { throw }
-        }
-        Start-Sleep -Seconds 2
-      }
+      $request = New-Object Net.Http.HttpRequestMessage ([Net.Http.HttpMethod]::Get), $url
+      $request.Headers.ConnectionClose = $true
+      if ($have -gt 0) { [void]$request.Headers.TryAddWithoutValidation('Range', "bytes=$have-") }
+      $response = $client.SendAsync($request, [Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+      $status = [int]$response.StatusCode
       if ($status -eq 404) {
         if ([IO.File]::Exists($part)) { [IO.File]::Delete($part) }
-        if ($response) { $response.Dispose() }
         return @{ result = 'gone'; path = $Path }
       }
+      if ($status -ge 500) { throw "the site answered $status" }
       if ($status -ne 200 -and $status -ne 206) {
-        if ($response) { $response.Dispose() }
         return @{ result = 'fail'; path = $Path; status = $status }
       }
       $mode = if ($status -eq 206) { [IO.FileMode]::Append } else { [IO.FileMode]::Create }
       $stream = New-Object IO.FileStream $part, $mode, ([IO.FileAccess]::Write)
-      try {
-        $response.Content.CopyToAsync($stream).GetAwaiter().GetResult()
-      } finally {
-        $stream.Dispose()
-        $response.Dispose()
+      $source = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+      $buffer = New-Object byte[] 65536
+      while ($true) {
+        $read = $source.ReadAsync($buffer, 0, $buffer.Length)
+        if (-not $read.Wait($silence)) { throw "nothing arrived for $([int]$silence.TotalSeconds) s" }
+        $count = $read.Result
+        if ($count -le 0) { break }
+        $stream.Write($buffer, 0, $count)
       }
+      return @{ result = 'ok'; path = $Path; size = $Size; part = $part; target = $Target }
+    } catch {
+      $problem = $_.Exception.Message
+      if ($_.Exception.InnerException) { $problem = $_.Exception.InnerException.Message }
+      # The client's own timeout reads as a cancellation.
+      if ($_.Exception -is [Threading.Tasks.TaskCanceledException] -or
+        $_.Exception.InnerException -is [Threading.Tasks.TaskCanceledException]) {
+        $problem = "no answer for $([int]$silence.TotalSeconds) s"
+      }
+    } finally {
+      # Closing the answer is what aborts a read still waiting on the line.
+      if ($stream) { $stream.Dispose() }
+      if ($response) { $response.Dispose() }
+      if ($client) { $client.Dispose() }
     }
-    return @{ result = 'ok'; path = $Path; size = $Size; part = $part; target = $Target }
-  } catch {
-    return @{ result = 'fail'; path = $Path; status = $_.Exception.Message }
-  } finally {
-    if ($client) { $client.Dispose() }
+    if ($attempt -lt 4) { Start-Sleep -Seconds (2 * $attempt) }
   }
+  return @{ result = 'fail'; path = $Path; status = $problem }
 }
 
 # Earlier copies, newest first: each can supply files that did not change.

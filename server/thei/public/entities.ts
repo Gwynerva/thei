@@ -11,7 +11,6 @@ import type {
   PublicEventResponseFull,
   PublicAction,
   PublicFile,
-  PublicReferenceGroup,
   PublicReferenceLink,
   PublicReferences,
   PublicProjectSection,
@@ -32,20 +31,15 @@ import {
   externalLinkHostname,
   type ProjectExternalLink,
 } from '#layers/thei/shared/external-link';
+import type { ContentLinkMention } from '#layers/thei/shared/content-link-mentions';
+import type { ContentEntityReference } from '#layers/thei/shared/content-link';
 import {
-  extractContentReferenceCandidates,
-  type ContentReferenceLinkCandidate,
-} from '#layers/thei/shared/public-content-reference';
-import {
-  splitPublicReferenceFiles,
-  splitPublicReferenceLinks,
+  uniquePublicReferenceFiles,
+  uniquePublicReferenceLinks,
 } from '#layers/thei/shared/public-references';
 import { isPublicSecret } from '#layers/thei/shared/api/public';
 import { richTextToPlainText } from '#layers/thei/shared/rich-text';
-import type {
-  ContentOutputData,
-  PublicContentOutputData,
-} from '#layers/thei/shared/content';
+import type { PublicContentOutputData } from '#layers/thei/shared/content';
 import {
   buildProjectSectionUrl,
   buildProjectUrl,
@@ -57,13 +51,14 @@ import {
 import type { TagItem } from '#layers/thei/shared/tag';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
+import { archivedOriginalFromMeta } from '#layers/thei/shared/asset';
 import {
-  archivedOriginalFromMeta,
   buildPublicProjectMedia,
   buildPublicEventMedia,
   buildPublicTagMedia,
   buildPublicPageMedia,
 } from '../assets/urls';
+import { readFamilyDescriptions } from '../assets/descriptions';
 import { resolveEntityIconMedia } from '../media/generated-icon';
 import {
   listProjectSections,
@@ -75,10 +70,7 @@ import {
   countPublicRelated,
   resolvePublicRelated,
 } from './related';
-import {
-  createExternalLinkLoader,
-  findExternalLink,
-} from '../external-links/repository';
+import { findExternalLink } from '../external-links/repository';
 import { getExternalLinkList } from '../external-links/lists';
 import { listTagsForContainer } from '../tags';
 import { parseInternalUrl } from '#layers/thei/shared/internal-url';
@@ -327,11 +319,6 @@ export async function buildPublicPage(
     chronology: buildPublicEntityChronology(page),
     iconMedia: await buildPublicPageIcon(page),
     content,
-    references: await buildPublicReferences(
-      emptyPublicReferenceGroup(),
-      await buildPublicContentReferenceGroup(content, viewer),
-      viewer,
-    ),
     ...(await buildOwnerOnlyNotes(
       'page',
       page.pageUuid,
@@ -427,6 +414,10 @@ export async function buildPublicProject(
     getExternalLinkList({ type: 'project', id: project.projectUuid }),
   ]);
   const { usages, sections: visibleSections, relations, status } = head;
+  // What each file of the showcase and of the files is, read at once.
+  const alts = readFamilyDescriptions(
+    [...head.showcase, ...rawFiles].map(({ asset }) => asset.familyUuid),
+  );
   const showcase = await Promise.all(
     head.showcase.map(async ({ asset, meta }) => {
       if (!own && usageIsPrivate(meta))
@@ -436,11 +427,13 @@ export async function buildPublicProject(
         );
       const item = meta as ShowcaseAssetUsageMeta | null;
       const href = `${buildProjectUrl(project.humanReadableSlug, project.publicId)}media/showcase-asset/${asset.slug}.${asset.extension}`;
+      const alt = alts.get(asset.familyUuid) ?? '';
       return buildPublicAssetDescriptor(
         asset,
         href,
-        await buildPublicProjectMedia(project, asset, 'showcase-asset'),
+        await buildPublicProjectMedia(project, asset, 'showcase-asset', alt),
         item?.role === 'showcase-asset' ? (item.caption ?? '') : '',
+        alt,
       );
     }),
   );
@@ -455,6 +448,7 @@ export async function buildPublicProject(
             project,
             asset,
             meta as OtherAssetUsageMeta | null,
+            alts.get(asset.familyUuid) ?? '',
           ),
     ),
   );
@@ -492,11 +486,7 @@ export async function buildPublicProject(
     related: countPublicRelated(relations),
     currentStatus: status.current,
     statusCount: status.total,
-    references: await buildPublicReferences(
-      manualReferences,
-      await buildPublicContentReferenceGroup(description, viewer),
-      viewer,
-    ),
+    references: await buildPublicReferences(manualReferences, viewer),
     action: await buildPublicAction(project, usages, own),
     ...(await buildOwnerOnlyNotes(
       'project',
@@ -584,11 +574,6 @@ export async function buildPublicProjectSection(
     chronology: buildPublicEntityChronology(section),
     content: content ?? { blocks: [] },
     project: parent,
-    references: await buildPublicReferences(
-      emptyPublicReferenceGroup(),
-      await buildPublicContentReferenceGroup(content, viewer),
-      viewer,
-    ),
   };
 }
 
@@ -631,6 +616,9 @@ export async function buildPublicEvent(
     resolvePublicRelated({ type: 'event', id: stored.eventUuid }, viewer),
   ]);
   const media = bannerMedia ?? bodyMedia!;
+  const alts = readFamilyDescriptions(
+    rawFiles.map(({ asset }) => asset.familyUuid),
+  );
   const files = await Promise.all(
     rawFiles.map(({ asset, meta }) => {
       if (!own && usageIsPrivate(meta))
@@ -654,6 +642,7 @@ export async function buildPublicEvent(
         extension: asset.extension,
         size: asset.size,
         archivedOriginal: archivedOriginalFromMeta(asset.meta),
+        ...publicAlt(alts.get(asset.familyUuid)),
       } satisfies PublicFile;
     }),
   );
@@ -669,11 +658,7 @@ export async function buildPublicEvent(
     media,
     ...(bannerMedia ? { bannerMedia } : {}),
     content: content ?? { blocks: [] },
-    references: await buildPublicReferences(
-      manual,
-      await buildPublicContentReferenceGroup(content, viewer),
-      viewer,
-    ),
+    references: await buildPublicReferences(manual, viewer),
     tags: await buildPublicTags(tags),
     related: countPublicRelated(relations),
     action: await buildPublicAction(stored, usages, own),
@@ -694,19 +679,15 @@ function usageIsPrivate(meta: unknown): boolean {
   );
 }
 
-function emptyPublicReferenceGroup(): PublicReferenceGroup {
-  return { links: [], files: [] };
-}
-
 /**
  * An entity's own list of links as the sidebar shows it: each page as it
  * presents itself, with the owner's note under it.
  */
 export function buildPublicManualReferenceGroup(
   links: ProjectExternalLink[],
-  files: PublicReferenceGroup['files'],
+  files: PublicReferences['files'],
   includePrivate: boolean,
-): PublicReferenceGroup {
+): PublicReferences {
   return {
     links: links
       .filter((link) => includePrivate || !link.isPrivate)
@@ -764,11 +745,6 @@ export async function buildPublicDiaryEntry(
     chronology: buildPublicEntityChronology(stored),
     media,
     content: content ?? { blocks: [] },
-    references: await buildPublicReferences(
-      emptyPublicReferenceGroup(),
-      await buildPublicContentReferenceGroup(content, viewer),
-      viewer,
-    ),
     related: countPublicRelated(relations),
     ...(await buildOwnerOnlyNotes(
       'diary-entry',
@@ -781,89 +757,15 @@ export async function buildPublicDiaryEntry(
 }
 
 /**
- * The links and files a piece of content refers to, for the sidebar. Each
- * linked entity is judged on its own: a share link opens the content it came
- * with, not the entities that content mentions.
+ * An entity of this site as the sidebar shows a link to it — or nothing,
+ * when the reader may not open it. The owner's note on why the link was
+ * worth making comes with it, never in place of its own title.
  */
-export async function buildPublicContentReferenceGroup(
-  content: ContentOutputData | PublicContentOutputData | null | undefined,
+async function buildPublicEntityLink(
+  reference: ContentEntityReference & { note?: string },
   viewer: PublicViewer,
-): Promise<PublicReferenceGroup> {
-  const referenceContent: ContentOutputData | undefined = content
-    ? {
-        blocks: content.blocks.flatMap((block) => {
-          if (block.type === 'privateSectionPlaceholder') return [];
-          if (block.type === 'privateSectionExpanded') return block.data.blocks;
-          return [block];
-        }),
-      }
-    : undefined;
-  // Hydrated content has no private boundaries left: a section the reader
-  // may not open is already gone. Raw content keeps them for the owner only.
-  const candidates = extractContentReferenceCandidates(
-    referenceContent,
-    viewer.isAdmin,
-  );
-  const loadExternalLink = createExternalLinkLoader();
-  const links = await Promise.all(
-    candidates.links.map((candidate) =>
-      buildPublicReferenceLink(candidate, viewer, loadExternalLink),
-    ),
-  );
-  return {
-    links: links.filter((link): link is PublicReferenceLink => Boolean(link)),
-    files: candidates.files
-      .map(({ asset, title, caption }): PublicFile | undefined => {
-        if (!asset.assetUrl || !asset.extension) return undefined;
-        return {
-          key: asset.assetUuid,
-          title: richTextToPlainText(title ?? ''),
-          description: caption ? richTextToPlainText(caption) : undefined,
-          href: asset.assetUrl,
-          extension: asset.extension,
-          size: asset.size ?? 0,
-          media: asset.media,
-          archivedOriginal: asset.archivedOriginal,
-        };
-      })
-      .filter((file): file is PublicFile => Boolean(file)),
-  };
-}
-
-/**
- * Resolves a link candidate into what the sidebar shows. An external address
- * that opens an entity of this very site is shown as that entity, so it looks
- * like — and merges with — a link made through the entity picker.
- */
-async function buildPublicReferenceLink(
-  candidate: ContentReferenceLinkCandidate,
-  viewer: PublicViewer,
-  loadExternalLink: ReturnType<
-    typeof createExternalLinkLoader
-  > = findExternalLink,
 ): Promise<PublicReferenceLink | undefined> {
-  const resolved =
-    candidate.kind === 'external'
-      ? {
-          ...(await resolveSiteEntityCandidate(candidate.url)),
-          note: candidate.note,
-        }
-      : candidate;
-  // The target is shown as it presents itself; the owner's note on why the
-  // link was worth making comes with it, never in its place.
-  const note = resolved.note ? { note: resolved.note } : {};
-  if (resolved.kind === 'external') {
-    const link = await loadExternalLink(resolved.url);
-    return {
-      kind: 'external',
-      title: link?.title || externalLinkHostname(resolved.url),
-      href: resolved.url,
-      description: link?.description,
-      ...note,
-      iconMedia: link?.faviconMedia,
-    };
-  }
-  const entity = await findContentEntity(resolved, viewer);
+  const entity = await findContentEntity(reference, viewer);
   const opens = opensGrantOwner(viewer, entity?.grantOwner);
   if (!entity || !canOpenPublicEntity(entity.access, opens)) return undefined;
   const iconMedia = await entity.media('public', opens);
@@ -872,7 +774,7 @@ async function buildPublicReferenceLink(
     title: entity.title,
     href: entity.href,
     description: entity.summary,
-    ...note,
+    ...(reference.note ? { note: reference.note } : {}),
     // A diary entry is called by its day, which the page writes out.
     ...(entity.date ? { date: entity.date } : {}),
     ...(iconMedia ? { iconMedia } : {}),
@@ -886,7 +788,7 @@ async function buildPublicReferenceLink(
  */
 export async function resolveSiteEntityCandidate(
   url: string,
-): Promise<ContentReferenceLinkCandidate> {
+): Promise<ContentLinkMention> {
   const external = { kind: 'external' as const, url };
   // Only absolute addresses: a manual link is always written as one, and a
   // bare path would be taken for this site whatever the author meant.
@@ -903,15 +805,14 @@ export async function resolveSiteEntityCandidate(
 }
 
 /**
- * Builds the sidebar's "Links" and "Files": manual and content references,
- * with everything that appears in both lifted into `shared`.
+ * Builds the sidebar's "Links" and "Files" from what the owner attached:
+ * an address of this site as the entity it opens, every link and file once.
  */
 export async function buildPublicReferences(
-  manual: PublicReferenceGroup,
-  content: PublicReferenceGroup,
+  manual: PublicReferences,
   viewer: PublicViewer,
 ): Promise<PublicReferences> {
-  const manualLinks = await Promise.all(
+  const links = await Promise.all(
     manual.links.map((link) =>
       link.kind === 'external' ? buildManualSiteLink(link, viewer) : link,
     ),
@@ -920,20 +821,18 @@ export async function buildPublicReferences(
   // separate rows over one stored file.
   const hashes = new Map<string, string>();
   await Promise.all(
-    [...manual.files, ...content.files].map(async (file) => {
+    manual.files.map(async (file) => {
       if (isPublicSecret(file) || hashes.has(file.key)) return;
       const asset = await THEI_SERVER.assets.findBySlug(file.key);
       if (asset) hashes.set(file.key, asset.contentHash);
     }),
   );
   return {
-    links: splitPublicReferenceLinks(
-      manualLinks.filter((link): link is PublicReferenceLink => Boolean(link)),
-      content.links,
+    links: uniquePublicReferenceLinks(
+      links.filter((link): link is PublicReferenceLink => Boolean(link)),
     ),
-    files: splitPublicReferenceFiles(
+    files: uniquePublicReferenceFiles(
       manual.files,
-      content.files,
       (file) => hashes.get(file.key) ?? file.key,
     ),
   };
@@ -949,16 +848,16 @@ async function buildManualSiteLink(
 ): Promise<PublicReferenceLink | undefined> {
   const candidate = await resolveSiteEntityCandidate(link.href);
   if (candidate.kind === 'external') return link;
-  return buildPublicReferenceLink({ ...candidate, note: link.note }, viewer);
+  return buildPublicEntityLink({ ...candidate, note: link.note }, viewer);
 }
 
 export async function buildPublicTags(
   tags: TagItem[],
 ): Promise<PublicTagSummary[]> {
   const { db, schema } = THEI_SERVER.useDb();
-  return Promise.all(
-    tags.map(async (tag) => {
-      const icon = db
+  const icons = tags.map(
+    (tag) =>
+      db
         .select({ asset: schema.assets })
         .from(schema.assetUsages)
         .innerJoin(
@@ -972,14 +871,26 @@ export async function buildPublicTags(
             eq(schema.assetUsages.role, 'icon'),
           ),
         )
-        .get();
+        .get()?.asset,
+  );
+  // What every icon is, read at once: the list of tags shows them all.
+  const alts = readFamilyDescriptions(
+    icons.flatMap((icon) => (icon ? [icon.familyUuid] : [])),
+  );
+  return Promise.all(
+    tags.map(async (tag, index) => {
+      const icon = icons[index];
       return {
         title: tag.title,
         slug: tag.slug,
         publicId: tag.publicId,
         description: tag.description,
         iconMedia: icon
-          ? await buildPublicTagMedia(tag, icon.asset)
+          ? await buildPublicTagMedia(
+              tag,
+              icon,
+              alts.get(icon.familyUuid) ?? '',
+            )
           : undefined,
       };
     }),
@@ -1005,10 +916,19 @@ export async function buildPublicTagListItems(
   }));
 }
 
+/**
+ * A file's description, where a public page shows the file: read with those
+ * of the other files of the page (`readFamilyDescriptions`).
+ */
+function publicAlt(alt: string | undefined): { alt?: string } {
+  return alt ? { alt } : {};
+}
+
 function buildPublicDirectFile(
   project: ProjectRow,
   asset: any,
   meta: OtherAssetUsageMeta | null,
+  alt: string,
 ): PublicFile {
   return {
     key: asset.slug,
@@ -1022,6 +942,7 @@ function buildPublicDirectFile(
     extension: asset.extension,
     size: asset.size,
     archivedOriginal: archivedOriginalFromMeta(asset.meta),
+    ...publicAlt(alt),
   };
 }
 
@@ -1030,17 +951,17 @@ function buildPublicAssetDescriptor(
   href: string,
   media: Awaited<ReturnType<typeof buildPublicProjectMedia>> | undefined,
   title: string,
-  description?: string,
+  alt: string,
 ): PublicFile {
   return {
     key: asset.slug,
     title: richTextToPlainText(title),
-    description: description ? richTextToPlainText(description) : undefined,
     href,
     extension: asset.extension,
     size: asset.size,
     media,
     archivedOriginal: archivedOriginalFromMeta(asset.meta),
+    ...publicAlt(alt),
   };
 }
 

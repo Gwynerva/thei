@@ -1,5 +1,3 @@
-import { publicIdIsValid } from './public-link';
-
 export function buildProjectUrl(
   humanReadable: string,
   publicId: string,
@@ -30,10 +28,6 @@ export function buildProjectTimelineUrl(
 /** Extracts the ID portion while deliberately ignoring the readable prefix. */
 export function publicIdFromProjectUrlPart(value: string): string {
   return value.slice(value.lastIndexOf('-') + 1);
-}
-
-export function isPublicId(value: string): boolean {
-  return publicIdIsValid(value);
 }
 
 export function buildProjectSectionUrl(

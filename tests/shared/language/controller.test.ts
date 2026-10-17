@@ -13,10 +13,6 @@ describe('createI18nController (en)', () => {
     expect(ctrl.code).toBe('en');
   });
 
-  it('has normalize function', () => {
-    expect(typeof ctrl.normalize).toBe('function');
-  });
-
   it('normalize applies English curly quotes via controller', () => {
     expect(ctrl.normalize('"hello"')).toBe('\u201Chello\u201D');
   });
@@ -67,17 +63,5 @@ describe('createI18nController (ru with en base)', () => {
 
   it('has Russian sampleDisplayNames', () => {
     expect(ctrl.sampleDisplayNames).toContain('Анна');
-  });
-
-  it('logs I18nError and returns {{ key }} fallback for phrase not in either module', () => {
-    const partialCtrl = createI18nController({ code: 'ru', phrases: {} }, {
-      code: 'en',
-      phrases: {},
-    } as unknown as I18nBaseModule);
-    const origError = console.error;
-    console.error = () => {};
-    const result = String(partialCtrl.phrase.theme);
-    console.error = origError;
-    expect(result).toBe('{{ theme }}');
   });
 });

@@ -26,12 +26,14 @@ withDefaults(
       'h-9 px-xs': size === 'default',
       'size-7 px-0': size === 'compact',
       'bg-bg-3 text-text-2': variant !== 'accent',
-      'not-disabled:hocus:bg-bg-4 not-disabled:hocus:text-text-1':
-        variant === 'default',
-      'not-disabled:hocus:bg-bg-error not-disabled:hocus:text-text-error':
+      // Its popup open, it looks as it does under the pointer.
+      [`popup-open:bg-bg-4 popup-open:text-text-1 not-disabled:hocus:bg-bg-4
+      not-disabled:hocus:text-text-1`]: variant === 'default',
+      [`popup-open:bg-bg-error popup-open:text-text-error
+      not-disabled:hocus:bg-bg-error not-disabled:hocus:text-text-error`]:
         variant === 'delete',
-      'bg-accent/80 text-white not-disabled:hocus:bg-accent':
-        variant === 'accent',
+      [`bg-accent/80 text-white popup-open:bg-accent
+      not-disabled:hocus:bg-accent`]: variant === 'accent',
       'disabled:bg-bg-accent disabled:text-text-2': variant === 'accent',
       'pointer-events-none opacity-40': disabled && size === 'compact',
       'w-9 px-0': size === 'default' && icon && !$slots.default,

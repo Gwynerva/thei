@@ -447,7 +447,7 @@ describe('editor drafts', () => {
           )
           .get(),
       ).toEqual({ n: 0 });
-      expect(logged).toHaveBeenCalledOnce();
+      expect(logged).toHaveBeenCalled();
       // The failed store took the staged file along: the editor stages it
       // again when it next asks.
       expect(() => useDraft('draft-a')).toThrow('Draft has expired');

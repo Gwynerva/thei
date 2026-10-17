@@ -2,7 +2,7 @@ import {
   collectContentAssetUuids,
   contentBlockTextParts,
   contentSemanticKey,
-  isContentAssetBlockType,
+  isContentFileBlockType,
   type ContentBlockType,
   type ContentOutputBlock,
   type ContentOutputData,
@@ -234,7 +234,7 @@ function similarity(left: ContentOutputBlock, right: ContentOutputBlock) {
   if (left.type === 'privateSectionBoundary' || left.type === 'delimiter')
     return 0;
   // The same file with another caption or layout is the same block.
-  if (isContentAssetBlockType(left.type)) {
+  if (isContentFileBlockType(left.type)) {
     const files = new Set(collectContentAssetUuids({ blocks: [left] }));
     if (
       collectContentAssetUuids({ blocks: [right] }).some((uuid) =>

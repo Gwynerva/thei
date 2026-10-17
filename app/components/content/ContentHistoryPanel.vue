@@ -20,9 +20,9 @@ import {
 } from '#layers/thei/app/composables/content-history/time-labels';
 
 /**
- * The versions of a text, one line each: when it was written and how much
- * it differs from the text now. Choosing one does not restore it: the editor
- * asks first, showing what would change and why the version was kept.
+ * The versions of a text, one line each: when it was written, why it was
+ * kept and how much it differs from the text now. Choosing one compares it
+ * with the text, to take all of it or a part.
  */
 const props = defineProps<{
   session: EditorHistorySession;
@@ -102,7 +102,7 @@ const row =
     role="dialog"
     :aria-label="phrase.content_history"
     class="flex scrollbar-mini
-      max-h-[min(22rem,var(--floating-popup-available-height))] w-64 max-w-full
+      max-h-[min(26rem,var(--floating-popup-available-height))] w-76 max-w-full
       flex-col gap-xs overflow-y-auto p-xs text-sm"
     data-content-history-panel
   >
@@ -111,6 +111,19 @@ const row =
     </div>
 
     <template v-else>
+      <div class="flex items-center justify-between gap-xs px-xs pt-0.5">
+        <span class="text-xs font-semibold text-text-3">{{
+          phrase.content_history
+        }}</span>
+        <!-- How it works, for whoever asks: not a paragraph over the list. -->
+        <Icon
+          name="question"
+          class="shrink-0 text-text-3"
+          :data-title-popup="phrase.content_history_keeps"
+          tabindex="0"
+          data-history-help
+        />
+      </div>
       <button
         v-if="showOpened && openedStats"
         type="button"
@@ -145,9 +158,19 @@ const row =
           :class="row"
           @click="chooseRevision(entry)"
         >
-          <span class="shrink-0 text-text-1 tabular-nums">{{
-            time(entry.updatedAt)
-          }}</span>
+          <span class="flex min-w-0 items-baseline gap-1.5">
+            <span class="shrink-0 text-text-1 tabular-nums">{{
+              time(entry.updatedAt)
+            }}</span>
+            <span
+              v-if="entry.reason"
+              class="min-w-0 truncate text-xs"
+              :class="
+                entry.reason === 'before-ai' ? 'text-accent' : 'text-text-2'
+              "
+              >{{ phrase.content_history_reasons[entry.reason] }}</span
+            >
+          </span>
           <ContentStatsDelta
             :from="current"
             :to="entry"

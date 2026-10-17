@@ -19,6 +19,7 @@ import {
   type AssetLibraryFacets,
   type AssetLibraryResponse,
   type AssetLibrarySourceFilter,
+  type AssetUsagesResponse,
 } from '../../../shared/asset-library';
 import { normalizeAssetExtension } from '../../../shared/assets/formats';
 import { dayQueryRank, parseDayQuery } from '../../../shared/day-query';
@@ -56,6 +57,7 @@ WITH sources AS (
   UNION ALL SELECT 'diary-entry',diaryUuid,date,'',date,'',updatedAt,access='private','','','','' FROM "diary-entries"
   UNION ALL SELECT 'tag',tagUuid,title,description,slug,publicId,0,0,'','','','' FROM tags
   UNION ALL SELECT 'profile',profileId,displayName,slogan,'','',0,0,'','','','' FROM profiles
+  UNION ALL SELECT 'ai-session',sessionUuid,title,'','','',lastActiveAt,1,'','','','' FROM "ai-sessions"
   UNION ALL SELECT 'project-section',se.sectionUuid,se.title,se.summary,se.humanReadableSlug,se.publicId,se.updatedAt,
     (se.isPrivate OR p.access='private'),p.projectUuid,p.title,p.humanReadableSlug,p.publicId
     FROM "project-content-sections" se JOIN projects p ON p.projectUuid=se.projectUuid
@@ -80,12 +82,14 @@ members AS (
 `;
 /**
  * Matches an asset by the text the site itself gives it: captions and titles
- * of its placements, captions inside editor blocks, and the titles of whatever
- * holds it. A diary entry has no title: it is found by its day, written in
+ * of its placements, captions and titles inside editor blocks — of a file in
+ * a group, the group's title too — and the titles of whatever holds it. A diary entry has no title: it is found by its day, written in
  * any way (`day-query.ts`), and never by the characters of its stored date,
  * so a lone `0` or `-` does not find every entry. What the uploaded file
- * was called is never kept, so it is never searchable. `scoped` restricts the
- * match to the member row's own source. Takes the query four times.
+ * was called is never kept, so it is never searchable. The file's own
+ * description, kept for its family, finds it wherever it is placed.
+ * `scoped` restricts the match by placements to the member row's own
+ * source. Takes the query five times.
  */
 function siteTextMatchSql(scoped: boolean) {
   const scope = scoped
@@ -103,8 +107,12 @@ function siteTextMatchSql(scoped: boolean) {
           instr(asset_search_text(coalesce(json_extract(b.value,'$.data.caption'),'') || ' ' || coalesce(json_extract(b.value,'$.data.title'),'')),?)>0)
         OR EXISTS (SELECT 1 FROM json_each(b.value,'$.data.items') i
           WHERE json_extract(i.value,'$.asset.assetUuid')=a.assetUuid
-            AND instr(asset_search_text(json_extract(i.value,'$.caption')),?)>0)
+            AND instr(asset_search_text(coalesce(json_extract(i.value,'$.caption'),'') || ' ' || coalesce(json_extract(i.value,'$.title'),'') || ' ' || coalesce(json_extract(b.value,'$.data.title'),'')),?)>0)
       )
+    )
+    OR EXISTS (
+      SELECT 1 FROM "asset-descriptions" d WHERE d.familyUuid=a.familyUuid
+      AND instr(asset_search_plain(d.text),?)>0
     ))`;
 }
 const registered = new WeakSet<Database.Database>();
@@ -119,6 +127,14 @@ function connection() {
         normalizeAdminSearchText(
           typeof value === 'string' ? richTextToPlainText(value) : '',
         ),
+    );
+    // A file's description is plain text: what looks like markup in it is
+    // words, and is searched as typed.
+    context.rawDb.function(
+      'asset_search_plain',
+      { deterministic: true },
+      (value: unknown) =>
+        normalizeAdminSearchText(typeof value === 'string' ? value : ''),
     );
     // Asked once per diary placement with the same query each time, so the
     // query is read once.
@@ -177,7 +193,7 @@ function matchSql(query: LibraryQuery, scoped = false) {
   const q = normalizeAdminSearchText(query.q ?? '');
   if (q) {
     parts.push(siteTextMatchSql(scoped));
-    args.push(q, q, q, q);
+    args.push(q, q, q, q, q);
   }
   if (query.source) {
     parts.push(
@@ -259,6 +275,8 @@ function sourceInfo(row: SourceRow): AssetSource {
               : type === 'profile'
                 ? '/'
                 : undefined;
+  if (type === 'ai-session')
+    return { ...base, editUrl: `/admin/ai/?session=${encodeURIComponent(id)}` };
   const editUrl =
     type === 'unused'
       ? undefined
@@ -269,7 +287,47 @@ function sourceInfo(row: SourceRow): AssetSource {
           : `/admin/${type === 'page' ? 'pages' : type === 'tag' ? 'tags' : type + 's'}/${id}/edit/`;
   return { ...base, url, editUrl };
 }
-function readPlacements(ids: string[]) {
+/**
+ * One use of a file with what holds it, as the library resolves it: the
+ * place, the container the use is kept in, its meta, and the text of a
+ * status the file is the picture of. What a place says of the file is read
+ * from these (`place-words.ts`).
+ */
+export interface AssetPlaceUse {
+  source: AssetSource;
+  role: AssetPlacement['role'];
+  containerType: string;
+  containerId: string;
+  meta: AssetUsageMeta | null;
+  /** The whole place is the owner's alone. */
+  sourcePrivate: boolean;
+  statusText?: string;
+}
+export function readAssetPlaceUses(assetUuid: string): AssetPlaceUse[] {
+  const rows = connection()
+    .rawDb.prepare(
+      ownersSql +
+        `SELECT * FROM placements WHERE assetUuid=? ORDER BY sourceType,sourceId,containerType,containerId,role`,
+    )
+    .all(assetUuid) as (PlacementRow & {
+    containerType: string;
+    containerId: string;
+    description: string;
+  })[];
+  return rows.map((row) => ({
+    source: sourceInfo(row),
+    role: row.role,
+    containerType: row.containerType,
+    containerId: row.containerId,
+    meta: row.meta ? (JSON.parse(row.meta) as AssetUsageMeta) : null,
+    sourcePrivate: Boolean(row.sourcePrivate),
+    ...(row.detail === 'status' && row.description
+      ? { statusText: row.description }
+      : {}),
+  }));
+}
+/** Where each of the files is placed, by the file's uuid. */
+export function readPlacements(ids: string[]) {
   const result = new Map<string, AssetPlacement[]>();
   if (!ids.length) return result;
   const rows = connection()
@@ -496,7 +554,7 @@ export function listSourceAssets(
   const { ids, ...page } = pageIds(from, [type, id, ...args], query, 48);
   return { ...page, items: readItems(ids, query, `${type}:${id}`) };
 }
-export function getAssetUsages(id: string) {
+export function getAssetUsages(id: string): AssetUsagesResponse {
   const item = readItems([id])[0];
   if (!item?.asset.settings)
     throw createError({ statusCode: 404, message: 'Asset not found' });
@@ -506,6 +564,7 @@ export function getAssetUsages(id: string) {
     counts: item.counts,
     entityCount: item.entityCount,
     ...(item.inHistory ? { inHistory: item.inHistory } : {}),
+    ...(item.heldByAi ? { heldByAi: item.heldByAi } : {}),
   };
 }
 

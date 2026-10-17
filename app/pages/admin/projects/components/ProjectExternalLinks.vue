@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { contentExternalLinkIdentities } from '#layers/thei/shared/public-content-reference';
+import { contentExternalLinkIdentities } from '#layers/thei/shared/content-link-mentions';
 import { projectDataInjectionKey } from '../composables';
 
 /**

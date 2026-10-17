@@ -45,7 +45,6 @@ const scope: LifeScope = { kind: 'project', projectUuid: 'P' };
 beforeEach(async () => {
   context = await freshTestDb();
   Object.assign(context.server, {
-    useDb: () => context,
     content: { findByOwner: async () => undefined },
   });
   seed();

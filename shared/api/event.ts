@@ -11,6 +11,8 @@ import type { RelationGetItem } from '../relation';
 
 export type EventGetResponse = {
   eventUuid: string;
+  /** When the entity last changed; a save names it back. */
+  version: number;
   title: string;
   summary: string;
   access: ProjectEventAccessLevel;
@@ -19,6 +21,8 @@ export type EventGetResponse = {
   periods: Period[];
   content: ContentFieldValue;
   reminder: string;
+  /** Other names it is found by; only the owner sees them. */
+  synonyms: string[];
   notes?: ContentFieldValue;
   bannerAssetUuid?: string;
   bannerMedia?: MediaDescriptor;
@@ -40,8 +44,13 @@ export type EventGetResponse = {
 };
 
 export type EventSaveResponse =
-  | { type: 'success'; eventUuid: string; action: ProjectActionEditData }
-  | { type: 'error'; message: string; code?: 'public-id-taken' };
+  | {
+      type: 'success';
+      eventUuid: string;
+      action: ProjectActionEditData;
+      version: number;
+    }
+  | { type: 'error'; message: string; code?: 'public-id-taken' | 'changed' };
 
 export type EventListItem = {
   eventUuid: string;
@@ -59,8 +68,3 @@ export type EventListItem = {
 };
 
 export type EventListResponse = PaginatedResponse<EventListItem>;
-
-export type PublicEventResponse = Pick<
-  EventGetResponse,
-  'title' | 'summary' | 'periods' | 'humanReadableSlug' | 'publicId' | 'access'
->;

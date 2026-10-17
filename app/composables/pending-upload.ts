@@ -1,7 +1,7 @@
 import { markRaw, shallowRef, type ShallowRef } from 'vue';
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
 import type { AssetDraftSource } from '#layers/thei/shared/api/asset-draft';
-import { pastedMediaRequest } from '#layers/thei/shared/asset-paste-defaults';
+import type { AssetUploadRequest } from '#layers/thei/shared/asset-upload-settings';
 import {
   getPathExtension,
   imageExtensionProfile,
@@ -226,8 +226,6 @@ export function createPendingUploadList(options: {
   };
 }
 
-export type PendingUploadList = ReturnType<typeof createPendingUploadList>;
-
 /** A file stored as it is, the way a batch of files is added to a list. */
 export class PendingOriginalUpload extends PendingUploadBase {
   private readonly send: typeof uploadOriginalFile;
@@ -272,12 +270,13 @@ export interface PendingMediaHandover {
 }
 
 /**
- * A pasted file on its way into the library without anyone asking: staged
- * once, then stored at the defaults of `pastedMediaRequest`. The block shows
- * where it is meanwhile, and may hand the draft to the asset editor instead;
- * the default is then abandoned for whatever the admin settles on, or taken
- * up again if the editor is dismissed. An image encode the abandoned default
- * had finished is not lost: the server keeps it as the draft's first render.
+ * A new file on its way into the library without anyone asking: staged
+ * once, then stored at the defaults of the place it goes to
+ * (`contentFileRequest`). The block shows where it is meanwhile, and may hand
+ * the draft to the asset editor instead; the default is then abandoned for
+ * whatever the admin settles on, or taken up again if the editor is
+ * dismissed. An image encode the abandoned default had finished is not lost:
+ * the server keeps it as the draft's first render.
  */
 export class PendingMediaUpload extends PendingUploadBase {
   private draft: Promise<AssetDraftSource> | null = null;
@@ -285,15 +284,19 @@ export class PendingMediaUpload extends PendingUploadBase {
   /** Handed to an editor: the default is not stored until `run` again. */
   private suspended = false;
   private readonly requests: PendingMediaRequests;
+  private readonly request: (draft: AssetDraftSource) => AssetUploadRequest;
 
   constructor(
     file: File,
     options: PendingUploadOptions & {
+      /** What the staged file is stored as. */
+      request: (draft: AssetDraftSource) => AssetUploadRequest;
       /** The requests themselves, replaceable for tests. */
       requests?: Partial<PendingMediaRequests>;
     },
   ) {
     super(file, options);
+    this.request = options.request;
     this.requests = {
       stage: stageDraftFile,
       commit: commitDraftRequest,
@@ -356,7 +359,7 @@ export class PendingMediaUpload extends PendingUploadBase {
     try {
       return await this.requests.commit(
         draft.draftId,
-        pastedMediaRequest(draft),
+        this.request(draft),
         this.options.constraints,
         { signal, onStatus: (status) => this.report(status) },
       );

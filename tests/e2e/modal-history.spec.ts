@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { createOriginalAssetSettings } from '../../shared/asset-upload-settings';
 import { buildUploadHeaders } from '../../shared/api/asset-upload-headers';
+import { topModal } from './helpers/modal';
+import { skipDescription, uploadControls } from './helpers/upload';
 
 test.use({
   storageState: fileURLToPath(
@@ -71,10 +73,8 @@ async function chooseFromLibrary(page: Page, assetUuid: string) {
 const pickScreen = (page: Page) =>
   page.getByRole('button', { name: 'Reuse', exact: true });
 const libraryScreen = (page: Page) => page.getByRole('searchbox');
-// "Create variant" names both the section toggle and the button inside it, so
-// the screen marker takes the first match and the action takes the last.
-const variantScreen = (page: Page) =>
-  page.getByRole('button', { name: 'Create variant', exact: true }).first();
+// The editor's first screen: how to take the file.
+const variantScreen = (page: Page) => uploadControls(page).newVariant;
 
 test('browser Back closes one nested modal per press and never leaves the page', async ({
   page,
@@ -135,25 +135,20 @@ test('going back from Reuse and uploading instead still delivers the asset', asy
 
   // A colour of its own: the original of the variant stored below stays in
   // the library for a day, and the next run must still be uploading anew.
-  await page.locator('input[type=file]').setInputFiles({
-    name: 'after-back.png',
-    mimeType: 'image/png',
-    buffer: await png(`#${randomUUID().slice(0, 6)}`),
-  });
-  // "Create variant", then "Use result" — the two clicks from the report. The
-  // first click opens the section, the second runs the encode inside it.
-  const createVariant = page.getByRole('button', {
-    name: 'Create variant',
-    exact: true,
-  });
-  await createVariant.first().click();
-  await createVariant.last().click();
-  const useResult = page.getByRole('button', {
-    name: 'Use result',
-    exact: true,
-  });
-  await expect(useResult).toBeEnabled({ timeout: 30_000 });
-  await useResult.click();
+  await topModal(page)
+    .locator('input[type=file]')
+    .setInputFiles({
+      name: 'after-back.png',
+      mimeType: 'image/png',
+      buffer: await png(`#${randomUUID().slice(0, 6)}`),
+    });
+  // A new variant, then on with it — the clicks from the report — and on
+  // past its description.
+  const { newVariant, next } = uploadControls(page);
+  await newVariant.click();
+  await expect(next).toBeEnabled({ timeout: 30_000 });
+  await next.click();
+  await skipDescription(page);
 
   // The wizard has to hand the asset back, and the page must still be here:
   // the stale sentinel used to turn the next Back into a real navigation.

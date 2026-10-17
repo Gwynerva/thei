@@ -5,6 +5,9 @@
 //   bun scripts/dev-server.ts playground          nuxt dev on 3000
 //   bun scripts/dev-server.ts fixture             nuxt dev on 3001
 //   bun scripts/dev-server.ts fixture --build     production build on 3001
+//   bun scripts/dev-server.ts realdata            nuxt dev on 3002, over a
+//                                                 copy of a real backup
+//                                                 (`bun scripts/realdata.ts`)
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -14,6 +17,7 @@ import { E2E_PORT } from '../tests/e2e/fixture-url';
 const targets = {
   playground: { dir: '.playground', port: 3000, fork: true },
   fixture: { dir: 'tests/e2e/fixture', port: E2E_PORT, fork: false },
+  realdata: { dir: '.realdata', port: 3002, fork: true },
 } as const;
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -82,13 +86,14 @@ if (process.argv.includes('--build')) {
     PORT: String(target.port),
   });
 } else {
-  // The lock records this server in `.nuxt/nuxt.lock`, which is how the next
-  // run recognises it, and nuxi refuses a second one over the same directory.
+  // The CLI records this server in `.nuxt/nuxt.lock`, which is how the next
+  // run recognises it. Left to itself, a second `nuxt dev` stops a server
+  // that was started without a terminal and takes its place: `--no-takeover`
+  // makes it refuse instead, and `--strictPort` keeps it off any other port.
   const args = ['x', 'nuxt', 'dev', target.dir, '--port', String(target.port)];
-  args.push('--host', host);
+  args.push('--host', host, '--strictPort', '--no-takeover');
   if (!target.fork) args.push('--no-fork');
   run(bun, args, {
-    NUXT_LOCK: '1',
     // Nitro's dev worker takes requests from the dev server over a named pipe
     // on Windows, where reading an upload's body from it can stall the worker
     // for seconds, every request with it. A port on localhost has no stall.

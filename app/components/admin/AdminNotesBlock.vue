@@ -36,7 +36,7 @@ const notesSlot =
       class="mb-md"
     />
     <Box class="flex flex-col gap-md p-sm sm:p-md">
-      <Field>
+      <Field ai="field:reminder">
         <FieldLabel>{{ phrase.entity_reminder }}</FieldLabel>
         <FieldTextarea
           v-model="reminder"

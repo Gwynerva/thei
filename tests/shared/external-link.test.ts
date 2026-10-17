@@ -1,4 +1,3 @@
-import { normalizeImageAccent } from '../../shared/accent-color';
 import { describe, expect, it } from 'vitest';
 import {
   externalLinkHostLooksComplete,
@@ -60,21 +59,6 @@ describe('external links', () => {
       'https://u@example.com',
     ])
       expect(externalLinkHostLooksComplete(url), url).toBe(false);
-  });
-
-  it('accepts the full hue range including red at zero', () => {
-    expect(normalizeImageAccent({ hue: 0, chroma: 0.15 })).toEqual({
-      hue: 0,
-      chroma: 0.15,
-    });
-    expect(normalizeImageAccent({ hue: 359, chroma: 0.15 })).toEqual({
-      hue: 359,
-      chroma: 0.15,
-    });
-    expect(normalizeImageAccent({ hue: 360, chroma: 0.15 })).toBeUndefined();
-    expect(
-      normalizeImageAccent({ hue: Number.NaN, chroma: 0.15 }),
-    ).toBeUndefined();
   });
 
   it('truncates unicode text with an ellipsis', () => {

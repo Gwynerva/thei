@@ -10,6 +10,7 @@ import {
 } from '#layers/thei/shared/tag';
 import { buildAdminAssetUrls } from './assets/urls';
 import { EntityPrefix, generateUniqueId } from './entity-id';
+import { forgetAiAnchors } from './ai/memory/forget';
 
 export async function listTagsForContainer(
   containerType: TagContainerType,
@@ -334,7 +335,7 @@ function createPreparedTag(
   let publicId = create.publicId;
   for (let suffix = 2; suffix < 102; suffix++) {
     tx.insert(schema.tags)
-      .values({ tagUuid, ...create, slug, publicId })
+      .values({ tagUuid, ...create, slug, publicId, updatedAt: Date.now() })
       .onConflictDoNothing()
       .run();
     const actual = tx
@@ -403,8 +404,10 @@ function cleanupSimpleOrphanTags(tx: any, schema: any, tagUuids: string[]) {
         ),
       )
       .get();
-    if (!icon)
-      tx.delete(schema.tags).where(eq(schema.tags.tagUuid, tagUuid)).run();
+    if (icon) continue;
+    tx.delete(schema.tags).where(eq(schema.tags.tagUuid, tagUuid)).run();
+    // Gone with it is what the AI kept of it; a tag kept stays remembered.
+    forgetAiAnchors(tx, schema, 'tag', [tagUuid]);
   }
 }
 

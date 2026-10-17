@@ -32,7 +32,6 @@ function edit(
 beforeEach(async () => {
   context = await freshTestDb();
   Object.assign(context.server, {
-    useDb: () => context,
     assets: { findByUuid: vi.fn(async () => undefined) },
     console: { tag: () => ({ warn: vi.fn() }) },
   });

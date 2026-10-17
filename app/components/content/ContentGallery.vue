@@ -11,8 +11,11 @@ import { richTextToPlainText } from '#layers/thei/shared/rich-text';
 
 const props = withDefaults(
   defineProps<{
+    /** Plain words heading the gallery, as a group of files has. */
+    title?: string;
     items: ContentGalleryItem[];
     editable?: boolean;
+    titlePlaceholder?: string;
     selectedId?: string;
     chooseLabel?: string;
     addLabel?: string;
@@ -25,21 +28,25 @@ const props = withDefaults(
     retryUploadLabel?: string;
     dismissUploadLabel?: string;
   }>(),
-  { editable: false, pending: () => [] },
+  { title: '', editable: false, pending: () => [] },
 );
 
 /**
  * What a tile is called: while editing, the action it opens; on the page,
- * the action of showing the picture, named by its caption when it has one —
- * distinct from the picture's own button, which opens the viewer.
+ * the action of showing the picture, named by its caption when it has one,
+ * else by what the picture shows — distinct from the picture's own button,
+ * which opens the viewer.
  */
 function tileLabel(item: ContentGalleryItem) {
-  const caption =
-    !props.editable && item.caption && richTextToPlainText(item.caption);
-  return caption ? `${props.chooseLabel}: ${caption}` : props.chooseLabel;
+  const named =
+    !props.editable &&
+    ((item.caption && richTextToPlainText(item.caption)) ||
+      publicText(item.asset.alt));
+  return named ? `${props.chooseLabel}: ${named}` : props.chooseLabel;
 }
 
 const emit = defineEmits<{
+  title: [value: string];
   'update:selectedId': [id: string | undefined];
   add: [];
   edit: [id: string];
@@ -102,9 +109,19 @@ const dragSort = useDragSort(
 <template>
   <section
     v-if="editable || items.length || pending.length"
-    class="min-w-0 overflow-hidden rounded-normal bg-bg-3"
+    class="min-w-0 overflow-hidden rounded-normal border border-border-1
+      bg-bg-2"
     data-content-gallery
   >
+    <!-- The title heads the gallery as a group of files has its own. -->
+    <ContentFilesHead
+      :title
+      :editable
+      :placeholder="titlePlaceholder"
+      block="gallery"
+      class="border-b border-border-1"
+      @title="emit('title', $event)"
+    />
     <div ref="tileRoot" class="flex flex-wrap items-start gap-xs p-xs sm:p-sm">
       <AssetTile
         v-for="item in items"
@@ -172,9 +189,10 @@ const dragSort = useDragSort(
     <!-- A tile switches the picture at once: its frame already has the
          picture's proportions, and the picture loads into it. The card
          itself stays, so the caption is one element for every tile — the one
-         Editor.js found in the block and follows the caret in. -->
+         Editor.js found in the block and follows the caret in — a tile whose
+         file has gone missing too. -->
     <ContentMediaCard
-      v-if="activeItem?.asset.media"
+      v-if="activeItem"
       :asset="activeItem.asset"
       layout="centered"
       :caption="activeItem.caption"
@@ -185,6 +203,7 @@ const dragSort = useDragSort(
       :media-natural-size="false"
       :openable
       caption-class="px-xs pb-xs"
+      bare
       class="border-t border-border-1"
       data-gallery-view
       @edit="emit('edit', activeItem.id)"

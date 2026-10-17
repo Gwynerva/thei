@@ -40,6 +40,9 @@ import {
   flushContentHistoryBuffers,
   type ContentHistoryWriterLocks,
 } from '../../app/composables/content-history/buffer';
+import { loadLanguage } from '../../shared/language';
+
+const language = await loadLanguage('en');
 
 /**
  * Whole stories of writing one long article with every kind of block: the
@@ -77,7 +80,7 @@ beforeEach(() => {
       .run(pageUuid, pageUuid);
   db = drizzle(rawDb, { schema });
   Object.assign(globalThis, {
-    THEI_SERVER: { useDb: () => ({ db, schema, rawDb }) },
+    THEI_SERVER: { useDb: () => ({ db, schema, rawDb }), language },
   });
   for (const assetUuid of FILES)
     rawDb

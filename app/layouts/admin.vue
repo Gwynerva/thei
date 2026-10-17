@@ -3,5 +3,6 @@
     <AdminBar />
     <TheiLoadingIndicator />
     <slot></slot>
+    <AppToast />
   </AdminGridWrapper>
 </template>

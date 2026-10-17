@@ -15,7 +15,6 @@ let otherFiles: unknown[] = [];
 beforeEach(async () => {
   context = await freshTestDb();
   Object.assign(context.server, {
-    useDb: () => context,
     projects: {
       findByUuid: async (projectUuid: string) =>
         context.db
@@ -165,15 +164,13 @@ describe('secret references', () => {
       .run();
     const event = context.db.select().from(context.schema.events).get()!;
 
-    const visitor = (await buildPublicEvent(event, STRANGER)).references.files
-      .manual;
+    const visitor = (await buildPublicEvent(event, STRANGER)).references.files;
     expect(visitor.map(isPublicSecret)).toEqual([false, true]);
     expect(visitor[1]!.title).toMatch(/^Secret file \S+$/);
     expect(JSON.stringify(visitor[1])).not.toMatch(/hidden-file|pdf|1234/);
     expect(visitor[1]).not.toHaveProperty('href');
 
-    const admin = (await buildPublicEvent(event, OWNER)).references.files
-      .manual;
+    const admin = (await buildPublicEvent(event, OWNER)).references.files;
     expect(admin.some(isPublicSecret)).toBe(false);
 
     // A link to the event opens its private files, never the owner's own
@@ -186,7 +183,7 @@ describe('secret references', () => {
       isAdmin: false,
       grants: new Set(['event:event']),
     });
-    expect(shared.references.files.manual.some(isPublicSecret)).toBe(false);
+    expect(shared.references.files.some(isPublicSecret)).toBe(false);
     expect(shared).not.toHaveProperty('reminder');
     expect(shared).not.toHaveProperty('notes');
   });

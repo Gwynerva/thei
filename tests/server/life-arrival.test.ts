@@ -35,7 +35,6 @@ const MORNING = new Date('2026-06-10T09:00:00Z');
 beforeEach(async () => {
   context = await freshTestDb();
   Object.assign(context.server, {
-    useDb: () => context,
     content: { findByOwner: async () => undefined },
   });
   event('past', '2026-01-01', '2026-01-05');

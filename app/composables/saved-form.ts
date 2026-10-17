@@ -19,9 +19,20 @@ export function useBeforeUnloadGuard(shouldGuard: () => boolean) {
 export function useLeaveGuard(options: {
   dirty: () => boolean;
   pendingUploads?: () => number;
+  /**
+   * The form is a tab of a page whose tabs change only the address's query:
+   * going to another tab leaves it too.
+   */
+  inTab?: boolean;
 }) {
   const uploading = () => (options.pendingUploads?.() ?? 0) > 0;
   useBeforeUnloadGuard(() => options.dirty() || uploading());
+  if (options.inTab)
+    onBeforeRouteUpdate(
+      () =>
+        !options.dirty() ||
+        window.confirm(phrase.value.unsaved_changes_confirm),
+    );
   onBeforeRouteLeave(() => {
     if (interceptModalNavigation()) return false;
     if (

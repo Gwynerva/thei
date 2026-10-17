@@ -4,6 +4,7 @@ dist
 .output
 .thei
 .playground/content
+.realdata/content
 tests/e2e/fixture/content
 tests/e2e/.artifacts
 tests/.artifacts

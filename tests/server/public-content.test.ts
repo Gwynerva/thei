@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AssetType } from '../../shared/asset';
 import { ProjectEventAccessLevel } from '../../shared/access-level';
 import {
@@ -7,13 +7,20 @@ import {
   selectPublicContentMediaAssetUuids,
 } from '../../server/thei/public/content';
 import {
-  buildPublicContentReferenceGroup,
   buildPublicManualReferenceGroup,
   buildPublicReferences,
   resolveSiteEntityCandidate,
   buildPublicProjectSectionSummary,
 } from '../../server/thei/public/entities';
 import { OWNER, STRANGER } from '../../server/thei/access-links/viewer';
+
+// The files here have no family in a database: none has a description.
+vi.mock('../../server/thei/assets/descriptions', async (original) => ({
+  ...(await original<typeof import('../../server/thei/assets/descriptions')>()),
+  describedText: () => '',
+  describeFiles: () => new Map(),
+  readFamilyDescriptions: () => new Map(),
+}));
 
 afterEach(() => {
   delete (globalThis as any).THEI_SERVER;
@@ -483,6 +490,91 @@ describe('public content media previews', () => {
     });
   });
 
+  it('hydrates a group of files and leaves out the ones a visitor may not see', async () => {
+    const stored = (assetUuid: string, extension: string, type: AssetType) => ({
+      assetUuid,
+      familyUuid: `${assetUuid}-family`,
+      contentHash: `${assetUuid}-hash`,
+      slug: assetUuid,
+      extension,
+      settingsKey: 'original',
+      settings: null,
+      type,
+      size: 10,
+      meta: null,
+    });
+    const assets = new Map<string, any>([
+      ['contract', stored('contract', 'pdf', AssetType.Other)],
+      ['secret', stored('secret', 'pdf', AssetType.Other)],
+    ]);
+    (globalThis as any).THEI_SERVER = {
+      content: {
+        findByOwner: async () => ({
+          contentUuid: 'project-content',
+          data: {
+            blocks: [
+              {
+                type: 'contentFileGroup',
+                data: {
+                  title: 'Papers',
+                  items: [
+                    {
+                      id: 'f1',
+                      asset: { assetUuid: 'contract' },
+                      title: 'Contract',
+                      caption: 'Signed <b>today</b>',
+                    },
+                    { id: 'f2', asset: { assetUuid: 'secret' } },
+                  ],
+                },
+              },
+            ],
+          },
+        }),
+      },
+      assets: {
+        findByUuid: async (assetUuid: string) => assets.get(assetUuid),
+        usages: {
+          // The second file is placed only inside a private part elsewhere.
+          findOne: async (assetUuid: string) => ({
+            meta: {
+              role: 'content',
+              refs: [{ isPrivate: assetUuid === 'secret' }],
+            },
+          }),
+          findByContainer: async () => [],
+        },
+      },
+    };
+
+    const result = await buildPublicContentData(
+      'project',
+      'project-uuid',
+      'project-description',
+      { type: 'project', humanReadableSlug: 'project', publicId: 'Project' },
+    );
+
+    expect(result?.blocks).toMatchObject([
+      {
+        type: 'contentFileGroup',
+        data: {
+          title: 'Papers',
+          items: [
+            {
+              id: 'f1',
+              title: 'Contract',
+              caption: 'Signed <b>today</b>',
+              asset: {
+                assetUuid: 'contract',
+                assetUrl: '/projects/project-Project/content/contract.pdf',
+              },
+            },
+          ],
+        },
+      },
+    ]);
+  });
+
   it('replaces private sections with stats without leaking their payload', async () => {
     const secretAsset = {
       assetUuid: 'secret-asset-uuid',
@@ -811,117 +903,7 @@ describe('public content media previews', () => {
   });
 });
 
-describe('public content reference groups', () => {
-  it('resolves accessible projects and attachments after privacy filtering', async () => {
-    const projects = new Map([
-      [
-        'public-project',
-        {
-          projectUuid: 'public-project',
-          title: 'Public project',
-          summary: 'Available reference',
-          access: ProjectEventAccessLevel.Public,
-          humanReadableSlug: 'public-project',
-          publicId: 'PublicProject',
-        },
-      ],
-      [
-        'private-project',
-        {
-          projectUuid: 'private-project',
-          title: 'Private project',
-          summary: 'Hidden reference',
-          access: ProjectEventAccessLevel.Private,
-          humanReadableSlug: 'private-project',
-          publicId: 'PrivateProject',
-        },
-      ],
-    ]);
-    (globalThis as any).THEI_SERVER = {
-      projects: {
-        findByUuid: async (projectUuid: string) => projects.get(projectUuid),
-      },
-      assets: { usages: { findByContainer: async () => [] } },
-    };
-    const content = {
-      blocks: [
-        {
-          type: 'entityLink',
-          data: { entityType: 'project', entityId: 'public-project' },
-        },
-        {
-          type: 'entityLink',
-          data: { entityType: 'project', entityId: 'private-project' },
-        },
-        {
-          type: 'entityLink',
-          data: { entityType: 'project', entityId: 'missing-project' },
-        },
-        {
-          type: 'contentAttachment',
-          data: {
-            asset: {
-              assetUuid: 'guide',
-              assetUrl: '/projects/project/content/guide.pdf',
-              extension: 'pdf',
-              size: 120,
-            },
-            title: 'Guide',
-          },
-        },
-        {
-          type: 'privateSectionBoundary',
-          data: { sectionId: 'private-section-5', edge: 'start' },
-        },
-        {
-          type: 'contentAttachment',
-          data: {
-            asset: {
-              assetUuid: 'private-guide',
-              assetUrl: '/projects/project/content/private.pdf',
-              extension: 'pdf',
-            },
-          },
-        },
-        {
-          type: 'privateSectionBoundary',
-          data: { sectionId: 'private-section-5', edge: 'end' },
-        },
-      ],
-    } as any;
-
-    const visitor = await buildPublicContentReferenceGroup(content, STRANGER);
-    expect(visitor.links).toHaveLength(1);
-    expect(visitor.links[0]).toMatchObject({
-      kind: 'project',
-      title: 'Public project',
-      href: '/projects/public-project-PublicProject/',
-    });
-    expect(visitor.files).toEqual([
-      {
-        key: 'guide',
-        title: 'Guide',
-        description: undefined,
-        href: '/projects/project/content/guide.pdf',
-        extension: 'pdf',
-        size: 120,
-        media: undefined,
-        archivedOriginal: undefined,
-      },
-    ]);
-
-    const administrator = await buildPublicContentReferenceGroup(
-      content,
-      OWNER,
-    );
-    expect(administrator.links.map((link) => link.title)).toEqual([
-      'Public project',
-      'Private project',
-    ]);
-    expect(administrator.files).toHaveLength(2);
-    expect(administrator.files[1]?.title).toBe('');
-  });
-
+describe('the links and files attached by hand', () => {
   it('keeps manual event links separate and respects their privacy', () => {
     const iconMedia = {
       kind: 'image' as const,
@@ -978,7 +960,7 @@ describe('public content reference groups', () => {
   });
 });
 
-describe('merged public references', () => {
+describe('the references a project or an event lists', () => {
   const project = {
     projectUuid: 'project-uuid',
     title: 'Linked project',
@@ -1034,7 +1016,7 @@ describe('merged public references', () => {
       });
   });
 
-  it('merges a manual site address with an entity link from the content, keeping its note', async () => {
+  it('shows an address of this site as its entity, keeping the note, and one file once', async () => {
     mockServer();
     const references = await buildPublicReferences(
       {
@@ -1045,29 +1027,23 @@ describe('merged public references', () => {
             href: 'https://me.example/projects/linked-LinkedProject/',
             note: 'Where it began',
           },
+          {
+            kind: 'external',
+            title: 'Elsewhere',
+            href: 'https://other.example/',
+          },
         ],
         files: [
           {
             key: 'manual-slug',
-            title: 'Manual copy',
+            title: 'First copy',
             href: '/a.pdf',
             extension: 'pdf',
             size: 1,
           },
-        ],
-      },
-      {
-        links: [
-          {
-            kind: 'project',
-            title: 'Linked project',
-            href: '/projects/linked-LinkedProject/',
-          },
-        ],
-        files: [
           {
             key: 'content-slug',
-            title: 'Content copy',
+            title: 'Same bytes',
             href: '/b.pdf',
             extension: 'pdf',
             size: 1,
@@ -1076,20 +1052,16 @@ describe('merged public references', () => {
       },
       STRANGER,
     );
-    expect(references.links.shared).toMatchObject([
+    expect(references.links).toMatchObject([
       {
         kind: 'project',
         title: 'Linked project',
         href: '/projects/linked-LinkedProject/',
         note: 'Where it began',
       },
+      { kind: 'external', href: 'https://other.example/' },
     ]);
-    expect(references.links.manual).toEqual([]);
-    expect(references.links.content).toEqual([]);
-    expect(references.files.shared.map((file) => file.title)).toEqual([
-      'Manual copy',
-    ]);
-    expect(references.files.content).toEqual([]);
+    expect(references.files.map((file) => file.title)).toEqual(['First copy']);
   });
 });
 

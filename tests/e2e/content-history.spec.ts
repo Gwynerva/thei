@@ -93,7 +93,17 @@ async function expectFitsScreen(page: Page, ...locators: Locator[]) {
   ).toBeLessThanOrEqual(0);
 }
 
-test('text of a page never created is offered again, with its changes shown before restoring', async ({
+/** The text compared with another version, on the review screen. */
+const reviewScreen = (page: Page) => page.locator('[data-review]');
+
+/** Takes all of what the version has, and the editor gets it. */
+async function takeAll(page: Page) {
+  await page.locator('[data-review-sure]').click();
+  await page.locator('[data-review-finish]').click();
+  await expect(reviewScreen(page)).toBeHidden();
+}
+
+test('text of a page never created is offered again, compared before it is taken', async ({
   context,
   page,
 }) => {
@@ -111,27 +121,29 @@ test('text of a page never created is offered again, with its changes shown befo
     again.locator('[data-field-unsaved-draft]').first(),
   ).toBeVisible();
   await again.locator('button[data-field]').first().click();
-  const chip = again.locator('[data-draft-offer]');
-  await expect(chip).toBeVisible({ timeout: 15_000 });
+  const notice = again.locator('[data-editor-notice="draft"]');
+  await expect(notice).toBeVisible({ timeout: 15_000 });
 
-  // Taking it up is a question first: the text shows what would come.
+  // Taking it up is a comparison first: the text shows what would come.
   await again.locator('[data-draft-offer-open]').click();
-  const bar = again.locator('[data-restore-bar]');
-  await expect(bar).toBeVisible();
-  await expect(again.locator('[data-diff="added"]')).toContainText(marker);
+  const screen = reviewScreen(again);
+  await expect(screen).toBeVisible();
+  await expect(screen).toHaveAttribute('data-review-mode', 'version');
+  await expect(screen.locator('[data-review-block]').first()).toContainText(
+    marker,
+  );
   await expect(again.locator('dialog .content-editor')).toBeHidden();
-  await expectFitsScreen(again, bar, again.locator('dialog header'));
+  await expectFitsScreen(again, screen);
 
   await again.setViewportSize(MOBILE);
-  await expectFitsScreen(again, bar, again.locator('dialog header'));
-  const header = await again.locator('dialog header').boundingBox();
+  await expectFitsScreen(again, screen);
+  const header = await screen.locator('header').boundingBox();
   expect(header!.height).toBeLessThan(160);
   await again.setViewportSize(DESKTOP);
 
-  await again.locator('[data-restore-confirm]').click();
-  await expect(bar).toBeHidden();
+  await takeAll(again);
   expect(await editorText(again)).toContain(marker);
-  await expect(chip).toBeHidden();
+  await expect(notice).toBeHidden();
   await expect(again.locator('[data-restore-undo]')).toBeVisible();
 });
 
@@ -149,61 +161,54 @@ test('a text closed without saving is kept as a version and comes back', async (
   await page.keyboard.press('Escape');
   await expect(page.locator('dialog .content-editor')).toBeHidden();
 
-  // Nothing is offered: closing was a decision. The text is in the history.
+  // Nothing is offered: closing was a decision. The text is in the history,
+  // which says why it kept it.
   await page.locator('button[data-field]').first().click();
   await expect(page.locator('dialog .content-editor')).toBeVisible();
-  await expect(page.locator('[data-draft-offer]')).toBeHidden();
+  await expect(page.locator('[data-editor-notice="draft"]')).toBeHidden();
   await page.getByRole('button', { name: 'Version history' }).click();
   const list = page.locator('[data-content-history-panel]');
   await expect(list).toBeVisible();
   await expectFitsScreen(page, list);
-  // The newest version; why it was kept is told once it is chosen.
   const row = list.locator('[data-history-row="version"]').first();
+  await expect(row).toContainText('Closed without saving');
   await row.click();
-  await expect(page.locator('[data-restore-bar]')).toContainText(
-    'Closed without saving',
-  );
+  await expect(reviewScreen(page)).toContainText('Closed without saving');
 
-  // Back returns to the list; the editor is untouched meanwhile.
+  // Escape leaves the comparison; the editor is untouched meanwhile.
   await page.keyboard.press('Escape');
-  await expect(list).toBeVisible();
-  await expect(page.locator('[data-restore-bar]')).toBeHidden();
+  await expect(reviewScreen(page)).toBeHidden();
   await expect(page.locator('dialog .content-editor')).toBeVisible();
   expect(await editorText(page)).not.toContain(marker);
 
+  await page.getByRole('button', { name: 'Version history' }).click();
   await row.click();
-  await page.locator('[data-restore-confirm]').click();
-  await expect(page.locator('[data-restore-bar]')).toBeHidden();
+  await takeAll(page);
   expect(await editorText(page)).toContain(marker);
 });
 
-test('clearing keeps what the editor held', async ({ page }) => {
+test('the text as opened comes first once it differs, and brings it back', async ({
+  page,
+}) => {
   await page.setViewportSize(DESKTOP);
-  const marker = `About to be cleared ${Date.now()}`;
-  const pageUuid = await createPage(page, 'cleared');
+  const marker = `Typed after opening ${Date.now()}`;
+  const pageUuid = await createPage(page, 'opened');
   await openPageEditor(page, `/admin/pages/${pageUuid}/edit/`);
   await typeInEditor(page, marker);
   await waitForDraft(page);
 
-  page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Clear' }).click();
-  await expect(page.locator('dialog .content-editor')).not.toContainText(
-    marker,
-  );
-
   await page.getByRole('button', { name: 'Version history' }).click();
-  // The text differs from the one opened now, so that comes first.
-  await expect(page.locator('[data-history-row]').first()).toHaveAttribute(
+  const list = page.locator('[data-content-history-panel]');
+  await expect(list.locator('[data-history-row]').first()).toHaveAttribute(
     'data-history-row',
     'opened',
   );
-  await page.locator('[data-history-row="version"]').first().click();
-  await expect(page.locator('[data-restore-bar]')).toContainText(
-    'Before clearing',
-  );
-  await expect(page.locator('[data-diff="added"]')).toContainText(marker);
-  await page.locator('[data-restore-confirm]').click();
-  expect(await editorText(page)).toContain(marker);
+  // The history is only versions: nothing in it empties the text.
+  await expect(list.getByRole('button', { name: /clear/i })).toHaveCount(0);
+  await list.locator('[data-history-row="opened"]').click();
+  await expect(reviewScreen(page)).toContainText('The saved text of the page.');
+  await takeAll(page);
+  expect(await editorText(page)).not.toContain(marker);
 });
 
 test('without a connection the text waits in the browser and is sent when it returns', async ({
@@ -216,9 +221,8 @@ test('without a connection the text waits in the browser and is sent when it ret
   await openPageEditor(page, `/admin/pages/${pageUuid}/edit/`);
   await context.setOffline(true);
   await typeInEditor(page, marker);
-  await expect(page.locator('[data-history-status]')).toContainText('Offline', {
-    timeout: 15_000,
-  });
+  const notice = page.locator('[data-editor-notice="offline"]');
+  await expect(notice).toContainText('Offline', { timeout: 15_000 });
   const buffered = () =>
     page.evaluate(() =>
       Object.keys(localStorage).filter((key) =>
@@ -228,10 +232,7 @@ test('without a connection the text waits in the browser and is sent when it ret
   expect(await buffered()).toHaveLength(1);
 
   await context.setOffline(false);
-  await expect(page.locator('[data-history-status]')).not.toContainText(
-    'Offline',
-    { timeout: 15_000 },
-  );
+  await expect(notice).toBeHidden({ timeout: 15_000 });
   await expect.poll(buffered).toHaveLength(0);
   const history = await page.request.get(
     `/api/admin/content-history?ownerType=page&ownerRef=${pageUuid}&slot=page-body`,
@@ -250,27 +251,25 @@ test('a draft written in one tab is offered in another as it grows', async ({
   const other = await context.newPage();
   await other.setViewportSize(DESKTOP);
   await openPageEditor(other, url);
-  const chip = other.locator('[data-draft-offer]');
-  await expect(chip).toBeHidden();
+  const notice = other.locator('[data-editor-notice="draft"]');
+  await expect(notice).toBeHidden();
 
   // The first tab writes; the other offers it without being touched.
   await typeInEditor(page, ` First tab ${Date.now()}`);
-  await expect(chip).toBeVisible({ timeout: 15_000 });
-  const firstSeen = await chip.getAttribute('data-draft-offer');
+  await expect(notice).toBeVisible({ timeout: 15_000 });
+  const firstSeen = await notice.getAttribute('data-draft-offer');
 
   // It goes on writing, and the offer follows.
   const more = `and goes on ${Date.now()}`;
   await typeInEditor(page, ` ${more}`);
-  await expect(chip).not.toHaveAttribute('data-draft-offer', firstSeen!, {
+  await expect(notice).not.toHaveAttribute('data-draft-offer', firstSeen!, {
     timeout: 15_000,
   });
   await other.locator('[data-draft-offer-open]').click();
-  await expect(
-    other.locator('[data-diff-words="added"]').first(),
-  ).toContainText(more);
+  await expect(reviewScreen(other)).toContainText(more);
 
   // Neither tab wrote over the other: each keeps a draft of its own.
-  await other.locator('[data-restore-back]').click();
+  await other.locator('[data-review-close]').click();
   await typeInEditor(other, ' Second tab');
   await expect
     .poll(
@@ -283,6 +282,38 @@ test('a draft written in one tab is offered in another as it grows', async ({
       { timeout: 15_000 },
     )
     .toBe(2);
+});
+
+test('a text saved elsewhere while this one is written is offered to compare', async ({
+  context,
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  const pageUuid = await createPage(page, 'saved-elsewhere');
+  const url = `/admin/pages/${pageUuid}/edit/`;
+  await openPageEditor(page, url);
+  await typeInEditor(page, ` Written here ${Date.now()}`);
+  await waitForDraft(page);
+
+  // Another device saves the text meanwhile.
+  const there = `Saved there ${Date.now()}`;
+  const other = await context.newPage();
+  await other.setViewportSize(DESKTOP);
+  await openPageEditor(other, url);
+  await typeInEditor(other, ` ${there}`);
+  await other.locator('[data-editor-save]').click();
+  await expect(other.locator('[data-editor-save]')).toHaveText('Saved');
+  await other.close();
+
+  // Writing on here, the editor hears of it with its next draft.
+  await typeInEditor(page, ' and more');
+  const notice = page.locator('[data-editor-notice="stored"]');
+  await expect(notice).toBeVisible({ timeout: 15_000 });
+  await page.locator('[data-stored-compare]').click();
+  await expect(reviewScreen(page)).toContainText(there);
+  await takeAll(page);
+  expect(await editorText(page)).toContain(there);
+  await expect(notice).toBeHidden();
 });
 
 test('a form with unsaved changes asks before the tab closes', async ({

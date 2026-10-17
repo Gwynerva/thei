@@ -17,14 +17,17 @@ defineEmits<{ save: [] }>();
           title
         }}</span>
       </h1>
-      <Button
-        :disabled="saving || !canSave"
-        class="shrink-0 font-semibold"
-        @click="$emit('save')"
-        ><Icon v-if="saving" name="loading" class="mr-xs" />{{
-          dirty ? phrase.save : phrase.saved
-        }}</Button
-      >
+      <div class="flex shrink-0 items-center gap-xs">
+        <slot />
+        <Button
+          :disabled="saving || !canSave"
+          class="shrink-0 font-semibold"
+          @click="$emit('save')"
+          ><Icon v-if="saving" name="loading" class="mr-xs" />{{
+            dirty ? phrase.save : phrase.saved
+          }}</Button
+        >
+      </div>
     </div>
   </StickyGlassHeader>
 </template>

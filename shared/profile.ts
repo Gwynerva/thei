@@ -51,6 +51,8 @@ export interface ProfileEditData extends StatusEditData {
   pinnedPageUuids: string[];
   externalLinks: NamedExternalLinkListItem[];
   deletedAvatarIds: string[];
+  /** The version the form was read at; a save over a newer one is refused. */
+  version?: number;
 }
 export interface ProfilePageLink {
   pageUuid: string;

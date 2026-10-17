@@ -110,15 +110,6 @@ export function isFullFrameCrop(
   );
 }
 
-/** The largest region of the given aspect, centred in the source. */
-export function centeredCropRect(
-  source: FileDimensions,
-  aspect: number,
-): AssetCropRect {
-  const fraction = centeredCropFraction(source, aspect);
-  return cropFractionToRect(fraction, source);
-}
-
 export function centeredCropFraction(
   source: FileDimensions,
   aspect: number,

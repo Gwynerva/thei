@@ -2,7 +2,7 @@ import type {
   AssetUploadResponse,
   AssetVariantInfo,
   AssetVariantWithUsage,
-  AssetVariantsResponse,
+  AssetWizardResult,
 } from '#layers/thei/shared/api/asset';
 import type { AssetDraftSource } from '#layers/thei/shared/api/asset-draft';
 import type { AssetUploadProgress } from '#layers/thei/shared/api/asset-upload-progress';
@@ -12,14 +12,9 @@ import type { AssetUploadLimitPolicy } from '#layers/thei/shared/asset-upload-li
 import { commitDraftRequest } from '#layers/thei/app/composables/upload-draft';
 import type { PickedFile } from '../pick-file/picked-file';
 
-export interface UploadSettingsModalData {
+interface EditFileOptions {
   duplicateNotice?: boolean;
   librarySelection?: boolean;
-  source:
-    | { kind: 'file'; file: PickedFile }
-    | { kind: 'asset'; asset: AssetVariantInfo }
-    /** A file someone else staged — a block storing a paste — and the file. */
-    | { kind: 'draft'; draft: AssetDraftSource; file: PickedFile };
   maxSize?: number;
   acceptedExtensions?: string[] | '*';
   sizeLimitPolicy?: AssetUploadLimitPolicy;
@@ -27,38 +22,55 @@ export interface UploadSettingsModalData {
   usageDelta?: Record<string, number>;
 }
 
+/** What the file editor is opened with. */
+export interface EditFileModalData extends EditFileOptions {
+  source:
+    | { kind: 'file'; file: PickedFile }
+    /** A stored file: the editor fetches it, with its family, itself. */
+    | { kind: 'asset'; assetUuid: string }
+    /** A file someone else staged — a block storing a paste — and the file. */
+    | { kind: 'draft'; draft: AssetDraftSource; file: PickedFile };
+}
+
+/** What the editor's panel is drawn with: a stored file comes with its family. */
+export interface UploadSettingsModalData extends EditFileOptions {
+  source:
+    | { kind: 'file'; file: PickedFile }
+    | {
+        kind: 'asset';
+        asset: AssetVariantInfo;
+        /** Every stored variant of the file, itself included. */
+        variants: AssetVariantWithUsage[];
+      }
+    | { kind: 'draft'; draft: AssetDraftSource; file: PickedFile };
+}
+
+export type UploadSettingsResult =
+  { type: 'upload-new' } | { type: 'asset-missing' } | AssetWizardResult;
+
 /**
  * The stored variants of the file being edited, and the requests that add to
  * them or pick one of them.
  */
 export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
-  const variants = ref<AssetVariantWithUsage[]>([]);
-  const loadingVariants = ref(false);
+  // Counted as they will be once the text being edited is saved.
+  const variants = ref<AssetVariantWithUsage[]>(
+    modalData.source.kind === 'asset'
+      ? modalData.source.variants.map((variant) => ({
+          ...variant,
+          usageCount: Math.max(
+            0,
+            variant.usageCount +
+              (modalData.usageDelta?.[variant.assetUuid] ?? 0),
+          ),
+        }))
+      : [],
+  );
   /** Where the commit under way is; nothing while none is. */
   const status = ref<AssetUploadProgress | null>(null);
   let commitController: AbortController | null = null;
 
   onBeforeUnmount(() => commitController?.abort());
-
-  async function loadVariants(): Promise<AssetVariantWithUsage[]> {
-    if (modalData.source.kind !== 'asset') return variants.value;
-    loadingVariants.value = true;
-    try {
-      const response = await $fetch<AssetVariantsResponse>(
-        `/api/admin/assets/${modalData.source.asset.assetUuid}/variants`,
-      );
-      variants.value = response.variants.map((variant) => ({
-        ...variant,
-        usageCount: Math.max(
-          0,
-          variant.usageCount + (modalData.usageDelta?.[variant.assetUuid] ?? 0),
-        ),
-      }));
-      return variants.value;
-    } finally {
-      loadingVariants.value = false;
-    }
-  }
 
   /**
    * Stores a result made from the draft. An image already rendered with
@@ -126,9 +138,7 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
 
   return {
     variants,
-    loadingVariants,
     status,
-    loadVariants,
     commit,
     cancelCommit,
     touch,

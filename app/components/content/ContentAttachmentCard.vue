@@ -1,181 +1,89 @@
 <script lang="ts" setup>
-import type { ContentAssetData } from '#layers/thei/shared/content';
-
-const props = withDefaults(
-  defineProps<{
-    asset: ContentAssetData;
-    title?: string;
-    description?: string;
-    editable?: boolean;
-    href?: string;
-    fallbackTitle?: string;
-    editLabel?: string;
-    titlePlaceholder?: string;
-    descriptionPlaceholder?: string;
-    openable?: boolean;
-  }>(),
-  {
-    title: '',
-    description: '',
-    editable: false,
-    href: undefined,
-    fallbackTitle: '',
-    editLabel: '',
-    titlePlaceholder: '',
-    descriptionPlaceholder: '',
-  },
-);
-
-const emit = defineEmits<{
-  edit: [];
-  title: [value: string];
-  description: [value: string];
-  open: [];
-}>();
-
-const humanSize = useHumanSize();
+import {
+  contentFileEmits,
+  contentFileProps,
+  useContentFileCard,
+} from './content-file-card';
 
 /**
- * Only a picture or a video has something to show in the asset viewer, and
- * only those open there; any other file is simply downloaded. Opening goes
- * through the viewer, which needs the file's address too.
+ * A file alone in a text, as a card: its square, its title and its facts,
+ * the whole card opening the file; the caption under it.
  */
-const viewable = computed(() => !!props.asset.media);
-const mode = computed(() => {
-  if (props.editable || !props.href) return 'static';
-  return props.openable && viewable.value ? 'open' : 'link';
-});
-function onPreviewClick(event: MouseEvent) {
-  if (!props.editable) return;
-  event.stopPropagation();
-  emit('edit');
-}
+const props = defineProps(contentFileProps);
 
-// The owner's title gets their typography; a file name stays as it is.
-const resolvedTitle = computed(
-  () => publicText(props.title) || props.fallbackTitle,
-);
-const details = computed(() =>
-  [
-    props.asset.extension?.toUpperCase(),
-    props.asset.size !== undefined ? humanSize(props.asset.size) : undefined,
-  ].filter(Boolean),
-);
+const emit = defineEmits(contentFileEmits);
+
+const { viewable, mode, resolvedTitle, details, actionIcon } =
+  useContentFileCard(props);
 </script>
 
 <template>
-  <component
-    :is="mode === 'open' ? 'button' : mode === 'link' ? 'a' : 'div'"
-    :type="mode === 'open' ? 'button' : undefined"
-    :href="mode === 'link' ? sitePath(href) : undefined"
-    :target="mode === 'link' && viewable ? '_blank' : undefined"
-    :rel="mode === 'link' ? 'noopener noreferrer' : undefined"
-    :download="mode === 'link' && !viewable ? '' : undefined"
-    class="attachment-card group relative flex w-full min-w-0 items-center
-      gap-sm rounded-normal border border-border-1 bg-bg-2 p-xs text-left
-      text-text-1 no-underline transition-colors outline-none sm:pr-sm"
-    :class="
-      mode === 'static'
-        ? 'focus-within:border-accent/50'
-        : `attachment-card-interactive cursor-pointer focus-visible:ring-2
-          focus-visible:ring-accent hocus:border-accent/40`
-    "
-    @click="mode === 'open' ? emit('open') : undefined"
-  >
+  <!-- The caption stands under the card, as a picture's does: it may hold a
+       link, which the card's own link or button cannot. -->
+  <figure class="min-w-0" data-content-attachment>
     <component
-      :is="editable ? 'button' : 'span'"
-      :type="editable ? 'button' : undefined"
-      :data-drag-ignore="editable || undefined"
-      :aria-label="editable ? editLabel : undefined"
-      :data-title-popup="editable ? editLabel : undefined"
-      class="attachment-card-tile relative flex size-14 shrink-0 items-center
-        justify-center rounded-sm text-accent transition-colors sm:size-16"
-      :class="{
-        [`attachment-card-tile-editable cursor-pointer outline-none
-        focus-visible:ring-2 focus-visible:ring-accent`]: editable,
-      }"
-      @click="onPreviewClick"
+      :is="mode === 'open' ? 'button' : mode === 'link' ? 'a' : 'div'"
+      :type="mode === 'open' ? 'button' : undefined"
+      :href="mode === 'link' ? sitePath(href) : undefined"
+      :target="mode === 'link' && viewable ? '_blank' : undefined"
+      :rel="mode === 'link' ? 'noopener noreferrer' : undefined"
+      :download="mode === 'link' && !viewable ? '' : undefined"
+      class="attachment-card group relative flex w-full min-w-0 items-center
+        gap-sm rounded-normal border border-border-1 bg-bg-2 p-xs text-left
+        text-text-1 no-underline transition-colors outline-none sm:pr-sm"
+      :class="
+        mode === 'static'
+          ? 'focus-within:border-accent/50'
+          : `attachment-card-interactive cursor-pointer focus-visible:ring-2
+            focus-visible:ring-accent hocus:border-accent/40`
+      "
+      @click="mode === 'open' ? emit('open') : undefined"
     >
-      <FilePreview :extension="asset.extension" class="size-10 sm:size-11" />
+      <ContentFileTile
+        :asset
+        :editable
+        :edit-label="editLabel"
+        @edit="emit('edit')"
+      />
+
+      <component
+        :is="editable ? 'div' : 'span'"
+        class="flex min-w-0 flex-1 flex-col gap-0.5"
+      >
+        <ContentFileWords
+          :title
+          :editable
+          :placeholder="fallbackTitle || titlePlaceholder"
+          :alt="asset.alt"
+          :details
+          @title="emit('title', $event)"
+        >
+          <span
+            class="truncate font-semibold tracking-tight transition-colors"
+            :class="{ 'group-hocus:text-accent': mode !== 'static' }"
+          >
+            {{ resolvedTitle }}
+          </span>
+        </ContentFileWords>
+      </component>
+
       <span
-        v-if="editable"
-        class="absolute -right-1 -bottom-1 flex size-6 items-center
-          justify-center rounded-full border border-border-1 bg-bg-2 text-xs
-          text-text-2 shadow-sm"
+        v-if="mode !== 'static'"
+        class="flex size-9 shrink-0 items-center justify-center rounded-full
+          bg-bg-3 text-text-2 transition-colors group-hocus:bg-accent
+          group-hocus:text-white"
         aria-hidden="true"
       >
-        <Icon name="edit" />
+        <Icon :name="actionIcon" />
       </span>
     </component>
-
-    <component
-      :is="editable ? 'div' : 'span'"
-      class="flex min-w-0 flex-1 flex-col gap-0.5"
-    >
-      <ContentPlainTextField
-        v-if="editable"
-        :model-value="title"
-        :editable="true"
-        :placeholder="fallbackTitle || titlePlaceholder"
-        class="min-h-6 truncate font-semibold tracking-tight outline-none
-          empty:before:pointer-events-none empty:before:text-text-3
-          empty:before:content-[attr(data-placeholder)] focus:before:hidden"
-        @update:model-value="emit('title', $event)"
-      />
-      <span
-        v-else
-        class="truncate font-semibold tracking-tight transition-colors"
-        :class="{ 'group-hocus:text-accent': mode !== 'static' }"
-      >
-        {{ resolvedTitle }}
-      </span>
-
-      <ContentPlainTextField
-        v-if="editable"
-        :model-value="description"
-        :editable="true"
-        :placeholder="descriptionPlaceholder"
-        class="min-h-5 truncate text-sm text-text-2 outline-none
-          empty:before:pointer-events-none empty:before:text-text-3
-          empty:before:content-[attr(data-placeholder)] focus:before:hidden"
-        @update:model-value="emit('description', $event)"
-      />
-      <span
-        v-else-if="description"
-        class="line-clamp-2 text-sm leading-snug text-text-2"
-      >
-        {{ publicText(description) }}
-      </span>
-
-      <span
-        v-if="details.length"
-        class="flex min-w-0 items-center gap-1.5 text-xs text-text-3"
-      >
-        <template v-for="(detail, index) in details" :key="index">
-          <span v-if="index" aria-hidden="true">·</span>
-          <span class="truncate">{{ detail }}</span>
-        </template>
-      </span>
-    </component>
-
-    <span
-      v-if="mode !== 'static'"
-      class="flex size-9 shrink-0 items-center justify-center rounded-full
-        bg-bg-3 text-text-2 transition-colors group-hocus:bg-accent
-        group-hocus:text-white"
-      aria-hidden="true"
-    >
-      <Icon
-        :name="
-          mode === 'open'
-            ? 'expand-diagonal'
-            : viewable
-              ? 'arrow-outward'
-              : 'download'
-        "
-      />
-    </span>
-  </component>
+    <ContentCaption
+      :model-value="caption"
+      :editable
+      :placeholder="captionPlaceholder"
+      @update:model-value="emit('caption', $event)"
+    />
+  </figure>
 </template>
 
 <style scoped>
@@ -184,14 +92,6 @@ const details = computed(() =>
  * as transparency: the card may lie on a pattern — the locks of a private
  * section — and a translucent tint would let it show through.
  */
-.attachment-card-tile {
-  background-color: color-mix(
-    in oklab,
-    var(--color-accent) 10%,
-    var(--color-bg-2)
-  );
-}
-
 .attachment-card-interactive:focus-visible {
   background-color: color-mix(
     in oklab,
@@ -210,8 +110,7 @@ const details = computed(() =>
   }
 }
 
-.attachment-card-interactive:focus-visible .attachment-card-tile,
-.attachment-card-tile-editable:focus-visible {
+.attachment-card-interactive:focus-visible .file-tile {
   background-color: color-mix(
     in oklab,
     var(--color-accent) 20%,
@@ -220,8 +119,7 @@ const details = computed(() =>
 }
 
 @media (hover: hover) {
-  .attachment-card-interactive:hover .attachment-card-tile,
-  .attachment-card-tile-editable:hover {
+  .attachment-card-interactive:hover .file-tile {
     background-color: color-mix(
       in oklab,
       var(--color-accent) 20%,

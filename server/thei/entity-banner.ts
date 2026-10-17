@@ -7,6 +7,7 @@ import {
 } from './assets/urls';
 import type { StoredAssetRecord } from './assets/storage';
 import { buildPublicEntityPreviewMedia } from './public/content';
+import { deleteUsagesReleasing } from './assets/repository/usages/release';
 
 /**
  * Banners of events and sections.
@@ -95,15 +96,15 @@ export function deleteEntityBanners(
   ownerIds: string[],
 ) {
   if (!ownerIds.length) return;
-  tx.delete(schema.assetUsages)
-    .where(
-      and(
-        eq(schema.assetUsages.containerType, ownerType),
-        inArray(schema.assetUsages.containerId, ownerIds),
-        eq(schema.assetUsages.role, 'banner'),
-      ),
-    )
-    .run();
+  deleteUsagesReleasing(
+    tx,
+    schema,
+    and(
+      eq(schema.assetUsages.containerType, ownerType),
+      inArray(schema.assetUsages.containerId, ownerIds),
+      eq(schema.assetUsages.role, 'banner'),
+    ),
+  );
 }
 
 /** The banner of each of these, by the owner's id. */

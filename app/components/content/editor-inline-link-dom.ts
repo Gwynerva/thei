@@ -2,6 +2,40 @@ import {
   withLinkFragment,
   type ContentEntityType,
 } from '#layers/thei/shared/content-link';
+import type EditorJS from '@editorjs/editorjs';
+import { editableFieldOf, insertInlineElement } from './editor-edit-commands';
+
+/**
+ * Marks words of the text with a highlight of `editor.css`, or takes the
+ * mark away: drawn over the text, never written into it, so Ctrl+Z has
+ * nothing of it to undo and the text is not changed.
+ */
+export function highlightWords(name: string, range?: Range) {
+  if (typeof CSS === 'undefined' || !('highlights' in CSS)) return;
+  if (range) CSS.highlights.set(name, new Highlight(range));
+  else CSS.highlights.delete(name);
+}
+
+/**
+ * The editor's text field a node is in, when that text takes links: one of
+ * `linkBlocks`, and none a block draws itself, outside Editor.js's watch.
+ */
+export function linkableFieldOf(
+  root: HTMLElement,
+  editor: EditorJS,
+  linkBlocks: ReadonlySet<string>,
+  node: Node | null | undefined,
+): HTMLElement | undefined {
+  const field = editableFieldOf(node);
+  if (
+    !field ||
+    !root.contains(field) ||
+    field.closest('[data-mutation-free="true"]')
+  )
+    return undefined;
+  const block = editor.blocks.getBlockByElement(field);
+  return block && linkBlocks.has(block.name) ? field : undefined;
+}
 
 /**
  * The attributes an inline link is written with. `undefined` removes one, so
@@ -66,7 +100,7 @@ export function unwrapNestedLinks(link: HTMLAnchorElement) {
 }
 
 /** The link a range lies wholly inside, if any. */
-export function linkAroundRange(range: Range): HTMLAnchorElement | undefined {
+function linkAroundRange(range: Range): HTMLAnchorElement | undefined {
   const node = range.commonAncestorContainer;
   const element = node instanceof Element ? node : node.parentElement;
   return element?.closest('a') ?? undefined;
@@ -74,30 +108,22 @@ export function linkAroundRange(range: Range): HTMLAnchorElement | undefined {
 
 /**
  * Makes a range a link: the link it already lies in is rewritten, otherwise
- * its content is wrapped in a new one. Returns the link.
+ * its content is wrapped in a new one, put in as one editing command that
+ * Ctrl+Z takes back whole. Returns the link, if it is in the text.
  */
 export function linkRange(
   range: Range,
   attributes: InlineLinkAttributes,
-): HTMLAnchorElement {
-  let link = linkAroundRange(range);
-  if (!link) {
-    link = document.createElement('a');
-    link.append(range.extractContents());
-    range.insertNode(link);
+): HTMLAnchorElement | undefined {
+  const around = linkAroundRange(range);
+  if (around) {
+    unwrapNestedLinks(around);
+    applyLinkAttributes(around, attributes);
+    return around;
   }
+  const link = document.createElement('a');
+  link.append(range.cloneContents());
   unwrapNestedLinks(link);
   applyLinkAttributes(link, attributes);
-  return link;
-}
-
-/** Puts the caret right after an element. */
-export function placeCaretAfter(element: Node) {
-  const selection = window.getSelection();
-  if (!selection) return;
-  const after = document.createRange();
-  after.setStartAfter(element);
-  after.collapse(true);
-  selection.removeAllRanges();
-  selection.addRange(after);
+  return insertInlineElement(range, link) as HTMLAnchorElement | undefined;
 }

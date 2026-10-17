@@ -15,7 +15,9 @@ export function useArrowKeys(handlers: {
     if (
       target instanceof HTMLElement &&
       (target.isContentEditable ||
-        target.closest('input, textarea, select, [contenteditable]'))
+        target.closest(
+          'input, textarea, select, [contenteditable], [data-own-arrows]',
+        ))
     )
       return;
     if (event.key === 'ArrowLeft') handlers.previous();

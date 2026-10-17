@@ -4,11 +4,8 @@ import enModule, { plural } from '../../../../shared/language/list/en';
 const { normalize } = enModule;
 
 describe('normalize', () => {
-  it('replaces ... with ellipsis', () => {
-    expect(normalize!('Wait...')).toBe('Wait\u2026');
-  });
-
-  it('replaces -- with em dash', () => {
+  // What the general step does is checked in general-normalize.test.ts.
+  it('applies the general step first', () => {
     expect(normalize!('one -- two')).toBe('one\u00a0\u2014 two');
   });
 
@@ -31,8 +28,6 @@ describe('Editor.js phrases', () => {
   it('provides English block names and controls', () => {
     expect(enModule.phrases.content_editor_i18n).toMatchObject({
       text: 'Text',
-      media: 'Media',
-      gallery: 'Gallery',
       file: 'File',
       add: 'Add',
       click_to_delete: 'Really delete?',

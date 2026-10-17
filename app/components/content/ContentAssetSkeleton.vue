@@ -16,12 +16,18 @@ const props = defineProps<{
   upload?: PendingUpload;
   editLabel?: string;
   retryLabel?: string;
+  /**
+   * Another way out of a failure, beside another try: a picture or a video
+   * that cannot be shown, stored as a file to download instead.
+   */
+  fallbackLabel?: string;
 }>();
 
 const emit = defineEmits<{
   pick: [];
   edit: [];
   retry: [];
+  fallback: [];
 }>();
 
 const { previewSrc, status, error, statusLabel } = usePendingUploadView(
@@ -81,6 +87,20 @@ const { previewSrc, status, error, statusLabel } = usePendingUploadView(
         @click.stop="emit('retry')"
       >
         <Icon name="refresh" />
+      </button>
+      <button
+        v-if="error && fallbackLabel"
+        type="button"
+        data-drag-ignore
+        data-content-asset-fallback
+        class="pointer-events-auto flex size-12 cursor-pointer items-center
+          justify-center rounded-full bg-bg-1/85 text-2xl text-text-2 shadow
+          backdrop-blur-sm transition hocus:bg-bg-accent hocus:text-accent"
+        :aria-label="fallbackLabel"
+        :data-title-popup="fallbackLabel"
+        @click.stop="emit('fallback')"
+      >
+        <Icon name="file" />
       </button>
     </div>
     <button

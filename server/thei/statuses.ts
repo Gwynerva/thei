@@ -26,6 +26,7 @@ import {
 } from './history-page';
 import { utcDayOf } from '#layers/thei/shared/date-range';
 import { normalizeCaptionText } from '#layers/thei/shared/terminal-punctuation';
+import { deleteUsagesReleasing } from './assets/repository/usages/release';
 
 export const STATUS_PAGE_SIZE = 30;
 
@@ -517,20 +518,20 @@ export function deleteStatusesForOwner(
   schema: any,
   owner: StatusOwner,
 ) {
-  tx.delete(schema.assetUsages)
-    .where(
-      and(
-        eq(schema.assetUsages.containerType, statusAssetContainer(owner.type)),
-        inArray(
-          schema.assetUsages.containerId,
-          tx
-            .select({ id: schema.statuses.id })
-            .from(schema.statuses)
-            .where(ownerWhere(schema, owner)),
-        ),
+  deleteUsagesReleasing(
+    tx,
+    schema,
+    and(
+      eq(schema.assetUsages.containerType, statusAssetContainer(owner.type)),
+      inArray(
+        schema.assetUsages.containerId,
+        tx
+          .select({ id: schema.statuses.id })
+          .from(schema.statuses)
+          .where(ownerWhere(schema, owner)),
       ),
-    )
-    .run();
+    ),
+  );
   tx.delete(schema.statuses).where(ownerWhere(schema, owner)).run();
 }
 
@@ -584,14 +585,14 @@ export function statusUsageHooks(
   return {
     invalid,
     detach(containerType: AssetContainerType, containerId: string) {
-      tx.delete(schema.assetUsages)
-        .where(
-          and(
-            eq(schema.assetUsages.containerType, containerType),
-            eq(schema.assetUsages.containerId, containerId),
-          ),
-        )
-        .run();
+      deleteUsagesReleasing(
+        tx,
+        schema,
+        and(
+          eq(schema.assetUsages.containerType, containerType),
+          eq(schema.assetUsages.containerId, containerId),
+        ),
+      );
     },
     attach(
       assetUuid: string | null,

@@ -11,17 +11,11 @@ import {
 } from 'vue';
 import type { MediaSurfaceProps } from '#layers/thei/shared/media';
 import { observeViewport } from './viewport-observer';
+import { canvasFilters, createFrameBackdrop } from './frame-backdrop';
 
 type Role = 'main' | 'backdrop' | 'preview' | 'previewBackdrop';
 type Status = 'loading' | 'ready' | 'error';
 type MediaElement = HTMLImageElement | HTMLVideoElement;
-
-/**
- * The blurred backdrop may lag the main video this far before it is moved to
- * the main video's time: the blur hides it, and a seek stalls the backdrop.
- */
-const BACKDROP_DRIFT = 0.25;
-const BACKDROP_STILL_DRIFT = 0.04;
 
 /**
  * Owns readiness and playback only; the two presentations own their geometry.
@@ -38,8 +32,12 @@ const BACKDROP_STILL_DRIFT = 0.04;
  * the browser; pausing and resuming around them showed a phone's controls
  * over the video on every loop. A hidden tab is left to the browser too. Only
  * deliberate signals act on a video in view: the pointer or focus over a tile
- * that plays while engaged, the reduced motion setting, a new source. The
- * backdrop copies the main video and never steers it.
+ * that plays while engaged, the reduced motion setting, a new source.
+ *
+ * A picture's blurred backdrop is a second image. A video's is drawn from its
+ * own frames on a canvas (`frame-backdrop.ts`), which never steers the video:
+ * a second video doubled the decoders and blurred a copy larger than the
+ * media on every frame.
  */
 export function useMediaPair(
   props: MediaSurfaceProps,
@@ -63,8 +61,15 @@ export function useMediaPair(
     previewBackdrop: 'loading',
   });
   const elements: Partial<Record<Role, MediaElement>> = {};
+  const frames = createFrameBackdrop();
+  /** Whether the canvas blurs by itself; set once mounted. */
+  const canvasFiltered = ref(true);
   const previewSrc = computed(
     () => props.previewSrc || (props.kind !== 'video' ? props.src : ''),
+  );
+  /** A video's blurred copy, drawn from its own frames. */
+  const frameBackdrop = computed(() =>
+    Boolean(props.backdrop && props.kind === 'video'),
   );
   const previewReady = computed(
     () =>
@@ -75,9 +80,13 @@ export function useMediaPair(
     () =>
       status.main === 'ready' &&
       (!props.backdrop ||
-        status.backdrop === 'ready' ||
-        (status.backdrop === 'error' &&
-          (!previewSrc.value || status.previewBackdrop !== 'loading'))),
+        // A copy drawn from the video waits only for the poster it shows
+        // until the video plays.
+        (frameBackdrop.value
+          ? !previewSrc.value || status.preview !== 'loading'
+          : status.backdrop === 'ready' ||
+            (status.backdrop === 'error' &&
+              (!previewSrc.value || status.previewBackdrop !== 'loading')))),
   );
   const previewWanted = computed(
     () => !requested.value || status.main === 'error',
@@ -132,10 +141,8 @@ export function useMediaPair(
     return element instanceof HTMLVideoElement ? element : undefined;
   }
   function pauseVideos() {
-    for (const role of ['main', 'backdrop'] as const) {
-      const element = video(role);
-      if (element && !element.paused) element.pause();
-    }
+    const main = video('main');
+    if (main && !main.paused) main.pause();
   }
   /**
    * Asks the main video to play, once. Without data yet the browser starts it
@@ -156,24 +163,9 @@ export function useMediaPair(
       return;
     main.play().catch(() => {});
   }
-  /** Keeps the backdrop on the main video's time, rate and motion. */
+  /** Keeps the drawn backdrop on what the main video shows. */
   function follow() {
-    const main = video('main');
-    const backdrop =
-      status.backdrop === 'ready' ? video('backdrop') : undefined;
-    if (!main || !backdrop) return;
-    if (backdrop.playbackRate !== main.playbackRate)
-      backdrop.playbackRate = main.playbackRate;
-    const moving = !main.paused && main.readyState >= 3;
-    // A still frame stays in sight, so a still backdrop matches it closely.
-    const drift = moving ? BACKDROP_DRIFT : BACKDROP_STILL_DRIFT;
-    if (
-      !main.seeking &&
-      Math.abs(backdrop.currentTime - main.currentTime) > drift
-    )
-      backdrop.currentTime = main.currentTime;
-    if (moving && backdrop.paused) backdrop.play().catch(() => {});
-    else if (!moving && !backdrop.paused) backdrop.pause();
+    if (frameBackdrop.value) frames.sync();
   }
   function reveal() {
     cancelAnimationFrame(firstFrame);
@@ -226,6 +218,9 @@ export function useMediaPair(
       return;
     }
     status[role] = 'ready';
+    // The copy shows what the video shows, before the pair is revealed.
+    if (frameBackdrop.value && (role === 'main' || role === 'preview'))
+      frames.draw();
     if (role === 'main' || (role === 'preview' && previewWanted.value)) {
       ratio.value = width / height;
       dimensions(width, height);
@@ -240,10 +235,12 @@ export function useMediaPair(
       element instanceof HTMLImageElement || element instanceof HTMLVideoElement
     )) {
       delete elements[role];
+      useFrames();
       return;
     }
     if (elements[role] === element) return;
     elements[role] = element;
+    useFrames();
     if (
       (element instanceof HTMLImageElement &&
         element.complete &&
@@ -252,17 +249,31 @@ export function useMediaPair(
     )
       void loaded(role, element);
   }
+  /** Hands the canvas the video it copies and the poster it shows first. */
+  function useFrames() {
+    const poster = elements.preview;
+    frames.use(
+      video('main'),
+      poster instanceof HTMLImageElement ? poster : undefined,
+    );
+  }
+  function registerFrameBackdrop(
+    element: Element | ComponentPublicInstance | null,
+  ) {
+    // A re-render hands the same backdrop over again after a null; only a
+    // new one replaces it, and `clear` lets it go.
+    if (element instanceof HTMLElement) frames.attach(element);
+  }
   function fail(role: Role, element: MediaElement) {
     if (!active.value || elements[role] !== element) return;
     status[role] = 'error';
     if (role === 'preview' && !requested.value) requested.value = true;
     if (role === 'main') pauseVideos();
-    if (role === 'backdrop') video('backdrop')?.pause();
     reveal();
   }
   function events(role: Role) {
-    // Only the main video's own events move the backdrop; neither video's
-    // events ever start or pause the main one.
+    // Only the main video's own events redraw the backdrop, and no event
+    // ever starts or pauses the video.
     const followMain = () => {
       if (role === 'main') follow();
     };
@@ -280,7 +291,6 @@ export function useMediaPair(
       playing: followMain,
       pause: followMain,
       waiting: followMain,
-      ratechange: followMain,
       timeupdate: followMain,
     };
     return Object.fromEntries(
@@ -298,6 +308,7 @@ export function useMediaPair(
     cancelAnimationFrame(firstFrame);
     cancelAnimationFrame(secondFrame);
     pauseVideos();
+    frames.stop();
     active.value = false;
     revealed.value = false;
     previewRevealed.value = false;
@@ -388,6 +399,7 @@ export function useMediaPair(
     reducedMotion.value = motion?.matches ?? true;
   }
   onMounted(() => {
+    canvasFiltered.value = canvasFilters();
     motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     updateMotion();
     motion.addEventListener('change', updateMotion);
@@ -412,7 +424,10 @@ export function useMediaPair(
     previewPhase,
     ratio,
     status,
+    frameBackdrop,
+    canvasFiltered,
     register,
+    registerFrameBackdrop,
     events,
     play,
     pause,

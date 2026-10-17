@@ -318,14 +318,12 @@ function revoke(link: ShareLinkItem) {
       :anchor="addButton?.element ?? null"
       placement="bottom-end"
       max-width="22rem"
+      density="card"
+      complex
       @opened="labelInput?.focus()"
       @closed="restoreAddFocus"
     >
-      <form
-        class="flex flex-col gap-sm rounded-normal border border-border-1
-          bg-bg-2 p-sm"
-        @submit.prevent="create"
-      >
+      <form class="flex flex-col gap-sm" @submit.prevent="create">
         <Field>
           <FieldLabel class="text-sm">{{ phrase.share_link_label }}</FieldLabel>
           <FieldInput
@@ -361,12 +359,9 @@ function revoke(link: ShareLinkItem) {
       :anchor="extendAnchor"
       placement="bottom-end"
       max-width="16rem"
+      density="card"
     >
-      <div
-        v-if="extending"
-        class="flex flex-col gap-xs rounded-normal border border-border-1
-          bg-bg-2 p-sm"
-      >
+      <div v-if="extending" class="flex flex-col gap-sm">
         <p class="text-sm font-semibold text-text-2">
           {{ phrase.share_link_extend_by }}
         </p>

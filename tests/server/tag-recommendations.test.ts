@@ -12,7 +12,6 @@ let context: Awaited<ReturnType<typeof freshTestDb>>;
 
 beforeEach(async () => {
   context = await freshTestDb();
-  Object.assign(context.server, { useDb: () => context });
   invalidateTagRecommendationIndex();
 });
 

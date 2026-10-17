@@ -38,14 +38,13 @@ const emit = defineEmits<{ resetSearch: [] }>();
     </button>
   </EmptyState>
   <EmptyState v-else :icon="icon" :title="title" :description="description">
-    <TheiLink
+    <Button
       v-if="createTo && createLabel"
       :to="createTo"
-      class="flex items-center gap-xs rounded-normal bg-accent/80 px-sm py-xs
-        text-sm font-semibold text-white transition hocus:bg-accent"
+      class="flex items-center gap-xs font-semibold"
     >
       <Icon name="plus-circle" />
       <span>{{ createLabel }}</span>
-    </TheiLink>
+    </Button>
   </EmptyState>
 </template>

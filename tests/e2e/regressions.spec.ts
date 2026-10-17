@@ -706,10 +706,19 @@ test.describe('administrator content and keyboard panels', () => {
       await request.post('/api/admin/pages', { data: pageData })
     ).json();
     expect(createdPage.type, JSON.stringify(createdPage)).toBe('success');
+    // Every save names the version it was read at, as the forms do.
+    const versionOf = async (path: string) =>
+      (await (await request.get(path)).json()).version as number;
     expect(
       await (
         await request.put(`/api/admin/pages/${createdPage.pageUuid}`, {
-          data: { ...pageData, title: 'Saved page' },
+          data: {
+            ...pageData,
+            title: 'Saved page',
+            version: await versionOf(
+              `/api/admin/pages/${createdPage.pageUuid}`,
+            ),
+          },
         })
       ).json(),
     ).toMatchObject({ type: 'success' });
@@ -760,6 +769,7 @@ test.describe('administrator content and keyboard panels', () => {
             ...projectData,
             sections: storedProject.sections,
             title: 'Saved project',
+            version: storedProject.version,
           },
         })
       ).json(),
@@ -780,7 +790,13 @@ test.describe('administrator content and keyboard panels', () => {
     expect(
       await (
         await request.put(`/api/admin/events/${createdEvent.eventUuid}`, {
-          data: { ...eventData, title: 'Saved event' },
+          data: {
+            ...eventData,
+            title: 'Saved event',
+            version: await versionOf(
+              `/api/admin/events/${createdEvent.eventUuid}`,
+            ),
+          },
         })
       ).json(),
     ).toMatchObject({ type: 'success' });

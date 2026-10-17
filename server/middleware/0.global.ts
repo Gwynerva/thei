@@ -10,6 +10,7 @@ import {
   CLOSED_SITE_RETRY_AFTER,
   closedSiteRoute,
 } from '../thei/boot/closed-site';
+import { signInReturnPath } from '#layers/thei/shared/oauth';
 import { getRequestPath } from '../thei/request';
 import { siteOrigin, sitePath } from '../thei/site-url';
 import {
@@ -119,6 +120,32 @@ export default defineEventHandler(async (event) => {
         return;
       }
 
+      // An AI client has no session cookie either. Every route under
+      // `/api/mcp` checks the token it carries, and serves a closed site as
+      // well: the token speaks for the owner, who sees a private site.
+      if (path === '/api/mcp' || path.startsWith('/api/mcp/')) {
+        return;
+      }
+
+      // Signing an AI app in: its endpoints answer apps, which carry no
+      // session, and its pages — the owner's consent, a refusal — must be
+      // able to say "sign in" on a closed site as well. Neither is ever
+      // framed, kept or indexed: a consent page in a frame is a click
+      // someone else steers.
+      if (
+        path.startsWith('/oauth/') ||
+        path.startsWith('/.well-known/oauth-')
+      ) {
+        setHeaders(event, {
+          'X-Frame-Options': 'DENY',
+          'Content-Security-Policy': "frame-ancestors 'none'",
+          'Cache-Control': 'no-store',
+          'X-Robots-Tag': 'noindex, nofollow',
+          'Referrer-Policy': 'no-referrer',
+        });
+        return;
+      }
+
       const isAuthPath =
         path === '/sign-in/' ||
         path.startsWith('/sign-in/link/') ||
@@ -126,7 +153,9 @@ export default defineEventHandler(async (event) => {
           path === '/api/admin/session/link') &&
           event.method === 'POST');
       if (isAuthPath && isAuthenticatedAdmin) {
-        return sendRedirect(event, sitePath('/admin/'));
+        // Back to a request for a connection the owner signed in for.
+        const next = signInReturnPath(getQuery(event).next);
+        return sendRedirect(event, sitePath(next ?? '/admin/'));
       }
 
       if (isAdminPath && !isAuthPath && !isAuthenticatedAdmin) {
@@ -159,7 +188,7 @@ export default defineEventHandler(async (event) => {
 
       const route = closedSiteRoute(path);
       if (route === 'unavailable') {
-        setHeader(event, 'Retry-After', String(CLOSED_SITE_RETRY_AFTER));
+        setHeader(event, 'Retry-After', CLOSED_SITE_RETRY_AFTER);
         throw createError({
           statusCode: 503,
           statusMessage: 'Thei is updating',

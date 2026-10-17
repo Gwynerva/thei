@@ -1,3 +1,4 @@
+import { AssetType } from './asset';
 import { formatMediaTime } from './audio';
 import type { ContentOutputBlock, PublicContentOutputData } from './content';
 import { contentIntegrationUrl } from './content-integrations';
@@ -79,40 +80,49 @@ function renderBlock(
       return '---';
     case 'contentMedia':
       return renderMedia(data.asset, data.caption, options);
-    case 'contentGallery':
-      return (Array.isArray(data.items) ? data.items : [])
+    case 'contentGallery': {
+      // The pictures one after another; the gallery's title a line of its
+      // own above them, not a heading, as a group's is.
+      const pictures = (Array.isArray(data.items) ? data.items : [])
         .map((item: any) => renderMedia(item?.asset, item?.caption, options))
         .filter(Boolean)
         .join('\n\n');
-    case 'contentAttachment': {
-      const url = data.asset?.assetUrl ?? data.asset?.media?.src;
+      if (!pictures) return '';
       const title =
-        inlineToMarkdown(data.title, options) ||
-        data.asset?.fileName ||
-        data.asset?.slug ||
-        '';
-      if (!url) return '';
-      const caption = inlineToMarkdown(data.caption, options);
-      const link = `[${title || url}](${options.absolute(url)})`;
-      return caption ? `${link}\n\n${caption}` : link;
+        typeof data.title === 'string' ? typeset(data.title, options) : '';
+      return title ? `${title}\n\n${pictures}` : pictures;
     }
+    case 'contentAttachment':
     case 'contentAudio': {
-      const url = data.asset?.assetUrl;
-      if (!url) return '';
+      const file = renderFile(data, block.type === 'contentAudio', options);
+      return file?.caption
+        ? `${file.link}\n\n${file.caption}`
+        : (file?.link ?? '');
+    }
+    case 'contentFileGroup': {
+      // Each file as it would be alone, a line of a list, its caption after
+      // it; the group's title a line of its own above, not a heading.
+      const lines = (Array.isArray(data.items) ? data.items : []).flatMap(
+        (item: any) => {
+          const file = renderFile(
+            item ?? {},
+            item?.asset?.type === AssetType.Audio,
+            options,
+          );
+          if (!file) return [];
+          return [`- ${file.link}${file.caption ? ` — ${file.caption}` : ''}`];
+        },
+      );
+      if (!lines.length) return '';
       const title =
-        inlineToMarkdown(data.title, options) || options.audioLabel || url;
-      const duration = data.asset?.audio?.duration;
-      const link = `[${title}](${options.absolute(url)})${
-        duration > 0 ? ` (${formatMediaTime(duration)})` : ''
-      }`;
-      const caption = inlineToMarkdown(data.caption, options);
-      return caption ? `${link}\n\n${caption}` : link;
+        typeof data.title === 'string' ? typeset(data.title, options) : '';
+      return title ? `${title}\n\n${lines.join('\n')}` : lines.join('\n');
     }
     case 'externalLink': {
       const url = data.url;
       if (!url) return '';
       const title = data.title || url;
-      return `[${title}](${url}${linkTitle(data.note, options)})`;
+      return `[${bracketed(title)}](${url}${linkTitle(data.note, options)})`;
     }
     case 'integration': {
       const url = contentIntegrationUrl(
@@ -125,7 +135,7 @@ function renderBlock(
       const url = data.url ?? data.href;
       const title = data.title ? typeset(data.title, options) : url;
       return url
-        ? `[${title}](${options.absolute(url)}${linkTitle(data.note, options)})`
+        ? `[${bracketed(title)}](${options.absolute(url)}${linkTitle(data.note, options)})`
         : '';
     }
     case 'privateSectionPlaceholder':
@@ -140,6 +150,33 @@ function renderBlock(
   }
 }
 
+/**
+ * A file as a link to it, named by the owner's title — a recording also by
+ * its length, then — with the file's description as the link's title, as a
+ * link's note is; and its caption.
+ */
+function renderFile(
+  data: Record<string, any>,
+  recording: boolean,
+  options: ContentMarkdownOptions,
+): { link: string; caption: string } | undefined {
+  const url = recording
+    ? data.asset?.assetUrl
+    : (data.asset?.assetUrl ?? data.asset?.media?.src);
+  if (!url) return undefined;
+  const title =
+    (typeof data.title === 'string' ? typeset(data.title, options) : '') ||
+    (recording ? options.audioLabel : undefined) ||
+    url;
+  const duration = data.asset?.audio?.duration;
+  const length =
+    recording && duration > 0 ? ` (${formatMediaTime(duration)})` : '';
+  return {
+    link: `[${bracketed(title)}](${options.absolute(url)}${linkTitle(data.asset?.alt, options)})${length}`,
+    caption: inlineToMarkdown(data.caption, options),
+  };
+}
+
 function renderMedia(
   asset: any,
   caption: unknown,
@@ -148,7 +185,38 @@ function renderMedia(
   const src = asset?.media?.src ?? asset?.assetUrl;
   if (!src) return '';
   const text = inlineToMarkdown(caption, options);
-  return `![${text}](${options.absolute(src)})`;
+  // The file's description is what the picture shows: its alt, and the
+  // caption follows as words of its own. Without one the caption's words
+  // are the alt, and the caption follows only when it holds more than its
+  // words — a link, a mark, a hint — which an alt cannot.
+  const description =
+    typeof asset?.alt === 'string'
+      ? typeset(asset.alt.replace(/\s+/g, ' ').trim(), options)
+      : '';
+  const alt = description || inlinePlainText(caption, options);
+  const image = `![${bracketed(alt)}](${options.absolute(src)})`;
+  return text && text !== alt ? `${image}\n\n${text}` : image;
+}
+
+/** Words between the brackets of a link or a picture, whose own would close them. */
+function bracketed(text: string): string {
+  return text.replace(/[[\]\\]/g, '\\$&');
+}
+
+/** Inline HTML as the words it shows, with the typography it is shown in. */
+function inlinePlainText(
+  value: unknown,
+  options: ContentMarkdownOptions,
+): string {
+  if (typeof value !== 'string' || !value) return '';
+  const html = options.format
+    ? normalizeInlineMarkup(value, options.format)
+    : value;
+  return decodeEntities(
+    html.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, ''),
+  )
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function renderList(
@@ -223,7 +291,7 @@ export function inlineToMarkdown(
             note && decodeEntities(note),
             options,
           ).replace(/&/g, '&amp;');
-          return `[${text.replace(/<[^>]+>/g, '')}](${
+          return `[${bracketed(text.replace(/<[^>]+>/g, ''))}](${
             href.startsWith('/') ? options.absolute(href) : href
           }${title})`;
         },

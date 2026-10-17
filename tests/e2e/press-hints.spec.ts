@@ -423,6 +423,46 @@ test.describe('by mouse', () => {
     await expect(hint(page)).toHaveText('Icon hint');
   });
 
+  test('a hint in a dialog fades out where it showed', async ({ page }) => {
+    await page.locator('[data-test-open-dialog]').click();
+    await page.locator('[data-test-dialog-button]').hover();
+    await expect(
+      page.locator('[data-test-dialog] [data-title-popup-el]'),
+    ).toHaveText('Dialog hint');
+    // Watched frame by frame: moved to the page under the dialog as its
+    // anchor went, it used to vanish at once behind the dialog.
+    await page.evaluate(() => {
+      const frames: { opacity: number; inDialog: boolean }[] = [];
+      Object.assign(window, { hintFrames: frames });
+      const start = performance.now();
+      const watch = () => {
+        const el = document.querySelector('[data-title-popup-el]');
+        if (el)
+          frames.push({
+            opacity: Number(getComputedStyle(el).opacity),
+            inDialog: Boolean(el.closest('dialog')),
+          });
+        if (performance.now() - start < 1500) requestAnimationFrame(watch);
+      };
+      requestAnimationFrame(watch);
+    });
+    await page.mouse.move(5, 5);
+    await expect(hint(page)).toHaveCount(0);
+    const frames = await page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            hintFrames: { opacity: number; inDialog: boolean }[];
+          }
+        ).hintFrames,
+    );
+    expect(frames.every((frame) => frame.inDialog)).toBe(true);
+    expect(
+      frames.filter((frame) => frame.opacity > 0.05 && frame.opacity < 0.95)
+        .length,
+    ).toBeGreaterThan(1);
+  });
+
   test('a link card shows while the pointer rests on its link', async ({
     page,
   }) => {

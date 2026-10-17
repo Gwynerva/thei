@@ -14,6 +14,8 @@ export const projects = sqliteTable('projects', {
   action: text({ mode: 'json' }).$type<ProjectActionEditData>(),
   /** Owner-only note to self; flags the entity wherever it is listed. */
   reminder: text().notNull().default(''),
+  /** Other names it is found by in every search; never shown on a page. */
+  synonyms: text({ mode: 'json' }).notNull().$type<string[]>().default([]),
   createdAt: integer().notNull(),
   updatedAt: integer().notNull(),
 });

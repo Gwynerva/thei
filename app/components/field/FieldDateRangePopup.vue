@@ -22,7 +22,6 @@ const props = withDefaults(
   defineProps<{
     anchor: ReferenceElement | null;
     placement?: Placement;
-    teleportTo?: string | HTMLElement;
     single?: boolean;
     maxDate?: Date;
     /** Certainty is meaningless for a date the engine picks, such as a filter. */
@@ -34,7 +33,6 @@ const props = withDefaults(
   }>(),
   {
     placement: 'bottom-end',
-    teleportTo: 'body',
     precision: true,
   },
 );
@@ -186,15 +184,15 @@ function confirmFromLabel(event: KeyboardEvent) {
     v-model:open="open"
     :anchor="anchor"
     :placement="placement"
-    :teleport-to="teleportTo"
     fit-content
+    shift-cross-axis
+    :complex="!single"
   >
     <!-- Both steps share one width, so the popup keeps its place when it
          turns from one to the other. -->
     <div
       class="flex scrollbar-mini max-h-(--floating-popup-available-height) w-76
-        max-w-full flex-col overflow-y-auto overscroll-contain rounded-normal
-        border border-border-1 bg-bg-2"
+        max-w-full flex-col overflow-y-auto overscroll-contain"
     >
       <div v-if="detailsShown && model" class="flex flex-col gap-sm p-sm">
         <!-- Each field says what it is in its placeholder, so the form stays

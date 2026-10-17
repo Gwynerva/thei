@@ -4,6 +4,7 @@ import {
   type PublicFile,
   type PublicSecretReference,
 } from '#layers/thei/shared/api/public';
+import { isAssetPreviewable } from '#layers/thei/shared/assets/preview';
 import { openPublicAssets } from '#layers/thei/app/modals/public-asset/modal';
 
 const props = withDefaults(
@@ -14,12 +15,18 @@ const props = withDefaults(
   { compact: false },
 );
 /**
- * Pictures and videos open in the viewer, together, so it can step between
- * them. Any other file has nothing to show there: it is simply downloaded.
+ * A file with something to show — a picture, a video, a text, a table, a
+ * page, a PDF, an archive's list — opens in the viewer, all of them
+ * together, so it can step between them. Any other file is downloaded.
  */
+function viewable(file: PublicFile) {
+  return (
+    !!file.media || isAssetPreviewable(file.extension, file.archivedOriginal)
+  );
+}
 const openable = computed(() =>
   props.files.filter(
-    (file): file is PublicFile => !isPublicSecret(file) && !!file.media,
+    (file): file is PublicFile => !isPublicSecret(file) && viewable(file),
   ),
 );
 </script>
@@ -44,6 +51,15 @@ const openable = computed(() =>
         :description="publicText(file.description)"
         :icon-media="file.media"
         icon="media"
+        button
+        @activate="openPublicAssets(openable, file)"
+      />
+      <PublicCompactResourceItem
+        v-else-if="viewable(file)"
+        :title="publicText(file.title) || phrase.asset"
+        :description="publicText(file.description)"
+        :extension="file.extension"
+        icon="file"
         button
         @activate="openPublicAssets(openable, file)"
       />

@@ -78,11 +78,6 @@ export type AssetVariantInfo =
   | AudioAssetVariantInfo
   | OtherAssetVariantInfo;
 
-export type AssetVariantInfoForType<TType extends AssetType> = Extract<
-  AssetVariantInfo,
-  { type: TType }
->;
-
 export type AssetUploadResponse = AssetVariantInfo & {
   /** True when this request created a new stored file instead of reusing a match. */
   created: boolean;
@@ -106,16 +101,14 @@ export type AssetReplaceResult = {
   meta?: AssetMeta | null;
 };
 
-export interface AssetVariantsRequest {
-  assetUuid: string;
-}
-
 export type AssetVariantWithUsage = AssetVariantInfo & {
   usageCount: number;
   /** Unix ms after which cleanup deletes the variant; set only when unused. */
   deleteAfter?: number;
   /** Unused, but kept while a version of some text still shows it. */
   inHistory?: true;
+  /** Unused, but kept while an AI action still needs it. */
+  heldByAi?: true;
 };
 
 export interface AssetVariantsResponse {

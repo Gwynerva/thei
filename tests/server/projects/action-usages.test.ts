@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { DEFAULT_PROJECT_ACTION } from '../../../shared/project-action';
 import { schema } from '../../../server/thei/db/schema';
 import { syncProjectActionUsages } from '../../../server/thei/projects/action-usages';
+import { createContentHistoryTable } from '../fixtures/content-history-table';
 
 let rawDb: Database.Database | undefined;
 
@@ -22,6 +23,7 @@ describe('project action usages', () => {
         PRIMARY KEY(assetUuid, containerType, containerId, role)
       );
     `);
+    createContentHistoryTable(rawDb);
     const db = drizzle(rawDb, { schema });
     const action = {
       ...DEFAULT_PROJECT_ACTION,

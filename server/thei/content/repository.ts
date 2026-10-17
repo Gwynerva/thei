@@ -7,12 +7,15 @@ import {
   contentPreviewAssets,
   createEmptyContentData,
   ContentValidationError,
+  CONTENT_FILE_BLOCKS,
   extractContentAssetRefs,
-  isContentAssetBlockType,
+  hydrateContentBlockFiles,
+  isContentFileBlockType,
   normalizeContentData,
   summarizeContentData,
   type ContentEditValue,
   type ContentFieldValue,
+  type ContentFileBlock,
   type ContentOutputBlock,
   type ContentOutputData,
   type ContentOwnerType,
@@ -24,7 +27,8 @@ import {
 } from '#layers/thei/shared/asset';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { audioDescriptorFromMeta } from '#layers/thei/shared/audio';
-import { buildAdminAssetUrls, archivedOriginalFromMeta } from '../assets/urls';
+import { buildAdminAssetUrls } from '../assets/urls';
+import { archivedOriginalFromMeta } from '#layers/thei/shared/asset';
 import {
   createExternalLinkLoader,
   ensureExternalLinks,
@@ -37,6 +41,11 @@ import {
   recordContentSave,
   touchReleasedAssets,
 } from './history';
+import { deleteUsagesReleasing } from '../assets/repository/usages/release';
+import {
+  forgetContentAnchors,
+  recordContentAnchors,
+} from '../content-links/anchor-ledger';
 
 export async function findContentByOwner(
   ownerType: ContentOwnerType,
@@ -217,6 +226,16 @@ export function applyPreparedContentSave(
         .all()
         .map((row: { assetUuid: string }) => row.assetUuid)
     : [];
+  // The anchors its headings had and have, for a link to one renamed since;
+  // a form resends texts it did not change, which have nothing new to tell.
+  if (prepared.type === 'delete' || prepared.changed || !previous)
+    recordContentAnchors(
+      tx,
+      schema,
+      { ownerType, ownerId, slot },
+      [previous?.data, prepared.type === 'delete' ? undefined : prepared.data],
+      now,
+    );
   const recordHistory = (saved: ContentOutputData) =>
     recordContentSave(
       tx,
@@ -333,6 +352,7 @@ export function deleteContentForOwner(
 
   // What the owner held, saved or still a draft, stays in the history.
   recordContentDeletion(tx, schema, ownerType, ownerId, rows);
+  forgetContentAnchors(tx, schema, ownerType, ownerId);
   for (const row of rows) {
     deleteContentRowAndUsages(tx, schema, row.contentUuid);
   }
@@ -356,35 +376,20 @@ async function validateContentAssets(data: ContentOutputData) {
   const assetByUuid = new Map(assets.map((asset) => [asset.assetUuid, asset]));
 
   for (const block of data.blocks) {
-    if (!isContentAssetBlockType(block.type)) continue;
-    const refs = extractContentAssetRefs({ blocks: [block] });
-    for (const ref of refs) {
+    if (!isContentFileBlockType(block.type)) continue;
+    const { accepts, sizeLimitPolicy }: ContentFileBlock =
+      CONTENT_FILE_BLOCKS[block.type];
+    for (const ref of extractContentAssetRefs({ blocks: [block] })) {
       const asset = assetByUuid.get(ref.assetUuid);
       if (!asset) continue;
-      const selectionError = assetSelectionError(asset, {
-        sizeLimitPolicy:
-          block.type === 'contentAttachment' || block.type === 'contentAudio'
-            ? 'file'
-            : 'media',
-      });
-      if (selectionError === 'size')
+      if (accepts !== 'any' && !accepts.includes(asset.type))
+        throw new ContentValidationError(
+          `A ${block.type} block cannot show a file of this kind`,
+        );
+      if (assetSelectionError(asset, { sizeLimitPolicy }) === 'size')
         throw new ContentValidationError(
           'Content asset exceeds the maximum allowed size',
         );
-      if (
-        (block.type === 'contentMedia' || block.type === 'contentGallery') &&
-        asset.type !== AssetType.Image &&
-        asset.type !== AssetType.Video
-      ) {
-        throw new ContentValidationError(
-          'Content media and gallery blocks can only use images or videos',
-        );
-      }
-      if (block.type === 'contentAudio' && asset.type !== AssetType.Audio) {
-        throw new ContentValidationError(
-          'Content audio blocks can only use audio files',
-        );
-      }
     }
   }
 
@@ -426,27 +431,8 @@ export async function hydrateContentData(
   const blocks: ContentOutputBlock[] = [];
   for (const block of normalized.blocks) {
     const data = { ...block.data };
-    if (
-      block.type === 'contentMedia' ||
-      block.type === 'contentAudio' ||
-      block.type === 'contentAttachment'
-    ) {
-      const assetUuid = (block.data as any).asset?.assetUuid;
-      data.asset = assetUuid ? await hydrateAsset(assetUuid) : null;
-    } else if (block.type === 'contentGallery') {
-      const items = Array.isArray((block.data as any).items)
-        ? (block.data as any).items
-        : [];
-      data.items = (
-        await Promise.all(
-          items.map(async (item: any) => {
-            const asset = item?.asset?.assetUuid
-              ? await hydrateAsset(item.asset.assetUuid)
-              : undefined;
-            return asset ? { ...item, asset } : undefined;
-          }),
-        )
-      ).filter(Boolean);
+    if (isContentFileBlockType(block.type)) {
+      Object.assign(data, await hydrateContentBlockFiles(block, hydrateAsset));
     } else if (block.type === 'externalLink') {
       const url = (block.data as any).url;
       const link = url ? await loadExternalLink(url) : undefined;
@@ -486,14 +472,14 @@ function buildPreparedAssetUsages(
 }
 
 function deleteContentRowAndUsages(tx: any, schema: any, contentUuid: string) {
-  tx.delete(schema.assetUsages)
-    .where(
-      and(
-        eq(schema.assetUsages.containerType, 'content'),
-        eq(schema.assetUsages.containerId, contentUuid),
-      ),
-    )
-    .run();
+  deleteUsagesReleasing(
+    tx,
+    schema,
+    and(
+      eq(schema.assetUsages.containerType, 'content'),
+      eq(schema.assetUsages.containerId, contentUuid),
+    ),
+  );
   tx.delete(schema.content)
     .where(eq(schema.content.contentUuid, contentUuid))
     .run();

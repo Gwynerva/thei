@@ -2,6 +2,11 @@ import { expect, test, type Page } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+import {
+  describeFile,
+  skipDescription,
+  uploadControls,
+} from './helpers/upload';
 
 /**
  * Adding one file to a project — to its showcase or to its other files —
@@ -75,14 +80,9 @@ async function pick(page: Page, add: string, name: string, buffer: Buffer) {
 const modal = (page: Page) => page.locator('dialog[open]').last();
 const openModals = (page: Page) => page.locator('dialog[open]');
 
-/** The editor's "Use as is", in the section of the file as it was picked. */
+/** The editor's first screen: the file as it is, on to its description. */
 async function useAsIs(page: Page) {
-  await modal(page)
-    .getByRole('button', { name: 'Selected file', exact: true })
-    .click();
-  await modal(page)
-    .getByRole('button', { name: 'Use as is', exact: true })
-    .click();
+  await uploadControls(page).next.click();
 }
 
 async function saveProject(page: Page, projectUuid: string) {
@@ -102,9 +102,14 @@ test('a picture added to the showcase goes on to its caption', async ({
 
   await pick(page, 'Add to Showcase', 'cat.png', await picture());
   await useAsIs(page);
+  // Last, what the file is: written once, for every place it goes.
+  await describeFile(page, 'Рыжий кот на подоконнике.');
 
   // The editor hands over to the details instead of closing the flow.
-  const caption = modal(page).getByPlaceholder('Caption');
+  const caption = modal(page).getByRole('textbox', {
+    name: 'Caption',
+    exact: true,
+  });
   await expect(caption).toBeVisible({ timeout: 20_000 });
   await caption.fill('Кот на окне.');
   await modal(page).getByRole('button', { name: 'Save', exact: true }).click();
@@ -115,6 +120,10 @@ test('a picture added to the showcase goes on to its caption', async ({
   const saved = await saveProject(page, projectUuid);
   expect(saved.showcaseAssets).toHaveLength(1);
   expect(saved.showcaseAssets[0].caption).toBe('Кот на окне');
+  const description = await page.request.get(
+    `/api/admin/assets/${saved.showcaseAssets[0].assetUuid}/description`,
+  );
+  expect((await description.json()).text).toBe('Рыжий кот на подоконнике.');
 });
 
 test('a duplicate settled by its variant goes on to its title, and Back leaves it placed', async ({
@@ -127,23 +136,26 @@ test('a duplicate settled by its variant goes on to its title, and Back leaves i
   // Stored once, through the showcase.
   await pick(page, 'Add to Showcase', 'first.png', buffer);
   await useAsIs(page);
-  await expect(modal(page).getByPlaceholder('Caption')).toBeVisible({
-    timeout: 20_000,
-  });
+  await skipDescription(page);
+  await expect(
+    modal(page).getByRole('textbox', { name: 'Caption', exact: true }),
+  ).toBeVisible({ timeout: 20_000 });
   await page.keyboard.press('Escape');
   await expect(openModals(page)).toHaveCount(0);
 
   // The same bytes again, as another file: a duplicate, settled by choosing
   // the variant already stored.
   await pick(page, 'Add File', 'again.png', buffer);
-  const choose = modal(page).getByRole('button', {
-    name: 'Choose this variant',
+  // The file as it is is the stored one.
+  const next = uploadControls(page).next;
+  await expect(next).toBeEnabled({ timeout: 20_000 });
+  await next.click();
+  await skipDescription(page);
+
+  const title = modal(page).getByRole('textbox', {
+    name: 'Title',
     exact: true,
   });
-  await expect(choose).toBeEnabled({ timeout: 20_000 });
-  await choose.click();
-
-  const title = modal(page).getByPlaceholder('Title');
   await expect(title).toBeVisible({ timeout: 20_000 });
   const url = page.url();
   await page.goBack();
@@ -157,7 +169,9 @@ test('a duplicate settled by its variant goes on to its title, and Back leaves i
   await page.getByRole('button', { name: 'File Details', exact: true }).click();
   await expect(title).toBeVisible();
   await title.fill('Отчёт за год.');
-  await modal(page).getByPlaceholder('Description').fill('Итоги. Планы');
+  await modal(page)
+    .getByRole('textbox', { name: 'Description', exact: true })
+    .fill('Итоги. Планы');
   await modal(page).getByRole('button', { name: 'Save', exact: true }).click();
   await expect(openModals(page)).toHaveCount(0);
 

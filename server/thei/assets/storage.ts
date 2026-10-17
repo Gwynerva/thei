@@ -29,7 +29,7 @@ import { extractImageAccent } from './image-color';
 import { inspectVideoFile, videoSourceInfo } from './process';
 import { createMediaPreview, MEDIA_PREVIEW_EXTENSION } from './media-preview';
 import { withProcessingSlot } from './queue';
-import { assetHeldByHistorySql } from '../content/history';
+import { assetHeldSql } from './holds';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import {
   assetBytesHash,
@@ -37,6 +37,8 @@ import {
   sha256,
   type AssetBytes,
 } from './bytes';
+import { forgetAiAnchors } from '../ai/memory/forget';
+import { forgetFamilyDescriptions } from './descriptions';
 
 export { sha256, type AssetBytes };
 
@@ -555,8 +557,9 @@ export async function deleteStoredAsset(
     if (!current || (cutoffMs !== undefined && current.touchedAt >= cutoffMs)) {
       return { deleted: false, blobOrphaned: false };
     }
-    // Cleanup never takes a file a draft or a version still shows. Deleting
-    // one by hand is the owner's decision and stays possible.
+    // Cleanup never takes a file a draft or a version still shows, or an AI
+    // action still needs. Deleting one by hand is the owner's decision and
+    // stays possible.
     if (
       cutoffMs !== undefined &&
       tx
@@ -565,7 +568,7 @@ export async function deleteStoredAsset(
         .where(
           and(
             eq(schema.assets.assetUuid, assetUuid),
-            assetHeldByHistorySql(schema.assets.assetUuid),
+            assetHeldSql(schema.assets.assetUuid),
           ),
         )
         .get()
@@ -590,6 +593,9 @@ export async function deleteStoredAsset(
     tx.delete(schema.assets)
       .where(eq(schema.assets.assetUuid, assetUuid))
       .run();
+    forgetAiAnchors(tx, schema, 'asset', [assetUuid]);
+    // Its family's description goes with the last file of it.
+    forgetFamilyDescriptions(tx, schema, [current.familyUuid]);
 
     // The file is shared: several rows can point at one blob when the same
     // bytes were derived from different sources. It only goes when the last

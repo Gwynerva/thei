@@ -5,6 +5,8 @@ const props = defineProps<{
 }>();
 
 const root = useTemplateRef('root');
+/** What an AI proposes for the field: the label turns accent, with a ✦. */
+const { place, offered } = useFieldOffers('label');
 
 function handleClick() {
   const target = root.value
@@ -26,7 +28,8 @@ function handleClick() {
 <template>
   <div
     ref="root"
-    class="cursor-pointer font-semibold tracking-tight"
+    class="cursor-pointer font-semibold tracking-tight transition-colors"
+    :class="offered ? 'text-accent' : ''"
     @click="handleClick"
   >
     <slot></slot
@@ -34,6 +37,6 @@ function handleClick() {
       v-if="required"
       class="relative -top-1 -right-1.5 text-xs text-accent"
       >*</span
-    >
+    ><AiFieldOffer v-if="place" :place :class="required ? 'ml-3' : 'ml-1.5'" />
   </div>
 </template>

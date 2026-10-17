@@ -5,6 +5,7 @@ import type {
   AssetPlacement,
 } from '#layers/thei/shared/asset-library';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
+import type { IconName } from '#thei/icons';
 
 export const assetSourceIcon = {
   project: entityTypeIcon('project'),
@@ -14,6 +15,7 @@ export const assetSourceIcon = {
   'diary-entry': entityTypeIcon('diary-entry'),
   tag: entityTypeIcon('tag'),
   profile: 'person',
+  'ai-session': 'ai-chat',
   unused: 'delete',
 } as const satisfies Record<AssetSourceType, string>;
 export function assetSourceLabel(source: Pick<AssetSource, 'type'>) {
@@ -25,6 +27,7 @@ export function assetSourceLabel(source: Pick<AssetSource, 'type'>) {
     'diary-entry': phrase.value.diary_entry,
     tag: phrase.value.tag,
     profile: phrase.value.asset_source_profile,
+    'ai-session': phrase.value.asset_source_ai_session,
     unused: phrase.value.asset_library_unused,
   }[source.type];
 }
@@ -34,6 +37,9 @@ export function assetSourceLabel(source: Pick<AssetSource, 'type'>) {
  */
 export function assetSourceTitle(source: Pick<AssetSource, 'type' | 'title'>) {
   if (source.type === 'unused') return phrase.value.asset_library_unused;
+  // A session not named yet is a new one, as its list calls it.
+  if (source.type === 'ai-session')
+    return publicText(source.title) || phrase.value.ai_session_untitled;
   return source.type === 'diary-entry'
     ? entityDisplayTitle({ title: source.title, date: source.title })
     : publicText(source.title);
@@ -49,14 +55,26 @@ export function assetFileLabel(asset: {
   extension: string;
   size: number;
 }) {
-  const type = {
+  return `${assetKindLabel(asset.type)} · ${asset.extension.toUpperCase()} · ${useHumanSize()(asset.size)}`;
+}
+
+/** What kind of file it is, in a word: the name of a file's window. */
+export function assetKindLabel(type: AssetType) {
+  return {
     [AssetType.Image]: phrase.value.image,
     [AssetType.Video]: phrase.value.video,
     [AssetType.Audio]: phrase.value.audio,
     [AssetType.Other]: phrase.value.asset,
-  }[asset.type];
-  return `${type} · ${asset.extension.toUpperCase()} · ${useHumanSize()(asset.size)}`;
+  }[type];
 }
+
+/** The icon a file's window is named with, by the kind of file. */
+export const assetKindIcon = {
+  [AssetType.Image]: 'media',
+  [AssetType.Video]: 'media',
+  [AssetType.Audio]: 'audio',
+  [AssetType.Other]: 'file',
+} as const satisfies Record<AssetType, IconName>;
 
 export function assetDeletionLabel(deleteAfter: number) {
   return phrase.value.asset_library_pending_deletion(
@@ -84,20 +102,31 @@ export function assetRoleLabel(
     'action-icon': phrase.value.asset_role_action_icon,
     'action-background': phrase.value.asset_role_action_background,
     'action-file': phrase.value.asset_role_action_file,
+    'ai-attachment': phrase.value.asset_role_ai_attachment,
   }[role];
 }
 
 export function assetPlacementLabel(placement: AssetPlacement) {
-  if (placement.role !== 'content') {
-    return assetRoleLabel(placement.role, placement.detail);
-  }
+  return assetUseLabel(placement.role, placement.source.type, placement.detail);
+}
+
+/**
+ * How a file is used in a place, in a word or two: a text names whose it
+ * is. The admin's window and a visitor's say it alike.
+ */
+export function assetUseLabel(
+  role: AssetRole,
+  sourceType: AssetSourceType,
+  detail?: AssetPlacement['detail'],
+) {
+  if (role !== 'content') return assetRoleLabel(role, detail);
   return {
     content: phrase.value.asset_role_content,
     'project-description': phrase.value.asset_role_project_description,
     'event-description': phrase.value.asset_role_event_description,
     'page-content': phrase.value.asset_role_page_content,
     'profile-about': phrase.value.asset_role_profile_about,
-  }[assetPlacementContentContext(placement)];
+  }[assetContentContext(sourceType)];
 }
 
 export function assetPlacementContentContext(
@@ -109,6 +138,10 @@ export function assetPlacementContentContext(
   | 'page-content'
   | 'profile-about' {
   if (placement.role !== 'content') return 'content';
+  return assetContentContext(placement.source.type);
+}
+
+function assetContentContext(sourceType: AssetSourceType) {
   return (
     {
       project: 'project-description',
@@ -118,7 +151,8 @@ export function assetPlacementContentContext(
       'diary-entry': 'content',
       profile: 'profile-about',
       tag: 'content',
+      'ai-session': 'content',
       unused: 'content',
     } as const
-  )[placement.source.type];
+  )[sourceType];
 }

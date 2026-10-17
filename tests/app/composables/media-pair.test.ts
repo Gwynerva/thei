@@ -27,12 +27,40 @@ class TestVideo {
   playbackRate = 1;
   paused = true;
   seeking = false;
+  played = { length: 0 };
   play = vi.fn(async () => {
     this.paused = false;
   });
   pause = vi.fn(() => {
     this.paused = true;
   });
+  requestVideoFrameCallback = vi.fn((callback: (now: number) => void) => {
+    videoFrames.push(callback);
+    return videoFrames.length;
+  });
+  cancelVideoFrameCallback = vi.fn();
+}
+class TestContext {
+  filter = 'none';
+  clearRect = vi.fn();
+  constructor(public drawImage: ReturnType<typeof vi.fn>) {}
+}
+class TestCanvas {
+  width = 300;
+  height = 150;
+  style: Record<string, string> = {};
+  dataset: Record<string, string> = {};
+  constructor(public context: TestContext) {}
+  getContext = () => this.context;
+  animate = vi.fn(() => ({ finish: vi.fn(), cancel: vi.fn() }));
+}
+/** A backdrop drawn from the video: two canvases, one over the other. */
+class TestBackdrop {
+  clientWidth = 1024;
+  clientHeight = 576;
+  drawImage = vi.fn();
+  canvases = [0, 1].map(() => new TestCanvas(new TestContext(this.drawImage)));
+  querySelectorAll = () => this.canvases;
 }
 const renderer = createRenderer<object, object>({
   patchProp() {},
@@ -52,6 +80,8 @@ let reduced = false;
 let dispose: () => void;
 let frames: Map<number, FrameRequestCallback>;
 let frameId: number;
+let videoFrames: ((now: number) => void)[];
+let now: number;
 
 async function settle() {
   await nextTick();
@@ -109,9 +139,25 @@ function setup(overrides: Partial<MediaSurfaceProps> = {}) {
 beforeEach(() => {
   frames = new Map();
   frameId = 0;
+  videoFrames = [];
+  now = 1000;
   reduced = false;
   vi.stubGlobal('HTMLImageElement', TestImage);
   vi.stubGlobal('HTMLVideoElement', TestVideo);
+  vi.stubGlobal('HTMLElement', TestBackdrop);
+  // A browser whose canvas blurs what it draws.
+  vi.stubGlobal('CanvasRenderingContext2D', { prototype: { filter: 'none' } });
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
+  vi.stubGlobal('getComputedStyle', () => ({
+    getPropertyValue: () => '64px',
+  }));
+  vi.spyOn(performance, 'now').mockImplementation(() => now);
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     frames.set(++frameId, callback);
     return frameId;
@@ -165,6 +211,7 @@ beforeEach(() => {
 afterEach(() => {
   dispose?.();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe('media pairs', () => {
@@ -224,28 +271,108 @@ describe('media pairs', () => {
     expect(pair.loading.value).toBe(false);
   });
 
-  it('starts the main video once both are ready, and the backdrop once it plays', async () => {
-    const { pair, fire } = setup({ kind: 'video', playback: 'autoplay' });
+  it('draws the backdrop of a video from its poster, then its frames, without a second video', async () => {
+    const { pair, attach, fire } = setup({
+      kind: 'video',
+      playback: 'autoplay',
+      previewSrc: '/preview',
+    });
+    const backdrop = new TestBackdrop();
+    pair.registerFrameBackdrop(backdrop as unknown as Element);
+    const [below, above] = backdrop.canvases as [TestCanvas, TestCanvas];
+    // A quarter of the backdrop's size, blurred by a quarter of its blur.
+    expect([below.width, below.height, above.width]).toEqual([256, 144, 256]);
+    const { drawImage } = backdrop;
+    const poster = attach('preview');
     const main = new TestVideo();
-    const backdrop = new TestVideo();
-    pair.register('main', main as unknown as Element);
-    pair.register('backdrop', backdrop as unknown as Element);
     main.readyState = 4;
-    fire('main', 'loadeddata', main);
+    pair.register('main', main as unknown as Element);
     await settle();
-    expect(main.play).not.toHaveBeenCalled();
-    backdrop.readyState = 4;
-    fire('backdrop', 'loadeddata', backdrop);
+    // Until its poster is in, the backdrop would show nothing.
+    expect(pair.revealed.value).toBe(false);
+    poster.complete = true;
+    fire('preview', 'load', poster);
     await settle();
-    expect(main.play).toHaveBeenCalledOnce();
-    expect(backdrop.play).not.toHaveBeenCalled();
     expect(pair.revealed.value).toBe(true);
+    expect(main.play).toHaveBeenCalledOnce();
+    expect(below.context.filter).toBe('blur(16px)');
+    expect(drawImage.mock.lastCall![0]).toBe(poster);
+
+    // Playing, it follows the frames, up to ten times a second, each drawing
+    // fading over the last until the next is due. The poster went into the
+    // upper canvas, faded in; the frame goes into the lower one, uncovered.
+    main.played.length = 1;
+    main.currentTime = 0.5;
     fire('main', 'playing', main);
-    expect(backdrop.play).toHaveBeenCalledOnce();
+    expect(main.requestVideoFrameCallback).toHaveBeenCalledOnce();
+    const drawn = drawImage.mock.calls.length;
+    expect('front' in above.dataset).toBe(true);
+    now += 50;
+    videoFrames.shift()!(now);
+    expect(drawImage).toHaveBeenCalledTimes(drawn);
+    now += 60;
+    videoFrames.shift()!(now);
+    expect(drawImage).toHaveBeenCalledTimes(drawn + 1);
+    expect(drawImage.mock.lastCall![0]).toBe(main);
+    expect('front' in below.dataset && !('front' in above.dataset)).toBe(true);
+    // Only the upper canvas fades; the lower one never moves.
+    expect(below.animate).not.toHaveBeenCalled();
+    expect(above.animate).toHaveBeenLastCalledWith(
+      [{ opacity: 1 }, { opacity: 0 }],
+      expect.objectContaining({ duration: 93.5, fill: 'forwards' }),
+    );
+    // One run of frames, however many events ask for it.
+    fire('main', 'timeupdate', main);
+    expect(videoFrames).toHaveLength(1);
+
+    // Paused, it shows the very frame the video stopped at.
+    main.pause();
+    fire('main', 'pause', main);
+    expect(main.cancelVideoFrameCallback).toHaveBeenCalled();
+    expect(drawImage).toHaveBeenCalledTimes(drawn + 2);
+    expect(drawImage.mock.lastCall![0]).toBe(main);
+  });
+
+  it('reveals a video without a poster once it can play, its backdrop drawn from its frame', async () => {
+    const { pair } = setup({ kind: 'video', playback: 'autoplay' });
+    const backdrop = new TestBackdrop();
+    pair.registerFrameBackdrop(backdrop as unknown as Element);
+    const main = new TestVideo();
+    main.readyState = 4;
+    pair.register('main', main as unknown as Element);
+    await settle();
+    expect(pair.revealed.value).toBe(true);
+    expect(backdrop.drawImage.mock.lastCall![0]).toBe(main);
+  });
+
+  it('draws the backdrop of a video less often where drawing a frame is dear', async () => {
+    const { pair, fire } = setup({ kind: 'video', playback: 'autoplay' });
+    const backdrop = new TestBackdrop();
+    pair.registerFrameBackdrop(backdrop as unknown as Element);
+    const { drawImage } = backdrop;
+    // A canvas the processor draws: 20 ms of the main thread for every frame.
+    drawImage.mockImplementation(() => {
+      now += 20;
+    });
+    const main = new TestVideo();
+    main.readyState = 4;
+    pair.register('main', main as unknown as Element);
+    await settle();
+    main.played.length = 1;
+    fire('main', 'playing', main);
+    const tick = () => {
+      now += 100;
+      videoFrames.shift()!(now);
+    };
+    for (let i = 0; i < 30; i++) tick();
+    const drawn = drawImage.mock.calls.length;
+    for (let i = 0; i < 10; i++) tick();
+    // Within its share of the main thread: about twice a second, not ten times.
+    expect(drawImage.mock.calls.length - drawn).toBeLessThanOrEqual(3);
   });
 
   it('defers interaction video loading and does not play after the pointer has left', async () => {
-    const { pair, props, fire } = setup({
+    const { pair, props, attach, fire } = setup({
       kind: 'video',
       playback: 'interaction',
       previewSrc: '/preview',
@@ -256,88 +383,70 @@ describe('media pairs', () => {
     expect(pair.requested.value).toBe(true);
     props.engaged = false;
     await settle();
+    const poster = attach('preview');
+    poster.complete = true;
+    fire('preview', 'load', poster);
     const main = new TestVideo();
-    const backdrop = new TestVideo();
-    main.readyState = backdrop.readyState = 4;
+    main.readyState = 4;
     pair.register('main', main as unknown as Element);
-    pair.register('backdrop', backdrop as unknown as Element);
     await settle();
     expect(main.play).not.toHaveBeenCalled();
-    expect(backdrop.play).not.toHaveBeenCalled();
     props.engaged = true;
     await settle();
     fire('main', 'playing', main);
-    expect(main.paused || backdrop.paused).toBe(false);
+    expect(main.paused).toBe(false);
     props.engaged = false;
     await settle();
-    expect(main.paused && backdrop.paused).toBe(true);
+    expect(main.paused).toBe(true);
     fire('main', 'canplay', main);
     expect(main.paused).toBe(true);
   });
 
-  it('keeps the main video usable when only its backdrop fails', async () => {
+  it('plays a video whose poster fails, its backdrop drawn from the video', async () => {
     const { pair, attach, fire } = setup({
       kind: 'video',
       playback: 'autoplay',
       previewSrc: '/preview',
     });
-    for (const role of ['preview', 'previewBackdrop'] as const)
-      fire(role, 'load', attach(role));
+    const backdrop = new TestBackdrop();
+    pair.registerFrameBackdrop(backdrop as unknown as Element);
+    fire('preview', 'error', attach('preview'));
     const main = new TestVideo();
     main.readyState = 4;
-    const backdrop = new TestVideo();
     pair.register('main', main as unknown as Element);
-    pair.register('backdrop', backdrop as unknown as Element);
-    fire('backdrop', 'error', backdrop);
     await settle();
     expect(pair.phase.value).toBe('visible');
     expect(main.paused).toBe(false);
-    expect(pair.status.previewBackdrop).toBe('ready');
+    expect(backdrop.drawImage.mock.lastCall![0]).toBe(main);
   });
 
   it('never pauses or restarts the main video while it is in view', async () => {
     const { pair, fire } = setup({ kind: 'video', playback: 'autoplay' });
+    const backdrop = new TestBackdrop();
+    pair.registerFrameBackdrop(backdrop as unknown as Element);
     const main = new TestVideo();
-    const backdrop = new TestVideo();
-    main.readyState = backdrop.readyState = 4;
+    main.readyState = 4;
     pair.register('main', main as unknown as Element);
-    pair.register('backdrop', backdrop as unknown as Element);
     await settle();
     fire('main', 'playing', main);
-    expect(backdrop.paused).toBe(false);
 
-    // Buffering holds only the backdrop, until the main video moves again.
+    // Buffering, a loop back to the start and its end only redraw the
+    // backdrop; the video itself is the browser's.
     main.readyState = 2;
     fire('main', 'waiting', main);
-    expect(backdrop.paused).toBe(true);
     main.readyState = 4;
     fire('main', 'canplay', main);
     fire('main', 'playing', main);
-    expect(backdrop.paused).toBe(false);
-
-    // A loop seeks the main video back to its start; the backdrop follows.
     main.seeking = true;
     main.currentTime = 0;
-    backdrop.currentTime = 2.9;
     fire('main', 'seeking', main);
     main.seeking = false;
     fire('main', 'seeked', main);
-    expect(backdrop.currentTime).toBe(0);
-
-    // Drift is corrected on the backdrop alone, and only once it shows.
     main.currentTime = 2.1;
-    backdrop.currentTime = 2;
     fire('main', 'timeupdate', main);
-    expect(backdrop.currentTime).toBe(2);
-    main.currentTime = 3;
-    fire('main', 'timeupdate', main);
-    expect(backdrop.currentTime).toBe(3);
-
-    // The backdrop's own stalls stay its own.
-    for (const name of ['waiting', 'seeking', 'seeked', 'canplay', 'pause'])
-      fire('backdrop', name, backdrop);
     fire('main', 'ended', main);
 
+    expect(backdrop.drawImage).toHaveBeenCalled();
     expect(main.pause).not.toHaveBeenCalled();
     expect(main.play).toHaveBeenCalledOnce();
     expect(main.paused).toBe(false);
@@ -365,40 +474,37 @@ describe('media pairs', () => {
   it('keeps a manually started or paused video so across viewport re-entry, and respects reduced motion', async () => {
     const { pair, fire } = setup({ kind: 'video', playback: 'manual' });
     const main = new TestVideo();
-    const backdrop = new TestVideo();
-    main.readyState = backdrop.readyState = 4;
+    main.readyState = 4;
     pair.register('main', main as unknown as Element);
-    pair.register('backdrop', backdrop as unknown as Element);
     await settle();
     expect(main.play).not.toHaveBeenCalled();
 
     // Started with its own controls.
     await main.play();
     fire('main', 'playing', main);
-    main.currentTime = backdrop.currentTime = 2;
+    main.currentTime = 2;
 
-    // Leaving the viewport pauses the pair; the elements stay, so nothing is
+    // Leaving the viewport pauses it; the element stays, so nothing is
     // loaded, decoded or seeked again when it comes back.
     intersect([{ isIntersecting: false }]);
     fire('main', 'pause', main);
     await settle();
-    expect(main.paused && backdrop.paused).toBe(true);
+    expect(main.paused).toBe(true);
 
     intersect([{ isIntersecting: true }]);
     await settle();
     fire('main', 'playing', main);
     expect(main.currentTime).toBe(2);
-    expect(main.paused || backdrop.paused).toBe(false);
+    expect(main.paused).toBe(false);
 
     // Paused with its own controls, it stays paused when it comes back.
     main.pause();
     fire('main', 'pause', main);
-    expect(backdrop.paused).toBe(true);
     intersect([{ isIntersecting: false }]);
     await settle();
     intersect([{ isIntersecting: true }]);
     await settle();
-    expect(main.paused && backdrop.paused).toBe(true);
+    expect(main.paused).toBe(true);
 
     reduced = true;
     motionChanged();
@@ -428,24 +534,22 @@ describe('media pairs', () => {
   it('preserves an explicit autoplay pause across viewport re-entry', async () => {
     const { pair, fire } = setup({ kind: 'video', playback: 'autoplay' });
     const main = new TestVideo();
-    const backdrop = new TestVideo();
-    main.readyState = backdrop.readyState = 4;
+    main.readyState = 4;
     pair.register('main', main as unknown as Element);
-    pair.register('backdrop', backdrop as unknown as Element);
     await settle();
     fire('main', 'playing', main);
-    expect(main.paused || backdrop.paused).toBe(false);
+    expect(main.paused).toBe(false);
 
     main.pause();
     fire('main', 'pause', main);
-    main.currentTime = backdrop.currentTime = 2;
+    main.currentTime = 2;
     intersect([{ isIntersecting: false }]);
     await settle();
     intersect([{ isIntersecting: true }]);
     await settle();
 
     expect(main.currentTime).toBe(2);
-    expect(main.paused && backdrop.paused).toBe(true);
+    expect(main.paused).toBe(true);
   });
 
   it('pauses manually started video while its gallery layer is suspended', async () => {

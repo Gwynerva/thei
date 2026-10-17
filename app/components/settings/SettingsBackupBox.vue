@@ -2,6 +2,7 @@
 import { isBackupStale, type BackupStatus } from '#layers/thei/shared/backup';
 
 const humanSize = useHumanSize();
+const liveNow = useLiveNow();
 const { data: status, refresh } = await useFetch<BackupStatus>(
   '/api/admin/backup',
   { key: 'admin-backup' },
@@ -18,7 +19,9 @@ const error = ref<string>();
 const freshToken = ref<string>();
 
 const lastBackup = computed(() => status.value?.lastBackup);
-const stale = computed(() => isBackupStale(lastBackup.value?.completedAt));
+const stale = computed(() =>
+  isBackupStale(lastBackup.value?.completedAt, liveNow.value),
+);
 
 async function generate() {
   await act(async () => {

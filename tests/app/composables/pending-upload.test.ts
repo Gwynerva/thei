@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { AssetVariantInfo } from '../../../shared/api/asset';
 import type { AssetDraftSource } from '../../../shared/api/asset-draft';
 import { AssetType } from '../../../shared/asset';
+import { pastedMediaRequest } from '../../../shared/asset-paste-defaults';
 import {
   createPendingUploadList,
   PendingMediaUpload,
@@ -163,6 +164,7 @@ describe('a pasted file', () => {
     const released: string[] = [];
     const pending = new PendingMediaUpload(new File(['x'], 'shot.png'), {
       constraints: { sizeLimitPolicy: 'media' },
+      request: pastedMediaRequest,
       requests: {
         stage: async () => {
           const next = draft(`d-${staged.length + 1}`);

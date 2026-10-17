@@ -34,6 +34,11 @@ type ModalData = {
    * section saved as it stands: the editor counts a file's uses with it.
    */
   usageDelta: (item: ProjectSectionItem) => Record<string, number>;
+  /**
+   * What changes each time the project is saved — its AI panel, read again
+   * then — so the section's own proposals are settled with it.
+   */
+  saved?: () => unknown;
 };
 type Result = { type: 'deleted' };
 type SectionDraft = Omit<ProjectSectionItem, 'content'> & {
@@ -95,6 +100,14 @@ useBeforeUnloadGuard(() => isDirty.value);
 // apart.
 provideContentOwner('project-section', () => item.value.sectionUuid, {
   offersPendingDrafts: false,
+});
+provideEntityAi({
+  ref: () =>
+    item.value.sectionUuid
+      ? `project-section:${item.value.sectionUuid}`
+      : undefined,
+  form: () => item.value,
+  version: () => props.modalData.saved?.(),
 });
 /**
  * A period is committed on a click, not the moment its dates are picked: its
@@ -250,6 +263,7 @@ async function deleteItem() {
           class="flex-1"
         />
         <div class="flex items-center gap-xs">
+          <AiEntityButton />
           <ModalHeaderButton
             v-if="exists"
             icon="delete"
@@ -275,7 +289,8 @@ async function deleteItem() {
     </template>
 
     <div class="flex flex-col gap-md p-sm">
-      <Field>
+      <AiFormOffers />
+      <Field ai="field:title">
         <div class="flex items-center justify-between gap-sm">
           <FieldLabel required>{{ phrase.content_section_title }}</FieldLabel>
           <span :data-title-popup="phrase.content_section_private_hint">
@@ -298,11 +313,11 @@ async function deleteItem() {
         :entity-name="phrase.content_section"
         :link-description="sectionLinkDescription"
       />
-      <Field>
+      <Field ai="field:summary">
         <FieldLabel>{{ phrase.content_section_summary }}</FieldLabel>
         <FieldTextarea v-model="item.summary" />
       </Field>
-      <Field>
+      <Field ai="periods">
         <div class="flex items-center justify-between gap-sm">
           <FieldLabel>{{ phrase.section_periods }}</FieldLabel>
           <div ref="periodPopupAnchor">
@@ -319,7 +334,6 @@ async function deleteItem() {
               v-model="pendingPeriod"
               v-model:open="periodPopupOpen"
               :anchor="periodPopupAnchor"
-              teleport-to="dialog"
               labelled
               :confirm-label="
                 editedPeriodIndex === undefined ? phrase.add : phrase.save
@@ -372,6 +386,7 @@ async function deleteItem() {
         :usage-delta="bannerUsageDelta"
         data-section-banner
       />
+      <AiMemoryBlock />
     </div>
   </ModalContainer>
 </template>

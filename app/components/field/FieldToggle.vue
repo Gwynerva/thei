@@ -6,18 +6,23 @@ defineProps<{
 }>();
 
 const model = defineModel<boolean>();
+/** In a field with no label, the switch's words show what an AI proposes. */
+const { place, offered } = useFieldOffers('switch');
 </script>
 
 <template>
   <div class="flex items-center gap-sm">
     <div
       v-if="label"
-      class="cursor-pointer font-semibold tracking-tight select-none"
+      class="cursor-pointer font-semibold tracking-tight transition-colors
+        select-none"
+      :class="offered ? 'text-accent' : ''"
       @click="model = !model"
     >
       {{ label }}
     </div>
-    <slot v-else></slot>
+    <span v-else :class="offered ? 'text-accent' : ''"><slot></slot></span>
+    <AiFieldOffer v-if="place" :place />
 
     <div
       v-if="$slots.inactive"

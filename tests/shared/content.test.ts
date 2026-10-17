@@ -11,7 +11,7 @@ import {
   contentPlainText,
   extractContentAssetRefs,
   normalizeContentData,
-  normalizeContentMediaCaption,
+  normalizeContentCaption,
   summarizeContentData,
 } from '../../shared/content';
 
@@ -741,16 +741,6 @@ describe('content normalization', () => {
     expect(contentDataIsSemanticallyEqual(source, normalized)).toBe(true);
   });
 
-  it('drops an empty gallery block during normalization', () => {
-    expect(
-      normalizeContentData({
-        blocks: [
-          { id: 'empty-gallery', type: 'contentGallery', data: { items: [] } },
-        ],
-      }).blocks,
-    ).toEqual([]);
-  });
-
   it('deduplicates asset sizes in summary', () => {
     const data = normalizeContentData({
       blocks: [
@@ -1016,7 +1006,7 @@ describe('content audio', () => {
     audio: { duration: 6, peaks: [0, 40, 100], channels: 1 },
   };
 
-  it('keeps a recording, its title and its caption, plain', () => {
+  it('keeps a recording, its plain title and its caption', () => {
     const data = normalizeContentData({
       blocks: [
         {
@@ -1186,6 +1176,213 @@ describe('the endings of captions and headings', () => {
   });
 
   it('leaves the caption being typed as it is', () => {
-    expect(normalizeContentMediaCaption('Кот на окне.')).toBe('Кот на окне.');
+    expect(normalizeContentCaption('Кот на окне.')).toBe('Кот на окне.');
+  });
+});
+
+describe('file captions and groups of files', () => {
+  const file = (assetUuid: string, size = 10) => ({
+    assetUuid,
+    type: 'other',
+    extension: 'pdf',
+    size,
+    assetUrl: `/files/${assetUuid}.pdf`,
+  });
+
+  it('gives a file the caption a picture has: markup, ended as a caption', () => {
+    const [attachment] = normalizeContentData({
+      blocks: [
+        {
+          type: 'contentAttachment',
+          data: {
+            asset: file('a-1'),
+            title: 'Contract.',
+            caption:
+              'Signed <b>today</b> <script></script>in Paris.<br>Filed later.',
+          },
+        },
+      ],
+    }).blocks;
+    expect(attachment!.data).toMatchObject({
+      title: 'Contract',
+      caption: 'Signed <b>today</b> in Paris. Filed later.',
+    });
+  });
+
+  it('keeps a group, its title and its files, each with its own words', () => {
+    const data = normalizeContentData({
+      blocks: [
+        {
+          type: 'contentFileGroup',
+          data: {
+            title: 'Papers.',
+            items: [
+              {
+                id: ' f1 ',
+                asset: file('a-1'),
+                title: 'Contract.',
+                caption: 'Signed <i>today</i>.',
+                extra: 'dropped',
+              },
+              { id: 'f2', asset: file('a-2') },
+              { asset: file('a-3') },
+              { id: 'f4' },
+            ],
+          },
+        },
+      ],
+    });
+    expect(canonicalizeContentData(data).blocks[0]).toEqual({
+      type: 'contentFileGroup',
+      data: {
+        title: 'Papers',
+        items: [
+          {
+            id: 'f1',
+            asset: { assetUuid: 'a-1' },
+            title: 'Contract',
+            caption: 'Signed <i>today</i>',
+          },
+          { id: 'f2', asset: { assetUuid: 'a-2' } },
+        ],
+      },
+    });
+    expect(contentPlainText(data)).toBe('Papers Contract Signed today');
+  });
+
+  it('gives a copied file of a list an id of its own, the same every time', () => {
+    const items = (block: { data: Record<string, unknown> }) =>
+      (block.data.items as { id: string }[]).map((item) => item.id);
+    const data = normalizeContentData({
+      blocks: [
+        {
+          type: 'contentFileGroup',
+          data: {
+            items: [
+              { id: 'f1', asset: file('a-1') },
+              { id: 'f1', asset: file('a-2') },
+              { id: 'f1-2', asset: file('a-3') },
+              { id: 'f1', asset: file('a-4') },
+            ],
+          },
+        },
+        {
+          type: 'contentGallery',
+          data: {
+            items: [
+              { id: 'g', asset: file('a-1') },
+              { id: 'g', asset: file('a-1') },
+            ],
+          },
+        },
+      ],
+    });
+    expect(data.blocks.map(items)).toEqual([
+      ['f1', 'f1-3', 'f1-2', 'f1-4'],
+      ['g', 'g-2'],
+    ]);
+    // Read again, the text is the text it was.
+    expect(normalizeContentData(data)).toEqual(data);
+  });
+
+  it('keys a group the same whatever order its data came in', () => {
+    const group = (item: object) => ({
+      blocks: [{ type: 'contentFileGroup', data: { items: [item] } }],
+    });
+    expect(
+      contentSemanticKey(
+        group({
+          caption: 'One',
+          title: 'T',
+          asset: file('a-1'),
+          id: 'f',
+        }) as never,
+      ),
+    ).toBe(
+      contentSemanticKey(
+        group({
+          id: 'f',
+          asset: { assetUuid: 'a-1' },
+          title: 'T',
+          caption: 'One',
+        }) as never,
+      ),
+    );
+  });
+
+  it('drops a group with no file left in it', () => {
+    expect(
+      normalizeContentData({
+        blocks: [
+          {
+            type: 'contentFileGroup',
+            data: { title: 'Empty', items: [{ id: 'f' }] },
+          },
+        ],
+      }).blocks,
+    ).toEqual([]);
+  });
+
+  it('counts every file of a group, a file placed twice twice', () => {
+    const data = {
+      blocks: [
+        {
+          id: 'g',
+          type: 'contentFileGroup',
+          data: {
+            items: [
+              { id: 'f1', asset: file('a-1', 100) },
+              { id: 'f2', asset: file('a-2', 50) },
+              { id: 'f3', asset: file('a-1', 100) },
+            ],
+          },
+        },
+      ],
+    } as never;
+    const ref = (assetUuid: string) => ({
+      assetUuid,
+      blockId: 'g',
+      blockType: 'contentFileGroup',
+      isPrivate: false,
+    });
+    expect(extractContentAssetRefs(data)).toEqual([
+      ref('a-1'),
+      ref('a-2'),
+      ref('a-1'),
+    ]);
+    expect(collectContentAssetUuids(data)).toEqual(['a-1', 'a-2']);
+    expect(analyzeContentData(data).summary).toMatchObject({
+      blockCount: 1,
+      assetCount: 2,
+      assetTotalSize: 150,
+    });
+  });
+
+  it('never takes a file of a group for the text’s picture', () => {
+    expect(
+      buildContentPreview({
+        blocks: [
+          {
+            type: 'contentFileGroup',
+            data: {
+              items: [
+                {
+                  id: 'f',
+                  asset: {
+                    assetUuid: 'a-1',
+                    type: 'image',
+                    media: {
+                      src: '/a.webp',
+                      previewSrc: '/a.webp?p',
+                      kind: 'image',
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      } as never).media,
+    ).toBeUndefined();
   });
 });

@@ -57,11 +57,6 @@ export interface AssetDraftRender {
   url: string;
 }
 
-/** Answer to a request for a draft that the server no longer holds. */
-export interface AssetDraftExpired {
-  draftExpired: true;
-}
-
 export function buildAssetDraftRenderUrl(
   draftId: string,
   renderId: string,

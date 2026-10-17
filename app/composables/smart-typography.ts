@@ -5,6 +5,10 @@ import {
   watch,
   type MaybeRefOrGetter,
 } from 'vue';
+import {
+  runEditCommand,
+  selectRange,
+} from '#layers/thei/app/components/content/editor-edit-commands';
 
 /**
  * Typing shorthands that turn into real typography as they are typed.
@@ -16,6 +20,9 @@ import {
  * Every replacement can be taken back. Pressing backspace right after one
  * restores exactly what was typed instead of eating a character — the person
  * meant two hyphens, and the editor does not get to insist otherwise.
+ *
+ * Only typing is replaced, never a paste, and the replacement is an editing
+ * command, so the browser's Ctrl+Z steps through it like any other edit.
  */
 export interface SmartTypographyRule {
   /**
@@ -121,10 +128,16 @@ export function bindSmartTypography(
     // was announcing and there would be nothing left to take back.
     if (announcing) return;
     const input = event as InputEvent;
-    if (input.inputType && !input.inputType.startsWith('insert')) {
-      pending = undefined;
+    if (input.inputType !== 'insertText') {
+      if (!input.inputType?.startsWith('insert')) pending = undefined;
       return;
     }
+    pending = applyReplacement(element, rules);
+  }
+
+  // Many phone keyboards compose every word: the rules run once a word is
+  // composed, never inside a composition, which they would break.
+  function onCompositionEnd() {
     pending = applyReplacement(element, rules);
   }
 
@@ -134,12 +147,14 @@ export function bindSmartTypography(
 
   element.addEventListener('beforeinput', onBeforeInput);
   element.addEventListener('input', onInput);
+  element.addEventListener('compositionend', onCompositionEnd);
   element.addEventListener('blur', onSelectionChange);
   element.addEventListener('pointerdown', onSelectionChange);
 
   return () => {
     element.removeEventListener('beforeinput', onBeforeInput);
     element.removeEventListener('input', onInput);
+    element.removeEventListener('compositionend', onCompositionEnd);
     element.removeEventListener('blur', onSelectionChange);
     element.removeEventListener('pointerdown', onSelectionChange);
   };
@@ -154,12 +169,7 @@ function applyReplacement(
     if (caret === null || caret !== element.selectionEnd) return undefined;
     const edit = smartTypographyEdit(element.value.slice(0, caret), rules);
     if (!edit) return undefined;
-    const next =
-      element.value.slice(0, edit.start) +
-      edit.replacement +
-      element.value.slice(caret);
-    const position = edit.start + edit.replacement.length;
-    setFieldValue(element, next, position);
+    replaceInField(element, edit.start, caret, edit.replacement);
     return edit;
   }
 
@@ -168,9 +178,7 @@ function applyReplacement(
   const { node, offset } = point;
   const edit = smartTypographyEdit((node.data ?? '').slice(0, offset), rules);
   if (!edit) return undefined;
-  node.replaceData(edit.start, edit.original.length, edit.replacement);
-  placeCaret(node, edit.start + edit.replacement.length);
-  notifyInput(element);
+  replaceInText(element, node, edit.start, offset, edit.replacement);
   return edit;
 }
 
@@ -185,11 +193,7 @@ function undoReplacement(
       return false;
     if (element.value.slice(pending.start, end) !== pending.replacement)
       return false;
-    const next =
-      element.value.slice(0, pending.start) +
-      pending.original +
-      element.value.slice(end);
-    setFieldValue(element, next, pending.start + pending.original.length);
+    replaceInField(element, pending.start, end, pending.original);
     return true;
   }
 
@@ -200,10 +204,58 @@ function undoReplacement(
   if (offset !== end) return false;
   if ((node.data ?? '').slice(pending.start, end) !== pending.replacement)
     return false;
-  node.replaceData(pending.start, pending.replacement.length, pending.original);
-  placeCaret(node, pending.start + pending.original.length);
-  notifyInput(element);
+  replaceInText(element, node, pending.start, end, pending.original);
   return true;
+}
+
+/**
+ * Replaces part of an input's or a textarea's value as an editing command,
+ * which keeps the field's own undo history; a browser that refuses gets the
+ * value written.
+ */
+function replaceInField(
+  element: HTMLInputElement | HTMLTextAreaElement,
+  start: number,
+  end: number,
+  text: string,
+) {
+  element.setSelectionRange(start, end);
+  if (
+    typeof document !== 'undefined' &&
+    document.activeElement === element &&
+    announced(() => runEditCommand('insertText', text))
+  )
+    return;
+  const next = element.value.slice(0, start) + text + element.value.slice(end);
+  setFieldValue(element, next, start + text.length);
+}
+
+/** The same in editable text: one editing command, else the text node. */
+function replaceInText(
+  element: TypographyTarget,
+  node: Text,
+  start: number,
+  end: number,
+  text: string,
+) {
+  const range = document.createRange();
+  range.setStart(node, start);
+  range.setEnd(node, end);
+  if (selectRange(range) && announced(() => runEditCommand('insertText', text)))
+    return;
+  node.replaceData(start, end - start, text);
+  placeCaret(node, start + text.length);
+  notifyInput(element);
+}
+
+/** Runs a command whose own `input` event is not someone typing. */
+function announced(command: () => boolean) {
+  announcing = true;
+  try {
+    return command();
+  } finally {
+    announcing = false;
+  }
 }
 
 /**

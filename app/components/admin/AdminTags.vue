@@ -33,6 +33,7 @@ const tags = defineModel<TagEditItem[]>({ required: true });
     <Box>
       <div class="p-sm sm:p-md">
         <TagAdder v-model="tags" :recommendations="recommendations" />
+        <AiOfferChips place="tags" class="mt-sm" />
         <p
           v-if="recommendationsFailed"
           role="status"

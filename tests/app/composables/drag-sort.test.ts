@@ -15,7 +15,6 @@ import {
   applyDragTouchAction,
   createDragSort,
   moveItemById,
-  moveItemToGroup,
 } from '../../../app/composables/drag-sort';
 
 function touchElement(initial = '', priority = '') {
@@ -84,27 +83,6 @@ describe('drag sort helpers', () => {
   it('keeps order for a no-op or unknown ID', () => {
     expect(moveItemById(items, 'b', 1, (item) => item.id)).toEqual(items);
     expect(moveItemById(items, 'missing', 0, (item) => item.id)).toEqual(items);
-  });
-
-  it('moves items between ordered groups, including an empty group', () => {
-    const grouped = [
-      { id: 'a', group: 'first' as const },
-      { id: 'b', group: 'second' as const },
-    ];
-    const result = moveItemToGroup(
-      grouped,
-      'b',
-      'third',
-      0,
-      ['first', 'second', 'third'] as const,
-      (item) => item.id,
-      (item) => item.group,
-      (item, group) => ({ ...item, group }),
-    );
-    expect(result).toEqual([
-      { id: 'a', group: 'first' },
-      { id: 'b', group: 'third' },
-    ]);
   });
 
   it('disables touch panning on draggable items and restores inline styles', () => {

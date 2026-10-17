@@ -10,11 +10,16 @@ import {
 } from '#layers/thei/shared/internal-url';
 import { trimInlineRange } from '#layers/thei/app/components/content/editor-inline-selection';
 import {
+  editableFieldOf,
+  placeCaretAfter,
+  replaceRangeText,
+} from '#layers/thei/app/components/content/editor-edit-commands';
+import {
   applyLinkAttributes,
   entityLinkAttributes,
   externalLinkAttributes,
+  linkableFieldOf,
   linkRange,
-  placeCaretAfter,
   type InlineLinkAttributes,
 } from '#layers/thei/app/components/content/editor-inline-link-dom';
 
@@ -89,12 +94,14 @@ export function bindEditorLinkPaste(
    */
   function linkableRange(range: Range | undefined) {
     if (!range || range.collapsed) return undefined;
-    const field = editableOf(range.startContainer);
-    if (!field || field !== editableOf(range.endContainer)) return undefined;
-    if (!root.contains(field) || field.closest('[data-mutation-free="true"]'))
+    const field = linkableFieldOf(
+      root,
+      editor,
+      options.linkBlocks,
+      range.startContainer,
+    );
+    if (!field || field !== editableFieldOf(range.endContainer))
       return undefined;
-    const block = editor.blocks.getBlockByElement(field);
-    if (!block || !options.linkBlocks.has(block.name)) return undefined;
     const trimmed = trimInlineRange(range);
     return trimmed && !trimmed.collapsed ? trimmed : undefined;
   }
@@ -169,18 +176,14 @@ export function bindEditorLinkPaste(
     if (!bound || !rangeStillHolds(range, text)) return;
     if (!attributes) {
       // A site path that opens nothing is pasted as the text it is.
-      const selection = window.getSelection();
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-      document.execCommand(
-        'insertText',
-        false,
+      replaceRangeText(
+        range,
         target.kind === 'internal' ? target.raw : target.url,
       );
       return;
     }
     const element = linkRange(range, attributes);
-    placeCaretAfter(element);
+    if (element) placeCaretAfter(element);
     editor.inlineToolbar.close();
   }
 
@@ -198,11 +201,9 @@ export function bindEditorLinkPaste(
       return undefined;
     const href = anchor.getAttribute('href')?.trim() ?? '';
     if (!/^https?:\/\//i.test(href)) return undefined;
-    const field = editableOf(anchor);
-    if (!field || !root.contains(field)) return undefined;
-    if (field.closest('[data-mutation-free="true"]')) return undefined;
-    const block = editor.blocks.getBlockByElement(field);
-    return block && options.linkBlocks.has(block.name) ? href : undefined;
+    return linkableFieldOf(root, editor, options.linkBlocks, anchor)
+      ? href
+      : undefined;
   }
 
   async function adopt(anchor: HTMLAnchorElement, href: string) {
@@ -247,11 +248,6 @@ export function bindEditorLinkPaste(
     root.removeEventListener('paste', onPaste, true);
     root.removeEventListener('beforeinput', onBeforeInput, true);
   };
-}
-
-function editableOf(node: Node) {
-  const element = node instanceof Element ? node : node.parentElement;
-  return element?.closest<HTMLElement>('[contenteditable="true"]') ?? undefined;
 }
 
 function rangeStillHolds(range: Range, text: string) {

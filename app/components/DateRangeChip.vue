@@ -100,7 +100,7 @@ const toneClass = computed(() => {
       removable ? 'pr-1 pl-xs' : 'px-xs',
       interactive
         ? `bg-bg-3 transition focus-visible:ring-2 focus-visible:ring-accent
-          focus-visible:outline-none hocus:bg-bg-4`
+          focus-visible:outline-none popup-open:bg-bg-4 hocus:bg-bg-4`
         : 'bg-bg-4/75',
     ]"
     data-date-range-chip

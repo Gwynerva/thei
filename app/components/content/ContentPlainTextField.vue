@@ -44,7 +44,29 @@ function onBeforeInput(event: InputEvent) {
   }
 }
 
+/**
+ * Keys that edit or move inside the field, kept from its block. Editor.js
+ * counts only `contenteditable="true"` among a block's inputs, so it reads
+ * the caret against another field of the block, takes it for the start or
+ * the end, and moves to the block before or after — from the middle of a
+ * title. Here they do what they do in any field.
+ */
+const FIELD_KEYS = new Set([
+  'Backspace',
+  'Delete',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  'Tab',
+]);
+
 function onKeydown(event: KeyboardEvent) {
+  if (FIELD_KEYS.has(event.key)) {
+    event.stopPropagation();
+    return;
+  }
+  // One line: Enter adds none.
   if (event.key !== 'Enter') return;
   event.preventDefault();
   event.stopPropagation();

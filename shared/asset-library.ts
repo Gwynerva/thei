@@ -1,5 +1,6 @@
 import { AssetType, type AssetMeta, type AssetRole } from './asset';
 import type { AssetVariantInfo } from './api/asset';
+import type { MediaDescriptor } from './media';
 import type { PaginatedResponse } from './pagination';
 import {
   ASSET_UPLOAD_LIMITS,
@@ -10,7 +11,8 @@ import { normalizeAssetExtension } from './assets/formats';
 
 /**
  * What holds a file, as the library groups files: an entity of the site, a
- * section of a project (with the project as its parent), or nothing at all.
+ * section of a project (with the project as its parent), an AI session the
+ * file was brought into, or nothing at all.
  */
 export const ASSET_SOURCE_TYPES = [
   'project',
@@ -20,6 +22,7 @@ export const ASSET_SOURCE_TYPES = [
   'diary-entry',
   'tag',
   'profile',
+  'ai-session',
   'unused',
 ] as const;
 export type AssetSourceType = (typeof ASSET_SOURCE_TYPES)[number];
@@ -33,6 +36,12 @@ export interface AssetSource {
   updatedAt: number;
   /** The project a section belongs to; its title as typed. */
   parent?: { title: string; url: string };
+  /**
+   * The picture that stands for the place — an icon, a banner, the first
+   * picture of a body — through the admin's own addresses. Only the file's
+   * window asks for it.
+   */
+  media?: MediaDescriptor;
 }
 export interface AssetPlacement {
   source: AssetSource;
@@ -62,6 +71,11 @@ export interface AssetLibraryItem {
    * cleanup keeps it for as long as that version lives.
    */
   inHistory?: true;
+  /**
+   * Unused, but an AI action still needs it — one waiting for the owner, or
+   * applied and still undoable — so cleanup keeps it while that action does.
+   */
+  heldByAi?: true;
   counts: AssetUsageCounts;
   entityCount: number;
   roles: AssetRole[];
@@ -150,6 +164,8 @@ export interface AssetUsagesResponse {
   entityCount: number;
   /** Unused, but kept while a version of some text still shows it. */
   inHistory?: true;
+  /** Unused, but kept while an AI action still needs it. */
+  heldByAi?: true;
 }
 export interface AssetSelectionConstraints {
   acceptedExtensions?: string[] | '*';

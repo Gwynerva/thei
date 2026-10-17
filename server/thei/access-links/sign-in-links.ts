@@ -110,18 +110,6 @@ export function consumeSignInLink(token: string): boolean {
   return result.changes > 0;
 }
 
-/** Whether a token still opens a valid link, without spending it. */
-export function signInLinkIsValid(token: string): boolean {
-  if (!isAccessTokenShape(token)) return false;
-  const { db, schema } = THEI_SERVER.useDb();
-  const row = db
-    .select()
-    .from(schema.signInLinks)
-    .where(eq(schema.signInLinks.tokenHash, hashAccessToken(token)))
-    .get();
-  return Boolean(row && row.expiresAt > Date.now());
-}
-
 export function cleanupExpiredSignInLinks(): void {
   const { db, schema } = THEI_SERVER.useDb();
   db.delete(schema.signInLinks)

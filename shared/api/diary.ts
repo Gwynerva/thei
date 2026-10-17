@@ -6,6 +6,8 @@ import type { RelationGetItem } from '../relation';
 
 export type DiaryGetResponse = {
   diaryUuid: string;
+  /** When the entity last changed; a save names it back. */
+  version: number;
   date: string;
   access: ProjectEventAccessLevel;
   content: ContentFieldValue;
@@ -15,8 +17,8 @@ export type DiaryGetResponse = {
 };
 
 export type DiarySaveResponse =
-  | { type: 'success'; diaryUuid: string; date: string }
-  | { type: 'error'; message: string; code?: 'date-taken' };
+  | { type: 'success'; diaryUuid: string; date: string; version: number }
+  | { type: 'error'; message: string; code?: 'date-taken' | 'changed' };
 
 export type DiaryListItem = {
   diaryUuid: string;

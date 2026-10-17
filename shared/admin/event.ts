@@ -1,4 +1,5 @@
 import { ProjectEventAccessLevel } from '../access-level';
+import { normalizeSynonyms } from '../synonyms';
 import { normalizeEntityNotes, normalizeEntityReminder } from '../entity-notes';
 import {
   contentPlainText,
@@ -53,9 +54,12 @@ export function validateEventData(
     if (!publicIdIsValid(publicId)) return 'Invalid public ID';
     if (!isOneOf(data.access, ProjectEventAccessLevel))
       return 'Invalid access level';
+    const synonyms = normalizeSynonyms(data.synonyms, title);
+    if (typeof synonyms === 'string') return synonyms;
 
     return {
       ...data,
+      synonyms,
       title,
       summary,
       humanReadableSlug,

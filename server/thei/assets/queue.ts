@@ -26,8 +26,16 @@ const PROBE_CONCURRENCY = 2;
  * that brings a hundred links must not open a hundred sockets at once.
  */
 const EXTERNAL_LINK_CONCURRENCY = 4;
+/**
+ * Building a stranger's page to learn whether it shows a file is a whole
+ * page's work, and anyone who opens a file's window asks for up to two dozen:
+ * a few at a time, whoever asks, so a crawler opening every window waits its
+ * turn instead of taking the site down.
+ */
+const PUBLIC_PAGE_CONCURRENCY = 2;
 
-type Lane = 'image' | 'video' | 'audio' | 'probe' | 'externalLink';
+type Lane =
+  'image' | 'video' | 'audio' | 'probe' | 'externalLink' | 'publicPage';
 
 /**
  * `low` is work nobody is waiting on: dry runs of settings beyond the one
@@ -52,6 +60,7 @@ const lanes: Record<Lane, LaneState> = {
   audio: { limit: AUDIO_CONCURRENCY, active: 0, waiting: [] },
   probe: { limit: PROBE_CONCURRENCY, active: 0, waiting: [] },
   externalLink: { limit: EXTERNAL_LINK_CONCURRENCY, active: 0, waiting: [] },
+  publicPage: { limit: PUBLIC_PAGE_CONCURRENCY, active: 0, waiting: [] },
 };
 
 export interface ProcessingSlotOptions {
@@ -100,6 +109,14 @@ export async function withExternalLinkSlot<T>(
   options: ProcessingSlotOptions = {},
 ): Promise<T> {
   return await withLaneSlot(lanes.externalLink, job, options);
+}
+
+/** Builds a public page only to look at it: where a file is shown. */
+export async function withPublicPageSlot<T>(
+  job: () => Promise<T>,
+  options: ProcessingSlotOptions = {},
+): Promise<T> {
+  return await withLaneSlot(lanes.publicPage, job, options);
 }
 
 async function withLaneSlot<T>(

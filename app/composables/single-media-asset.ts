@@ -1,6 +1,6 @@
 import type {
+  AssetReplaceResult,
   AssetVariantInfo,
-  AssetVariantsResponse,
 } from '#layers/thei/shared/api/asset';
 import {
   imageExtensionProfile,
@@ -44,26 +44,29 @@ export function useSingleMediaAsset(options: SingleMediaAssetOptions) {
     await detachSingleMediaAsset(options);
   }
 
-  async function loadAsset(assetUuid: string) {
-    const family = await $fetch<AssetVariantsResponse>(
-      `/api/admin/assets/${assetUuid}/variants`,
-    );
-    return family.variants.find((variant) => variant.assetUuid === assetUuid);
-  }
-
-  async function openDetails(initialAsset: AssetVariantInfo) {
-    let current = initialAsset;
+  /**
+   * The slot's details, then the editor and back. The file the slot holds is
+   * known by its uuid alone until the details window, open at once, has
+   * fetched it; one just picked or made is known whole.
+   */
+  async function openDetails(initial: AssetVariantInfo | string) {
+    let current: AssetReplaceResult | { assetUuid: string } =
+      typeof initial === 'string'
+        ? { assetUuid: initial }
+        : mapAssetVariantToReplaceResult(initial);
 
     while (true) {
       const asideTitle = options.asideTitle();
       const result = await openModal(assetDetailsModal, {
         asideTitle,
-        asset: mapAssetVariantToReplaceResult(current),
+        icon: 'media',
+        asset: current,
       });
 
       if (result.type === 'replace') {
+        if (result.asset) current = result.asset;
         try {
-          const replacement = await launchAssetEditor(current, {
+          const replacement = await launchAssetEditor(current.assetUuid, {
             accept: options.accept ?? [
               imageExtensionProfile,
               videoExtensionProfile,
@@ -75,7 +78,7 @@ export function useSingleMediaAsset(options: SingleMediaAssetOptions) {
           });
           if (!replacement) continue;
           if (!apply(replacement)) continue;
-          current = replacement;
+          current = mapAssetVariantToReplaceResult(replacement);
         } catch (error) {
           reportError(error);
         }
@@ -98,8 +101,7 @@ export function useSingleMediaAsset(options: SingleMediaAssetOptions) {
     const assetUuid = options.getAssetUuid();
     if (assetUuid) {
       try {
-        const asset = await loadAsset(assetUuid);
-        if (asset) await openDetails(asset);
+        await openDetails(assetUuid);
       } catch (error) {
         reportError(error);
       }

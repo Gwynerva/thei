@@ -1,6 +1,10 @@
 import { runAssetCleanup } from './cleanup';
+import { sweepOAuth } from '../oauth/maintenance';
 import { clearDraftDirectories } from './drafts';
 import { runContentHistoryMaintenance } from '../content/history';
+import { sweepUsage } from '../ai/model/usage';
+import { maintainAiSessions } from '../ai/sessions/lifecycle';
+import { recoverAiSessions } from '../ai/runner/queue';
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * ONE_HOUR_MS;
@@ -38,6 +42,32 @@ export function bootTheiAssets() {
   // The files they let go are touched, so they still get their day of grace.
   setTimeout(maintainContentHistory, FIRST_RUN_DELAY_MS).unref();
   setInterval(maintainContentHistory, ONE_HOUR_MS).unref();
+  // Sessions go to the archive and are purged in their time, and the record
+  // of what the model spent is swept — whether AI is on or not, so nothing
+  // outlives its time.
+  setTimeout(maintainAiRecords, FIRST_RUN_DELAY_MS).unref();
+  setInterval(maintainAiRecords, ONE_HOUR_MS).unref();
+  // A session the last process was answering is idle again, an action it
+  // was applying waits again.
+  try {
+    recoverAiSessions();
+  } catch {
+    THEI_SERVER.console
+      .tag('MCP')
+      .error('Failed to put back the sessions the last run had left');
+  }
+}
+
+function maintainAiRecords() {
+  maintainAiSessions();
+  sweepOAuth();
+  try {
+    sweepUsage();
+  } catch {
+    THEI_SERVER.console
+      .tag('MCP')
+      .error('Failed to sweep the record of AI usage');
+  }
 }
 
 function maintainContentHistory() {

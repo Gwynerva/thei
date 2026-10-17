@@ -12,9 +12,8 @@ describe('publicDetailSummary', () => {
 
   it('counts the lists of the panel in the order the panel shows them', () => {
     const references = emptyPublicReferences();
-    references.links.manual.push({} as never);
-    references.links.content.push({} as never, {} as never);
-    references.files.shared.push({} as never);
+    references.links.push({} as never, {} as never, {} as never);
+    references.files.push({} as never);
     expect(summary({ references })).toEqual([
       ['Links', 3],
       ['Files', 1],
@@ -23,7 +22,7 @@ describe('publicDetailSummary', () => {
 
   it('leaves out empty lists and whatever is not a list worth opening', () => {
     const references = emptyPublicReferences();
-    references.files.content.push({} as never);
+    references.files.push({} as never);
     expect(
       summary({
         contents: [{} as never, {} as never],
@@ -45,6 +44,7 @@ describe('publicDetailSummary', () => {
 
   it('says nothing for a panel without lists', () => {
     expect(summary({ references: emptyPublicReferences() })).toEqual([]);
+    expect(summary({})).toEqual([]);
   });
 });
 

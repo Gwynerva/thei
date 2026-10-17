@@ -257,3 +257,198 @@ describe('inline markdown for the newer markup', () => {
     );
   });
 });
+
+describe('a file’s description in the Markdown copy', () => {
+  const format = (text: string) => text.replace(/"([^"]*)"/g, '«$1»');
+  const render = (block: object) =>
+    contentToMarkdown({ blocks: [block as never] }, { ...options, format });
+
+  it('is a picture’s alt, its caption following', () => {
+    const picture = (asset: object, caption?: string) =>
+      render({
+        type: 'contentMedia',
+        data: {
+          asset: {
+            assetUuid: 'p',
+            media: { src: '/events/e/content/p.webp' },
+            ...asset,
+          },
+          ...(caption ? { caption } : {}),
+        },
+      });
+    expect(
+      picture({ alt: 'Grandmother at the "dacha" [1985]' }, 'Summer'),
+    ).toBe(
+      '![Grandmother at the «dacha» \\[1985\\]](https://example.com/events/e/content/p.webp)\n\nSummer',
+    );
+    expect(picture({ alt: 'A red square' })).toBe(
+      '![A red square](https://example.com/events/e/content/p.webp)',
+    );
+    // Without one, the caption stays the alt.
+    expect(picture({}, 'Summer')).toBe(
+      '![Summer](https://example.com/events/e/content/p.webp)',
+    );
+  });
+
+  it('takes a caption’s words for the alt, and the caption after it when it holds a link', () => {
+    const picture = (caption: string) =>
+      render({
+        type: 'contentMedia',
+        data: {
+          asset: { assetUuid: 'p', media: { src: '/events/e/content/p.webp' } },
+          caption,
+        },
+      });
+    expect(picture('Shot [1] by a\\b')).toBe(
+      '![Shot \\[1\\] by a\\\\b](https://example.com/events/e/content/p.webp)',
+    );
+    expect(
+      picture(
+        'From <a href="https://example.com/" data-content-link="external">the "site"</a> ]',
+      ),
+    ).toBe(
+      '![From the «site» \\]](https://example.com/events/e/content/p.webp)\n\n' +
+        'From [the «site»](https://example.com/) ]',
+    );
+  });
+
+  it('keeps a bracket in a file’s title or a link’s words from closing the link', () => {
+    expect(
+      render({
+        type: 'contentAttachment',
+        data: {
+          title: 'Report ] [draft',
+          asset: { assetUuid: 't', assetUrl: '/events/e/content/t.pdf' },
+        },
+      }),
+    ).toBe('[Report \\] \\[draft](https://example.com/events/e/content/t.pdf)');
+    expect(
+      inlineToMarkdown(
+        'see <a href="https://example.com/">note ] here</a>',
+        options,
+      ),
+    ).toBe('see [note \\] here](https://example.com/)');
+  });
+
+  it('is the title of a file’s and a recording’s link', () => {
+    expect(
+      render({
+        type: 'contentAttachment',
+        data: {
+          title: 'Tickets',
+          asset: {
+            assetUuid: 't',
+            assetUrl: '/events/e/content/t.pdf',
+            alt: 'Two "train" tickets',
+          },
+        },
+      }),
+    ).toBe(
+      '[Tickets](https://example.com/events/e/content/t.pdf "Two «train» tickets")',
+    );
+    expect(
+      render({
+        type: 'contentAudio',
+        data: {
+          title: 'Talk',
+          asset: {
+            assetUuid: 's',
+            assetUrl: '/events/e/content/s.weba',
+            audio: { duration: 65, peaks: [] },
+            alt: 'A talk about the move',
+          },
+        },
+      }),
+    ).toBe(
+      '[Talk](https://example.com/events/e/content/s.weba "A talk about the move") (1:05)',
+    );
+  });
+});
+
+describe('a group of files in the Markdown copy', () => {
+  const format = (text: string) => text.replace(/"([^"]*)"/g, '«$1»');
+
+  it('is its title on a line of its own, then each file as alone', () => {
+    expect(
+      contentToMarkdown(
+        {
+          blocks: [
+            {
+              type: 'contentFileGroup',
+              data: {
+                title: 'The "papers"',
+                items: [
+                  {
+                    id: 'f1',
+                    title: 'Contract',
+                    caption: 'Signed <b>today</b>',
+                    asset: {
+                      assetUuid: 't',
+                      type: 'other',
+                      assetUrl: '/events/e/content/t.pdf',
+                      alt: 'Two pages',
+                    },
+                  },
+                  {
+                    id: 'f2',
+                    asset: {
+                      assetUuid: 's',
+                      type: 'audio',
+                      assetUrl: '/events/e/content/s.weba',
+                      audio: { duration: 65, peaks: [] },
+                    },
+                  },
+                  // A file the reader may not see arrives as nothing.
+                  { id: 'f3', asset: null },
+                ],
+              },
+            },
+          ],
+        } as never,
+        { ...options, audioLabel: 'Audio', format },
+      ),
+    ).toBe(
+      'The «papers»\n\n' +
+        '- [Contract](https://example.com/events/e/content/t.pdf "Two pages") — Signed **today**\n' +
+        '- [Audio](https://example.com/events/e/content/s.weba) (1:05)',
+    );
+  });
+});
+
+describe('a gallery in the Markdown copy', () => {
+  const format = (text: string) => text.replace(/"([^"]*)"/g, '«$1»');
+  const picture = (id: string) => ({
+    id,
+    asset: {
+      assetUuid: id,
+      type: 'image',
+      media: { kind: 'image', src: `/events/e/content/${id}.avif` },
+    },
+  });
+
+  it('is its title on a line of its own, then its pictures', () => {
+    const markdown = contentToMarkdown(
+      {
+        blocks: [
+          {
+            type: 'contentGallery',
+            data: { title: 'The "arena"', items: [picture('a'), picture('b')] },
+          },
+        ],
+      } as never,
+      { ...options, format },
+    );
+    expect(markdown.startsWith('The «arena»\n\n![')).toBe(true);
+    expect(markdown.match(/!\[/g)).toHaveLength(2);
+  });
+
+  it('is its pictures alone without one', () => {
+    const markdown = contentToMarkdown(
+      {
+        blocks: [{ type: 'contentGallery', data: { items: [picture('a')] } }],
+      } as never,
+      options,
+    );
+    expect(markdown.startsWith('![')).toBe(true);
+  });
+});

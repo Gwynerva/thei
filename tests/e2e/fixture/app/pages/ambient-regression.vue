@@ -214,6 +214,20 @@ const fieldValue = computed<ContentFieldModelValue>(() => ({
         data-test-editor-link
       />
     </div>
+    <!-- Diary entries as the life feed shows them: titleless clouds. -->
+    <div class="mx-auto grid w-full max-w-180 gap-sm p-sm" data-diary-cards>
+      <PublicContentCard
+        v-for="day in ['2026-09-26', '2026-09-27', '2026-09-28']"
+        :key="day"
+        href="#"
+        title=""
+        summary="A thought of the day, with a video beside it"
+        :date="day"
+        :media="banner"
+        titleless
+        cloud
+      />
+    </div>
     <button type="button" data-clear-focus>Leave previews</button>
     <div style="height: 200vh" />
     <p data-below>Below the media</p>

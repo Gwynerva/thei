@@ -17,8 +17,10 @@ import type {
 } from './db/schema/entity-relations';
 import { buildContentPreview } from '#layers/thei/shared/content';
 import { buildAdminAssetUrls } from './assets/urls';
+import { contentOwnerKeys } from './content/history';
 import { resolveEntityIconMedia } from './media/generated-icon';
 import { buildAdminEntityBanner } from './entity-banner';
+import { inChunks } from './db/in-chunks';
 
 /**
  * The picture that stands for a related entity in a list.
@@ -160,16 +162,6 @@ export type RelationTarget = {
   access: ProjectEventAccessLevel;
 };
 
-/** SQLite takes a bounded number of parameters per statement. */
-const LOOKUP_CHUNK = 500;
-
-function chunks<T>(items: T[]): T[][] {
-  const result: T[][] = [];
-  for (let index = 0; index < items.length; index += LOOKUP_CHUNK)
-    result.push(items.slice(index, index + LOOKUP_CHUNK));
-  return result;
-}
-
 /**
  * The entities behind a set of endpoints, one query per kind.
  *
@@ -190,7 +182,7 @@ export async function loadRelationTargets(
     ),
   ];
 
-  for (const ids of chunks(idsOf('project')))
+  for (const ids of inChunks(idsOf('project')))
     for (const project of db
       .select()
       .from(schema.projects)
@@ -206,7 +198,7 @@ export async function loadRelationTargets(
         access: project.access,
       });
 
-  for (const ids of chunks(idsOf('event')))
+  for (const ids of inChunks(idsOf('event')))
     for (const event of db
       .select()
       .from(schema.events)
@@ -222,7 +214,7 @@ export async function loadRelationTargets(
         access: event.access,
       });
 
-  for (const ids of chunks(idsOf('diary-entry')))
+  for (const ids of inChunks(idsOf('diary-entry')))
     for (const entry of db
       .select()
       .from(schema.diaryEntries)
@@ -302,6 +294,7 @@ export function applyRelations(
   for (const row of existing) {
     if (nextRows.has(rowKeyString(row))) continue;
     tx.delete(schema.entityRelations).where(rowWhere(schema, row)).run();
+    touchEndpoint(tx, schema, otherEndOf(row, owner));
   }
 
   for (let index = 0; index < relations.length; index++) {
@@ -321,6 +314,13 @@ export function applyRelations(
         : ownerFirst
           ? previous.secondSortOrder
           : previous.firstSortOrder;
+    if (
+      previous === undefined ||
+      previous.type !== relation.storedType ||
+      JSON.stringify(previous.note ?? null) !==
+        JSON.stringify(relation.storedNote ?? null)
+    )
+      touchEndpoint(tx, schema, other);
 
     tx.insert(schema.entityRelations)
       .values({
@@ -350,7 +350,32 @@ export function applyRelations(
 }
 
 export function deleteRelations(tx: any, schema: any, owner: RelationEndpoint) {
+  const rows = tx
+    .select()
+    .from(schema.entityRelations)
+    .where(rowMatches(schema, owner))
+    .all();
   tx.delete(schema.entityRelations).where(rowMatches(schema, owner)).run();
+  for (const row of rows) touchEndpoint(tx, schema, otherEndOf(row, owner));
+}
+
+function otherEndOf(row: any, owner: RelationEndpoint): RelationEndpoint {
+  return ownerIsFirst(row, owner)
+    ? { type: row.secondType, id: row.secondId }
+    : { type: row.firstType, id: row.firstId };
+}
+
+/**
+ * Moves the version of the other end of a relation that changed. Its form
+ * holds its relations whole, so one read before the change would write the
+ * relation back as it was; a moved version makes that save refused instead.
+ */
+function touchEndpoint(tx: any, schema: any, endpoint: RelationEndpoint) {
+  const { table, id } = contentOwnerKeys(schema)[endpoint.type];
+  tx.update(table)
+    .set({ updatedAt: Date.now() })
+    .where(eq(id, endpoint.id))
+    .run();
 }
 
 /** One relation read from its owner's side, before its target is looked up. */

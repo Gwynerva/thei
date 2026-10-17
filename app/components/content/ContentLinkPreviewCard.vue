@@ -28,6 +28,7 @@ const props = defineProps<{
   loading?: boolean;
   interactive: boolean;
   playback?: MediaPlayback;
+  /** Laid on a popup's surface: no border or ground of its own. */
   flush?: boolean;
   continuousProjectMedia?: boolean;
 }>();
@@ -71,9 +72,9 @@ const externalLink = computed(() => externalLinkFromResolved(props.result));
   </ExternalLinkPreviewCard>
   <div
     v-else
-    class="flex w-full min-w-0 items-center gap-xs rounded-normal border"
+    class="flex w-full min-w-0 items-center gap-xs"
     :class="[
-      flush ? 'min-h-16' : 'min-h-18 p-sm',
+      flush ? 'min-h-16' : 'min-h-18 rounded-normal border p-sm',
       result?.state === 'broken'
         ? 'border-border-error bg-bg-error text-text-error'
         : result?.state === 'restricted'
@@ -118,14 +119,14 @@ const externalLink = computed(() => externalLinkFromResolved(props.result));
       <span
         v-if="result?.state === 'broken'"
         class="line-clamp-2"
-        :class="flush ? 'text-sm' : 'text-[0.9375rem] leading-snug'"
+        :class="flush ? 'text-sm' : 'text-sm leading-snug'"
       >
         {{ phrase.content_link_broken_description }}
       </span>
       <span
         v-else-if="!result || result.state !== 'restricted'"
         class="text-text-3"
-        :class="flush ? 'text-sm' : 'text-[0.9375rem] leading-snug'"
+        :class="flush ? 'text-sm' : 'text-sm leading-snug'"
       >
         {{ phrase.content_link_loading }}
       </span>

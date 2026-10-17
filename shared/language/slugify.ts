@@ -93,7 +93,3 @@ export function normalizeUrlSegmentDraft(value: unknown): string {
   const last = [...value].at(-1) ?? '';
   return URL_SEGMENT_SEPARATORS.test(last) ? `${normalized}-` : normalized;
 }
-
-export function urlSegmentIsValid(value: unknown): value is string {
-  return typeof value === 'string' && normalizeUrlSegment(value) === value;
-}

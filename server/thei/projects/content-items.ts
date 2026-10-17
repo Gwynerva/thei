@@ -4,6 +4,7 @@ import {
   deleteContentForOwner,
   type PreparedContentSave,
 } from '../content/repository';
+import { forgetAiAnchors } from '../ai/memory/forget';
 
 export class ProjectContentItemStorageError extends Error {}
 
@@ -88,6 +89,7 @@ export function deleteProjectContentItemContent(
   ids: string[],
 ) {
   for (const id of ids) deleteContentForOwner(tx, schema, ownerType, id);
+  forgetAiAnchors(tx, schema, ownerType, ids);
 }
 
 /**

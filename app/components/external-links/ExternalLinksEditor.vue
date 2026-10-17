@@ -280,13 +280,11 @@ onUnmounted(() => draft.reset());
       :anchor="popupAnchor"
       placement="bottom-end"
       max-width="20rem"
+      density="card"
+      complex
       @closed="onPopupClosed"
     >
-      <form
-        class="flex flex-col gap-sm rounded-normal border border-border-1
-          bg-bg-2 p-sm"
-        @submit.prevent="save"
-      >
+      <form class="flex flex-col gap-sm" @submit.prevent="save">
         <Field>
           <FieldLabel class="text-sm">
             {{ phrase.external_link_url }}

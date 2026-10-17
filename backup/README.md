@@ -89,6 +89,12 @@ A run in progress fills `.partial` in the destination. If it stops, the next
 run picks up what was already fetched. The site is told a copy exists only
 once it is renamed into place.
 
+No file can hold a run up: a connection may die without a word, so each file
+is given up after a minute with nothing arriving — no answer, or no bytes —
+and asked again on a fresh connection, picking up where its bytes stopped.
+A file that still will not come after four tries fails the run, and the next
+one starts from what is in `.partial`.
+
 ## When the site shrinks
 
 Before downloading anything, the client compares the site with the last

@@ -18,6 +18,10 @@ import externalLinkNotes from './0.0.3-external-link-notes';
 import periodLabels from './0.0.4-period-labels';
 import projectSections from './0.0.4-project-sections';
 import audioExtensions from './0.0.4-audio-extensions';
+import ai from './0.0.6-ai';
+import aiConfig from './0.0.6-ai-config';
+import entities from './0.0.6-entities';
+import fileCaptions from './0.0.6-file-captions';
 
 /**
  * Every migration Thei has ever shipped, oldest first.
@@ -49,6 +53,10 @@ export const migrationRegistry: TheiMigration[] = [
   periodLabels,
   projectSections,
   audioExtensions,
+  ai,
+  aiConfig,
+  entities,
+  fileCaptions,
 ];
 
 export { baselineSql } from './0.0.1-baseline';

@@ -33,6 +33,7 @@ describe('asset cleanup', () => {
         CREATE TABLE "profile-avatars" (id text PRIMARY KEY);
         CREATE TABLE statuses (id text PRIMARY KEY);
         CREATE TABLE "diary-entries" (diaryUuid text PRIMARY KEY);
+        CREATE TABLE "ai-sessions" (sessionUuid text PRIMARY KEY);
         CREATE TABLE "project-content-sections" (sectionUuid text PRIMARY KEY);
         CREATE TABLE assets (
           assetUuid text PRIMARY KEY,
@@ -55,6 +56,11 @@ describe('asset cleanup', () => {
           meta text,
           PRIMARY KEY(assetUuid, containerType, containerId, role)
         );
+        CREATE TABLE "asset-descriptions" (
+          familyUuid text PRIMARY KEY,
+          text text NOT NULL,
+          updatedAt integer NOT NULL
+        );
         CREATE TABLE projects (
           projectUuid text PRIMARY KEY,
           title text NOT NULL,
@@ -66,6 +72,7 @@ describe('asset cleanup', () => {
           cv integer NOT NULL DEFAULT false,
           action text,
           reminder text NOT NULL DEFAULT '',
+          synonyms text NOT NULL DEFAULT '[]',
           createdAt integer NOT NULL,
           updatedAt integer NOT NULL
         );
@@ -78,6 +85,7 @@ describe('asset cleanup', () => {
           publicId text NOT NULL UNIQUE,
           action text,
           reminder text NOT NULL DEFAULT '',
+          synonyms text NOT NULL DEFAULT '[]',
           createdAt integer NOT NULL,
           updatedAt integer NOT NULL
         );
@@ -88,6 +96,7 @@ describe('asset cleanup', () => {
           summary text NOT NULL,
           access text NOT NULL,
           reminder text NOT NULL DEFAULT '',
+          synonyms text NOT NULL DEFAULT '[]',
           createdAt integer NOT NULL,
           updatedAt integer NOT NULL
         );

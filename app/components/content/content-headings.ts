@@ -2,10 +2,14 @@ import {
   type PublicContentOutputBlock,
   type PublicContentOutputData,
 } from '#layers/thei/shared/content';
-import { richTextToPlainText } from '#layers/thei/shared/rich-text';
+import {
+  contentBlockPath,
+  contentHeadingAnchors,
+  type ContentHeadingLevel,
+} from '#layers/thei/shared/content-headings';
 import type { IconName } from '#thei/icons';
 
-export type ContentHeadingLevel = 2 | 3;
+export { contentBlockPath, type ContentHeadingLevel };
 
 export interface ContentHeading {
   title: string;
@@ -22,10 +26,6 @@ export interface VisibleContentBlock {
   path: string;
 }
 
-export function contentBlockPath(prefix: string, index: number): string {
-  return prefix ? `${prefix}.${index}` : String(index);
-}
-
 export function visibleContentBlocks(
   data: PublicContentOutputData,
   pathPrefix = '',
@@ -36,42 +36,16 @@ export function visibleContentBlocks(
   }));
 }
 
+/** A text's headings as the page lists and anchors them (`content-headings`). */
 export function buildContentHeadings(
   data: PublicContentOutputData | null | undefined,
   slugify: (value: string) => string,
 ): ContentHeading[] {
-  if (!data) return [];
-
-  const headings: ContentHeading[] = [];
-  const usedIds = new Set<string>();
-
-  function uniqueId(title: string) {
-    const base = slugify(title) || 'heading';
-    let id = base;
-    let suffix = 2;
-    while (usedIds.has(id)) id = `${base}-${suffix++}`;
-    usedIds.add(id);
-    return id;
-  }
-
-  function visit(value: PublicContentOutputData, pathPrefix = '') {
-    for (const { block, path } of visibleContentBlocks(value, pathPrefix)) {
-      if (block.type === 'header') {
-        const title = richTextToPlainText(String(block.data.text ?? ''));
-        const id = uniqueId(title);
-        headings.push({
-          title,
-          level: block.data.level === 3 ? 3 : 2,
-          id,
-          href: `#${id}`,
-          path,
-        });
-      } else if (block.type === 'privateSectionExpanded') {
-        visit({ blocks: block.data.blocks }, path);
-      }
-    }
-  }
-
-  visit(data);
-  return headings;
+  return contentHeadingAnchors(data, slugify).map((heading) => ({
+    title: heading.title,
+    level: heading.level,
+    id: heading.id,
+    href: `#${heading.id}`,
+    path: heading.path,
+  }));
 }

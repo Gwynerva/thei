@@ -4,7 +4,6 @@ import type {
   PublicTagSummary,
 } from '#layers/thei/shared/api/public';
 import type { Period } from '#layers/thei/shared/period';
-import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 import type { IconName } from '#thei/icons';
 import type { ContentHeading } from '#layers/thei/app/components/content/content-headings';
 
@@ -59,7 +58,8 @@ export type PublicDetailPanelData = {
   chronology?: PublicDetailTimelineItem[];
   periods?: Period[];
   tags?: PublicTagSummary[];
-  references: PublicReferences;
+  /** What the owner attached by hand: a project's or an event's. */
+  references?: PublicReferences;
 };
 
 /**
@@ -80,12 +80,12 @@ export function publicDetailSummary(
     {
       icon: 'link',
       label: labels.links,
-      value: publicReferenceSplitSize(data.references.links),
+      value: data.references?.links.length ?? 0,
     },
     {
       icon: 'files',
       label: labels.files,
-      value: publicReferenceSplitSize(data.references.files),
+      value: data.references?.files.length ?? 0,
     },
   ];
   return metrics.filter((metric) => Number(metric.value) > 0);

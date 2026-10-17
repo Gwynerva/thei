@@ -25,11 +25,6 @@
     var(--color-accent) 50%,
     transparent
   );
-  --content-editor-hover: color-mix(
-    in oklch,
-    var(--color-accent) 12%,
-    var(--color-bg-3)
-  );
   --content-editor-active: color-mix(
     in oklch,
     var(--color-accent) 20%,
@@ -49,10 +44,6 @@
     in oklch,
     var(--color-bg-2) 80%,
     var(--color-bg-3)
-  );
-  --content-editor-modal-overlay: light-dark(
-    oklch(18% 0.04 var(--hue-accent) / 0.18),
-    oklch(4% 0.02 var(--hue-accent) / 0.62)
   );
   /* Faint, so the locks of a private section show through it. */
   --content-editor-current: color-mix(
@@ -284,6 +275,11 @@
     cursor: grab;
   }
 
+  /* A link just made by «@» takes what is typed: no toolbar over its name. */
+  &.content-editor--fresh-link .ce-inline-toolbar {
+    visibility: hidden;
+  }
+
   &.content-editor--dragging-block {
     cursor: grabbing;
     user-select: none;
@@ -293,20 +289,27 @@
     }
   }
 
-  /* 5. Popovers: the toolbox, block settings and the inline toolbar. */
+  /*
+   * 5. Popovers: block settings and the inline toolbar, on the surface of
+   * every popup of the site (`FloatingPopup`). The layer places them and
+   * draws their arrow (`editor-popover-layer.ts`); they grow from it as they
+   * open. Editor.js closes them at once.
+   */
   & .ce-popover {
+    --border-radius: var(--radius-normal);
+    --padding: var(--spacing-xs);
     --color-border: var(--color-border-1);
-    --color-shadow: var(--content-editor-shadow);
-    --color-background: var(--content-editor-panel);
+    --color-shadow: transparent;
+    --color-background: var(--color-bg-2);
     --color-text-primary: var(--color-text-1);
     --color-text-secondary: var(--color-text-2);
     --color-border-icon: var(--color-border-1);
     --color-border-icon-disabled: var(--color-border-1);
     --color-text-icon-active: var(--color-accent);
     --color-background-icon-active: var(--color-bg-accent);
-    --color-background-item-focus: var(--content-editor-active);
+    --color-background-item-focus: var(--color-bg-3);
     --color-shadow-item-focus: transparent;
-    --color-background-item-hover: var(--content-editor-hover);
+    --color-background-item-hover: var(--color-bg-3);
     --color-background-item-confirm: var(--color-bg-error);
     --color-background-item-confirm-hover: color-mix(
       in oklch,
@@ -317,15 +320,32 @@
   }
 
   & .ce-popover__container {
-    box-shadow:
-      0 16px 36px -22px var(--content-editor-shadow),
-      inset 0 0 0 1px
-        color-mix(in oklch, var(--color-bw-reverse) 4%, transparent);
+    box-shadow: var(--shadow-popup);
+    transform-origin: top left;
+  }
+
+  & .ce-popover--opened > .ce-popover__container {
+    animation: content-editor-popover-in var(--default-transition-duration)
+      var(--default-transition-timing-function);
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
+  }
+
+  & .ce-popover:not(.ce-popover--nested) > .ce-popover__container {
+    transform-origin: var(--content-editor-popover-origin, top left);
+  }
+
+  /* The item Enter would choose, as in every list of the site. */
+  & .ce-popover-item--focused:not(.ce-popover-item--no-focus) {
+    box-shadow: inset 0 0 0 2px
+      color-mix(in oklab, var(--color-accent) 60%, transparent);
   }
 
   & .ce-popover__overlay {
-    background: var(--content-editor-modal-overlay);
-    backdrop-filter: blur(1.5px);
+    background: rgb(0 0 0 / 0.4);
+    opacity: 1;
     pointer-events: auto;
   }
 
@@ -513,6 +533,29 @@
       }
     }
 
+    /*
+     * The block's settings are a sheet from the bottom, as every popup of
+     * the site that holds levels is on a phone.
+     */
+    & .ce-popover--opened:not(.ce-popover--inline) > .ce-popover__container {
+      --offset: 0px;
+      border-width: 1px 0 0;
+      border-radius: var(--radius-normal) var(--radius-normal) 0 0;
+      padding-bottom: calc(var(--spacing-xs) + env(safe-area-inset-bottom));
+      animation-name: content-editor-sheet-in;
+
+      &::before {
+        flex: none;
+        align-self: center;
+        width: 2.5rem;
+        height: 0.25rem;
+        margin-bottom: var(--spacing-xs);
+        border-radius: 9999px;
+        background: var(--color-border-2);
+        content: '';
+      }
+    }
+
     & .ce-popover--inline .ce-popover__items > .ce-popover-item {
       box-sizing: border-box;
       width: 2.5rem;
@@ -575,7 +618,35 @@
   }
 }
 
+@keyframes content-editor-popover-in {
+  from {
+    opacity: 0;
+    scale: 0.95;
+  }
+}
+
+@keyframes content-editor-sheet-in {
+  from {
+    opacity: 0;
+    translate: 0 100%;
+  }
+}
+
 body.content-editor-block-dragging,
 body.content-editor-block-dragging * {
   cursor: grabbing !important;
+}
+
+/*
+ * The words a link or hint popup is about, marked while it is open. A
+ * highlight, not markup: nothing is written into the text, so Ctrl+Z has
+ * nothing of it to undo.
+ */
+.content-editor ::highlight(content-editor-pending) {
+  background-color: var(--content-editor-selection);
+}
+
+/* The `@` a link popup was opened at, while it is open. A highlight too. */
+.content-editor ::highlight(content-editor-at) {
+  color: var(--color-accent);
 }

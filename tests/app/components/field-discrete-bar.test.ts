@@ -3,15 +3,12 @@ import {
   compactSize,
   nearestStopIndex,
   steppedIndex,
-  stopPosition,
   trackInset,
   trackPosition,
 } from '../../../app/components/field/discrete-bar-stops';
 
 describe('discrete bar geometry', () => {
   it('puts each stop at the centre of its column', () => {
-    expect(stopPosition(0, 4)).toBe(12.5);
-    expect(stopPosition(3, 4)).toBe(87.5);
     expect(trackInset(4)).toBe(12.5);
     expect(trackPosition(0, 4)).toBe(0);
     expect(trackPosition(3, 4)).toBe(100);

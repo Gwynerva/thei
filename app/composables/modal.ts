@@ -26,25 +26,88 @@ export const activeModal = computed(
 );
 
 /**
- * Depth of the modal flows currently running.
+ * A sequence of modals that replace one another — a wizard, or a file's
+ * details handing over to its editor and back.
  *
- * A flow is a sequence of modals that replace one another — a wizard. Each
- * step settles before the next one is pushed, so the stack drops to the depth
- * below in between, and for a flow started from a page that depth is zero.
- * Without this counter the history interceptor reads the gap as "the last
- * modal closed", hands the sentinel entry back, and races the next step's
- * pushState — after which Back stops closing modals at all.
+ * Each step settles before the next one is pushed, so the stack drops back to
+ * the flow's base in between, and for a flow started from a page that base is
+ * zero. Two things must not read that gap as "the last modal closed":
+ *
+ * - the history interceptor, which would hand the sentinel entry back and race
+ *   the next step's pushState, after which Back stops closing modals at all;
+ * - the dialog, which would close and leave the page, or the modal the flow
+ *   began in, on show until the next step arrives. It shows the frame of the
+ *   step that left, waiting, instead (`modalWait`).
  */
-const modalFlowDepth = shallowRef(0);
+interface ModalFlow {
+  /** How deep the stack was when the flow began: its steps open above it. */
+  base: number;
+  /** Its step that left last, whose frame the wait keeps. */
+  last?: ActiveModal;
+  /**
+   * Which wait it is in, once a step has left; one wait goes on when an inner
+   * flow hands over to the outer one.
+   */
+  waitId?: number;
+}
 
-/** Run a sequence of modals as one logical layer. See `modalFlowDepth`. */
+const modalFlows = shallowRef<ModalFlow[]>([]);
+let waitSerial = 0;
+
+/** Run a sequence of modals as one logical layer. See `ModalFlow`. */
 export async function runModalFlow<T>(run: () => Promise<T>): Promise<T> {
-  modalFlowDepth.value++;
+  const flow: ModalFlow = { base: modalStack.value.length };
+  modalFlows.value = [...modalFlows.value, flow];
   try {
     return await run();
   } finally {
-    modalFlowDepth.value--;
+    modalFlows.value = modalFlows.value.filter((item) => item !== flow);
   }
+}
+
+export interface ModalWait {
+  id: number;
+  /** The step that left; its frame and title stay on screen. */
+  last?: ActiveModal;
+}
+
+/** A flow between two steps: the stack is back at its base, the next is due. */
+export const modalWait = computed<ModalWait | null>(() => {
+  const depth = modalStack.value.length;
+  const flows = modalFlows.value;
+  for (let index = flows.length - 1; index >= 0; index--) {
+    const flow = flows[index]!;
+    if (flow.base === depth && flow.waitId !== undefined)
+      return { id: flow.waitId, last: flow.last };
+  }
+  return null;
+});
+
+/** Components whose code has loaded: they open without a shell. */
+const loadedComponents = new WeakMap<object, Component>();
+const loadingComponents = new WeakMap<object, Promise<Component>>();
+
+/**
+ * Load a modal's code ahead of opening it, as a wizard does for the steps it
+ * may go on to, so that opening it costs no wait at all.
+ */
+export function preloadModal(
+  descriptor: ModalDescriptor<any, any>,
+): Promise<Component> {
+  const loaded = loadedComponents.get(descriptor);
+  if (loaded) return Promise.resolve(loaded);
+  let loading = loadingComponents.get(descriptor);
+  if (!loading) {
+    loading = descriptor.component().then((module) => {
+      const component = markRaw(module.default);
+      loadedComponents.set(descriptor, component);
+      return component;
+    });
+    // A failed load is tried again the next time; the caller hears of it.
+    loading.catch(() => loadingComponents.delete(descriptor));
+    loadingComponents.set(descriptor, loading);
+  }
+  return loading;
 }
 
 /**
@@ -69,6 +132,19 @@ export function registerDismissLayer(close: () => void) {
 
 export function hasDismissLayer() {
   return dismissLayers.length > 0;
+}
+
+/** Presses that closed a popup on their way, so they close nothing more. */
+const popupClosingPresses = new WeakSet<Event>();
+
+/** A popup closed by a press outside it says so of the press. */
+export function noteClosingPress(event: Event) {
+  popupClosingPresses.add(event);
+}
+
+/** Whether this press closed a popup already: it is a step of its own. */
+export function closedPopup(event: Event) {
+  return popupClosingPresses.has(event);
 }
 
 /** Undo one step: the innermost dismissible layer, else the top modal. */
@@ -168,7 +244,7 @@ export function installModalNavigationInterceptor(router: Router) {
   }
 
   const stopStackWatch = watch(
-    () => [modalStack.value.length, modalFlowDepth.value] as const,
+    () => [modalStack.value.length, modalFlows.value.length] as const,
     ([stackSize, flowDepth]) => {
       if (stackSize > 0) {
         pushSentinel();
@@ -265,10 +341,14 @@ export function useModalCloseGuard(guard: () => boolean) {
  * Returns a Promise that resolves with a typed ModalResult when the modal
  * completes (via @modalResult emit), is closed/aborted (empty), or throws (error).
  *
+ * The modal is on the stack at once. Until its code has loaded, the shell of
+ * its frame stands in for it, closable like the modal itself; code that
+ * fails to load closes it with an error.
+ *
  * Usage (no data):   const result = await openModal(myModal);
  * Usage (with data): const result = await openModal(myModal, { foo: 'bar' });
  */
-export async function openModal<
+export function openModal<
   TResult extends { type: string },
   TComponent extends Component,
 >(
@@ -282,23 +362,38 @@ export async function openModal<
     document.activeElement instanceof HTMLElement
       ? document.activeElement
       : undefined;
-  const module = await descriptor.component();
-  const component = markRaw(module.default);
   const props = args.length > 0 ? { modalData: args[0] } : {};
 
   return new Promise<TResult>((resolve) => {
-    modalStack.value = [
-      ...modalStack.value,
-      {
-        id: ++modalId,
-        name: descriptor.name,
-        component,
-        props,
-        returnFocus,
-        resolve: resolve as (result: { type: string }) => void,
-        close: (result: BaseModalResult) => resolve(result as TResult),
+    const modal: ActiveModal = {
+      id: ++modalId,
+      name: descriptor.name,
+      component: loadedComponents.get(descriptor),
+      frame: descriptor.frame,
+      props,
+      returnFocus,
+      resolve: resolve as (result: { type: string }) => void,
+      close: (result: BaseModalResult) => resolve(result as TResult),
+    };
+    modalStack.value = [...modalStack.value, modal];
+    if (modal.component) return;
+
+    preloadModal(descriptor).then(
+      (component) => {
+        if (!modalStack.value.includes(modal)) return;
+        modal.component = component;
+        modalStack.value = [...modalStack.value];
       },
-    ];
+      (error: unknown) => {
+        if (!modalStack.value.includes(modal)) return;
+        finishModal(modal, () =>
+          modal.close({
+            type: 'error',
+            message: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      },
+    );
   });
 }
 
@@ -314,6 +409,15 @@ export function closeActiveModal(result: BaseModalResult) {
 }
 
 function removeModal(modal: ActiveModal) {
+  const index = modalStack.value.indexOf(modal);
+  if (index === -1) return;
+  // A step of a flow leaving: the flow waits in its frame for the next one.
+  const waitId = ++waitSerial;
+  for (const flow of modalFlows.value) {
+    if (flow.base !== index) continue;
+    flow.last = modal;
+    flow.waitId = waitId;
+  }
   modalStack.value = modalStack.value.filter((item) => item.id !== modal.id);
 }
 

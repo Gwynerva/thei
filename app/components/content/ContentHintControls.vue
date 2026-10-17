@@ -10,8 +10,6 @@ import type {
  * `FloatingPopup` watches the panel's own size, so a hint of several lines
  * pushes the panel around rather than out of view.
  */
-defineProps<{ teleportTo?: string | HTMLElement }>();
-
 const open = ref(false);
 const request = shallowRef<ContentHintRequest>();
 const text = ref('');
@@ -48,19 +46,15 @@ defineExpose<ContentHintControlsExpose>({ open: openControls });
     :anchor="request?.anchor ?? null"
     placement="bottom-start"
     :fallback-placements="['top-start']"
-    :offset="0"
     shift-cross-axis
     max-width="20rem"
-    :teleport-to="teleportTo"
+    density="card"
+    complex
     @opened="field?.focus({ preventScroll: true })"
     @dismiss="request?.restore()"
     @closed="popupClosed"
   >
-    <form
-      class="flex flex-col gap-xs rounded-normal border border-border-1 bg-bg-2
-        p-xs"
-      @submit.prevent="submit"
-    >
+    <form class="flex flex-col gap-sm" @submit.prevent="submit">
       <FieldTextarea
         v-model="text"
         class="max-h-40 min-h-9 py-1 text-sm"

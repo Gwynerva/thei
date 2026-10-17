@@ -1,4 +1,4 @@
-import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 export const tags = sqliteTable('tags', {
   tagUuid: text().primaryKey(),
@@ -9,4 +9,6 @@ export const tags = sqliteTable('tags', {
   description: text().notNull().default(''),
   /** Other words the tag is known by. Only the owner sees them. */
   synonyms: text({ mode: 'json' }).notNull().$type<string[]>().default([]),
+  /** When its form was last saved; 0 for a tag not saved since 0.0.6. */
+  updatedAt: integer().notNull().default(0),
 });

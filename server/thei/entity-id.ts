@@ -13,6 +13,14 @@ export const EntityPrefix = {
   Session: 's',
   Tag: 't',
   Share: 'sh',
+  ApiToken: 'tk',
+  OAuthClient: 'oc',
+  AiSession: 'ais',
+  AiMessage: 'aim',
+  AiAction: 'aia',
+  AiBundle: 'aib',
+  AiMemory: 'aime',
+  AiTemplate: 'ait',
 } as const;
 
 export type EntityPrefixValue =

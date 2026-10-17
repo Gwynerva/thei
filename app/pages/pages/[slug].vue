@@ -53,7 +53,6 @@ const details = computed(
         created: phrase.value.page_chronology_created,
         updated: phrase.value.page_chronology_updated,
       }),
-      references: data.value.references,
     }) satisfies PublicDetailPanelData,
 );
 

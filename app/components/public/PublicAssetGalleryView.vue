@@ -6,7 +6,10 @@ const emit = defineEmits<{ open: [] }>();
 </script>
 
 <template>
-  <figure class="min-w-0 overflow-hidden rounded-normal bg-bg-3">
+  <figure
+    class="min-w-0 overflow-hidden rounded-normal border border-border-1
+      bg-bg-2"
+  >
     <component
       :is="item.media?.kind === 'video' ? 'div' : 'button'"
       :type="item.media?.kind === 'video' ? undefined : 'button'"

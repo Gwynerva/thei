@@ -1,5 +1,6 @@
 import { beforeAll, beforeEach, afterEach, describe, it, expect } from 'vitest';
 import Database from 'better-sqlite3';
+import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import {
   generateSQLiteDrizzleJson,
@@ -333,6 +334,36 @@ describe('asset library', () => {
       .run();
     expect(getAssetUsages('b').placements[0]?.isPrivate).toBe(true);
   });
+  it('finds a file of a group by its own words and by the group’s title', () => {
+    addLaunch();
+    db.update(schema.content)
+      .set({
+        data: {
+          blocks: [
+            {
+              type: 'contentFileGroup',
+              data: {
+                title: 'Бумаги полёта',
+                items: [
+                  {
+                    id: 'f1',
+                    asset: { assetUuid: 'b' },
+                    title: 'Билет',
+                    caption: 'Купленный <b>заранее</b>',
+                  },
+                ],
+              },
+            },
+          ],
+        } as never,
+      })
+      .where(eq(schema.content.contentUuid, 'launch-content'))
+      .run();
+    for (const q of ['билет', 'купленный заранее', 'бумаги'])
+      expect(
+        listLibraryAssets({ q }).items.map((i) => i.asset.assetUuid),
+      ).toEqual(['b']);
+  });
   it('searches site-defined text without exposing internal previews', () => {
     expect(
       listLibrarySections({ q: 'КОСМОСА' }).items.map((g) => g.id),
@@ -561,6 +592,27 @@ describe('asset library', () => {
         updatedAt: 1,
       })
       .run();
+    // A banner an applied AI update replaced: only the undo still needs it.
+    db.insert(schema.assets)
+      .values({
+        assetUuid: 'by-ai',
+        slug: 'by-ai',
+        extension: 'webp',
+        familyUuid: 'by-ai',
+        contentHash: 'i'.repeat(64),
+        settingsKey: 'original',
+        settings: createOriginalAssetSettings(),
+        type: AssetType.Image,
+        size: 100,
+        touchedAt: 20,
+        meta: {},
+      })
+      .run();
+    raw
+      .prepare(
+        "INSERT INTO `ai-actions` (actionUuid, sessionUuid, kind, payload, certainty, state, fingerprint, assetUuids, createdAt) VALUES ('aia-1', 's', 'update', '{}', 'sure', 'applied', 'f', '[\"by-ai\"]', 1)",
+      )
+      .run();
 
     const rows = db.select().from(schema.assets).all();
     const retention = readAssetRetention(rows);
@@ -570,15 +622,22 @@ describe('asset library', () => {
       deleteAfter: 10 + ASSET_ORPHAN_GRACE_MS,
     });
     expect(retention.get('held')).toEqual({ inHistory: true });
+    expect(retention.get('by-ai')).toEqual({ heldByAi: true });
     for (const item of listLibraryAssets().items) {
       expect({
         deleteAfter: item.deleteAfter,
         inHistory: item.inHistory,
+        heldByAi: item.heldByAi,
       }).toEqual({
         deleteAfter: retention.get(item.asset.assetUuid)?.deleteAfter,
         inHistory: retention.get(item.asset.assetUuid)?.inHistory,
+        heldByAi: retention.get(item.asset.assetUuid)?.heldByAi,
       });
     }
+    // The file's window says what keeps it, as the library does.
+    expect(getAssetUsages('held')).toMatchObject({ inHistory: true });
+    expect(getAssetUsages('by-ai')).toMatchObject({ heldByAi: true });
+    expect(getAssetUsages('by-ai').inHistory).toBeUndefined();
   });
   it('paginates deterministically and does not touch assets while browsing', () => {
     const template = db

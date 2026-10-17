@@ -18,9 +18,11 @@ export interface ContentInlineMarkupRequest {
   remove: () => void;
   /**
    * Gives the selection back as it was, with the tool's highlight removed.
-   * Safe to call more than once; only the first call does anything.
+   * Safe to call more than once; only the first call does anything. A
+   * popup given up hands over what was typed in its search, for a popup
+   * opened by typing, which puts it back into the text.
    */
-  restore: () => void;
+  restore: (typed?: string) => void;
 }
 
 export interface ContentInlineLinkRequest extends ContentInlineMarkupRequest {
@@ -35,8 +37,7 @@ export interface ContentInlineLinkRequest extends ContentInlineMarkupRequest {
 }
 
 export interface ContentInlineLinkControlsExpose {
-  openEntity: (request: ContentInlineLinkRequest) => void;
-  openExternal: (request: ContentInlineLinkRequest) => void;
+  open: (request: ContentInlineLinkRequest) => void;
 }
 
 /** The same shape for the hint tool: a note attached to a span of text. */

@@ -1,6 +1,6 @@
 import { inArray } from 'drizzle-orm';
 import { ASSET_ORPHAN_GRACE_MS } from '../../../shared/asset-library';
-import { assetsHeldByHistory } from '../content/history';
+import { assetsHeldByAi, assetsHeldByHistory } from './holds';
 
 /** What cleanup has in store for an asset; nothing for one in use. */
 export interface AssetRetention {
@@ -8,13 +8,16 @@ export interface AssetRetention {
   deleteAfter?: number;
   /** Unused, but kept while a version of some text still shows it. */
   inHistory?: true;
+  /** Unused, but kept while an AI action still needs it. */
+  heldByAi?: true;
 }
 
 /**
  * Tells, the way cleanup decides it, which of these assets it will take and
- * when: one no usage row holds is kept while a version of some text shows it,
- * and otherwise goes a grace period after its last touch. An asset with any
- * usage row, whatever holds it, is absent from the result.
+ * when: one no usage row holds is kept while a version of some text shows it
+ * or an AI action still needs it, and otherwise goes a grace period after its
+ * last touch. An asset with any usage row, whatever holds it, is absent from
+ * the result.
  */
 export function readAssetRetention(
   rows: readonly { assetUuid: string; touchedAt: number }[],
@@ -31,14 +34,18 @@ export function readAssetRetention(
       .all()
       .map((usage) => usage.assetUuid),
   );
-  const held = assetsHeldByHistory(ids.filter((id) => !referenced.has(id)));
+  const unused = ids.filter((id) => !referenced.has(id));
+  const held = assetsHeldByHistory(unused);
+  const heldByAi = assetsHeldByAi(unused);
   for (const row of rows) {
     if (referenced.has(row.assetUuid)) continue;
     result.set(
       row.assetUuid,
       held.has(row.assetUuid)
         ? { inHistory: true }
-        : { deleteAfter: row.touchedAt + ASSET_ORPHAN_GRACE_MS },
+        : heldByAi.has(row.assetUuid)
+          ? { heldByAi: true }
+          : { deleteAfter: row.touchedAt + ASSET_ORPHAN_GRACE_MS },
     );
   }
   return result;

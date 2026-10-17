@@ -22,9 +22,6 @@ export const AUDIO_EXTENSIONS = [
   'aiff',
 ] as const;
 
-export type ImageExtension = (typeof IMAGE_EXTENSIONS)[number];
-export type VideoExtension = (typeof VIDEO_EXTENSIONS)[number];
-export type AudioExtension = (typeof AUDIO_EXTENSIONS)[number];
 export type AssetMediaKind = 'image' | 'video' | 'audio' | 'other';
 
 const IMAGE_EXTS = new Set<string>(IMAGE_EXTENSIONS);
@@ -55,6 +52,7 @@ const ASSET_MIME_TYPES: Record<string, string> = {
   aif: 'audio/aiff',
   aiff: 'audio/aiff',
   zip: 'application/zip',
+  pdf: 'application/pdf',
 };
 
 export function normalizeAssetExtension(extension: string): string {
@@ -76,8 +74,15 @@ export function getAssetMimeType(extension: string): string {
   );
 }
 
+/**
+ * Whether a file may be shown by the browser at its own address rather than
+ * saved: pictures, videos, recordings and PDFs, which the browser's viewers
+ * show without running anything on this site. Raw SVG may carry a script;
+ * an HTML file would run on the site's origin; both are saved.
+ */
 export function isAssetExtensionSafeInline(extension: string): boolean {
   const normalized = normalizeAssetExtension(extension);
   if (normalized === 'svg') return false;
+  if (normalized === 'pdf') return true;
   return getAssetMediaKind(normalized) !== 'other';
 }

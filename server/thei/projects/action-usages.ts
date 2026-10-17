@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { AssetRole, AssetUsageMeta } from '#layers/thei/shared/asset';
 import type { ProjectActionEditData } from '#layers/thei/shared/project-action';
+import { deleteUsagesReleasing } from '../assets/repository/usages/release';
 
 const ACTION_ROLES = [
   ['action-icon', 'iconAssetUuid'],
@@ -99,9 +100,11 @@ function deleteUsage(
   containerId: string,
   role: AssetRole,
 ) {
-  tx.delete(schema.assetUsages)
-    .where(usageWhere(schema, assetUuid, containerType, containerId, role))
-    .run();
+  deleteUsagesReleasing(
+    tx,
+    schema,
+    usageWhere(schema, assetUuid, containerType, containerId, role),
+  );
 }
 
 function usageWhere(

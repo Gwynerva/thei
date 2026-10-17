@@ -5,7 +5,6 @@ import {
   createSignInLink,
   listSignInLinks,
   revokeSignInLink,
-  signInLinkIsValid,
 } from '../../server/thei/access-links/sign-in-links';
 import {
   createShareLink,
@@ -49,11 +48,9 @@ describe('sign-in links', () => {
   it('works exactly once', async () => {
     const link = await createSignInLink(request);
     expect(link.token).toBeTruthy();
-    expect(signInLinkIsValid(link.token!)).toBe(true);
     expect(consumeSignInLink(link.token!)).toBe(true);
     // The second attempt is what a copy of the link in a chat would do.
     expect(consumeSignInLink(link.token!)).toBe(false);
-    expect(signInLinkIsValid(link.token!)).toBe(false);
   });
 
   it('stores only the hash, and can be revoked before use', async () => {
@@ -72,7 +69,6 @@ describe('sign-in links', () => {
     context.db.run(
       `UPDATE "sign-in-links" SET expiresAt = 1 WHERE tokenHash = '${link.tokenHash}'` as never,
     );
-    expect(signInLinkIsValid(link.token!)).toBe(false);
     expect(consumeSignInLink(link.token!)).toBe(false);
   });
 });

@@ -153,7 +153,6 @@ describe('public search documents', () => {
 describe('public search index', () => {
   it('finds projects and events by the readable part of their URL', async () => {
     const context = await freshTestDb();
-    Object.assign(context.server, { useDb: () => context });
     try {
       const { db, schema } = context;
       const row = {

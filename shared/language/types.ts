@@ -1,5 +1,8 @@
 import type { ContentHistoryReason } from '../content-history';
 import type { RelationEntityType } from '../relation';
+import type { ProofreadCategory, TidyCommentKind } from '../ai-revise';
+import type { AiActionKind } from '../ai-actions';
+import type { ContentFileSkip } from '../content-file-placement';
 
 export const languagesInfo = {
   en: 'English',
@@ -78,9 +81,6 @@ export type EditorJsPhrases = {
   checklist: string;
   quote: string;
   delimiter: string;
-  media: string;
-  gallery: string;
-  audio: string;
   file: string;
   enter_quote: string;
   enter_caption: string;
@@ -107,6 +107,8 @@ export type LanguagePhrases = {
   asset_aspect_hint: (ratio: string, size: string) => string;
   asset_library_pending_deletion: (date: string) => string;
   asset_library_in_history: string;
+  /** Unused, but kept while an AI action still needs it. */
+  asset_library_held_by_ai: string;
   asset_library_empty: string;
   asset_library_unused: string;
   asset_library_unused_hint: string;
@@ -118,7 +120,7 @@ export type LanguagePhrases = {
   asset_library_more: string;
   asset_library_insert: string;
   asset_library_usage: string;
-  asset_library_places: (count: number) => string;
+  asset_used_elsewhere: string;
   asset_library_properties: string;
   asset_library_settings: string;
   asset_recipe_original: string;
@@ -141,13 +143,29 @@ export type LanguagePhrases = {
   asset_quality_high: string;
   asset_quality_maximum: string;
   asset_quality_lossless: string;
-  asset_library_no_usage: string;
-  asset_library_refresh_preview: string;
-  asset_library_refresh_preview_hint: string;
   asset_library_description: string;
+  /** A file's own description («Описание файла»): its field and its public block. */
+  asset_description: string;
+  asset_description_hint: string;
+  asset_description_placeholder: string;
+  asset_description_global: string;
+  asset_description_global_hint: string;
+  asset_description_why: string;
+  asset_detach_hint: string;
+  asset_here: string;
+  asset_library_other_variants: string;
+  asset_library_unused_line: string;
+  asset_library_history_line: string;
+  asset_library_held_by_ai_line: string;
+  asset_open_place: (title: string) => string;
+  asset_open_variant: string;
+  asset_description_save: string;
+  asset_description_saved: string;
+  asset_description_conflict: string;
+  asset_description_too_long: (max: number) => string;
+  asset_description_error: string;
   asset_hash_check: string;
   asset_hash_error: string;
-  asset_hash_match: string;
   asset_selection_type: string;
   asset_selection_size: string;
   asset_library_retry: string;
@@ -167,11 +185,11 @@ export type LanguagePhrases = {
   asset_role_action_icon: string;
   asset_role_action_background: string;
   asset_role_action_file: string;
+  asset_role_ai_attachment: string;
   asset_role_avatar: string;
   asset_role_status: string;
   asset_source_profile: string;
-  asset_library_view: string;
-  asset_library_edit: string;
+  asset_source_ai_session: string;
   site_settings: string;
   about_me: string;
   profile_name: string;
@@ -356,8 +374,6 @@ export type LanguagePhrases = {
   next: string;
   public_details_expand: string;
   content_integration_youtube: string;
-  public_details_manual: string;
-  public_details_from_content: string;
   public_details_links: string;
   public_details_files: string;
   public_details_overview: string;
@@ -448,6 +464,8 @@ export type LanguagePhrases = {
   sign_in_link_qr: string;
   copy: string;
   copied: string;
+  /** Words quoted as the language quotes them: “words”, «слова». */
+  quoted: (text: string) => string;
   share_links: string;
   share_links_description: string;
   share_link_create: string;
@@ -551,6 +569,101 @@ export type LanguagePhrases = {
   backup_setup_hint: string;
   backup_history: string;
   backup_run_summary: (files: number, size: string) => string;
+  ai_access_on_hint: string;
+  ai_access_off_hint: string;
+  api_token_create: string;
+  api_token_label: string;
+  api_token_label_placeholder: string;
+  api_token_label_required: string;
+  api_token_access: string;
+  api_token_preset_reader: string;
+  api_token_preset_reader_hint: string;
+  api_token_preset_editor: string;
+  api_token_preset_editor_hint: string;
+  api_token_preset_custom: string;
+  api_token_empty: string;
+  api_token_never_used: string;
+  api_token_last_used: string;
+  api_token_revoke: string;
+  api_token_too_many: string;
+  api_token_shown_once: string;
+  api_token_endpoint: string;
+  api_token_connect_hint: string;
+  ai_page: string;
+  ai_page_description: string;
+  ai_tab_connection: string;
+  ai_switch: string;
+  ai_welcome: string;
+  ai_ways_facts: Record<'what' | 'how' | 'pays' | 'rights', string>;
+  ai_ways_cards: Record<
+    'app' | 'model',
+    Record<'title' | 'what' | 'how' | 'pays' | 'rights', string>
+  >;
+  api_tokens_title: string;
+  api_tokens_hint: string;
+  ai_connect_title: string;
+  ai_connect_apps: Record<
+    'claude' | 'chatgpt' | 'claude-code' | 'other',
+    string
+  >;
+  ai_connect_steps: Record<
+    'claude' | 'chatgpt' | 'claude-code' | 'other',
+    string[]
+  >;
+  ai_connect_no_sign_in: string;
+  ai_connect_proxy: string;
+  api_token_signed_in: (client: string) => string;
+  api_token_signed_in_verified: (client: string, host: string) => string;
+  api_token_signed_in_unverified: (client: string) => string;
+  oauth_consent: string;
+  oauth_consent_title: (client: string, site: string) => string;
+  oauth_verified: (host: string) => string;
+  oauth_unverified: string;
+  oauth_redirect_web: (host: string) => string;
+  oauth_redirect_elsewhere: (host: string) => string;
+  oauth_redirect_loopback: (port: string) => string;
+  oauth_redirect_app: (scheme: string) => string;
+  oauth_connections: (count: number) => string;
+  oauth_rights: string;
+  oauth_requested_edit: string;
+  oauth_allow: string;
+  oauth_deny: string;
+  oauth_sign_in_needed: string;
+  oauth_gone: string;
+  oauth_returning: string;
+  oauth_refused_title: string;
+  oauth_refused: Record<
+    'client' | 'client_document' | 'redirect_uri' | 'request',
+    string
+  >;
+  oauth_restart: string;
+  api_token_history: string;
+  api_token_history_empty: string;
+  ai_settings_link: string;
+  ai_open_page: string;
+  ai_instructions_placeholder: string;
+  ai_check: string;
+  ai_check_enabled_ok: string;
+  ai_check_handshake_ok: (version: string) => string;
+  ai_check_handshake_fail: string;
+  ai_check_tools_ok: (count: number) => string;
+  ai_check_tools_fail: string;
+  ai_check_read_ok: (projects: number, events: number, diary: number) => string;
+  ai_check_read_fail: string;
+  ai_check_public_ok: string;
+  ai_check_public_fail: (status: number) => string;
+  ai_check_public_warn: string;
+  ai_check_https_ok: string;
+  ai_check_https_warn: string;
+  ai_check_https_skip: string;
+  ai_check_signin_ok: string;
+  ai_check_signin_fail: (where: string) => string;
+  ai_check_signin_https: string;
+  ai_check_clients_ok: (label: string, client: string) => string;
+  ai_check_clients_warn: string;
+  entity_changed_since: string;
+  api_token_revoke_confirm: (label: string) => string;
+  api_token_last_client: (client: string) => string;
   admin_updates: string;
   updates_description: string;
   update_current_version: string;
@@ -671,13 +784,14 @@ export type LanguagePhrases = {
   tag_title_taken: string;
   tag_title_is_synonym: (tag: string) => string;
   tag_synonym_taken: (synonym: string, tag: string) => string;
-  tag_synonyms: string;
+  synonyms: string;
+  synonyms_hint: string;
+  synonyms_placeholder: string;
+  synonyms_limit: (limit: number) => string;
+  synonym_remove: (synonym: string) => string;
+  synonym_suggestion_add: (word: string) => string;
   tag_synonyms_hint: string;
-  tag_synonyms_placeholder: string;
-  tag_synonyms_limit: (limit: number) => string;
-  tag_synonym_remove: (synonym: string) => string;
   tag_synonym_suggestions: string;
-  tag_synonym_suggestion_add: (word: string) => string;
   tag_synonym_found_in: string;
   tag_synonym_already_added: (synonym: string, tag: string) => string;
   tag_slug_taken: string;
@@ -829,7 +943,6 @@ export type LanguagePhrases = {
   content_editor_placeholder: string;
   content_editor_save_error: string;
   content_editor_title: string;
-  content_editor_clear_confirm: string;
   content_never_saved: string;
   content_history: string;
   content_history_empty: string;
@@ -840,34 +953,26 @@ export type LanguagePhrases = {
   content_history_row_label: (time: string, changes: string) => string;
   content_history_delta: (value: string, delta: number) => string;
   content_history_missing_assets: (count: number) => string;
-  content_history_back: string;
-  content_restore: string;
-  content_restore_cancel: string;
-  content_diff_removed: string;
-  content_diff_added: string;
-  content_diff_changed: string;
-  /** Above a rewritten block as it is now, before the restore. */
-  content_diff_before: string;
-  /** Above the same block as the restore would leave it. */
-  content_diff_after: string;
-  content_restore_title: (time: string) => string;
-  content_restore_keeps_current: string;
   content_restore_same: string;
-  content_restored: (label: string) => string;
+  /** What the last change taken into the editor was, for its undo. */
+  content_taken_from: (label: string) => string;
   content_restore_undo: string;
-  content_draft_offer: (time: string) => string;
   content_draft_dismiss: string;
-  content_draft_chip: (time: string) => string;
   content_draft_status_offline_short: string;
+  content_draft_offline_hint: string;
+  content_draft_notice: (time: string) => string;
+  content_draft_notice_hint: string;
+  content_draft_compare: string;
+  content_stored_notice: (time: string) => string;
+  content_stored_notice_hint: string;
+  content_history_keeps: string;
   content_draft_status_synced: (time: string) => string;
   content_draft_status_offline: string;
   content_draft_status_refused_short: string;
   content_draft_status_refused: string;
   content_field_unsaved_draft: (time: string) => string;
   sign_out_unsynced_confirm: (count: number) => string;
-  content_internal_link: string;
   content_external_link: string;
-  content_link_url: string;
   content_link_loading: string;
   content_link_broken_title: string;
   content_link_broken_description: string;
@@ -883,11 +988,20 @@ export type LanguagePhrases = {
   content_add_media: string;
   content_choose_file: string;
   content_choose_audio: string;
-  content_audio_as_player: string;
-  content_audio_as_file: string;
+  content_show_as_player: string;
+  content_show_as_file: string;
+  content_show_as_picture: string;
   content_choose_entity: string;
   content_make_gallery: string;
-  content_link_internal_detected: string;
+  content_make_file_group: string;
+  content_file_group_title: string;
+  content_gallery_title: string;
+  content_add_files: string;
+  content_remove_file: string;
+  content_move_file: string;
+  content_upload_as_file: string;
+  /** A file brought into a text that the site cannot store, and why. */
+  content_file_skipped: (name: string, reason: ContentFileSkip) => string;
   /** Names the place inside the target a link leads to, its `#…`. */
   content_link_fragment: string;
   content_link_fragment_remove: string;
@@ -917,7 +1031,9 @@ export type LanguagePhrases = {
   clear: string;
   delete: string;
   close_modal: string;
+  modal_waiting: string;
   done: string;
+  asset_pick_title: string;
   asset_pick_upload: string;
   asset_pick_reuse: string;
   asset_pick_reuse_hint: string;
@@ -1028,22 +1144,48 @@ export type LanguagePhrases = {
   file_wrong_type: (ext: string) => string;
   file_too_large: (size: string) => string;
   direct_link_to_asset: string;
+  download_asset: string;
+  file_preview_shown_part: (shown: string, total: string) => string;
+  file_preview_rows_shown: (count: number) => string;
+  file_preview_too_large: string;
+  file_preview_failed: string;
+  file_preview_no_pdf: string;
+  file_preview_page: string;
+  archive_summary: (files: number, size: string) => string;
+  archive_packed: (size: string) => string;
+  archive_more: (count: number) => string;
+  archive_partial: string;
+  archive_back: string;
+  archive_root: string;
+  archive_name: string;
+  archive_size: string;
+  archive_files: (count: number) => string;
+  archive_levels: string;
+  archive_entry_download: string;
+  archive_entry_nested: string;
+  asset_zoom: string;
+  archive_entry_locked: string;
+  archive_entry_unavailable: string;
+  archive_entry_too_large: (size: string) => string;
   asset_previous: string;
   asset_next: string;
   asset_pager: (position: number, count: number) => string;
   asset: string;
-  upload_variants: string;
-  pick_another_file: string;
+  upload_how: string;
+  upload_as_is: string;
+  upload_saved_variant: string;
+  upload_saved_count: (count: number) => string;
+  upload_new_variant: string;
+  upload_new_variant_hint: string;
+  upload_new_audio_hint: string;
+  upload_new_zip_hint: string;
+  upload_other_file_hint: string;
+  upload_next: string;
+  upload_back: string;
+  upload_skip_description: string;
   upload_replace_with_new_file: string;
-  upload_replace_with_new_file_hint: string;
-  upload_section_selected_file: string;
   upload_section_family: string;
-  upload_section_create: string;
   upload_section_zip: string;
-  upload_use: string;
-  upload_use_variant: string;
-  upload_searching: string;
-  upload_no_matches: string;
   upload_apply_settings: string;
   upload_processing: string;
   upload_queued: string;
@@ -1087,7 +1229,6 @@ export type LanguagePhrases = {
   upload_error_network: string;
   upload_error_cancelled: string;
   upload_error_request_failed: (status: number) => string;
-  upload_use_unchanged: string;
   upload_crop: string;
   upload_crop_area: string;
   upload_crop_handle: string;
@@ -1176,5 +1317,495 @@ export type LanguagePhrases = {
   og_tags_headline: (count: number) => string;
   og_pages_headline: (count: number) => string;
   og_image_alt: (kind: string, title: string, site: string) => string;
+  ai_tab_sessions: string;
+  ai_tab_memory: string;
+  ai_tab_templates: string;
+  ai_templates_title: string;
+  ai_templates_hint: string;
+  ai_templates_column_template: string;
+  ai_templates_column_last: string;
+  ai_templates_builtin_section: string;
+  ai_templates_own_section: string;
+  ai_templates_own_empty: string;
+  ai_templates_new: string;
+  ai_templates_presets: string;
+  ai_template_open: string;
+  ai_open_full: string;
+  select_filter: string;
+  content_link: string;
+  content_link_search_placeholder: string;
+  content_link_mention_placeholder: string;
+  content_link_search: string;
+  content_link_path: string;
+  content_link_place: string;
+  content_link_whole: (
+    kind: import('../content-link').ContentEntityType,
+  ) => string;
+  content_link_headings: string;
+  content_link_description_headings: string;
+  content_link_sections: string;
+  content_link_anchor_gone: (anchor: string) => string;
+  content_link_target_gone: string;
+  content_link_becomes_video: string;
+  content_link_apply: string;
+  content_link_change: string;
+  /** The hint of the editor's "+". */
+  content_block_add: string;
+  content_block_settings: string;
+  /** The grid of blocks the "+" opens. */
+  content_block_toolbox: string;
+  ai_template_run: string;
+  ai_template_nothing_new: (title: string) => string;
+  ai_template_nothing_here: (title: string) => string;
+  ai_template_edit: string;
+  ai_template_running: string;
+  ai_template_never_run: string;
+  ai_template_started: (title: string) => string;
+  ai_template_saved: string;
+  ai_template_deleted: string;
+  ai_template_copied: string;
+  ai_template_modal_title: string;
+  ai_template_modal_new: string;
+  ai_template_name: string;
+  ai_template_name_placeholder: string;
+  ai_template_instruction: string;
+  ai_template_instruction_placeholder: string;
+  /** The connection's model, while its name is not known. */
+  ai_template_sessions: string;
+  ai_template_copy: string;
+  ai_template_delete: string;
+  ai_template_delete_confirm: (title: string) => string;
+  ai_sessions_search: string;
+  ai_sessions_filter: string;
+  ai_sessions_filters: Record<
+    'all' | 'waiting' | 'applied' | 'rejected' | 'app' | 'template',
+    string
+  >;
+  ai_session_new: string;
+  ai_session_groups: Record<
+    'pinned' | 'waiting' | 'running' | 'week' | 'earlier' | 'archive',
+    string
+  >;
+  ai_session_untitled: string;
+  ai_session_you: string;
+  ai_session_template: string;
+  ai_session_running: string;
+  /** The dashboard's group of sessions done within the week. */
+  ai_session_recent: string;
+  ai_session_waiting: (count: number) => string;
+  ai_sessions_archive_note: string;
+  ai_sessions_empty: string;
+  ai_sessions_more: string;
+  ai_sessions_back: string;
+  ai_no_model_title: string;
+  ai_no_model_text: string;
+  ai_no_model_action: string;
+  ai_session_menu: string;
+  ai_session_pin: string;
+  ai_session_unpin: string;
+  ai_session_rename: string;
+  ai_session_archive: string;
+  ai_session_unarchive: string;
+  ai_session_delete: string;
+  ai_session_delete_confirm: (title: string) => string;
+  ai_session_by_you: (when: string) => string;
+  ai_session_via_app: (client: string) => string;
+  /** An amount as `compactAmount` says it: «21», «1.2K». */
+  ai_session_tokens: (amount: string) => string;
+  ai_session_app_note: string;
+  ai_session_archived_note: string;
+  ai_session_model: string;
+  ai_steps: {
+    read: (count: number) => string;
+    search: (queries: string) => string;
+    list: string;
+    graph: string;
+    timeline: string;
+    tags: string;
+    digests: (count: number) => string;
+    proposed: (count: number) => string;
+    refused: (count: number) => string;
+    refused_hint: string;
+    files: string;
+    failed: (count: number) => string;
+  };
+  ai_question: string;
+  ai_question_own: string;
+  ai_notices: Record<
+    | 'stopped'
+    | 'timeout'
+    | 'interrupted'
+    | 'limit'
+    | 'no-model'
+    | 'key'
+    | 'busy'
+    | 'address'
+    | 'model'
+    | 'refused'
+    | 'length'
+    | 'turns'
+    | 'error',
+    string
+  >;
+  ai_notice_connection: string;
+  ai_comment_on: (what: string) => string;
+  ai_answer_to: (question: string) => string;
+  ai_composer_placeholder: string;
+  ai_composer_running: string;
+  ai_composer_attach: string;
+  ai_composer_files: { title: string; hint: string };
+  ai_composer_file_remove: string;
+  ai_composer_file_failed: string;
+  ai_composer_files_limit: (max: number) => string;
+  ai_composer_file_unnamed: string;
+  ai_composer_drop: string;
+  ai_message_file_gone: string;
+  ai_composer_mention: { title: string; hint: string };
+  ai_send: string;
+  ai_stop: string;
+  /** What the month's answers spent, under the list of sessions. */
+  ai_usage_title: (month: string) => string;
+  ai_usage_amount: (spent: string, limit: string) => string;
+  /** `average` as a number for its word, and as written short beside it. */
+  ai_usage_average: (average: number, averageText: string) => string;
+  ai_new_title: string;
+  ai_new_text: string;
+  /** The built-in checks' words: what each is called and asks. */
+  ai_template_builtins: Record<
+    import('../ai-template').AiBuiltinTemplateKey,
+    { title: string; instruction: string }
+  >;
+  ai_template_copy_title: (title: string) => string;
+  /** How a check's session opens: who started it, and how much it was given. */
+  ai_template_note: (title: string, count: number | null) => string;
+  ai_action_kinds: Record<AiActionKind, string>;
+  /** What a memory record is about when it is not one entity. */
+  ai_memory_owner: string;
+  /** The screen a text edit or another version is gone through on. */
+  ai_review_title: string;
+  ai_review_compare_title: (when: string) => string;
+  ai_review_compare_why: string;
+  ai_review_view: string;
+  ai_review_views: Record<import('../content-review').ReviewView, string>;
+  ai_review_kinds: Record<import('../content-review').ReviewPartKind, string>;
+  /** Where words outside the running text stand. */
+  ai_review_where: Record<'caption' | 'file' | 'link', string>;
+  ai_review_unsure: string;
+  ai_review_private: string;
+  ai_review_settled: Record<'applied' | 'stale', string>;
+  /** The words of each way through: an AI's edit, or another version. */
+  ai_review_modes: Record<
+    'ai' | 'version',
+    {
+      accept: string;
+      keep: string;
+      sure: string;
+      was: string;
+      will: string;
+      accepted: string;
+      kept: string;
+      apply: (count: number) => string;
+      finish: (decided: number, total: number) => string;
+      finish_hint: string;
+    }
+  >;
+  ai_review_finish_editor: string;
+  ai_review_close: string;
+  ai_review_go_on: string;
+  ai_review_undo: string;
+  ai_review_prev: string;
+  ai_review_next: string;
+  ai_review_words: (count: number) => string;
+  ai_review_blocks: (count: number) => string;
+  ai_review_unsure_count: (count: number) => string;
+  ai_review_all_decided: string;
+  ai_review_filters: Record<'all' | 'unsure' | 'words' | 'blocks', string>;
+  ai_review_gone: string;
+  ai_review_gone_taken: string;
+  /** A block's files in a line about it: how many, and their extensions. */
+  ai_review_files: (count: number, extensions: string) => string;
+  /** A block a part would bring, left out. */
+  ai_review_not_added: string;
+  ai_review_file_added: string;
+  ai_review_file_removed: string;
+  /** What changed in a block besides its words, in a few words each. */
+  ai_review_changes: {
+    type: (from: string, to: string) => string;
+    level: (from: number, to: number) => string;
+    style: (from: string, to: string) => string;
+    spoiler: (on: boolean) => string;
+    numbering: string;
+    checks: string;
+    markup: string;
+    alignment: string;
+    layout: string;
+    title: string;
+    caption: string;
+    files: string;
+    target: string;
+    note: string;
+    other: string;
+  };
+  /** Of a new order: how many blocks it moves. */
+  ai_review_moved: (count: number) => string;
+  /** Of a paragraph split: how many it becomes. */
+  ai_review_split_into: (count: number) => string;
+  ai_review_comment_placeholder: string;
+  ai_review_comment_sent: string;
+  ai_review_from_session: (title: string) => string;
+  ai_review_applied: (count: number) => string;
+  ai_review_taken: (count: number) => string;
+  ai_memory_search: string;
+  ai_memory_owner_hint: string;
+  ai_memory_owner_never: string;
+  ai_memory_chars: (count: number, max: number) => string;
+  ai_memory_terms: string;
+  ai_memory_terms_hint: string;
+  ai_memory_term_new: string;
+  ai_memory_term_exists: string;
+  ai_memory_term_add: string;
+  ai_memory_term_word: string;
+  ai_memory_term_note: string;
+  ai_memory_term_note_placeholder: string;
+  ai_memory_term_forms: string;
+  ai_memory_term_forms_placeholder: string;
+  ai_memory_term_keep: string;
+  ai_memory_term_keep_hint: string;
+  /** How many texts of the archive use a word, any form of it. */
+  ai_memory_term_uses: (count: number) => string;
+  ai_memory_term_remove: string;
+  ai_memory_kinds_title: string;
+  ai_memory_kinds_hint: string;
+  ai_memory_entities_title: string;
+  ai_memory_entities_hint: string;
+  /** What an entity is, after its name in the list. */
+  ai_memory_entity_kinds: Record<
+    Exclude<import('../ai').AiEntityType, 'profile'>,
+    string
+  >;
+  ai_memory_nothing: string;
+  ai_memory_by_you: string;
+  ai_memory_edit: string;
+  ai_memory_forget: string;
+  ai_memory_allow: string;
+  ai_memory_forgotten: string;
+  ai_memory_restore: string;
+  ai_offer_take: string;
+  ai_offer_in_session: string;
+  ai_offer_taken: string;
+  ai_offer_take_back: string;
+  ai_offer_chip: (label: string) => string;
+  /** The ✦ at a field's label: what an AI proposes for the field. */
+  ai_field_offers: (count: number) => string;
+  ai_field_offer_prev: string;
+  ai_field_offer_next: string;
+  ai_remember_title: string;
+  ai_remember_placeholder: string;
+  ai_remember_hint: string;
+  ai_remember_save: string;
+  ai_remember_saved: string;
+  ai_memory_block_title: string;
+  ai_memory_block_hint: (withIt: string) => string;
+  ai_memory_digest_fresh: (when: string) => string;
+  ai_memory_digest_stale: (when: string) => string;
+  ai_memory_parts: string;
+  ai_entity_this: {
+    profile: string;
+    project: string;
+    'project-section': string;
+    event: string;
+    'diary-entry': string;
+    page: string;
+    tag: string;
+  };
+  ai_entity_with: {
+    project: string;
+    'project-section': string;
+    event: string;
+    'diary-entry': string;
+    page: string;
+    tag: string;
+  };
+  ai_entity_menu: (it: string) => string;
+  ai_entity_new_session: (title: string) => string;
+  ai_entity_sessions: (count: number) => string;
+  ai_entity_no_sessions: string;
+  ai_entity_all_sessions: string;
+  ai_session_applied_count: (count: number) => string;
+  ai_form_outdated: string;
+  ai_form_outdated_hint: string;
+  ai_form_reload: string;
+  ai_sessions_about: string;
+  ai_sessions_about_clear: string;
+  ai_new_about: string;
+  ai_bar_new_plain: string;
+  ai_bar_waiting_title: (count: number) => string;
+  ai_bar_nothing_waits: string;
+  ai_bar_all_sessions: string;
+  ai_memory_open: string;
+  ai_memory_more: (count: number) => string;
+  ai_memory_cancel: string;
+  ai_memory_kinds: Record<
+    Exclude<import('../ai').AiEntityType, 'profile'>,
+    string
+  >;
+  ai_action_and: string;
+  ai_action_term_keep: string;
+  ai_action_facts: (count: number) => string;
+  ai_action_card_title: (count: number) => string;
+  ai_action_apply: string;
+  ai_action_apply_count: (count: number) => string;
+  ai_action_apply_sure: string;
+  ai_action_apply_final: string;
+  ai_action_reject: string;
+  ai_action_reject_all: string;
+  ai_action_comment: string;
+  ai_action_open: string;
+  ai_action_undo: string;
+  ai_action_restore: string;
+  ai_action_never: string;
+  ai_action_pick: string;
+  ai_action_unsure: string;
+  ai_action_applied: (by: string, when: string) => string;
+  ai_action_by: Record<'owner' | 'app', string>;
+  ai_action_states: Record<
+    | 'rejected'
+    | 'never'
+    | 'undone'
+    | 'stale'
+    | 'failed'
+    | 'superseded'
+    | 'applying',
+    string
+  >;
+  ai_action_undo_states: Record<
+    'changed' | 'gone' | 'final' | 'undone',
+    string
+  >;
+  ai_action_atomic_hint: string;
+  ai_action_unticked_hint: string;
+  ai_action_final_note: string;
+  ai_action_by_ai: string;
+  ai_action_corrections: (count: number) => string;
+  /** Links that lead nowhere, mended: the action, and how many. */
+  ai_action_relink: string;
+  ai_action_relinks: (count: number) => string;
+  /** A mended link in a review: what it led to is gone; no link after. */
+  ai_review_link_gone: string;
+  ai_review_link_off: string;
+  /** Words that lead nowhere yet, before a link is made of them. */
+  ai_review_link_none: string;
+  /** A mended link whose link leads elsewhere since. */
+  ai_review_link_changed: string;
+  ai_action_unsure_count: (count: number) => string;
+  ai_action_order: string;
+  ai_action_order_parts: (count: number) => string;
+  ai_action_relations: Record<'related' | 'depends-on' | 'affects', string>;
+  ai_action_relation_removed: string;
+  ai_action_write_modes: Record<'new' | 'append' | 'replace', string>;
+  ai_action_texts: Record<'body' | 'notes' | 'description' | 'about', string>;
+  /** Every field a form takes, as a change names it (`FORM_FIELDS`). */
+  ai_action_fields: Record<
+    | 'title'
+    | 'summary'
+    | 'reminder'
+    | 'showcase'
+    | 'cv'
+    | 'description'
+    | 'synonyms'
+    | 'slogan'
+    | 'statuses'
+    | 'actionText'
+    | 'access'
+    | 'slug'
+    | 'publicId'
+    | 'icon'
+    | 'banner'
+    | 'showcaseFiles'
+    | 'files'
+    | 'links'
+    | 'tags'
+    | 'relations'
+    | 'notes'
+    | 'sections'
+    | 'sectionOrder'
+    | 'private'
+    | 'periods'
+    | 'body'
+    | 'date'
+    | 'displayName'
+    | 'nickname'
+    | 'about'
+    | 'favicon',
+    string
+  >;
+  ai_action_flag: Record<'on' | 'off', string>;
+  ai_action_create: Record<
+    'project' | 'project-section' | 'event' | 'diary-entry' | 'page' | 'tag',
+    string
+  >;
+  ai_action_parts: Record<'sections' | 'tags' | 'relations', string>;
+  ai_action_access: Record<'public' | 'link-only' | 'private', string>;
+  ai_action_update_fields: (fields: string) => string;
+  ai_toast_declined: (count: number) => string;
+  ai_toast_never: string;
+  ai_toast_comment_sent: string;
+  ai_toast_answer_sent: string;
+  ai_toast_pinned: string;
+  ai_toast_unpinned: string;
+  ai_toast_undone: string;
+  ai_toast_restored: string;
+  ai_comment_label: string;
+  ai_comment_placeholder: string;
+  ai_comment_quick: [string, string];
+  ai_model_states: Record<
+    'ready' | 'off' | 'none' | 'no-key' | 'no-address' | 'no-model' | 'budget',
+    string
+  >;
+  ai_model_provider_label: string;
+  ai_model_provider_cards: Record<
+    'none' | 'api',
+    { title: string; text: string }
+  >;
+  ai_model_service_label: string;
+  /** Under a service that takes no sound: how its model meets recordings. */
+  ai_model_no_sound: string;
+  ai_model_service_choose: string;
+  ai_model_service_custom: string;
+  ai_model_service_local: (name: string) => string;
+  ai_model_service_missing: string;
+  ai_model_base_url: string;
+  ai_model_label: string;
+  ai_model_list_refresh: string;
+  ai_model_unlisted: string;
+  ai_model_choose: string;
+  ai_model_other: string;
+  ai_model_choice: string;
+  ai_model_id_placeholder: string;
+  ai_model_missing: string;
+  ai_model_address_invalid: string;
+  ai_model_key: string;
+  ai_model_key_placeholder: string;
+  ai_model_key_replace_placeholder: (hint: string) => string;
+  ai_model_key_remove: string;
+  ai_model_key_remove_confirm: string;
+  ai_model_key_where: string;
+  ai_model_key_optional: string;
+  ai_model_limit_label: string;
+  ai_model_limit_hint: string;
+  ai_model_limit_unit: string;
+  ai_model_limit_tokens: string;
+  ai_model_limit_tokens_link: string;
+  ai_model_limit_invalid: string;
+  ai_model_usage_line: (month: string, spent: string, limit: string) => string;
+  ai_model_average: (thousands: string) => string;
+  ai_model_check: string;
+  ai_model_check_outcomes: Record<
+    'ok' | 'key' | 'model' | 'address' | 'busy' | 'error',
+    string
+  >;
+  ai_bar_waiting: (count: number) => string;
+  ai_error: string;
+  ai_off_notice: string;
   x_sections: (count: number) => string;
 };

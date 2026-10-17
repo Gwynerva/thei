@@ -226,6 +226,8 @@ export default defineI18nModule({
       `Не используется: будет удалён после ${date}`,
     asset_library_in_history:
       'Не используется, но хранится, пока его показывает версия какого-то текста',
+    asset_library_held_by_ai:
+      'Не используется, но хранится, пока он нужен действию ИИ: ждущему вашего решения или такому, которое ещё можно отменить',
     asset_library_empty: 'Подходящих файлов нет',
     asset_library_unused: 'Неиспользуемые',
     asset_library_unused_hint:
@@ -236,8 +238,7 @@ export default defineI18nModule({
     asset_library_more: 'Показать ещё',
     asset_library_insert: 'Вставить выбранное',
     asset_library_usage: 'Где используется',
-    asset_library_places: (count) =>
-      `${count} ${plural(count, 'размещение', 'размещения', 'размещений')}`,
+    asset_used_elsewhere: 'Где ещё используется',
     asset_library_properties: 'Свойства файла',
     asset_library_settings: 'Как получен файл',
     asset_recipe_original: 'Сохранён как загружен',
@@ -259,15 +260,33 @@ export default defineI18nModule({
     asset_quality_high: 'Высокое',
     asset_quality_maximum: 'Максимальное',
     asset_quality_lossless: 'Без потерь',
-    asset_library_no_usage: 'Этот файл пока не используется.',
-    asset_library_refresh_preview: 'Обновить превью',
-    asset_library_refresh_preview_hint:
-      'Подбирает кадр, по которому видно видео, минуя чёрное или пустое начало.',
     asset_library_description:
       'Все загруженные файлы: где используется каждый, сколько весит и какие у него варианты.',
+    asset_description: 'Описание файла',
+    asset_description_hint:
+      'Что показано в файле или о чём он, в одном или нескольких предложениях: для поиска, для AI и для тех, кто его не видит. Одно на файл и все его варианты.',
+    asset_description_placeholder: 'Что это за файл?',
+    asset_description_global: 'Глобально',
+    asset_description_global_hint:
+      'Глобальное описание файла, даже если он будет показываться в других местах.',
+    asset_description_why:
+      'Пара предложений о том, о чём файл. По нему файл находят в поиске, его читают нейросети и те, кто файл не видит.',
+    asset_detach_hint: 'Убрать отсюда. Файл останется в хранилище.',
+    asset_here: 'Здесь',
+    asset_library_other_variants: 'Другие варианты',
+    asset_library_unused_line: 'Не используется',
+    asset_library_history_line: 'Только в истории текстов',
+    asset_library_held_by_ai_line: 'Только в действиях ИИ',
+    asset_open_place: (title) => `Открыть «${title}» в новой вкладке`,
+    asset_open_variant: 'Открыть этот вариант',
+    asset_description_save: 'Сохранить описание файла',
+    asset_description_saved: 'Описание файла сохранено',
+    asset_description_conflict:
+      'Его изменили в другом месте. Ваш текст остался в поле: сохраните ещё раз, и он заменит то, что там теперь.',
+    asset_description_too_long: (max) => `Не больше ${max} символов`,
+    asset_description_error: 'Не удалось сохранить описание файла.',
     asset_hash_check: 'Проверка файла',
     asset_hash_error: 'Не удалось проверить файл. Выберите его ещё раз.',
-    asset_hash_match: 'Этот файл уже загружен',
     asset_selection_type: 'Этот тип файла не подходит для поля.',
     asset_selection_size:
       'Размер варианта превышает ограничение. Создайте вариант меньшего размера.',
@@ -289,11 +308,11 @@ export default defineI18nModule({
     asset_role_action_icon: 'Иконка кнопки',
     asset_role_action_background: 'Фон кнопки',
     asset_role_action_file: 'Файл кнопки',
+    asset_role_ai_attachment: 'Принесён в сессию',
     asset_role_avatar: 'Аватар',
     asset_role_status: 'Статус',
     asset_source_profile: 'Профиль',
-    asset_library_view: 'Открыть сущность',
-    asset_library_edit: 'Редактировать сущность',
+    asset_source_ai_session: 'Сессия ИИ',
     site_settings: 'Настройки сайта',
     about_me: 'Обо мне',
     profile_name: 'Имя',
@@ -531,8 +550,6 @@ export default defineI18nModule({
     content_integration_youtube: 'Видео YouTube',
     public_details_links: 'Ссылки',
     public_details_files: 'Файлы',
-    public_details_manual: 'Вручную',
-    public_details_from_content: 'Из содержимого',
     public_details_overview: 'Сводка',
     public_details_contents: 'Содержание',
     public_project_description: 'Описание проекта',
@@ -644,6 +661,7 @@ export default defineI18nModule({
     sign_in_link_qr: 'QR-код ссылки для входа',
     copy: 'Копировать',
     copied: 'Скопировано',
+    quoted: (text) => `«${text}»`,
     share_links: 'Временный доступ',
     share_links_description:
       'Ссылки открывают эту страницу вместе со всем приватным и сами закрываются в срок.',
@@ -782,6 +800,187 @@ export default defineI18nModule({
     backup_history: 'Последние запуски',
     backup_run_summary: (files: number, size: string) =>
       `${files} файл(ов), ${size}`,
+    ai_access_on_hint:
+      'Включено: ИИ-приложения подключаются по ключам доступа, а в сессиях ' +
+      'может отвечать ваша модель. Выключите — и всё, что связано с ИИ, ' +
+      'исчезнет с сайта.',
+    ai_access_off_hint:
+      'Выключено: ни одно приложение не подключится, Thei не обращается к ' +
+      'модели, сессий и предложений не видно. Ключи и настройки сохраняются ' +
+      'до включения.',
+    api_token_create: 'Создать ключ',
+    api_token_label: 'Для чего он',
+    api_token_label_placeholder: 'Claude Code на ноутбуке',
+    api_token_label_required: 'Назовите ключ: для чего он.',
+    api_token_access: 'Доступ',
+    api_token_preset_reader: 'Читатель',
+    api_token_preset_reader_hint:
+      'Читает всё и оставляет предложения: вы принимаете их или нет. Сам ничего не меняет.',
+    api_token_preset_editor: 'Редактор',
+    api_token_preset_editor_hint:
+      'Может всё, что можете вы: создавать, править, загружать файлы, публиковать и удалять. Каждое изменение видно в его сессии, и его можно отменить; удаление не отменить.',
+    api_token_preset_custom: 'Особый',
+    api_token_empty: 'Ключей доступа пока нет',
+    api_token_never_used: 'Ещё не использовался',
+    api_token_last_used: 'Использовался',
+    api_token_revoke: 'Отозвать',
+    api_token_too_many:
+      'Слишком много ключей. Отзовите тот, что больше не нужен.',
+    api_token_shown_once:
+      'Скопируйте сейчас. Ключ показывается один раз и не читается обратно: ' +
+      'потерянный заменяют, а не восстанавливают.',
+    api_token_endpoint: 'Адрес',
+    api_token_connect_hint:
+      'Укажите приложению этот адрес и ключ — он передаётся в этом ' +
+      'заголовке. Как это делается в каждом приложении, сказано выше.',
+    ai_page: 'ИИ',
+    ai_page_description:
+      'Сессии с ИИ и его действия, что он помнит о вас, подключение приложений и модели.',
+    ai_tab_connection: 'Подключение',
+    ai_switch: 'ИИ в Thei',
+    ai_welcome:
+      'ИИ в Thei работает в сессиях: вы говорите с моделью или с ' +
+      'приложением об архиве, а оно читает, вычитывает тексты и предлагает ' +
+      'действия — связи, теги, заметки, правки. Без вас ничего не меняется; ' +
+      'что применил ключ Редактора, видно в его сессии и отменяется.',
+    ai_ways_facts: {
+      what: 'Что это',
+      how: 'Как',
+      pays: 'Кто платит',
+      rights: 'Права',
+    },
+    ai_ways_cards: {
+      app: {
+        title: 'ИИ-приложение работает с архивом',
+        what: 'Ваше ИИ-приложение читает архив и помогает с ним прямо в разговоре с вами.',
+        how: 'Thei выдаёт ключ доступа, и приложение подключается с ним.',
+        pays: 'Приложение — по вашей обычной подписке. Thei ничего не тратит.',
+        rights:
+          'Читатель только читает и предлагает. Редактор меняет сам; каждое изменение видно в его сессии и отменяется.',
+      },
+      model: {
+        title: 'Thei сам обращается к модели',
+        what: 'Модель отвечает в сессиях на этой странице: читает архив и предлагает действия, а применяете их вы.',
+        how: 'Нужен ключ API от сервиса, который даёт доступ к модели.',
+        pays: 'Вы — этому сервису, за каждый ответ. Расход ограничен лимитом на месяц.',
+        rights: 'Только читает и предлагает.',
+      },
+    },
+    api_tokens_title: 'Ключи доступа',
+    api_tokens_hint:
+      'У каждого приложения свой ключ; отозванный перестаёт работать сразу.',
+    ai_connect_title: 'Подключить приложение',
+    ai_connect_apps: {
+      claude: 'Claude',
+      chatgpt: 'ChatGPT',
+      'claude-code': 'Claude Code',
+      other: 'Другое',
+    },
+    ai_connect_steps: {
+      claude: [
+        'В Claude откройте Настройки → Коннекторы → «Добавить свой коннектор». Он появится и в приложениях для компьютера и телефона.',
+        'Вставьте адрес ниже и добавьте коннектор.',
+        'Откроется страница этого сайта: войдите, выберите права и разрешите.',
+      ],
+      chatgpt: [
+        'В ChatGPT включите режим разработчика: Настройки → Коннекторы → Дополнительно.',
+        'Создайте коннектор: адрес ниже, аутентификация — OAuth.',
+        'Откроется страница этого сайта: войдите, выберите права и разрешите.',
+      ],
+      'claude-code': [
+        'Выполните команду ниже в терминале.',
+        'В Claude Code наберите /mcp, выберите thei и «Authenticate» — откроется страница этого сайта. Или создайте ключ доступа ниже и добавьте его заголовок к команде через --header.',
+      ],
+      other: [
+        'Укажите приложению адрес ниже.',
+        'Если оно умеет входить по OAuth, оно само откроет страницу этого сайта. Если нет — создайте ключ доступа и передайте его в заголовке Authorization: Bearer.',
+      ],
+    },
+    ai_connect_no_sign_in:
+      'Входом это приложение не подключить: сайту нужен HTTPS. Подключите его по ключу доступа или включите HTTPS.',
+    ai_connect_proxy:
+      'Сайт открыт в подпапке: чтобы приложения нашли вход, перенаправьте на прокси',
+    api_token_signed_in: (client) => `подключено входом: ${client}`,
+    api_token_signed_in_verified: (client, host) =>
+      `Подключено входом: ${client}, опознано по описанию на ${host}`,
+    api_token_signed_in_unverified: (client) =>
+      `Подключено входом: ${client} — приложение назвалось само`,
+    oauth_consent: 'Подключение ИИ-приложения',
+    oauth_consent_title: (client, site) =>
+      `${client} просит доступ к «${site}»`,
+    oauth_verified: (host) => `Опознано по своему описанию на ${host}`,
+    oauth_unverified:
+      'Приложение назвалось само: его имя проверить нельзя. Разрешайте, только если подключение начали вы.',
+    oauth_redirect_web: (host) => `После ответа вы вернётесь на ${host}`,
+    oauth_redirect_elsewhere: (host) =>
+      `После ответа вы попадёте на ${host} — это не адрес приложения. Убедитесь, что так и должно быть.`,
+    oauth_redirect_loopback: (port) =>
+      `Ответ получит программа на этом компьютере (порт ${port}). Разрешайте, только если вы её только что запустили.`,
+    oauth_redirect_app: (scheme) => `Ответ откроет приложение (${scheme})`,
+    oauth_connections: (count) =>
+      `У этого приложения уже ${plural(count, 'подключение', 'подключения', 'подключений')}`,
+    oauth_rights: 'Права',
+    oauth_requested_edit:
+      'Приложение просит права Редактора. Можно дать меньше: оно увидит, что получило.',
+    oauth_allow: 'Разрешить',
+    oauth_deny: 'Отказать',
+    oauth_sign_in_needed:
+      'Войдите в панель сайта, чтобы ответить на этот запрос. После входа вы вернётесь сюда.',
+    oauth_gone:
+      'Этот запрос истёк или на него уже ответили. Начните подключение в приложении заново.',
+    oauth_returning: 'Возвращаю в приложение…',
+    oauth_refused_title: 'Подключение не начато',
+    oauth_refused: {
+      client: 'Сайт не знает приложения, которое попросило доступ.',
+      client_document:
+        'Описание приложения не удалось прочитать, или в нём ошибка.',
+      redirect_uri:
+        'Адрес, куда приложение просит вернуться, ему не принадлежит.',
+      request: 'Запрос на подключение составлен неверно.',
+    },
+    oauth_restart:
+      'Приложению ничего не отправлено. Начните подключение в нём заново; если не выйдет — подключите его по ключу доступа.',
+    api_token_history: 'Что делал',
+    api_token_history_empty: 'Этим ключом пока ничего не делали.',
+    ai_settings_link:
+      'ИИ-приложения и их ключи доступа, модель по ключу API и ваши правила ' +
+      'для ИИ — на странице «ИИ».',
+    ai_open_page: 'Открыть страницу ИИ',
+    ai_instructions_placeholder:
+      'Сленг пишу намеренно. Названия проектов не трогать.',
+    ai_check: 'Проверить ключ доступа',
+    ai_check_enabled_ok: 'ИИ в Thei включён',
+    ai_check_handshake_ok: (_version: string) => 'ИИ-приложения подключаются',
+    ai_check_handshake_fail: 'ИИ-приложения не могут подключиться',
+    ai_check_tools_ok: (count: number) => `Инструментов для ИИ: ${count}`,
+    ai_check_tools_fail: 'ИИ-приложения не видят инструментов',
+    ai_check_read_ok: (projects: number, events: number, diary: number) =>
+      `Сайт читается: проектов ${projects}, событий ${events}, записей дневника ${diary}`,
+    ai_check_read_fail: 'Инструмент не может прочитать сайт',
+    ai_check_public_ok:
+      'Публичный адрес отвечает снаружи и просит ключ доступа',
+    ai_check_public_fail: (status: number) =>
+      `Публичный адрес ответил ${status}: проверьте, что прокси пропускает /api/mcp`,
+    ai_check_public_warn:
+      'Сайт не смог достучаться до своего публичного адреса; клиенты снаружи всё равно могут его видеть',
+    ai_check_https_ok: 'Адрес работает по HTTPS',
+    ai_check_https_warn:
+      'Адрес не HTTPS: Claude Code с ключом доступа работает, а коннекторам ' +
+      'claude.ai и ChatGPT нужен HTTPS',
+    ai_check_https_skip: 'Локальный адрес: HTTPS здесь не нужен',
+    ai_check_signin_ok: 'Приложения находят вход по OAuth',
+    ai_check_signin_fail: (where) =>
+      `Вход по OAuth не находится по адресу ${where}: для сайта в подпапке нужно правило прокси`,
+    ai_check_signin_https:
+      'Входа по OAuth нет: сайту нужен HTTPS. Подключение по ключу доступа работает',
+    ai_check_clients_ok: (label: string, client: string) =>
+      `Последнее подключение: «${label}»${client ? `, ${client}` : ''}`,
+    ai_check_clients_warn: 'С этим ключом ещё никто не подключался',
+    entity_changed_since:
+      'С тех пор как форму открыли, это изменилось — в другой вкладке или через ИИ. Обновите страницу, чтобы не затереть те изменения.',
+    api_token_revoke_confirm: (label: string) =>
+      `Отозвать ключ «${label}»? Приложение с ним сразу потеряет доступ.`,
+    api_token_last_client: (client: string) => `через ${client}`,
     admin_updates: 'Обновления',
     updates_description:
       'Поддерживайте Thei в актуальном состоянии. Обновление заменяет движок ' +
@@ -957,15 +1156,17 @@ export default defineI18nModule({
       `Это название уже служит синонимом тега «${tag}».`,
     tag_synonym_taken: (synonym, tag) =>
       `«${synonym}» уже называет тег «${tag}».`,
-    tag_synonyms: 'Синонимы',
+    synonyms: 'Синонимы',
+    synonyms_hint:
+      'Другие имена, под которыми это известно: сокращение, прозвище, название на другом языке. Любой поиск находит по ним; видны они только вам.',
+    synonyms_placeholder: 'Добавить синоним…',
+    synonyms_limit: (limit) =>
+      `Не больше ${plural(limit, 'синонима', 'синонимов', 'синонимов')}.`,
+    synonym_remove: (synonym) => `Убрать синоним «${synonym}»`,
+    synonym_suggestion_add: (word) => `Добавить синоним «${word}»`,
     tag_synonyms_hint:
       'Другие слова, по которым узнаётся тег: в текстах проектов и событий и в поле добавления тегов. Формы слова учитываются сами. Синонимы видны только вам.',
-    tag_synonyms_placeholder: 'Добавить синоним…',
-    tag_synonyms_limit: (limit) =>
-      `Не больше ${plural(limit, 'синонима', 'синонимов', 'синонимов')}.`,
-    tag_synonym_remove: (synonym) => `Убрать синоним «${synonym}»`,
     tag_synonym_suggestions: 'Часто встречается в записях с этим тегом',
-    tag_synonym_suggestion_add: (word) => `Добавить синоним «${word}»`,
     tag_synonym_found_in: 'Встречается в',
     tag_synonym_already_added: (synonym, tag) =>
       `«${synonym}» — синоним тега «${tag}», и он уже добавлен.`,
@@ -1147,11 +1348,9 @@ export default defineI18nModule({
     content_editor_placeholder: 'Начните писать...',
     content_editor_save_error: 'Не удалось сохранить контент.',
     content_editor_title: 'Редактор контента',
-    content_editor_clear_confirm: 'Очистить весь контент в редакторе?',
     content_never_saved: 'Не было сохранено',
     content_history: 'История версий',
-    content_history_empty:
-      'Версий пока нет. Они появляются по ходу работы и хранятся двое суток.',
+    content_history_empty: 'Версий пока нет.',
     content_history_unavailable: 'История версий сейчас недоступна.',
     content_history_load_error: 'Не удалось загрузить эту версию.',
     content_history_opened_version: 'Как при открытии',
@@ -1167,6 +1366,7 @@ export default defineI18nModule({
       cleared: 'Сохранённое до очистки',
       deleted: 'Удалённый текст',
       abandoned: 'Брошенный черновик',
+      'before-ai': 'До правки ИИ',
     },
     content_history_row_label: (time, changes) =>
       `Версия от ${time}: ${changes}`,
@@ -1176,23 +1376,22 @@ export default defineI18nModule({
         : `${value}, на ${Math.abs(delta)} ${delta < 0 ? 'меньше' : 'больше'}, чем сейчас`,
     content_history_missing_assets: (count) =>
       `Из этой версии уже удалено: ${plural(count, 'файл', 'файла', 'файлов')}`,
-    content_history_back: 'К списку версий',
-    content_restore: 'Восстановить',
-    content_restore_cancel: 'Отмена',
-    content_diff_removed: 'Пропадёт',
-    content_diff_added: 'Появится',
-    content_diff_changed: 'Изменится',
-    content_diff_before: 'Сейчас',
-    content_diff_after: 'Станет',
-    content_restore_title: (time) => `Версия от ${time}`,
-    content_restore_keeps_current: 'Текущий текст останется в истории.',
     content_restore_same: 'Эта версия совпадает с текущим текстом.',
-    content_restored: (label) => `Восстановлено: ${label}`,
+    content_taken_from: (label) => `Взято: ${label}`,
     content_restore_undo: 'Вернуть как было',
-    content_draft_offer: (time) => `Несохранённый черновик от ${time}`,
     content_draft_dismiss: 'Отклонить черновик (он останется в истории версий)',
-    content_draft_chip: (time) => `Черновик · ${time}`,
     content_draft_status_offline_short: 'Нет связи',
+    content_draft_offline_hint:
+      'Текст хранится в этом браузере и уйдёт на сервер сам, когда связь вернётся. Закрывать окно можно.',
+    content_draft_notice: (time) => `Черновик из другой вкладки · ${time}`,
+    content_draft_notice_hint:
+      'Не сохранён. Сравните и возьмите нужное — ваш текст останется как есть.',
+    content_draft_compare: 'Сравнить',
+    content_stored_notice: (time) => `Сохранено на другом устройстве · ${time}`,
+    content_stored_notice_hint:
+      'Пока вы писали, текст сохранили там. Сравните и возьмите нужное оттуда — ваш текст останется как есть.',
+    content_history_keeps:
+      'Версии хранятся двое суток, правки ИИ — пока жива их сессия.',
     content_draft_status_synced: (time) => `Черновик сохранён · ${time}`,
     content_draft_status_offline: 'Нет связи — хранится в браузере',
     content_draft_status_refused_short: 'Не сохраняется',
@@ -1201,9 +1400,7 @@ export default defineI18nModule({
     content_field_unsaved_draft: (time) => `Несохранённый черновик · ${time}`,
     sign_out_unsynced_confirm: (count) =>
       `Ещё не на сервере: ${plural(count, 'текст', 'текста', 'текстов')}. Если выйти сейчас, они пропадут. Всё равно выйти?`,
-    content_internal_link: 'Внутренняя ссылка',
     content_external_link: 'Внешняя ссылка',
-    content_link_url: 'Адрес ссылки',
     content_link_loading: 'Загрузка данных ссылки…',
     content_link_broken_title: 'Ссылка недоступна',
     content_link_broken_description:
@@ -1225,9 +1422,6 @@ export default defineI18nModule({
       checklist: 'Чекбоксовый',
       quote: 'Цитата',
       delimiter: 'Разделитель',
-      media: 'Медиа',
-      gallery: 'Галерея',
-      audio: 'Аудио',
       file: 'Файл',
       enter_quote: 'Введите цитату',
       enter_caption: 'Введите подпись',
@@ -1255,12 +1449,24 @@ export default defineI18nModule({
     content_add_media: 'Добавить изображение или видео',
     content_choose_file: 'Выбрать файл',
     content_choose_audio: 'Выбрать аудио',
-    content_audio_as_player: 'Показать плеером',
-    content_audio_as_file: 'Показать файлом',
+    content_show_as_player: 'Показать плеером',
+    content_show_as_file: 'Показать файлом',
+    content_show_as_picture: 'Показать картинкой',
     content_choose_entity: 'Выбрать, на что ссылаться',
     content_make_gallery: 'Сделать галереей',
-    content_link_internal_detected:
-      'Это адрес страницы этого сайта — ссылка будет сохранена как внутренняя.',
+    content_make_file_group: 'Сделать группой',
+    content_file_group_title: 'Название группы',
+    content_gallery_title: 'Название галереи',
+    content_add_files: 'Добавить файлы',
+    content_remove_file: 'Убрать из группы',
+    content_move_file: 'Переставить',
+    content_upload_as_file: 'Загрузить как файл',
+    content_file_skipped: (name, reason) =>
+      reason === 'extension'
+        ? `«${name}» не добавлен: у файла нет расширения`
+        : reason === 'empty'
+          ? `«${name}» не добавлен: файл пустой`
+          : `«${name}» не добавлен: он больше 500 МБ`,
     content_link_fragment: 'Ведёт к этому месту страницы',
     content_link_fragment_remove: 'Ссылаться на страницу целиком',
     content_caption: 'Подпись',
@@ -1291,6 +1497,7 @@ export default defineI18nModule({
     clear: 'Очистить',
     delete: 'Удалить',
     close_modal: 'Закрыть окно',
+    modal_waiting: 'Загрузка…',
     done: 'Готово',
     public_link: (entityName) => `Ссылка на ${entityName.toLowerCase()}`,
     human_readable_url: 'Читаемая часть URL',
@@ -1399,6 +1606,7 @@ export default defineI18nModule({
     other_add: 'Добавить файл',
     other_details: 'Детали файла',
     other_description: 'Описание',
+    asset_pick_title: 'Выбор файла',
     asset_pick_upload: 'Загрузить',
     asset_pick_reuse: 'Переиспользовать',
     asset_pick_reuse_hint: 'Выбрать ранее загруженное',
@@ -1414,23 +1622,55 @@ export default defineI18nModule({
     file_wrong_type: (ext) => `Неподдерживаемый тип файла: .${ext}!`,
     file_too_large: (size) => `Файл слишком большой: ${size}!`,
     direct_link_to_asset: 'Прямая ссылка на файл',
+    download_asset: 'Скачать',
+    file_preview_shown_part: (shown: string, total: string) =>
+      `Показано ${shown} из ${total}. Скачайте файл, чтобы прочитать его целиком.`,
+    file_preview_rows_shown: (count: number) =>
+      `Показаны первые ${plural(count, 'строка', 'строки', 'строк')}. Остальные — в файле.`,
+    file_preview_too_large:
+      'Файл слишком большой, чтобы показать его здесь. Скачайте его.',
+    file_preview_failed: 'Не удалось прочитать файл. Скачайте его.',
+    file_preview_no_pdf:
+      'Этот браузер не показывает PDF внутри страницы. Скачайте файл.',
+    file_preview_page: 'Содержимое файла',
+    archive_summary: (files: number, size: string) =>
+      `${plural(files, 'файл', 'файла', 'файлов')}, ${size}`,
+    archive_packed: (size: string) => `в архиве ${size}`,
+    archive_more: (count: number) =>
+      `И ещё ${plural(count, 'файл', 'файла', 'файлов')}`,
+    archive_partial: 'В архиве больше файлов, чем удалось перечислить.',
+    archive_back: 'Назад к архиву',
+    archive_root: 'Архив',
+    archive_name: 'Имя',
+    archive_size: 'Размер',
+    archive_files: (count: number) => plural(count, 'файл', 'файла', 'файлов'),
+    archive_levels: 'Папки до этой',
+    archive_entry_download: 'Скачать этот файл',
+    archive_entry_nested: 'Архив внутри архива откроется после скачивания',
+    asset_zoom: 'Масштаб',
+    archive_entry_locked: 'Файл зашифрован',
+    archive_entry_unavailable: 'Этот файл здесь не открыть',
+    archive_entry_too_large: (size: string) =>
+      `Здесь открываются файлы до ${size}`,
     asset_previous: 'Предыдущий файл',
     asset_next: 'Следующий файл',
     asset_pager: (position: number, count: number) => `${position} из ${count}`,
     asset: 'Файл',
-    upload_variants: 'Варианты файла',
-    pick_another_file: 'Выбрать другой файл',
+    upload_how: 'Как взять файл',
+    upload_as_is: 'Как есть',
+    upload_saved_variant: 'Сохранённый вариант',
+    upload_saved_count: (count) => `В хранилище: ${count}`,
+    upload_new_variant: 'Новый вариант',
+    upload_new_variant_hint: 'Обрезать, сжать, сменить формат',
+    upload_new_audio_hint: 'Сжать, сделать моно',
+    upload_new_zip_hint: 'Упаковать в ZIP',
+    upload_other_file_hint: 'Загрузить или переиспользовать',
+    upload_next: 'Далее',
+    upload_back: 'Назад',
+    upload_skip_description: 'Продолжить без описания файла',
     upload_replace_with_new_file: 'Другой файл',
-    upload_replace_with_new_file_hint:
-      'Можно загрузить новый файл или взять уже загруженный.',
-    upload_section_selected_file: 'Выбранный файл',
     upload_section_family: 'Сохраненные варианты',
-    upload_section_create: 'Создать вариант',
     upload_section_zip: 'Создать ZIP-вариант',
-    upload_use: 'Использовать результат',
-    upload_use_variant: 'Выбрать этот вариант',
-    upload_searching: 'Ищу...',
-    upload_no_matches: 'Сохраненных вариантов пока нет',
     upload_apply_settings: 'Создать вариант',
     upload_processing: 'Обработка...',
     upload_queued: 'Ожидание в очереди...',
@@ -1478,7 +1718,6 @@ export default defineI18nModule({
     upload_error_network: 'Ошибка сети.',
     upload_error_cancelled: 'Загрузка отменена.',
     upload_error_request_failed: (status) => `Запрос не удался (${status})`,
-    upload_use_unchanged: 'Использовать как есть',
     upload_crop: 'Обрезка',
     upload_crop_area: 'Область обрезки',
     upload_crop_handle: 'Изменить размер обрезки',
@@ -1579,6 +1818,700 @@ export default defineI18nModule({
     og_pages_headline: (count) =>
       `${plural(count, 'текст', 'текста', 'текстов')} вне хронологии`,
     og_image_alt: (kind, title, site) => `${kind} «${title}» — ${site}`,
+    ai_tab_sessions: 'Сессии',
+    ai_tab_memory: 'Память',
+    ai_tab_templates: 'Шаблоны',
+    ai_templates_title: 'Шаблоны сессий',
+    ai_templates_hint:
+      'Готовые просьбы к ИИ — здесь, в новой сессии и в каждом ✦.',
+    ai_templates_column_template: 'Шаблон',
+    ai_templates_column_last: 'Последний запуск',
+    ai_templates_builtin_section: 'Встроенные шаблоны',
+    ai_templates_own_section: 'Ваши шаблоны',
+    ai_templates_own_empty: 'Своих шаблонов пока нет.',
+    ai_templates_new: 'Новый',
+    ai_templates_presets: 'Шаблоны',
+    ai_template_open: 'Открыть в новой сессии',
+    ai_open_full: 'На странице ИИ',
+    select_filter: 'Фильтр',
+    content_link: 'Ссылка',
+    content_link_search_placeholder: 'Поиск или ссылка',
+    content_link_mention_placeholder: 'Что упомянуть',
+    content_link_search: 'Поиск',
+    content_link_path: 'Куда ведёт ссылка',
+    content_link_place: 'Куда внутри',
+    content_link_whole: (kind) =>
+      ({
+        project: 'Весь проект',
+        'project-section': 'Весь раздел',
+        event: 'Всё событие',
+        'diary-entry': 'Вся запись',
+        page: 'Вся страница',
+        tag: 'Весь тег',
+      })[kind],
+    content_link_headings: 'Заголовки',
+    content_link_description_headings: 'Заголовки описания',
+    content_link_sections: 'Разделы',
+    content_link_anchor_gone: (anchor) =>
+      `§ ${anchor} — этого заголовка больше нет`,
+    content_link_target_gone: 'Ссылка вела туда, чего больше нет.',
+    content_link_becomes_video: 'Станет блоком видео',
+    content_link_apply: 'Готово',
+    content_link_change: 'Изменить ссылку',
+    content_block_add: 'Добавить блок',
+    content_block_settings: 'Настройки блока. Потяните, чтобы переместить',
+    content_block_toolbox: 'Блоки',
+    ai_template_run: 'Проверить новое в архиве',
+    ai_template_nothing_new: (title) => `«${title}»: нового для проверки нет`,
+    ai_template_nothing_here: (title) => `«${title}»: здесь нечего проверять`,
+    ai_template_edit: 'Настроить',
+    ai_template_running: 'идёт сейчас',
+    ai_template_never_run: 'ещё не запускался',
+    ai_template_started: (title) => `Сессия «${title}» начата`,
+    ai_template_saved: 'Шаблон сохранён',
+    ai_template_deleted: 'Шаблон удалён',
+    ai_template_copied: 'Копия сделана — теперь это ваша заготовка',
+    ai_template_modal_title: 'Шаблон',
+    ai_template_modal_new: 'Новый шаблон',
+    ai_template_name: 'Название',
+    ai_template_name_placeholder: 'Например, «Неделя путешествия»',
+    ai_template_instruction: 'Запрос',
+    ai_template_instruction_placeholder:
+      'Что сделать модели — как сказали бы человеку. Например: «Посмотри эту запись и скажи, чего в ней не хватает…»',
+    ai_template_sessions: 'Сессии этого шаблона',
+    ai_template_copy: 'Сделать копию',
+    ai_template_delete: 'Удалить шаблон',
+    ai_template_delete_confirm: (title) =>
+      `Удалить шаблон «${title}»? Его сессии останутся.`,
+    ai_sessions_search: 'Найти сессию',
+    ai_sessions_filter: 'Какие сессии',
+    ai_sessions_filters: {
+      all: 'Все сессии',
+      waiting: 'Ждут вас',
+      applied: 'С применённым',
+      rejected: 'С отклонённым',
+      app: 'Из приложений',
+      template: 'Из шаблонов',
+    },
+    ai_session_new: 'Новая сессия',
+    ai_session_groups: {
+      pinned: 'Закреплённые',
+      waiting: 'Ждут вас',
+      running: 'Работают',
+      week: 'На этой неделе',
+      earlier: 'Раньше',
+      archive: 'Архив',
+    },
+    ai_session_untitled: 'Новая сессия',
+    ai_session_you: 'Вы',
+    ai_session_template: 'Шаблон',
+    ai_session_running: 'Работает',
+    ai_session_recent: 'Недавно завершены',
+    ai_session_waiting: (count) => `Ждут решения: ${count}`,
+    ai_sessions_archive_note: 'Старше 30 дней удаляются',
+    ai_sessions_empty: 'Сессий пока нет',
+    ai_sessions_more: 'Показать ещё',
+    ai_sessions_back: 'К сессиям',
+    ai_no_model_title: 'Модель не настроена',
+    ai_no_model_text:
+      'Здесь разговаривает модель из «Подключения»: модель сервиса по ключу API или своя, в Ollama и LM Studio. Сессии приложений через MCP — ниже.',
+    ai_no_model_action: 'Настроить',
+    ai_session_menu: 'Сессия',
+    ai_session_pin: 'Закрепить',
+    ai_session_unpin: 'Открепить',
+    ai_session_rename: 'Переименовать',
+    ai_session_archive: 'В архив',
+    ai_session_unarchive: 'Вернуть из архива',
+    ai_session_delete: 'Удалить',
+    ai_session_delete_confirm: (title) =>
+      `Удалить сессию «${title}»? Применённое останется, но отменить его отсюда будет нельзя.`,
+    ai_session_by_you: (when) => `Начата вами · ${when}`,
+    ai_session_via_app: (client) => `${client} через MCP`,
+    ai_session_tokens: (amount) =>
+      // «1,2 тыс.» is followed by «токенов» whatever the number.
+      /^\d+$/.test(amount)
+        ? plural(Number(amount), 'токен', 'токена', 'токенов')
+        : `${amount} токенов`,
+    ai_session_app_note:
+      'Здесь — то, что приложение предложило и применило. Сам разговор остался в приложении: писать ему — там.',
+    ai_session_archived_note: 'Сессия в архиве: писать в неё нельзя',
+    ai_session_model: 'Модель',
+    ai_steps: {
+      read: (count) =>
+        `прочитал ${plural(count, 'сущность', 'сущности', 'сущностей')}`,
+      search: (queries) => `искал ${queries}`,
+      list: 'смотрел список',
+      graph: 'смотрел граф связей',
+      timeline: 'смотрел хронологию',
+      tags: 'подбирал теги',
+      digests: (count) =>
+        `пролистал ${plural(count, 'сущность', 'сущности', 'сущностей')}`,
+      proposed: (count) => `предложил ${plural(count, 'раз', 'раза', 'раз')}`,
+      refused: (count) =>
+        `${plural(count, 'предложение отсеяно', 'предложения отсеяны', 'предложений отсеяно')}`,
+      refused_hint:
+        'Код не пропустил их к вам: так уже есть, такое уже ждёт вашего решения или вы недавно от него отказались.',
+      files: 'работал с файлами',
+      failed: (count) =>
+        `${plural(count, 'вызов отклонён', 'вызова отклонены', 'вызовов отклонено')}`,
+    },
+    ai_question: 'Вопрос',
+    ai_question_own: 'Свой ответ…',
+    ai_notices: {
+      stopped: 'Остановлено вами.',
+      timeout: 'Остановлено: слишком долго.',
+      interrupted: 'Прервано перезапуском сайта.',
+      limit:
+        'Месячный лимит исчерпан. Сессия продолжится в следующем месяце или когда вы поднимете лимит.',
+      'no-model': 'Модель для ответа не настроена.',
+      key: 'Сервис не принял ключ API.',
+      busy: 'Сервис занят — попробуйте позже.',
+      address: 'Сервис не отвечает по своему адресу.',
+      model: 'Сервис не знает такой модели.',
+      refused: 'Модель отказалась отвечать.',
+      length: 'Оборвано: ответу не хватило места.',
+      turns: 'Остановлено: слишком много шагов.',
+      error: 'Что-то пошло не так.',
+    },
+    ai_notice_connection: 'Подключение',
+    ai_comment_on: (what) => `К действию: ${what}`,
+    ai_answer_to: (question) => `Ответ: ${question}`,
+    ai_composer_placeholder: 'Что сделать?',
+    ai_composer_running: 'Можно дописать — модель учтёт',
+    ai_composer_attach: 'Прикрепить',
+    ai_composer_files: {
+      title: 'Фото или файл',
+      hint: 'Можно и вставить, и перетащить сюда',
+    },
+    ai_composer_file_remove: 'Убрать файл',
+    ai_composer_file_failed: 'Не загрузился',
+    ai_composer_files_limit: (max) =>
+      `В одном сообщении — не больше ${max} файлов`,
+    ai_composer_file_unnamed:
+      'У файла нет расширения — по нему сайт узнаёт, что это',
+    ai_composer_drop: 'Отпустите, чтобы приложить',
+    ai_message_file_gone: 'Файл удалён',
+    ai_composer_mention: {
+      title: 'Запись, проект, событие',
+      hint: 'То же, что @ в тексте',
+    },
+    ai_send: 'Отправить',
+    ai_stop: 'Остановить',
+    ai_usage_title: (month) => `Токены за ${month}`,
+    ai_usage_amount: (spent, limit) => `${spent} из ${limit}`,
+    ai_usage_average: (average, averageText) =>
+      `Ответ модели обычно стоит ${averageText} ${
+        // «1,2 тыс.» is followed by «токенов» whatever the number.
+        average >= 1000
+          ? 'токенов'
+          : plural(average, 'токен', 'токена', 'токенов', false)
+      }`,
+    ai_new_title: 'О чём поговорим?',
+    ai_new_text:
+      'Спросите про архив, попросите оформить, вычитать или навести порядок. ИИ предложит действия — ничего не изменится, пока вы не примете.',
+    ai_template_builtins: {
+      proofread: {
+        title: 'Ошибки в тексте',
+        instruction:
+          'Найди и исправь очевидные ошибки в тексте. Если есть сомнения, прокомментируй и предоставь выбор мне. Только то, что ещё не было вычитано или изменилось с тех пор.\n\n' +
+          'Не исправляй авторский стиль подачи текста и мат. Ты проверяешь правильность написания текста, а не «корректность», «красоту», «лаконичность» и другие субъективные критерии!',
+      },
+      describe: {
+        title: 'Описания файлов',
+        instruction:
+          'Добавь описания для файлов, у которых их нет. При составлении описания анализируй не только сам файл, но и контекст мест, в которых он используется (родительская сущность, подписи, окружающий текст и т. д.).\n\n' +
+          'Если нет уверенности или описание для файла составить не получается по любой причине, сообщай мне.',
+      },
+      links: {
+        title: 'Битые ссылки',
+        instruction:
+          'Найди сломанные внутренние ссылки. Для каждой разбери, в чем проблема поломки: целевая сущность была удалена, целевой заголовок был удален или изменен и так далее.\n\n' +
+          'Попытайся исправить ситуацию и найти уверенную замену с сохранением сути ссылки. Крайняя мера — убрать ссылку совсем.',
+      },
+      graph: {
+        title: 'Связи и ссылки между сущностями',
+        instruction:
+          'Проанализируй связи и ссылки между проектами, событиями и записями дневника.\n\n' +
+          'Предложи недостающие связи и удаление слабых — тех, у которых нет достаточного обоснования.\n\n' +
+          'Ищи в текстах упоминания других сущностей без ссылки и, если сильно уверен, что ссылка нужна, предлагай её — в том числе на разделы проектов и на конкретные заголовки. Явно ошибочные или лишние ссылки предлагай удалить.',
+      },
+      tags: {
+        title: 'Аудит тегов',
+        instruction:
+          'Проверь теги: каким сущностям нужно добавить подходящие теги или убрать лишние, какие теги создать, а какие удалить, и какие синонимы добавить тегам.\n\n' +
+          'Создание или удаление тега — только с уверенным обоснованием и примерами сущностей, которых это коснётся.',
+      },
+    },
+    ai_template_copy_title: (title) => `${title} (копия)`,
+    ai_template_note: (title, count) =>
+      count === null
+        ? `«${title}» — запущено вами`
+        : `«${title}» — запущено вами · к проверке: ${count}`,
+    ai_action_kinds: {
+      update: 'Изменить',
+      field: 'Поле',
+      periods: 'Даты',
+      tags: 'Теги',
+      relation: 'Связь',
+      note: 'В заметки',
+      access: 'Доступ',
+      write: 'Текст',
+      revise: 'Правка текста',
+      create: 'Создать',
+      delete: 'Удалить',
+      remember: 'Запомнить',
+      term: 'В словарь',
+      'memory-compact': 'Сжать память',
+      describe: 'Описание файла',
+    },
+    ai_memory_owner: 'О вас',
+    ai_review_title: 'Правка текста',
+    ai_review_compare_title: (when) => `Сравнение · ${when}`,
+    ai_review_compare_why:
+      'Сравнение с текстом в этом окне. Возьмите всё или только нужное — остальное останется как сейчас. Взятое ляжет в текст окна; сохраните, как обычно.',
+    ai_review_view: 'Вид правки',
+    ai_review_views: {
+      read: 'Чтение',
+      diff: 'Было и стало',
+      list: 'Список',
+    },
+    ai_review_kinds: {
+      spelling: 'Орфография',
+      grammar: 'Грамматика',
+      punctuation: 'Пунктуация',
+      case: 'Заглавная буква',
+      'missing-letter': 'Пропущенная буква',
+      link: 'Ссылка',
+      changed: 'Блок изменён',
+      added: 'Новый блок',
+      removed: 'Блок уходит',
+      heading: 'Новый заголовок',
+      delimiter: 'Разделитель',
+      removal: 'Повтор убран',
+      split: 'Абзац разделён',
+      order: 'Новый порядок',
+    },
+    ai_review_where: {
+      caption: 'в подписи',
+      file: 'в названии или подписи файла',
+      link: 'в заметке к ссылке',
+    },
+    ai_review_unsure: 'на ваше решение',
+    ai_review_private: 'приватная часть',
+    ai_review_settled: {
+      applied: 'Уже в тексте',
+      stale: 'Этих слов в тексте уже нет',
+    },
+    ai_review_modes: {
+      ai: {
+        accept: 'Принять',
+        keep: 'Оставить как было',
+        sure: 'Принять уверенные правки',
+        was: 'Было',
+        will: 'Будет',
+        accepted: 'Принято',
+        kept: 'Как было',
+        apply: (count) => `Применить · ${count}`,
+        finish: (decided, total) => `Решено ${decided} из ${total}`,
+        finish_hint:
+          'Принятое ляжет в текст сейчас — прежний останется в истории версий. Нерешённое подождёт в сессии.',
+      },
+      version: {
+        accept: 'Взять',
+        keep: 'Оставить как сейчас',
+        sure: 'Взять всё',
+        was: 'Сейчас',
+        will: 'Там',
+        accepted: 'Взято',
+        kept: 'Как сейчас',
+        apply: (count) => `Взять · ${count}`,
+        finish: (decided, total) => `Отмечено ${decided} из ${total}`,
+        finish_hint:
+          'Взятое ляжет в текст окна; остальное останется как сейчас.',
+      },
+    },
+    ai_review_finish_editor:
+      'Принятое ляжет в текст окна; сохраните, как обычно. Нерешённое подождёт в сессии.',
+    ai_review_close: 'Закрыть',
+    ai_review_go_on: 'Продолжить',
+    ai_review_undo: 'Отменить решение',
+    ai_review_prev: 'Предыдущая',
+    ai_review_next: 'Следующая',
+    ai_review_words: (count) =>
+      plural(count, 'правка слов', 'правки слов', 'правок слов'),
+    ai_review_blocks: (count) =>
+      plural(count, 'правка блоков', 'правки блоков', 'правок блоков'),
+    ai_review_unsure_count: (count) => `${count} на ваше решение`,
+    ai_review_all_decided: 'всё решено',
+    ai_review_filters: {
+      all: 'Все',
+      unsure: 'На ваше решение',
+      words: 'Слова',
+      blocks: 'Блоки',
+    },
+    ai_review_gone: 'Блок уйдёт',
+    ai_review_gone_taken: 'Блок убран',
+    ai_review_files: (count, extensions) =>
+      count === 1
+        ? extensions
+          ? `Файл ${extensions}`
+          : 'Файл'
+        : `${plural(count, 'файл', 'файла', 'файлов')}${extensions ? `: ${extensions}` : ''}`,
+    ai_review_not_added: 'Блок не добавлен',
+    ai_review_file_added: 'Новый файл',
+    ai_review_file_removed: 'Файл уходит',
+    ai_review_changes: {
+      type: (from, to) => (from && to ? `${from} → ${to}` : 'Другой вид блока'),
+      level: (from, to) => `Уровень заголовка ${from} → ${to}`,
+      style: (from, to) => `Список: ${from} → ${to}`,
+      spoiler: (on) => (on ? 'Спрятан под спойлер' : 'Спойлер снят'),
+      numbering: 'Нумерация списка',
+      checks: 'Отметки в списке',
+      markup: 'Оформление слов',
+      alignment: 'Выравнивание цитаты',
+      layout: 'Размер на странице',
+      title: 'Название',
+      caption: 'Подпись',
+      files: 'Файлы',
+      target: 'Куда ведёт',
+      note: 'Заметка к ссылке',
+      other: 'Настройки блока',
+    },
+    ai_review_moved: (count) =>
+      `Переставит ${plural(count, 'блок', 'блока', 'блоков')}`,
+    ai_review_split_into: (count) =>
+      `Разделится на ${plural(count, 'абзац', 'абзаца', 'абзацев')}`,
+    ai_review_comment_placeholder: 'Что сделать иначе?',
+    ai_review_comment_sent:
+      'Комментарий в сессии: модель пришлёт новую версию правки.',
+    ai_review_from_session: (title) =>
+      title ? `Из сессии «${title}»` : 'Из сессии',
+    ai_review_applied: (count) =>
+      `В тексте ${plural(count, 'правка', 'правки', 'правок')}`,
+    ai_review_taken: (count) =>
+      `Взято ${plural(count, 'часть', 'части', 'частей')}`,
+    ai_memory_search: 'Найти в памяти — слово, имя, проект',
+    ai_memory_owner_hint:
+      'Любая модель — на сайте или в приложении — читает это в каждой сессии: как вы пишете, что не трогать, что для вас важно.',
+    ai_memory_owner_never: 'Больше не предлагать нигде',
+    ai_memory_chars: (count, max) => `${count} из ${max} знаков`,
+    ai_memory_terms: 'Словарь',
+    ai_memory_terms_hint:
+      'Имена, места, ваши слова. Модель читает слово, когда оно есть в тексте; слово «не исправлять» вычитка оставляет как есть.',
+    ai_memory_term_new: 'Имя, место или ваше слово',
+    ai_memory_term_exists: 'Такое слово уже есть в словаре.',
+    ai_memory_term_add: 'Добавить в словарь',
+    ai_memory_term_word: 'Слово',
+    ai_memory_term_note: 'Что это',
+    ai_memory_term_note_placeholder: 'Например: брат; архипелаг в Белом море',
+    ai_memory_term_forms: 'Другие формы',
+    ai_memory_term_forms_placeholder: 'Через запятую: на Кузова, на Кузовах',
+    ai_memory_term_keep: 'Не исправлять',
+    ai_memory_term_keep_hint: 'Вычитка оставит слово так, как оно написано',
+    ai_memory_term_uses: (count) =>
+      count
+        ? `в ${count} ${plural(count, 'тексте', 'текстах', 'текстах', false)}`
+        : 'пока нигде',
+    ai_memory_term_remove: 'Убрать из словаря',
+    ai_memory_kinds_title: 'Общие правила',
+    ai_memory_kinds_hint:
+      'Не про что-то одно, а про всё такое сразу: все записи дневника, все проекты, все файлы. Например: «Все записи дневника: теги не предлагать». Модель держится правила, когда работает с любым из них.',
+    ai_memory_entities_title: 'У сущностей',
+    ai_memory_entities_hint:
+      'Модель читает это вместе с сущностью. То же видно в её форме.',
+    ai_memory_entity_kinds: {
+      project: 'проект',
+      'project-section': 'раздел проекта',
+      event: 'событие',
+      'diary-entry': 'запись дневника',
+      page: 'страница',
+      tag: 'тег',
+      asset: 'файл',
+    },
+    ai_memory_nothing: 'Пока ничего.',
+    ai_memory_by_you: 'вы',
+    ai_memory_edit: 'Изменить',
+    ai_memory_forget: 'Забыть',
+    ai_memory_allow: 'Снова можно предлагать',
+    ai_memory_forgotten: 'Забыто',
+    ai_memory_restore: 'Вернуть',
+    ai_offer_take: 'Принять — поле заполнится, сохраните форму',
+    ai_offer_in_session: 'Открыть в сессии',
+    ai_offer_taken: 'Взято в форму — сохраните её',
+    ai_offer_take_back: 'Отменить',
+    ai_offer_chip: (label) => `Предложено ИИ: ${label}`,
+    ai_field_offers: (count) =>
+      count === 1 ? 'Предложение ИИ' : `Предложения ИИ: ${count}`,
+    ai_field_offer_prev: 'Предыдущее предложение',
+    ai_field_offer_next: 'Следующее предложение',
+    ai_remember_title: 'Запомнить',
+    ai_remember_placeholder:
+      'Что модели знать об этом? Например: «маршрут больше не секрет»',
+    ai_remember_hint:
+      'Модель прочитает это, только когда будет работать с этим.',
+    ai_remember_save: 'Запомнить',
+    ai_remember_saved: 'Запомнено',
+    ai_memory_block_title: 'Что помнит ИИ',
+    ai_memory_block_hint: (withIt) =>
+      `Модель читает это, только когда работает с ${withIt}.`,
+    ai_memory_digest_fresh: (when) =>
+      `Так модель коротко помнит это · по версии от ${when}; изменится — перепишет`,
+    ai_memory_digest_stale: (when) =>
+      `Написано по версии от ${when}; с тех пор изменилось — модель перепишет при следующем чтении`,
+    ai_memory_parts: 'И у частей:',
+    ai_entity_this: {
+      profile: 'ваш профиль',
+      project: 'этот проект',
+      'project-section': 'этот раздел',
+      event: 'это событие',
+      'diary-entry': 'эта запись',
+      page: 'эта страница',
+      tag: 'этот тег',
+    },
+    ai_entity_with: {
+      project: 'этим проектом',
+      'project-section': 'этим разделом',
+      event: 'этим событием',
+      'diary-entry': 'этой записью',
+      page: 'этой страницей',
+      tag: 'этим тегом',
+    },
+    ai_entity_menu: (it) => `ИИ и ${it}`,
+    ai_entity_new_session: (title) => `Новая сессия о «${title}»`,
+    ai_entity_sessions: (count) => `Сессии · ${count}`,
+    ai_entity_no_sessions: 'Сессий о нём ещё не было',
+    ai_entity_all_sessions: 'Все сессии о нём',
+    ai_session_applied_count: (count) => `Применено: ${count}`,
+    ai_form_outdated: 'Изменено в сессии ИИ, пока форма открыта',
+    ai_form_outdated_hint:
+      'Обновите форму: сохранить поверх изменения не получится.',
+    ai_form_reload: 'Обновить',
+    ai_sessions_about: 'Только о',
+    ai_sessions_about_clear: 'Показать все сессии',
+    ai_new_about: 'О чём:',
+    ai_bar_new_plain: 'Новая сессия без привязки',
+    ai_bar_waiting_title: (count) => `Ждут вас · ${count}`,
+    ai_bar_nothing_waits: 'Ничего не ждёт вашего решения.',
+    ai_bar_all_sessions: 'Все сессии',
+    ai_memory_open: 'Открыть',
+    ai_memory_more: (count) => `Ещё ${count}`,
+    ai_memory_cancel: 'Отмена',
+    ai_memory_kinds: {
+      project: 'Все проекты',
+      'project-section': 'Все разделы проектов',
+      event: 'Все события',
+      'diary-entry': 'Все записи дневника',
+      page: 'Все страницы',
+      tag: 'Все теги',
+      asset: 'Все файлы',
+    },
+    ai_action_and: 'и',
+    ai_action_term_keep: 'Не исправлять',
+    ai_action_facts: (count) => plural(count, 'факт', 'факта', 'фактов'),
+    ai_action_card_title: (count) => `Действия · ${count}`,
+    ai_action_apply: 'Применить',
+    ai_action_apply_count: (count) => `Применить · ${count}`,
+    ai_action_apply_sure: 'Принять уверенные части',
+    ai_action_apply_final: 'Применить — окончательно',
+    ai_action_reject: 'Отклонить',
+    ai_action_reject_all: 'Отклонить все',
+    ai_action_comment: 'Комментировать',
+    ai_action_open: 'Открыть',
+    ai_action_undo: 'Отменить',
+    ai_action_restore: 'Вернуть к решению',
+    ai_action_never: 'Больше не предлагать',
+    ai_action_pick: 'Включить в применение',
+    ai_action_unsure: 'На ваше решение.',
+    ai_action_applied: (by, when) => `Применено ${by} · ${when}`,
+    ai_action_by: { owner: 'вами', app: 'приложением' },
+    ai_action_states: {
+      rejected: 'Отклонено',
+      never: 'Не предлагать',
+      undone: 'Отменено',
+      stale: 'Устарело: изменилось после предложения',
+      failed: 'Не применилось:',
+      superseded: 'Заменено новой версией',
+      applying: 'Применяется…',
+    },
+    ai_action_undo_states: {
+      changed: 'С тех пор изменено: отмена сняла бы и это',
+      gone: 'С тех пор удалено',
+      final: 'Отменить нельзя',
+      undone: 'Уже отменено',
+    },
+    ai_action_atomic_hint:
+      'Проверятся вместе; при сбое ничего не останется наполовину',
+    ai_action_unticked_hint: 'Без галочки — отклонятся',
+    ai_action_final_note: 'Удаление окончательное — отменить нельзя',
+    ai_action_by_ai: 'написано ИИ',
+    ai_action_corrections: (count) =>
+      plural(count, 'правка', 'правки', 'правок'),
+    ai_action_unsure_count: (count) => `${count} на решение`,
+    ai_action_order: 'Новый порядок',
+    ai_action_order_parts: (count) => plural(count, 'часть', 'части', 'частей'),
+    ai_action_relink: 'Починка ссылок',
+    ai_action_relinks: (count) => plural(count, 'ссылка', 'ссылки', 'ссылок'),
+    ai_review_link_gone: 'то, куда она вела, удалено',
+    ai_review_link_off: 'без ссылки, слова остаются',
+    ai_review_link_none: 'без ссылки',
+    ai_review_link_changed: 'Ссылка ведёт уже в другое место',
+    ai_action_relations: {
+      related: 'Связаны',
+      'depends-on': 'зависит от',
+      affects: 'влияет на',
+    },
+    ai_action_relation_removed: 'Связь убрать',
+    ai_action_write_modes: {
+      new: 'Новый текст',
+      append: 'Дописать',
+      replace: 'Переписать',
+    },
+    ai_action_texts: {
+      body: 'текст',
+      notes: 'заметки',
+      description: 'описание',
+      about: 'о себе',
+    },
+    ai_action_fields: {
+      title: 'Название',
+      summary: 'Суть',
+      reminder: 'Напоминание',
+      showcase: 'Витрина',
+      cv: 'Резюме',
+      description: 'Описание',
+      synonyms: 'Синонимы',
+      slogan: 'Слоган',
+      statuses: 'Статусы',
+      actionText: 'Текст кнопки',
+      access: 'Доступ',
+      slug: 'Адрес',
+      publicId: 'Публичный ID',
+      icon: 'Иконка',
+      banner: 'Баннер',
+      showcaseFiles: 'Файлы витрины',
+      files: 'Файлы',
+      links: 'Ссылки',
+      tags: 'Теги',
+      relations: 'Связи',
+      notes: 'Заметки',
+      sections: 'Разделы',
+      sectionOrder: 'Порядок разделов',
+      private: 'Приватный',
+      periods: 'Даты',
+      body: 'Текст',
+      date: 'День',
+      displayName: 'Имя',
+      nickname: 'Псевдоним',
+      about: 'Обо мне',
+      favicon: 'Иконка сайта',
+    },
+    ai_action_flag: { on: 'да', off: 'нет' },
+    ai_action_create: {
+      project: 'Создать проект',
+      'project-section': 'Создать раздел',
+      event: 'Создать событие',
+      'diary-entry': 'Создать запись',
+      page: 'Создать страницу',
+      tag: 'Создать тег',
+    },
+    ai_action_parts: {
+      sections: 'Разделы',
+      tags: 'Теги',
+      relations: 'Связи',
+    },
+    ai_action_access: {
+      public: 'Публичный',
+      'link-only': 'По ссылке',
+      private: 'Приватный',
+    },
+    ai_action_update_fields: (fields) => `Изменить: ${fields}`,
+    ai_toast_declined: (count) =>
+      count === 1 ? 'Отклонено' : `Отклонено: ${count}`,
+    ai_toast_never: 'Больше не предложит',
+    ai_toast_comment_sent: 'Отправлено — модель ответит новой версией',
+    ai_toast_answer_sent: 'Ответ отправлен — модель продолжит',
+    ai_toast_pinned: 'Закреплена — останется наверху и не уйдёт в архив',
+    ai_toast_unpinned: 'Откреплена',
+    ai_toast_undone: 'Отменено',
+    ai_toast_restored: 'Возвращено к решению',
+    ai_comment_label: 'Комментарий',
+    ai_comment_placeholder: 'Что изменить?',
+    ai_comment_quick: ['Другой вариант', 'Почему так?'],
+    ai_model_states: {
+      ready: 'работает',
+      off: 'ИИ в Thei выключен',
+      none: 'модель не настроена',
+      'no-key': 'нет ключа API',
+      'no-address': 'не указан адрес API',
+      'no-model': 'не указана модель',
+      budget: 'лимит на месяц исчерпан',
+    },
+    ai_model_provider_label: 'Кто отвечает в сессиях',
+    ai_model_provider_cards: {
+      none: {
+        title: 'Только мои ИИ-приложения',
+        text: 'Здесь не отвечает никакая модель: свои сессии оставляют ваши приложения через MCP, по вашей подписке.',
+      },
+      api: {
+        title: 'Модель по ключу API',
+        text: 'Thei сам обращается к выбранному сервису; оплата — по факту, на счёт ключа.',
+      },
+    },
+    ai_model_service_label: 'Сервис',
+    ai_model_no_sound:
+      'Claude видит картинки, PDF и тексты, но не слышит звук: о записи или о звуке видео ему только скажут, что их не удалось показать.',
+    ai_model_service_choose: 'Выберите сервис',
+    ai_model_service_custom: 'Свой адрес…',
+    ai_model_service_local: (name) => `${name} — на вашем компьютере`,
+    ai_model_service_missing: 'Выберите сервис.',
+    ai_model_base_url: 'Адрес API',
+    ai_model_label: 'Модель',
+    ai_model_list_refresh: 'Обновить список моделей',
+    ai_model_unlisted:
+      'Сервис не дал списка моделей — впишите название вручную.',
+    ai_model_choose: 'Выберите модель',
+    ai_model_other: 'Другая…',
+    ai_model_choice: 'Модель сессии',
+    ai_model_id_placeholder: 'Название модели',
+    ai_model_missing: 'Укажите модель.',
+    ai_model_address_invalid:
+      'Адрес API должен начинаться с http:// или https://.',
+    ai_model_key: 'Ключ API',
+    ai_model_key_placeholder: 'Вставьте ключ API',
+    ai_model_key_replace_placeholder: (hint) =>
+      `Задан ключ …${hint}. Вставьте новый, чтобы заменить`,
+    ai_model_key_remove: 'Удалить ключ',
+    ai_model_key_remove_confirm:
+      'Удалить ключ API? Модель перестанет отвечать, пока вы не вставите новый.',
+    ai_model_key_where: 'Где взять ключ API',
+    ai_model_key_optional: 'Модели на вашем компьютере ключ не нужен.',
+    ai_model_limit_label: 'Лимит в месяц',
+    ai_model_limit_hint:
+      'Исчерпав лимит, Thei не обращается к модели до следующего месяца. ' +
+      'Деньги считает сервис — задайте предел расходов и у него.',
+    ai_model_limit_unit: 'млн токенов',
+    ai_model_limit_tokens:
+      'Токен — единица расхода модели: примерно слог прочитанного или ' +
+      'написанного. Прочитанное из кеша считается за десятую часть — ' +
+      'примерно столько оно и стоит.',
+    ai_model_limit_tokens_link: 'Что такое токены?',
+    ai_model_limit_invalid: 'Лимит — число миллионов больше нуля.',
+    ai_model_usage_line: (month, spent, limit) =>
+      `${month}: ${spent} из ${limit} млн токенов`,
+    ai_model_average: (thousands) =>
+      `Ответ в среднем ≈ ${thousands} тыс. токенов`,
+    ai_model_check: 'Проверить',
+    ai_model_check_outcomes: {
+      ok: 'работает',
+      key: 'ключ API не подошёл',
+      model: 'модель не найдена',
+      address: 'адрес не отвечает',
+      busy: 'провайдер занят, попробуйте позже',
+      error: 'ошибка',
+    },
+    ai_bar_waiting: (count) => (count ? `ИИ: ждут вас — ${count}` : 'ИИ'),
+    ai_error: 'Не получилось. Попробуйте ещё раз.',
+    ai_off_notice: 'ИИ в Thei выключен.',
     x_sections: (count) => plural(count, 'раздел', 'раздела', 'разделов'),
   },
 });

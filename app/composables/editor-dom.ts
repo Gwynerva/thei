@@ -15,3 +15,53 @@ export function editorBlockOf(
   const block = target.closest<HTMLElement>(EDITOR_BLOCK_SELECTOR);
   return block && root.contains(block) ? block : undefined;
 }
+
+/**
+ * The block a button of Editor.js's toolbar stands beside: the one level
+ * with its middle, or the nearest. Read from where the button is, not from
+ * what the pointer last crossed, which can be a block gone since. Between
+ * two about as near, `prefer`, the block of the caret, is the one.
+ *
+ * On a phone the toolbar stands below its block instead, in the gap before
+ * the next one, and reaches over that one's top, which its middle may be
+ * level with: there it is the caret's block's, Editor.js opening it for no
+ * other, or else the last block that begins above it.
+ */
+export function editorBlockNextTo(
+  root: HTMLElement,
+  element: HTMLElement,
+  prefer?: HTMLElement,
+): HTMLElement | undefined {
+  const box = element.getBoundingClientRect();
+  if (root.dataset.contentEditorLayout === 'mobile') {
+    if (prefer?.dataset.id && root.contains(prefer)) return prefer;
+    let above: HTMLElement | undefined;
+    for (const block of root.querySelectorAll<HTMLElement>(
+      EDITOR_BLOCK_SELECTOR,
+    )) {
+      if (!block.dataset.id) continue;
+      if (block.getBoundingClientRect().top >= box.top) break;
+      above = block;
+    }
+    return above;
+  }
+  const y = box.top + box.height / 2;
+  let nearest: { block: HTMLElement; distance: number } | undefined;
+  for (const block of root.querySelectorAll<HTMLElement>(
+    EDITOR_BLOCK_SELECTOR,
+  )) {
+    if (!block.dataset.id) continue;
+    const rect = block.getBoundingClientRect();
+    const distance =
+      y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+    if (!nearest || distance < nearest.distance) nearest = { block, distance };
+    if (distance === 0) break;
+  }
+  if (prefer && nearest && prefer !== nearest.block && root.contains(prefer)) {
+    const rect = prefer.getBoundingClientRect();
+    const distance =
+      y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+    if (distance <= nearest.distance + 2) return prefer;
+  }
+  return nearest?.block;
+}

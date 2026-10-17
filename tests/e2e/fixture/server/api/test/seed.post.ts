@@ -89,12 +89,14 @@ export default defineEventHandler(async (event) => {
         .run();
   });
   // The sites the link specs point at, stored as though they had been read,
-  // so that no spec waits on the network. The last one never answered.
+  // so that no spec waits on the network. silent.example never answered.
   const sites = [
     ['https://noted.example/', 'Noted site', 'complete'],
     ['https://listed.example/', 'Listed site', 'complete'],
     ['https://block.example/', 'Block site', 'complete'],
     ['https://silent.example/', 'silent.example', 'fallback'],
+    // The video the link picker's spec makes a block of.
+    ['https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'A video', 'complete'],
   ] as const;
   for (const [url, title, status] of sites)
     upsertExternalLink({

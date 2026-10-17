@@ -1,7 +1,6 @@
 import type {
   PublicFile,
   PublicReferenceLink,
-  PublicReferenceSplit,
   PublicReferences,
   PublicSecretReference,
 } from './api/public';
@@ -21,53 +20,30 @@ export function publicReferenceLinkKey(link: PublicReferenceLink): string {
 }
 
 /**
- * Splits two reference lists into what both of them hold and what only one
- * does.
- *
- * Two copies of one item become one through `merge`, which starts from the
- * first of them — inside one list, the earlier copy; across the lists, the
- * manual one. When `merge` finds the two would say different things it
- * returns nothing: inside a list the earlier copy stands, and across the
- * lists each stays in its own.
+ * One list with every item once. Two copies of one item become one through
+ * `merge`, which starts from the earlier copy; when `merge` finds the two
+ * would say different things it returns nothing, and both stay.
  */
-export function splitPublicReferences<T>(
-  manual: T[],
-  content: T[],
+export function uniquePublicReferences<T>(
+  items: T[],
   key: (item: T) => string,
   merge: (first: T, second: T) => T | undefined = (item) => item,
-): PublicReferenceSplit<T> {
-  const unique = (items: T[]) => {
-    const byKey = new Map<string, T>();
-    for (const item of items) {
-      const itemKey = key(item);
-      const kept = byKey.get(itemKey);
-      byKey.set(
-        itemKey,
-        kept === undefined ? item : (merge(kept, item) ?? kept),
-      );
+): T[] {
+  const kept: { key: string; item: T }[] = [];
+  for (const item of items) {
+    const itemKey = key(item);
+    let merged = false;
+    for (const entry of kept) {
+      if (entry.key !== itemKey) continue;
+      const both = merge(entry.item, item);
+      if (both === undefined) continue;
+      entry.item = both;
+      merged = true;
+      break;
     }
-    return byKey;
-  };
-  const contentItems = unique(content);
-  const split: PublicReferenceSplit<T> = {
-    shared: [],
-    manual: [],
-    content: [],
-  };
-  const merged = new Set<string>();
-  for (const [itemKey, item] of unique(manual)) {
-    const twin = contentItems.get(itemKey);
-    const shared = twin === undefined ? undefined : merge(item, twin);
-    if (shared === undefined) {
-      split.manual.push(item);
-      continue;
-    }
-    split.shared.push(shared);
-    merged.add(itemKey);
+    if (!merged) kept.push({ key: itemKey, item });
   }
-  for (const [itemKey, item] of contentItems)
-    if (!merged.has(itemKey)) split.content.push(item);
-  return split;
+  return kept.map((entry) => entry.item);
 }
 
 /**
@@ -86,35 +62,23 @@ export function mergePublicReferenceLinks(
   return note ? { ...first, note } : first;
 }
 
-export function splitPublicReferenceLinks(
-  manual: PublicReferenceLink[],
-  content: PublicReferenceLink[],
-) {
-  return splitPublicReferences(
-    manual,
-    content,
+export function uniquePublicReferenceLinks(links: PublicReferenceLink[]) {
+  return uniquePublicReferences(
+    links,
     publicReferenceLinkKey,
     mergePublicReferenceLinks,
   );
 }
 
-export function splitPublicReferenceFiles(
-  manual: (PublicFile | PublicSecretReference)[],
-  content: (PublicFile | PublicSecretReference)[],
+export function uniquePublicReferenceFiles(
+  files: (PublicFile | PublicSecretReference)[],
   fileIdentity: (file: PublicFile) => string = (file) => file.key,
 ) {
-  return splitPublicReferences(manual, content, (file) =>
+  return uniquePublicReferences(files, (file) =>
     isPublicSecret(file) ? `secret:${file.key}` : `file:${fileIdentity(file)}`,
   );
 }
 
-export function publicReferenceSplitSize(split: PublicReferenceSplit<unknown>) {
-  return split.shared.length + split.manual.length + split.content.length;
-}
-
 export function emptyPublicReferences(): PublicReferences {
-  return {
-    links: { shared: [], manual: [], content: [] },
-    files: { shared: [], manual: [], content: [] },
-  };
+  return { links: [], files: [] };
 }

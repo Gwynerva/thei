@@ -200,7 +200,7 @@ test.describe('on a desktop', () => {
   }) => {
     // The toolbox's way: Editor.js reads the fields of a placeholder, and the
     // caption appears only once a picture is chosen.
-    await page.getByRole('button', { name: 'Insert media' }).click();
+    await page.getByRole('button', { name: 'Insert file' }).click();
     await page.getByRole('button', { name: 'Choose picture' }).click();
     const id = await page
       .locator('.codex-editor .ce-block')
@@ -314,11 +314,14 @@ test.describe('on a desktop', () => {
     await page.keyboard.press('Enter');
     expect(await blockAfter(page, 'gallery')).toEqual(NEW_PARAGRAPH);
 
-    // From the block itself, Tab reaches the first tile, and Enter is its own.
+    // From the block itself, Tab reaches its title, then the first tile, and
+    // Enter is the tile's own.
     const point = await besideBlock(gallery);
     await page.mouse.click(point.x, point.y);
     await expectCurrent(page, 'gallery');
     const count = await blockCount(page);
+    await page.keyboard.press('Tab');
+    await expect(gallery.locator('[data-gallery-title]')).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(tiles.nth(0)).toBeFocused();
     await page.keyboard.press('Enter');
@@ -733,6 +736,8 @@ test.describe('on a phone, by touch', () => {
     await gallery.evaluate((item) => (item as HTMLElement).focus());
     const count = await blockCount(page);
     await page.keyboard.press('Tab');
+    await expect(gallery.locator('[data-gallery-title]')).toBeFocused();
+    await page.keyboard.press('Tab');
     await expect(tiles.nth(0)).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(tiles.nth(0)).toHaveAttribute('aria-pressed', 'true');
@@ -928,7 +933,7 @@ test.describe('in the text editor of a page', () => {
       '.ce-popover--opened [data-item-name="contentBold"]',
     );
     const link = page.locator(
-      '.ce-popover--opened [data-item-name="contentExternalInlineLink"]',
+      '.ce-popover--opened [data-item-name="contentLink"]',
     );
     await expect(link).toBeVisible();
 
@@ -959,7 +964,7 @@ test.describe('in the text editor of a page', () => {
     await expect(first.locator('b, strong')).toHaveCount(0);
 
     await link.click();
-    const address = page.locator('dialog input[inputmode="url"]');
+    const address = page.locator('dialog [data-link-field]');
     await expect(address).toBeFocused();
     await address.fill('https://example.com/');
     await page.keyboard.press('Enter');
@@ -986,11 +991,9 @@ test.describe('in the text editor of a page', () => {
     await openEditor(page, 'typed-link');
     await selectEnd(page, 'world'.length);
     await page
-      .locator(
-        '.ce-popover--opened [data-item-name="contentExternalInlineLink"]',
-      )
+      .locator('.ce-popover--opened [data-item-name="contentLink"]')
       .click();
-    const address = page.locator('dialog input[inputmode="url"]');
+    const address = page.locator('dialog [data-link-field]');
     await expect(address).toBeFocused();
 
     // Typed without a pause: one read, of the whole address, while the field
@@ -1015,7 +1018,7 @@ test.describe('in the text editor of a page', () => {
     await expect(
       page.locator('dialog').getByText('Stubbed /pasted'),
     ).toBeVisible();
-    await expect(address).toHaveValue('https://example.com/pasted');
+    await expect(address).toHaveValue('https://EXAMPLE.com/pasted');
     await expect(address).toBeFocused();
     expect(reads).toEqual([
       'https://example.com/about',
@@ -1051,10 +1054,10 @@ test.describe('in the text editor of a page', () => {
     ]);
     await selectEnd(page, name.length);
     await page
-      .locator('.ce-popover--opened [data-item-name="contentEntityLink"]')
+      .locator('.ce-popover--opened [data-item-name="contentLink"]')
       .click();
 
-    const search = page.locator('dialog input[type="search"]');
+    const search = page.locator('dialog [data-link-field]');
     const options = page.locator('dialog [role="option"]');
     await expect(search).toBeFocused();
     await expect(search).toHaveValue('');
@@ -1087,19 +1090,20 @@ test.describe('in the text editor of a page', () => {
       editorBlocks(page).last().locator('[contenteditable]'),
     ).toBeFocused();
     await page.waitForTimeout(300);
-    await page.keyboard.type('/');
+    // The grid of blocks opens from the "+" beside the block, the first
+    // tile focused; the arrows go to the heading, and Enter puts it in place
+    // of the empty paragraph. A "/" is only typed.
+    await editorBlocks(page).last().hover();
+    await page.locator('dialog .ce-toolbar__plus').click();
+    const tiles = page.locator('dialog [data-block-tile]');
+    await expect(tiles.first()).toBeFocused();
+    await page.keyboard.press('ArrowRight');
     await expect(
-      page.locator('.ce-popover--opened .ce-popover-item').first(),
-    ).toBeVisible();
-    for (let step = 0; step < 10; step++) {
-      await page.keyboard.press('ArrowDown');
-      const name = await page
-        .locator('.ce-popover--opened .ce-popover-item--focused')
-        .getAttribute('data-item-name');
-      if (name === 'header') break;
-    }
+      page.locator('dialog [data-block-tile="header:0"]'),
+    ).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(editorBlocks(page).last().locator('.ce-header')).toBeVisible();
+    await expect(tiles).toHaveCount(0);
     expect(await editorBlocks(page).count()).toBe(count);
 
     // The settings of a block, from the keyboard: opening them selects the
@@ -1130,6 +1134,26 @@ test.describe('in the text editor of a page', () => {
       viewport: { width: 375, height: 812 },
       hasTouch: true,
       isMobile: true,
+    });
+
+    test('the settings button opens the settings of its own block, not of the one under it', async ({
+      page,
+    }) => {
+      // The toolbar stands in the gap below its block and reaches over the
+      // top of the next one, the divider.
+      await openEditor(page, 'phone-settings');
+      const first = editorBlocks(page).first();
+      await first.locator('[contenteditable="true"]').tap();
+      const settings = page.locator('dialog .ce-toolbar__settings-btn');
+      await expect(settings).toBeVisible();
+      await settings.tap();
+      await expect(
+        page.locator('.ce-settings .ce-popover--opened .ce-popover__container'),
+      ).toBeVisible();
+      await expect(first).toHaveClass(/ce-block--selected/);
+      await expect(editorBlocks(page).nth(1)).not.toHaveClass(
+        /ce-block--selected/,
+      );
     });
 
     for (const width of [375, 320]) {

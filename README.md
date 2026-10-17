@@ -110,8 +110,9 @@ bun run format
 
 The engine is consumed as a Nuxt layer from `node_modules/thei`, installed in
 place over sites that already hold real content. [AGENTS.md](AGENTS.md) collects
-the rules that follow from that — migrations, file storage, boot, styling — and
-is worth reading before a first change.
+the rules that follow from that — migrations, file storage, boot — and is worth
+reading before a first change. How the interface looks and behaves is written
+down in the [design documentation](docs/design/README.md).
 
 ## License
 

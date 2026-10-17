@@ -4,8 +4,10 @@ import type { ContentAssetData } from '#layers/thei/shared/content';
 
 /**
  * A recording in a text: its title, the player, and a caption under it, as
- * a picture has one. The title and caption are plain text, as a file's are,
- * so the block turns into a file and back without losing a word.
+ * a picture has one. The title is plain text and the caption takes markup,
+ * as a file's do, so the block turns into a file and back without losing a
+ * word. As a row of a group's list it has no frame of its own, and its
+ * caption is a line of the row.
  */
 const props = withDefaults(
   defineProps<{
@@ -16,6 +18,7 @@ const props = withDefaults(
     editLabel?: string;
     titlePlaceholder?: string;
     captionPlaceholder?: string;
+    listed?: boolean;
   }>(),
   {
     title: '',
@@ -24,6 +27,7 @@ const props = withDefaults(
     editLabel: '',
     titlePlaceholder: '',
     captionPlaceholder: '',
+    listed: false,
   },
 );
 
@@ -47,10 +51,19 @@ const shownTitle = computed(() => publicText(props.title));
 </script>
 
 <template>
-  <figure class="min-w-0" data-content-audio>
+  <!-- Alone, the recording has a frame and its caption stands under it; as a
+       row of a list, the caption is a line of the row. -->
+  <figure
+    class="min-w-0"
+    :class="{ 'flex flex-col gap-xs p-xs sm:px-sm': listed }"
+    data-content-audio
+  >
     <div
-      class="audio-card flex min-w-0 flex-col gap-xs rounded-normal border
-        border-border-1 bg-bg-2 p-xs text-text-1 sm:px-sm"
+      class="flex min-w-0 flex-col gap-xs text-text-1"
+      :class="{
+        'audio-card rounded-normal border border-border-1 p-xs sm:px-sm':
+          !listed,
+      }"
     >
       <div
         v-if="editable || shownTitle"
@@ -108,20 +121,17 @@ const shownTitle = computed(() => publicText(props.title));
         :title="shownTitle || undefined"
         :download="!editable"
       />
+      <p v-if="!editable && asset.alt" class="sr-only" data-audio-alt>
+        {{ publicText(asset.alt) }}
+      </p>
     </div>
-    <ContentPlainTextField
-      v-if="editable"
+    <ContentCaption
       :model-value="caption"
-      :editable="true"
+      :editable
       :placeholder="captionPlaceholder"
-      class="mt-xs min-h-6 w-full text-sm text-text-2 outline-none
-        empty:before:pointer-events-none empty:before:text-text-3
-        empty:before:content-[attr(data-placeholder)] focus:before:hidden"
+      :class="{ 'audio-row-caption': listed }"
       @update:model-value="emit('caption', $event)"
     />
-    <figcaption v-else-if="caption" class="mt-xs text-sm text-text-2">
-      {{ publicText(caption) }}
-    </figcaption>
   </figure>
 </template>
 
@@ -137,5 +147,10 @@ const shownTitle = computed(() => publicText(props.title));
     var(--color-accent) 4%,
     var(--color-bg-2)
   );
+}
+
+/* A line of the row, close under the player. */
+.audio-row-caption {
+  margin-top: 0;
 }
 </style>

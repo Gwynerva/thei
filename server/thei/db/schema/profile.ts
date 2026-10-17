@@ -18,6 +18,8 @@ export const profiles = sqliteTable('profiles', {
   bannerAssetUuid: text(),
   faviconAssetUuid: text(),
   facts: text({ mode: 'json' }).notNull().$type<ProfileFact[]>().default([]),
+  /** When its form was last saved; 0 for a profile not saved since 0.0.6. */
+  updatedAt: integer().notNull().default(0),
 });
 export const profileAvatars = sqliteTable(
   'profile-avatars',
