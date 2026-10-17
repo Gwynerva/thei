@@ -6,7 +6,6 @@ import { createEvent, getRequestURL } from 'h3';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
-import { DEFAULT_AI_MODEL } from '../../shared/ai-model';
 import type { AiMessagePart } from '../../shared/ai';
 import { sessionActions } from '../../server/thei/ai/actions/rows';
 import { subscribeSession } from '../../server/thei/ai/sessions/bus';
@@ -36,7 +35,11 @@ import {
   type FakeModel,
   type FakeScript,
 } from '../helpers/fake-model';
-import { freshTestDb } from '../helpers/fresh-db';
+import {
+  aiOnConfig,
+  fakeModelSettings,
+  freshAiTestDb,
+} from '../helpers/fresh-ai-db';
 import { serverRepositories } from '../helpers/server-repositories';
 
 /**
@@ -45,27 +48,14 @@ import { serverRepositories } from '../helpers/server-repositories';
  * the session, a question left for the owner, and every way a turn ends
  * early said in the session.
  */
-let context: Awaited<ReturnType<typeof freshTestDb>>;
+let context: Awaited<ReturnType<typeof freshAiTestDb>>;
 let model: FakeModel | undefined;
 
 const PROJECT = 'p-11111111-1111-4111-8111-111111111111';
 
 beforeEach(async () => {
-  context = await freshTestDb();
-  Object.assign(context.server, {
-    useDb: () => context,
-    version: '0.0.6',
-    console: { log() {}, warn() {}, error() {} },
-    ...serverRepositories,
-  });
-  Object.assign(globalThis, {
-    useRuntimeConfig: () => ({ app: { baseURL: '/' } }),
-  });
-  context.rawDb
-    .prepare(
-      "INSERT INTO profiles (profileId, displayName) VALUES ('profile', 'Owner')",
-    )
-    .run();
+  context = await freshAiTestDb();
+  context.insert('profiles', { profileId: 'profile', displayName: 'Owner' });
   context.rawDb
     .prepare(
       "INSERT INTO projects (projectUuid, title, summary, access, humanReadableSlug, publicId, createdAt, updatedAt) VALUES (?, 'Parapet', 'A browser remake', 'public', 'parapet', 'Parapet', 1, 2)",
@@ -87,23 +77,12 @@ async function useModel(
   options: Parameters<typeof startFakeModel>[1] = {},
 ) {
   model = await startFakeModel(script, options);
-  if (provider === 'anthropic') process.env.ANTHROPIC_BASE_URL = model.url;
   Object.assign(context.server, {
-    config: {
-      siteUrl: 'https://example.test',
-      languageCode: 'en',
-      mcp: {
-        enabled: true,
-        instructions: '',
-        model: {
-          provider,
-          apiKey: provider === 'anthropic' ? 'sk-test' : '',
-          baseUrl: provider === 'openai' ? model.url : '',
-          model: 'fake-small',
-        },
-        monthlyTokens: 1_000_000,
-      },
-    },
+    config: aiOnConfig({
+      model: fakeModelSettings(model, provider),
+      // A month a test can spend whole.
+      monthlyTokens: 1_000_000,
+    }),
   });
   return model;
 }
@@ -407,18 +386,7 @@ describe('a session turn', () => {
   });
 
   it('asks to set a model when there is none', async () => {
-    Object.assign(context.server, {
-      config: {
-        siteUrl: 'https://example.test',
-        languageCode: 'en',
-        mcp: {
-          enabled: true,
-          instructions: '',
-          model: { ...DEFAULT_AI_MODEL },
-          monthlyTokens: 10_000_000,
-        },
-      },
-    });
+    // AI is on, but no model is set (`aiOnConfig`).
     const sessionUuid = startOwnerSession({ text: 'Hello' });
     await turnsSettled();
     expect(partOf(modelMessage(sessionUuid)[0]!.parts, 'notice')?.kind).toBe(

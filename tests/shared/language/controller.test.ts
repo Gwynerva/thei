@@ -13,10 +13,6 @@ describe('createI18nController (en)', () => {
     expect(ctrl.code).toBe('en');
   });
 
-  it('has normalize function', () => {
-    expect(typeof ctrl.normalize).toBe('function');
-  });
-
   it('normalize applies English curly quotes via controller', () => {
     expect(ctrl.normalize('"hello"')).toBe('\u201Chello\u201D');
   });

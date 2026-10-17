@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_AI_MODEL } from '../../shared/ai-model';
 import { readEventEdit, saveEventEdit } from '../../server/thei/events/edit';
 import type { EventEditData } from '../../shared/event';
 import {
@@ -30,57 +29,22 @@ import { undoAction, undoState } from '../../server/thei/ai/actions/undo';
 import { findAction } from '../../server/thei/ai/actions/rows';
 import { assetIdsIn } from '../../server/thei/ai/actions/values';
 import { assetsHeldByAi } from '../../server/thei/assets/holds';
-import { freshTestDb } from '../helpers/fresh-db';
-import { serverRepositories } from '../helpers/server-repositories';
+import { freshAiTestDb } from '../helpers/fresh-ai-db';
 
 /**
  * Actions a session proposes and the owner applies: checked when proposed,
  * applied through the entity's own save, taken back while nothing changed
  * since, and never offered again once the owner said so.
  */
-let context: Awaited<ReturnType<typeof freshTestDb>>;
+let context: Awaited<ReturnType<typeof freshAiTestDb>>;
 
 const PROJECT = 'p-11111111-1111-4111-8111-111111111111';
 const TAG = 't-22222222-2222-4222-8222-222222222222';
 const DIARY = 'd-1';
 
 beforeEach(async () => {
-  context = await freshTestDb();
-  Object.assign(context.server, {
-    useDb: () => context,
-    version: '0.0.6',
-    config: {
-      siteUrl: 'https://example.test',
-      languageCode: 'en',
-      mcp: {
-        enabled: true,
-        instructions: '',
-        model: { ...DEFAULT_AI_MODEL },
-        monthlyTokens: 10_000_000,
-      },
-    },
-    console: { log() {}, warn() {}, error() {} },
-    ...serverRepositories,
-  });
-  Object.assign(globalThis, {
-    useRuntimeConfig: () => ({ app: { baseURL: '/' } }),
-  });
-  const insert = (table: string, row: Record<string, unknown>) =>
-    context.rawDb
-      .prepare(
-        `INSERT INTO \`${table}\` (${Object.keys(row)
-          .map((key) => `\`${key}\``)
-          .join(', ')}) VALUES (${Object.keys(row)
-          .map(() => '?')
-          .join(', ')})`,
-      )
-      .run(
-        ...Object.values(row).map((value) =>
-          value !== null && typeof value === 'object'
-            ? JSON.stringify(value)
-            : value,
-        ),
-      );
+  context = await freshAiTestDb();
+  const { insert } = context;
   const text = (blocks: unknown[]) => ({ blocks });
   insert('profiles', { profileId: 'profile', displayName: 'Owner' });
   insert('projects', {

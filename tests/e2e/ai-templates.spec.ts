@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { startFakeModel, type FakeModel } from '../helpers/fake-model';
+import { turnAiOff, turnAiOn } from './helpers/ai';
 
 /**
  * The Templates tab as the owner uses it: the three built-in checks and the
@@ -55,23 +56,7 @@ test.beforeAll(async ({ request }) => {
   model = await startFakeModel(() => ({ text: 'Looked: all is well.' }), {
     models: ['fake-e2e'],
   });
-  expect(
-    (
-      await request.put('/api/admin/ai/settings', { data: { enabled: true } })
-    ).ok(),
-  ).toBe(true);
-  expect(
-    (
-      await request.put('/api/admin/ai/model', {
-        data: {
-          provider: 'openai',
-          baseUrl: model.url,
-          model: 'fake-e2e',
-          monthlyTokens: 10_000_000,
-        },
-      })
-    ).ok(),
-  ).toBe(true);
+  await turnAiOn(request, model);
 });
 
 test.afterAll(async ({ request }) => {
@@ -83,8 +68,7 @@ test.afterAll(async ({ request }) => {
   for (const template of list.templates)
     if (!template.builtin && template.title.includes(String(run)))
       await request.delete(`/api/admin/ai/templates/${template.templateId}`);
-  await request.put('/api/admin/ai/model', { data: { provider: 'none' } });
-  await request.put('/api/admin/ai/settings', { data: { enabled: false } });
+  await turnAiOff(request);
   await model?.close();
 });
 

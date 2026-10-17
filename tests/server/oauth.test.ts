@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_AI_MODEL } from '../../shared/ai-model';
 import { OAUTH_REFRESH_GRACE_MS, signInReturnPath } from '../../shared/oauth';
-import { freshTestDb } from '../helpers/fresh-db';
+import { freshAiTestDb } from '../helpers/fresh-ai-db';
 
 vi.mock('../../server/thei/external-links/fetch', () => ({
   fetchGuarded: vi.fn(),
@@ -35,7 +34,7 @@ import {
  * opens exactly what was granted, for exactly as long — and that nothing
  * along the way can be turned to sending a browser or a key elsewhere.
  */
-let context: Awaited<ReturnType<typeof freshTestDb>>;
+let context: Awaited<ReturnType<typeof freshAiTestDb>>;
 let baseURL = '/';
 
 const event = {
@@ -45,21 +44,8 @@ const event = {
 
 beforeEach(async () => {
   baseURL = '/';
-  context = await freshTestDb();
-  Object.assign(context.server, {
-    useDb: () => context,
-    config: {
-      siteUrl: 'https://example.test',
-      languageCode: 'en',
-      mcp: {
-        enabled: true,
-        instructions: '',
-        model: { ...DEFAULT_AI_MODEL },
-        monthlyTokens: 10_000_000,
-      },
-    },
-    console: { log() {}, warn() {}, error() {} },
-  });
+  context = await freshAiTestDb();
+  // A test may move the site into a folder.
   Object.assign(globalThis, {
     useRuntimeConfig: () => ({ app: { baseURL } }),
   });

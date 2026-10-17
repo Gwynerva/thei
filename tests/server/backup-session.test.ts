@@ -20,9 +20,6 @@ let context: Awaited<ReturnType<typeof freshTestDb>>;
 beforeEach(async () => {
   context = await freshTestDb();
   Object.assign(context.server, {
-    useDb: () => context,
-    // The content root itself too, as a backup walks it.
-    contentPath: (...parts: string[]) => join(context.directory, ...parts),
     projectPath: (...parts: string[]) => join(context.directory, ...parts),
     assets: { filePath: assetFilePath },
     console: {

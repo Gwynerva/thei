@@ -62,7 +62,6 @@ const description = (second: string) => [
 beforeEach(async () => {
   context = await freshTestDb();
   Object.assign(context.server, {
-    useDb: () => context,
     ...serverRepositories,
   });
   context.rawDb

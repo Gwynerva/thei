@@ -41,8 +41,11 @@ import {
   type FakeModel,
   type FakeScript,
 } from '../helpers/fake-model';
-import { freshTestDb } from '../helpers/fresh-db';
-import { serverRepositories } from '../helpers/server-repositories';
+import {
+  aiOnConfig,
+  fakeModelSettings,
+  freshAiTestDb,
+} from '../helpers/fresh-ai-db';
 
 /**
  * A turn stops for sure. Stopped, it ends at once wherever it waits; one
@@ -117,37 +120,21 @@ vi.mock('../../server/thei/ai/model/stream', async (importOriginal) => {
   };
 });
 
-let context: Awaited<ReturnType<typeof freshTestDb>>;
+let context: Awaited<ReturnType<typeof freshAiTestDb>>;
 let model: FakeModel | undefined;
 const LIMITS = { ...TURN_LIMITS };
 
 const PROJECT = 'p-11111111-1111-4111-8111-111111111111';
 
 beforeEach(async () => {
-  context = await freshTestDb();
-  Object.assign(context.server, {
-    useDb: () => context,
-    version: '0.0.6',
-    console: {
-      log() {},
-      warn() {},
-      error() {},
-      tag: () => ({ log() {}, warn() {}, error() {} }),
-    },
-    ...serverRepositories,
-  });
+  context = await freshAiTestDb();
   Object.assign(globalThis, {
-    useRuntimeConfig: () => ({ app: { baseURL: '/' } }),
     defineEventHandler,
     createError,
     readBody,
     getRouterParam,
   });
-  context.rawDb
-    .prepare(
-      "INSERT INTO profiles (profileId, displayName) VALUES ('profile', 'Owner')",
-    )
-    .run();
+  context.insert('profiles', { profileId: 'profile', displayName: 'Owner' });
   context.rawDb
     .prepare(
       "INSERT INTO projects (projectUuid, title, summary, access, humanReadableSlug, publicId, createdAt, updatedAt) VALUES (?, 'Parapet', 'A browser remake', 'public', 'parapet', 'Parapet', 1, 2)",
@@ -173,23 +160,8 @@ async function useModel(
   provider: 'openai' | 'anthropic' = 'openai',
 ) {
   model = await startFakeModel(script);
-  if (provider === 'anthropic') process.env.ANTHROPIC_BASE_URL = model.url;
   Object.assign(context.server, {
-    config: {
-      siteUrl: 'https://example.test',
-      languageCode: 'en',
-      mcp: {
-        enabled: true,
-        instructions: '',
-        model: {
-          provider,
-          apiKey: provider === 'anthropic' ? 'sk-test' : '',
-          baseUrl: provider === 'openai' ? model.url : '',
-          model: 'fake-small',
-        },
-        monthlyTokens: 1_000_000,
-      },
-    },
+    config: aiOnConfig({ model: fakeModelSettings(model, provider) }),
   });
   return model;
 }

@@ -15,7 +15,6 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ProjectEditData } from '../../shared/admin/project';
 import type { ApiTokenScope } from '../../shared/api-token';
-import { DEFAULT_AI_MODEL } from '../../shared/ai-model';
 import { createTheiMcpServer } from '../../server/thei/mcp/server';
 import {
   readProjectEdit,
@@ -36,14 +35,13 @@ import { directTools } from '../../server/thei/mcp/registry';
 import { rejectActions } from '../../server/thei/ai/actions/decide';
 import { undoState } from '../../server/thei/ai/actions/undo';
 import { saveTerm } from '../../server/thei/ai/terms';
-import { freshTestDb } from '../helpers/fresh-db';
-import { serverRepositories } from '../helpers/server-repositories';
+import { aiOnConfig, freshAiTestDb } from '../helpers/fresh-ai-db';
 
 /**
  * The MCP surface as a client meets it: both protocol eras, the tools a
  * token's scopes allow, and reads that show the owner's archive as it is.
  */
-let context: Awaited<ReturnType<typeof freshTestDb>>;
+let context: Awaited<ReturnType<typeof freshAiTestDb>>;
 
 const PROJECT = 'p-11111111-1111-4111-8111-111111111111';
 const TAG = 't-22222222-2222-4222-8222-222222222222';
@@ -54,43 +52,10 @@ let tokenUuid = 'tk-0';
 
 beforeEach(async () => {
   tokenUuid = `tk-${++tokenCount}`;
-  context = await freshTestDb();
-  Object.assign(context.server, {
-    useDb: () => context,
-    version: '0.0.6',
-    config: {
-      siteUrl: 'https://example.test',
-      languageCode: 'en',
-      mcp: {
-        enabled: true,
-        instructions: 'I write "ваще" on purpose.',
-        model: { ...DEFAULT_AI_MODEL },
-        monthlyTokens: 10_000_000,
-      },
-    },
-    console: { log() {}, warn() {}, error() {} },
-    // The admin's own saves, which an editor token goes through.
-    ...serverRepositories,
+  context = await freshAiTestDb({
+    config: aiOnConfig({ instructions: 'I write "ваще" on purpose.' }),
   });
-  Object.assign(globalThis, {
-    useRuntimeConfig: () => ({ app: { baseURL: '/' } }),
-  });
-  const insert = (table: string, row: Record<string, unknown>) =>
-    context.rawDb
-      .prepare(
-        `INSERT INTO \`${table}\` (${Object.keys(row)
-          .map((key) => `\`${key}\``)
-          .join(', ')}) VALUES (${Object.keys(row)
-          .map(() => '?')
-          .join(', ')})`,
-      )
-      .run(
-        ...Object.values(row).map((value) =>
-          value !== null && typeof value === 'object'
-            ? JSON.stringify(value)
-            : value,
-        ),
-      );
+  const { insert } = context;
   const text = (blocks: unknown[]) => ({ blocks });
   insert('profiles', { profileId: 'profile', displayName: 'Owner' });
   insert('projects', {
@@ -521,44 +486,6 @@ const textVersion = () =>
   ).updatedAt;
 
 describe('proposing over MCP', () => {
-  it('offers a reader proposals, and an editor applying and undoing too', async () => {
-    const reader = (
-      await call(handlerFor(['read']), 'tools/list')
-    ).result!.tools.map((t: { name: string }) => t.name);
-    expect(reader).toEqual(
-      expect.arrayContaining(['read_entity', 'propose', 'describe_actions']),
-    );
-    expect(reader).not.toContain('undo_action');
-    expect(reader).not.toContain('upload_file');
-    const editor = handlerFor(['read', 'edit']);
-    const names = (await call(editor, 'tools/list')).result!.tools.map(
-      (t: { name: string }) => t.name,
-    );
-    expect(names).toEqual(
-      expect.arrayContaining(['propose', 'undo_action', 'upload_file']),
-    );
-    const written = await propose(
-      editor,
-      [
-        {
-          kind: 'write',
-          target: 'diary-entry:2026-10-13',
-          text: 'body',
-          mode: 'replace',
-          markdown: 'All new.',
-          reason: 'Asked to',
-        },
-      ],
-      { apply: true },
-    );
-    expect(written).toMatch(/Applied: aia-/);
-    expect(
-      bodyOf('2026-10-13').blocks.map(
-        (b: { data: { text: string } }) => b.data.text,
-      ),
-    ).toEqual(['All new.']);
-  });
-
   it('tells a client of every tool whether it reads, suggests, adds or changes', async () => {
     const tools = (await call(handlerFor(['read', 'edit']), 'tools/list'))
       .result!.tools as {

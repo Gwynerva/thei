@@ -6,6 +6,7 @@ import {
   type FakeRequest,
   type FakeTurn,
 } from '../helpers/fake-model';
+import { turnAiOff, turnAiOn } from './helpers/ai';
 import { expectPopupUsable } from './helpers/popup';
 
 /**
@@ -188,28 +189,11 @@ test.beforeAll(async ({ request }) => {
   eventUuid = event.eventUuid;
 
   model = await startFakeModel(script, { models: ['fake-e2e'] });
-  expect(
-    (
-      await request.put('/api/admin/ai/settings', { data: { enabled: true } })
-    ).ok(),
-  ).toBe(true);
-  expect(
-    (
-      await request.put('/api/admin/ai/model', {
-        data: {
-          provider: 'openai',
-          baseUrl: model.url,
-          model: 'fake-e2e',
-          monthlyTokens: 10_000_000,
-        },
-      })
-    ).ok(),
-  ).toBe(true);
+  await turnAiOn(request, model);
 });
 
 test.afterAll(async ({ request }) => {
-  await request.put('/api/admin/ai/model', { data: { provider: 'none' } });
-  await request.put('/api/admin/ai/settings', { data: { enabled: false } });
+  await turnAiOff(request);
   await model?.close();
 });
 

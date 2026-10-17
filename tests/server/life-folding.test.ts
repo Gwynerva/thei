@@ -29,7 +29,6 @@ const now = new Date('2026-09-01T00:00:00Z');
 beforeEach(async () => {
   context = await freshTestDb();
   Object.assign(context.server, {
-    useDb: () => context,
     content: { findByOwner: async () => undefined },
   });
   // A diary entry falls inside the trip, so its start and end stay apart.

@@ -1,7 +1,6 @@
 import { createMcpHandler } from '@modelcontextprotocol/server';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ApiTokenScope } from '../../shared/api-token';
-import { DEFAULT_AI_MODEL } from '../../shared/ai-model';
 import { createTheiMcpServer } from '../../server/thei/mcp/server';
 import { applyActions } from '../../server/thei/ai/actions/apply';
 import { findAction, sessionActions } from '../../server/thei/ai/actions/rows';
@@ -26,8 +25,7 @@ import {
   listSessions,
   sessionOverview,
 } from '../../server/thei/ai/sessions/view';
-import { freshTestDb } from '../helpers/fresh-db';
-import { serverRepositories } from '../helpers/server-repositories';
+import { freshAiTestDb } from '../helpers/fresh-ai-db';
 
 /**
  * Sessions of apps over MCP: opened or gathered by key and name, proposed
@@ -35,37 +33,14 @@ import { serverRepositories } from '../helpers/server-repositories';
  * editor's key — and sessions' lives: archived when quiet, purged a month
  * later, the files and versions they held let go.
  */
-let context: Awaited<ReturnType<typeof freshTestDb>>;
+let context: Awaited<ReturnType<typeof freshAiTestDb>>;
 
 const PROJECT = 'p-11111111-1111-4111-8111-111111111111';
 let tokenCount = 0;
 
 beforeEach(async () => {
-  context = await freshTestDb();
-  Object.assign(context.server, {
-    useDb: () => context,
-    version: '0.0.6',
-    config: {
-      siteUrl: 'https://example.test',
-      languageCode: 'en',
-      mcp: {
-        enabled: true,
-        instructions: '',
-        model: { ...DEFAULT_AI_MODEL },
-        monthlyTokens: 10_000_000,
-      },
-    },
-    console: { log() {}, warn() {}, error() {} },
-    ...serverRepositories,
-  });
-  Object.assign(globalThis, {
-    useRuntimeConfig: () => ({ app: { baseURL: '/' } }),
-  });
-  context.rawDb
-    .prepare(
-      "INSERT INTO profiles (profileId, displayName) VALUES ('profile', 'Owner')",
-    )
-    .run();
+  context = await freshAiTestDb();
+  context.insert('profiles', { profileId: 'profile', displayName: 'Owner' });
   context.rawDb
     .prepare(
       "INSERT INTO projects (projectUuid, title, summary, access, humanReadableSlug, publicId, createdAt, updatedAt) VALUES (?, 'Parapet', 'A browser remake', 'public', 'parapet', 'Parapet', 1, 2)",

@@ -9,8 +9,7 @@ import {
   toNodeListener,
 } from 'h3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_AI_MODEL } from '../../shared/ai-model';
-import { freshTestDb } from '../helpers/fresh-db';
+import { freshAiTestDb, quietConsole } from '../helpers/fresh-ai-db';
 
 vi.mock('../../server/thei/assets/upload-stream', async (original) => ({
   ...(await original<object>()),
@@ -32,7 +31,7 @@ import { McpToolError } from '../../server/thei/mcp/result';
  * how long one may take, and that a session the owner archived takes in
  * nothing more, however late its bytes come.
  */
-let context: Awaited<ReturnType<typeof freshTestDb>>;
+let context: Awaited<ReturnType<typeof freshAiTestDb>>;
 const logged: unknown[][] = [];
 const principal = {
   tokenUuid: 'tk-files',
@@ -42,22 +41,9 @@ const principal = {
 
 beforeEach(async () => {
   logged.length = 0;
-  context = await freshTestDb();
-  Object.assign(context.server, {
-    useDb: () => context,
-    config: {
-      siteUrl: 'https://example.test',
-      languageCode: 'en',
-      mcp: {
-        enabled: true,
-        instructions: '',
-        model: { ...DEFAULT_AI_MODEL },
-        monthlyTokens: 10_000_000,
-      },
-    },
+  context = await freshAiTestDb({
     console: {
-      log() {},
-      warn() {},
+      ...quietConsole,
       error: (...args: unknown[]) => logged.push(args),
     },
   });

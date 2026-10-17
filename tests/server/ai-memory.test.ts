@@ -1,9 +1,5 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { H3Event } from 'h3';
-import { DEFAULT_AI_MODEL } from '../../shared/ai-model';
 import { AI_ANCHOR_MEMORY_MAX } from '../../shared/ai';
 import { createSession } from '../../server/thei/ai/sessions/store';
 import {
@@ -34,11 +30,14 @@ import {
 } from '../../server/thei/ai/terms';
 import { digestOf, writeDigest } from '../../server/thei/ai/digests';
 import { deleteDiaryEntry } from '../../server/thei/diary/edit';
-import { setTheiConfig, theiConfig } from '../../server/thei/config/index';
+import { theiConfig } from '../../server/thei/config/index';
 import { directTools } from '../../server/thei/mcp/registry';
 import { invalidateMcpDocuments } from '../../server/thei/mcp/documents';
-import { freshTestDb } from '../helpers/fresh-db';
-import { serverRepositories } from '../helpers/server-repositories';
+import {
+  aiOnConfig,
+  freshAiTestDb,
+  holdSiteConfig,
+} from '../helpers/fresh-ai-db';
 
 /**
  * What the AI keeps besides sessions: memory anchored to what it is about
@@ -46,8 +45,7 @@ import { serverRepositories } from '../helpers/server-repositories';
  * entities kept while they read the same. Remembered by actions the owner
  * applies and takes back, by hand, and gone with what it was about.
  */
-let context: Awaited<ReturnType<typeof freshTestDb>>;
-let folder: string;
+let context: Awaited<ReturnType<typeof freshAiTestDb>>;
 
 const PROJECT = 'p-11111111-1111-4111-8111-111111111111';
 const EVENT = 'e-33333333-3333-4333-8333-333333333333';
@@ -56,50 +54,12 @@ const project = { kind: 'project' as const, id: PROJECT };
 const diary = { kind: 'diary-entry' as const, id: DIARY, date: '2026-10-13' };
 
 beforeEach(async () => {
-  context = await freshTestDb();
-  folder = await mkdtemp(join(tmpdir(), 'thei-ai-memory-'));
-  Object.assign(context.server, {
-    useDb: () => context,
-    version: '0.0.6',
-    contentPath: (...parts: string[]) => join(folder, ...parts),
-    console: { log() {}, warn() {}, error() {} },
-    ...serverRepositories,
-  });
-  // The settings as the site holds them: a write is read back at once.
-  setTheiConfig({
-    version: '0.0.6',
-    siteUrl: 'https://example.test',
-    languageCode: 'en',
-    mcp: {
-      enabled: true,
-      instructions: 'I write in the first person.',
-      model: { ...DEFAULT_AI_MODEL },
-      monthlyTokens: 10_000_000,
-    },
-  } as never);
-  Object.defineProperty(context.server, 'config', {
-    configurable: true,
-    get: () => theiConfig,
-  });
-  Object.assign(globalThis, {
-    useRuntimeConfig: () => ({ app: { baseURL: '/' } }),
-  });
-  const insert = (table: string, row: Record<string, unknown>) =>
-    context.rawDb
-      .prepare(
-        `INSERT INTO \`${table}\` (${Object.keys(row)
-          .map((key) => `\`${key}\``)
-          .join(', ')}) VALUES (${Object.keys(row)
-          .map(() => '?')
-          .join(', ')})`,
-      )
-      .run(
-        ...Object.values(row).map((value) =>
-          value !== null && typeof value === 'object'
-            ? JSON.stringify(value)
-            : value,
-        ),
-      );
+  context = await freshAiTestDb();
+  holdSiteConfig(
+    context.server,
+    aiOnConfig({ instructions: 'I write in the first person.' }),
+  );
+  const { insert } = context;
   insert('profiles', { profileId: 'profile', displayName: 'Owner' });
   insert('projects', {
     projectUuid: PROJECT,
@@ -150,7 +110,6 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await context.close();
-  await rm(folder, { recursive: true, force: true });
 });
 
 const one = (sql: string, ...params: unknown[]) =>

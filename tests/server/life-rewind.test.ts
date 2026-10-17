@@ -13,7 +13,6 @@ const now = new Date('2026-09-10T23:59:59Z');
 
 beforeEach(async () => {
   context = await freshTestDb();
-  Object.assign(context.server, { useDb: () => context });
   vi.clearAllMocks();
 });
 afterEach(async () => {

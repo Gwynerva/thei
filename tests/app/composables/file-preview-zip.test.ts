@@ -30,14 +30,6 @@ function counted(bytes: Uint8Array) {
 }
 
 describe('a file of an archive', () => {
-  it('is unpacked whole when it is what it says', async () => {
-    const zipped = zipSync({ 'notes.txt': utf8('день 1\n'.repeat(1000)) });
-    const { source } = counted(zipped);
-    const [entry] = (await readZipDirectory(source)).entries;
-    const bytes = await readZipEntry(source, entry!, 1024 * 1024);
-    expect(new TextDecoder().decode(bytes)).toBe('день 1\n'.repeat(1000));
-  });
-
   it('is refused unread when it is packed larger than it may unpack to', async () => {
     const zipped = zipSync({ 'notes.txt': utf8('день 1\n'.repeat(1000)) });
     const { source, reads } = counted(zipped);

@@ -47,7 +47,6 @@ beforeEach(async () => {
   config.siteAccessLevel = SiteAccessLevel.Public;
   invalidatePublicSearchIndex();
   Object.assign(context.server, {
-    useDb: () => context,
     config,
     projects: {
       findByPublicId: findProjectByPublicId,

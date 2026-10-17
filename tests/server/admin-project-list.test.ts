@@ -19,7 +19,6 @@ beforeAll(async () => {
   context = await freshTestDb();
   const { db, schema } = context;
   Object.assign(context.server, {
-    useDb: () => context,
     projects: { count: async () => 1 },
   });
   db.insert(schema.projects)

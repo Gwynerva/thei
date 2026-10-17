@@ -1,4 +1,12 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import type { AssetUploadResponse } from '../../../shared/api/asset';
 import type { AssetJobStatus } from '../../../shared/api/asset-upload-progress';
 import {
@@ -59,7 +67,13 @@ beforeAll(() => {
   globals.window = { addEventListener() {}, removeEventListener() {} };
 });
 
+// A job is polled once a second: the clock is the test's own.
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+
 afterEach(() => {
+  vi.useRealTimers();
   delete globals.$fetch;
   delete globals.fetch;
 });
@@ -96,12 +110,14 @@ describe('committing a draft', () => {
     };
     serve(server);
     const seen: unknown[] = [];
-    expect(await commit(undefined, (status) => seen.push(status))).toBe(asset);
+    const pending = commit(undefined, (status) => seen.push(status));
+    await vi.runAllTimersAsync();
+    expect(await pending).toBe(asset);
     expect(seen).toEqual([
       { phase: 'processing', progress: 0.5 },
       { phase: 'finishing' },
     ]);
-  }, 10_000);
+  });
 
   it('turns a failed job into the error the request would have raised', async () => {
     const server: FakeServer = {
@@ -110,7 +126,9 @@ describe('committing a draft', () => {
       requests: [],
     };
     serve(server);
-    const failure = await commit().catch((reason: unknown) => reason);
+    const settled = commit().catch((reason: unknown) => reason);
+    await vi.runAllTimersAsync();
+    const failure = await settled;
     expect(failure).toBeInstanceOf(UploadJobError);
     expect(failure).toMatchObject({ message: 'too large', statusCode: 400 });
     expect(isDraftExpired(failure)).toBe(false);
@@ -123,33 +141,30 @@ describe('committing a draft', () => {
       requests: [],
     };
     serve(server);
-    const failure = await commit().catch((reason: unknown) => reason);
+    const settled = commit().catch((reason: unknown) => reason);
+    await vi.runAllTimersAsync();
+    const failure = await settled;
     expect(failure).toBeInstanceOf(UploadJobError);
     expect(isDraftExpired(failure)).toBe(true);
   });
 
   it('keeps asking a server it cannot reach rather than give the job up', async () => {
-    vi.useFakeTimers();
-    try {
-      const offline = new TypeError('Failed to fetch');
-      const server: FakeServer = {
-        commit: { status: 202, body: { uploadId: 'x' } },
-        // Half a minute and more of an outage, polled all along.
-        polls: [...Array(40).fill(offline), { phase: 'done', asset }],
-        requests: [],
-      };
-      serve(server);
-      const pending = commit();
-      // The job may well go on there: giving it up would encode the file a
-      // second time beside it.
-      await vi.advanceTimersByTimeAsync(10 * 60_000);
-      expect(await pending).toBe(asset);
-      expect(server.requests.some((line) => line.startsWith('DELETE'))).toBe(
-        false,
-      );
-    } finally {
-      vi.useRealTimers();
-    }
+    const offline = new TypeError('Failed to fetch');
+    const server: FakeServer = {
+      commit: { status: 202, body: { uploadId: 'x' } },
+      // Half a minute and more of an outage, polled all along.
+      polls: [...Array(40).fill(offline), { phase: 'done', asset }],
+      requests: [],
+    };
+    serve(server);
+    const pending = commit();
+    // The job may well go on there: giving it up would encode the file a
+    // second time beside it.
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(await pending).toBe(asset);
+    expect(server.requests.some((line) => line.startsWith('DELETE'))).toBe(
+      false,
+    );
   });
 
   it('cancels the job when abandoned before the server answered', async () => {
@@ -181,10 +196,13 @@ describe('committing a draft', () => {
     };
     serve(server);
     const controller = new AbortController();
-    const pending = commit(controller.signal);
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    const pending = commit(controller.signal).catch(
+      (reason: unknown) => reason,
+    );
+    // Abandoned while it waits for its second answer.
+    await vi.advanceTimersByTimeAsync(1_200);
     controller.abort();
-    const failure = await pending.catch((reason: unknown) => reason);
+    const failure = await pending;
     expect(failure).toBeInstanceOf(DOMException);
     expect((failure as DOMException).name).toBe('AbortError');
     // The job is keyed by the id the client chose, not by the server's echo.

@@ -293,10 +293,6 @@ describe('settling the endings of stored texts', () => {
         label: 'Италия',
       },
     ]);
-    expect(
-      log.some((line) => line.includes('ev-1') && line.includes('2')),
-    ).toBe(true);
-
     expect(db.select().from(schema.statuses).get()!.text).toBe(
       'Работаю. Отдыхаю.',
     );

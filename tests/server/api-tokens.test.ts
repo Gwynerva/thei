@@ -21,7 +21,6 @@ let context: Awaited<ReturnType<typeof freshTestDb>>;
 
 beforeEach(async () => {
   context = await freshTestDb();
-  Object.assign(context.server, { useDb: () => context });
 });
 
 afterEach(async () => {
@@ -85,7 +84,7 @@ describe('API tokens', () => {
   });
 
   it('note their last use at most once a minute', async () => {
-    const { token, item } = await createApiToken('Laptop', 'reader');
+    const { item } = await createApiToken('Laptop', 'reader');
     const lastUsed = () =>
       (
         context.rawDb

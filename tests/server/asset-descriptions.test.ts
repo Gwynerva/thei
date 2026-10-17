@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
-import { DEFAULT_AI_MODEL } from '../../shared/ai-model';
 import { ASSET_DESCRIPTION_MAX } from '../../shared/asset-description';
 import {
   AssetDescriptionConflict,
@@ -28,7 +27,7 @@ import { directTools } from '../../server/thei/mcp/registry';
 import { FILES_META } from '../../server/thei/mcp/result';
 import { takeDownloadTicket } from '../../server/thei/mcp/files';
 import { backgroundEvent } from '../../server/thei/ai/runner/background-event';
-import { freshTestDb } from '../helpers/fresh-db';
+import { freshAiTestDb } from '../helpers/fresh-ai-db';
 import { serverRepositories } from '../helpers/server-repositories';
 
 /**
@@ -37,15 +36,16 @@ import { serverRepositories } from '../helpers/server-repositories';
  * by every search, proposed and taken back as an action, and read by an app
  * with the file's places.
  */
-let context: Awaited<ReturnType<typeof freshTestDb>>;
+let context: Awaited<ReturnType<typeof freshAiTestDb>>;
 
 const PROJECT = 'p-11111111-1111-4111-8111-111111111111';
-const PICTURE = join('picture.png');
+const PICTURE = 'picture.png';
 
-let insert: (table: string, row: Record<string, unknown>) => void;
+const insert = (table: string, row: Record<string, unknown>) =>
+  context.insert(table, row);
 
 beforeEach(async () => {
-  context = await freshTestDb();
+  context = await freshAiTestDb();
   const picture = join(context.directory, PICTURE);
   await sharp({
     create: { width: 40, height: 30, channels: 3, background: '#cc0000' },
@@ -54,45 +54,12 @@ beforeEach(async () => {
     .toFile(picture);
   writeFileSync(join(context.directory, 'notes.txt'), 'Row 7');
   Object.assign(context.server, {
-    useDb: () => context,
-    version: '0.0.6',
-    config: {
-      siteUrl: 'https://example.test',
-      languageCode: 'en',
-      mcp: {
-        enabled: true,
-        instructions: '',
-        model: { ...DEFAULT_AI_MODEL },
-        monthlyTokens: 10_000_000,
-      },
-    },
-    console: { log() {}, warn() {}, error() {} },
-    ...serverRepositories,
     assets: {
       ...serverRepositories.assets,
       filePath: (_hash: string, extension: string) =>
         join(context.directory, extension === 'png' ? PICTURE : 'notes.txt'),
     },
   });
-  Object.assign(globalThis, {
-    useRuntimeConfig: () => ({ app: { baseURL: '/' } }),
-  });
-  insert = (table, row) =>
-    context.rawDb
-      .prepare(
-        `INSERT INTO \`${table}\` (${Object.keys(row)
-          .map((key) => `\`${key}\``)
-          .join(', ')}) VALUES (${Object.keys(row)
-          .map(() => '?')
-          .join(', ')})`,
-      )
-      .run(
-        ...Object.values(row).map((value) =>
-          value !== null && typeof value === 'object'
-            ? JSON.stringify(value)
-            : value,
-        ),
-      );
   insert('profiles', { profileId: 'profile', displayName: 'Owner' });
   insert('projects', {
     projectUuid: PROJECT,

@@ -13,7 +13,11 @@ import {
   type FakeModelOptions,
   type FakeScript,
 } from '../helpers/fake-model';
-import { freshTestDb } from '../helpers/fresh-db';
+import {
+  aiOnConfig,
+  fakeModelSettings,
+  freshAiTestDb,
+} from '../helpers/fresh-ai-db';
 import { serverRepositories } from '../helpers/server-repositories';
 
 /**
@@ -23,11 +27,11 @@ import { serverRepositories } from '../helpers/server-repositories';
  * service turns away is asked again without, the model told in words what it
  * could not be shown.
  */
-let context: Awaited<ReturnType<typeof freshTestDb>>;
+let context: Awaited<ReturnType<typeof freshAiTestDb>>;
 let model: FakeModel | undefined;
 
 beforeEach(async () => {
-  context = await freshTestDb();
+  context = await freshAiTestDb();
   const picture = join(context.directory, 'photo.png');
   const recording = join(context.directory, 'talk.wav');
   await sharp({
@@ -56,23 +60,12 @@ beforeEach(async () => {
     txt: notes,
   };
   Object.assign(context.server, {
-    useDb: () => context,
-    version: '0.0.6',
-    console: { log() {}, warn() {}, error() {} },
-    ...serverRepositories,
     assets: {
       ...serverRepositories.assets,
       filePath: (_hash: string, extension: string) => files[extension]!,
     },
   });
-  Object.assign(globalThis, {
-    useRuntimeConfig: () => ({ app: { baseURL: '/' } }),
-  });
-  context.rawDb
-    .prepare(
-      "INSERT INTO profiles (profileId, displayName) VALUES ('profile', 'Owner')",
-    )
-    .run();
+  context.insert('profiles', { profileId: 'profile', displayName: 'Owner' });
   const insert = context.rawDb.prepare(
     `INSERT INTO assets (assetUuid, slug, extension, familyUuid, contentHash, settingsKey, settings, type, size, touchedAt, meta)
      VALUES (?, ?, ?, ?, ?, 'original', '{"type":"original"}', ?, 900, 1, ?)`,
@@ -112,23 +105,8 @@ async function useModel(
   options: FakeModelOptions = {},
 ) {
   model = await startFakeModel(script, options);
-  if (provider === 'anthropic') process.env.ANTHROPIC_BASE_URL = model.url;
   Object.assign(context.server, {
-    config: {
-      siteUrl: 'https://example.test',
-      languageCode: 'en',
-      mcp: {
-        enabled: true,
-        instructions: '',
-        model: {
-          provider,
-          apiKey: provider === 'anthropic' ? 'sk-test' : '',
-          baseUrl: provider === 'openai' ? model.url : '',
-          model: 'fake-small',
-        },
-        monthlyTokens: 1_000_000,
-      },
-    },
+    config: aiOnConfig({ model: fakeModelSettings(model, provider) }),
   });
   return model;
 }

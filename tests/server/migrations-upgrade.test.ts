@@ -11,6 +11,7 @@ import { migrations_0_0_2, schema_0_0_2 } from './fixtures/schema-0.0.2';
 import { migrations_0_0_3, schema_0_0_3 } from './fixtures/schema-0.0.3';
 import { migrations_0_0_4, schema_0_0_4 } from './fixtures/schema-0.0.4';
 import { migrations_0_0_5, schema_0_0_5 } from './fixtures/schema-0.0.5';
+import { insertRow } from '../helpers/insert-row';
 import { writeSiteConfig_0_0_2 } from '../helpers/site-config';
 
 /**
@@ -133,15 +134,7 @@ async function createSite_0_0_1() {
   seedLedger(rawDb, migrationRegistry.slice(0, 1));
 
   const insert = (table: string, row: Record<string, unknown>) =>
-    rawDb
-      .prepare(
-        `INSERT INTO \`${table}\` (${Object.keys(row)
-          .map((key) => `\`${key}\``)
-          .join(', ')}) VALUES (${Object.keys(row)
-          .map(() => '?')
-          .join(', ')})`,
-      )
-      .run(...Object.values(row));
+    insertRow(rawDb, table, row);
   const now = Date.UTC(2026, 8, 1);
 
   insert('profiles', { profileId: 'profile', displayName: 'Owner' });
@@ -396,69 +389,23 @@ describe('upgrading a 0.0.1 site', () => {
   });
 });
 
-describe('upgrading a 0.0.2 site', () => {
+/**
+ * A site of every released version, updated, ends with the schema a new
+ * installation starts from. A release adds its row once it is tagged.
+ */
+describe.each([
+  ['0.0.2', schema_0_0_2, migrations_0_0_2],
+  ['0.0.3', schema_0_0_3, migrations_0_0_3],
+  ['0.0.4', schema_0_0_4, migrations_0_0_4],
+  ['0.0.5', schema_0_0_5, migrations_0_0_5],
+] as const)('upgrading a %s site', (_version, schema, migrations) => {
   it('ends with the schema a new installation starts from', async () => {
-    for (const statement of schema_0_0_2) rawDb.prepare(statement).run();
+    for (const statement of schema) rawDb.prepare(statement).run();
     seedLedger(
       rawDb,
-      migrationRegistry.filter(({ id }) => migrations_0_0_2.includes(id)),
-    );
-    await runPendingMigrations(rawDb, { contentPath });
-
-    const fresh = new Database(':memory:');
-    try {
-      for (const statement of baselineSql) fresh.prepare(statement).run();
-      expect(describeSchema(rawDb)).toEqual(describeSchema(fresh));
-    } finally {
-      fresh.close();
-    }
-  });
-});
-
-describe('upgrading a 0.0.3 site', () => {
-  it('ends with the schema a new installation starts from', async () => {
-    for (const statement of schema_0_0_3) rawDb.prepare(statement).run();
-    seedLedger(
-      rawDb,
-      migrationRegistry.filter(({ id }) => migrations_0_0_3.includes(id)),
-    );
-    await runPendingMigrations(rawDb, { contentPath });
-
-    const fresh = new Database(':memory:');
-    try {
-      for (const statement of baselineSql) fresh.prepare(statement).run();
-      expect(describeSchema(rawDb)).toEqual(describeSchema(fresh));
-    } finally {
-      fresh.close();
-    }
-  });
-});
-
-describe('upgrading a 0.0.4 site', () => {
-  it('ends with the schema a new installation starts from', async () => {
-    for (const statement of schema_0_0_4) rawDb.prepare(statement).run();
-    seedLedger(
-      rawDb,
-      migrationRegistry.filter(({ id }) => migrations_0_0_4.includes(id)),
-    );
-    await runPendingMigrations(rawDb, { contentPath });
-
-    const fresh = new Database(':memory:');
-    try {
-      for (const statement of baselineSql) fresh.prepare(statement).run();
-      expect(describeSchema(rawDb)).toEqual(describeSchema(fresh));
-    } finally {
-      fresh.close();
-    }
-  });
-});
-
-describe('upgrading a 0.0.5 site', () => {
-  it('ends with the schema a new installation starts from', async () => {
-    for (const statement of schema_0_0_5) rawDb.prepare(statement).run();
-    seedLedger(
-      rawDb,
-      migrationRegistry.filter(({ id }) => migrations_0_0_5.includes(id)),
+      migrationRegistry.filter(({ id }) =>
+        (migrations as readonly string[]).includes(id),
+      ),
     );
     await runPendingMigrations(rawDb, { contentPath });
 

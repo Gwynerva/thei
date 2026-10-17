@@ -50,7 +50,6 @@ beforeAll(async () => {
   });
   context = await freshTestDb();
   Object.assign(context.server, {
-    useDb: () => context,
     isAdmin: async () => false,
   });
   const { db, schema } = context;

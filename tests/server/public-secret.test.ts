@@ -15,7 +15,6 @@ let otherFiles: unknown[] = [];
 beforeEach(async () => {
   context = await freshTestDb();
   Object.assign(context.server, {
-    useDb: () => context,
     projects: {
       findByUuid: async (projectUuid: string) =>
         context.db

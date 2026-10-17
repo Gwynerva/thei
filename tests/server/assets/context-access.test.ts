@@ -94,7 +94,6 @@ beforeAll(async () => {
   await writeFile(join(context.directory, 'original-hash.webp'), 'original');
   await writeFile(join(context.directory, 'preview-hash.webp'), 'preview!');
   Object.assign(context.server, {
-    useDb: () => context,
     config: {
       get siteAccessLevel() {
         return siteAccess;

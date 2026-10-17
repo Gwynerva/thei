@@ -37,7 +37,6 @@ const warn = vi.fn();
 beforeEach(async () => {
   context = await freshTestDb();
   Object.assign(context.server, {
-    useDb: () => context,
     console: { tag: () => ({ warn, error: warn }) },
   });
   vi.mocked(collectExternalLink).mockReset();

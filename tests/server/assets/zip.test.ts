@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -55,11 +55,18 @@ describe('zipFileToPath', () => {
 
   it('produces identical archives for identical bytes', async () => {
     const input = Buffer.from('payload');
-    const first = (await zip(input, 'pdf')).archive;
-    await new Promise((resolve) => setTimeout(resolve, 2100));
-    const second = (await zip(input, '../pdf')).archive;
+    // Made a year apart: an archive stamped with the time would differ.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date(2026, 0, 1, 9, 0, 0));
+      const first = (await zip(input, 'pdf')).archive;
+      vi.setSystemTime(new Date(2027, 5, 15, 21, 30, 10));
+      const second = (await zip(input, '../pdf')).archive;
 
-    expect(second.equals(first)).toBe(true);
+      expect(second.equals(first)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('leaves no archive behind when the source cannot be read', async () => {

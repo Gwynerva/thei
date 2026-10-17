@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { migrationRegistry } from '../../update/migrations';
 import { runPendingMigrations, seedLedger } from '../../update/migrations/run';
+import { insertRow } from '../helpers/insert-row';
 import { writeSiteConfig_0_0_2 } from '../helpers/site-config';
 import { migrations_0_0_3, schema_0_0_3 } from './fixtures/schema-0.0.3';
 
@@ -35,21 +36,8 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true });
 });
 
-function insert(table: string, row: Record<string, unknown>) {
-  const columns = Object.keys(row);
-  rawDb
-    .prepare(
-      `INSERT INTO \`${table}\` (${columns.map((column) => `\`${column}\``).join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
-    )
-    .run(
-      ...columns.map((column) => {
-        const value = row[column];
-        return value !== null && typeof value === 'object'
-          ? JSON.stringify(value)
-          : value;
-      }),
-    );
-}
+const insert = (table: string, row: Record<string, unknown>) =>
+  insertRow(rawDb, table, row);
 
 const all = <T = Record<string, unknown>>(sql: string, ...params: unknown[]) =>
   rawDb.prepare(sql).all(...params) as T[];

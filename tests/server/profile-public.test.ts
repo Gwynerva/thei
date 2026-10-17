@@ -82,7 +82,6 @@ beforeAll(async () => {
   Object.assign(globalThis, { defineEventHandler });
   context = await freshTestDb();
   Object.assign(context.server, {
-    useDb: () => context,
     isAdmin: async () => false,
     content: { findByOwner: async () => undefined },
   });

@@ -41,7 +41,6 @@ import {
   listTemplates,
   saveTemplate,
 } from '../../server/thei/ai/templates/store';
-import { setTheiConfig, theiConfig } from '../../server/thei/config/index';
 import { invalidateMcpDocuments } from '../../server/thei/mcp/documents';
 import { directTools } from '../../server/thei/mcp/registry';
 import {
@@ -49,8 +48,12 @@ import {
   type FakeModel,
   type FakeTurn,
 } from '../helpers/fake-model';
-import { freshTestDb } from '../helpers/fresh-db';
-import { serverRepositories } from '../helpers/server-repositories';
+import {
+  aiOnConfig,
+  fakeModelSettings,
+  freshAiTestDb,
+  holdSiteConfig,
+} from '../helpers/fresh-ai-db';
 
 /**
  * The built-in checks and the owner's ready-made requests. A check is given
@@ -61,7 +64,7 @@ import { serverRepositories } from '../helpers/server-repositories';
  * entity's ✦ it looks at that entity alone, and again from the start when
  * asked; two runs never share what they look at.
  */
-let context: Awaited<ReturnType<typeof freshTestDb>>;
+let context: Awaited<ReturnType<typeof freshAiTestDb>>;
 let model: FakeModel | undefined;
 /** What the model answers next; it may take its time. */
 let reply: () => FakeTurn | Promise<FakeTurn> = () => ({ text: 'Looked.' });
@@ -89,23 +92,8 @@ const paragraph = (id: string, text: string) => ({
 const link = (type: string, id: string, words: string, fragment?: string) =>
   `<a data-content-link="entity" data-entity-type="${type}" data-entity-id="${id}"${fragment ? ` data-entity-fragment="${fragment}"` : ''}>${words}</a>`;
 
-function insert(table: string, row: Record<string, unknown>) {
-  context.rawDb
-    .prepare(
-      `INSERT INTO \`${table}\` (${Object.keys(row)
-        .map((key) => `\`${key}\``)
-        .join(', ')}) VALUES (${Object.keys(row)
-        .map(() => '?')
-        .join(', ')})`,
-    )
-    .run(
-      ...Object.values(row).map((value) =>
-        value !== null && typeof value === 'object'
-          ? JSON.stringify(value)
-          : value,
-      ),
-    );
-}
+const insert = (table: string, row: Record<string, unknown>) =>
+  context.insert(table, row);
 
 let clock = 10;
 /** Writes a text as the owner's form would: the text, and its entity's version. */
@@ -156,42 +144,12 @@ function addDiary(id: string, day: string, text: string) {
 }
 
 beforeEach(async () => {
-  context = await freshTestDb();
-  Object.assign(context.server, {
-    useDb: () => context,
-    version: '0.0.6',
-    console: {
-      log() {},
-      warn() {},
-      error() {},
-      tag: () => ({ log() {}, warn() {}, error() {} }),
-    },
-    ...serverRepositories,
-  });
+  context = await freshAiTestDb();
   model = await startFakeModel(() => reply());
-  setTheiConfig({
-    version: '0.0.6',
-    siteUrl: 'https://example.test',
-    languageCode: 'en',
-    mcp: {
-      enabled: true,
-      instructions: '',
-      model: {
-        provider: 'openai',
-        apiKey: '',
-        baseUrl: model.url,
-        model: 'fake-small',
-      },
-      monthlyTokens: 10_000_000,
-    },
-  } as never);
-  Object.defineProperty(context.server, 'config', {
-    configurable: true,
-    get: () => theiConfig,
-  });
-  Object.assign(globalThis, {
-    useRuntimeConfig: () => ({ app: { baseURL: '/' } }),
-  });
+  holdSiteConfig(
+    context.server,
+    aiOnConfig({ model: fakeModelSettings(model) }),
+  );
   insert('profiles', { profileId: 'profile', displayName: 'Owner' });
   insert('projects', {
     projectUuid: PROJECT,
