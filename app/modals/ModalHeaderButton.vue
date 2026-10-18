@@ -4,6 +4,13 @@ import type { IconName } from '#thei/icons';
 withDefaults(
   defineProps<{
     icon?: IconName;
+    /** The icon's own colour, as the ✦ of AI wears the accent. */
+    iconClass?: string;
+    /**
+     * On a phone the words give way to this icon, the button a square named
+     * by its label: the floppy disk of a Save.
+     */
+    phoneIcon?: IconName;
     label: string;
     variant?: 'default' | 'delete' | 'accent';
     size?: 'default' | 'compact';
@@ -23,7 +30,7 @@ withDefaults(
       rounded-normal text-sm font-semibold transition-colors
       disabled:cursor-auto"
     :class="{
-      'h-9 px-xs': size === 'default',
+      'h-9 px-xs pointer-coarse:h-11': size === 'default',
       'size-7 px-0': size === 'compact',
       'bg-bg-3 text-text-2': variant !== 'accent',
       // Its popup open, it looks as it does under the pointer.
@@ -36,10 +43,15 @@ withDefaults(
       not-disabled:hocus:bg-accent`]: variant === 'accent',
       'disabled:bg-bg-accent disabled:text-text-2': variant === 'accent',
       'pointer-events-none opacity-40': disabled && size === 'compact',
-      'w-9 px-0': size === 'default' && icon && !$slots.default,
+      'w-9 px-0 pointer-coarse:w-11':
+        size === 'default' && icon && !$slots.default,
+      'max-sm:w-9 max-sm:px-0 max-sm:pointer-coarse:w-11':
+        size === 'default' && phoneIcon,
     }"
   >
-    <Icon v-if="icon" :name="icon" />
-    <slot></slot>
+    <Icon v-if="icon" :name="icon" :class="iconClass" />
+    <Icon v-if="phoneIcon" :name="phoneIcon" class="sm:hidden" />
+    <span v-if="phoneIcon" class="max-sm:hidden"><slot></slot></span>
+    <slot v-else></slot>
   </button>
 </template>

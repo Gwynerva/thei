@@ -30,6 +30,8 @@ export interface AssetDescriptionResponse extends AssetDescription {
   offers?: AiEntityOffer[];
   asking?: AiFieldAsk[];
   modelReady?: boolean;
+  /** With AI on: what waits for the owner across sessions, for the admin bar's ✦. */
+  waiting?: number;
 }
 
 /** What a save sends: the words, and the version they were written over. */

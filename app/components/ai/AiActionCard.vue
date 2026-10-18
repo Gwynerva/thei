@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import type { IconName } from '#thei/icons';
 import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';
 import type { AiActionItem } from '#layers/thei/shared/ai';
 import {
@@ -91,14 +90,6 @@ const title = computed(() => {
   }
   return phrase.value.ai_action_card_title(props.actions.length);
 });
-const icon = computed<IconName>(
-  () =>
-    (sameKind.value &&
-      (AI_ACTION_INFO[props.actions[0]!.kind as AiActionKind]?.icon as
-        IconName | undefined)) ||
-    'blocks',
-);
-
 // ---- Answers ------------------------------------------------------------------
 
 async function run(work: () => Promise<void>) {
@@ -123,6 +114,8 @@ async function applyNow(actions: AiActionItem[]) {
   tellEntitiesChanged(outcome.changed);
   if (outcome.refused) showToast(outcome.refused);
   else if (outcome.failed) showToast(outcome.failed.error);
+  // Said as declining is, so no word of an earlier step stays up.
+  else showToast(phrase.value.ai_toast_applied(outcome.applied.length));
   return !outcome.refused && !outcome.failed;
 }
 
@@ -185,10 +178,10 @@ function restore(action: AiActionItem) {
   });
 }
 
+/** Said in the thread itself, where the comment and the answer come: no toast. */
 function comment(action: AiActionItem, text: string) {
   return run(async () => {
     await aiApi.comment(action.actionUuid, text);
-    showToast(phrase.value.ai_toast_comment_sent);
   });
 }
 
@@ -201,13 +194,14 @@ const settled = computed(() =>
 <template>
   <div
     ref="root"
-    class="@container min-w-0 overflow-hidden rounded-normal border
-      border-border-1 bg-bg-2 [--ai-chip-surface:var(--color-bg-2)]"
+    class="@container flex min-w-0 flex-col overflow-hidden rounded-normal
+      border border-border-1 bg-bg-2 [--ai-chip-surface:var(--color-bg-2)]"
     :data-card="lone ? 'single' : 'bundle'"
     :data-card-state="settled || 'pending'"
   >
     <AiActionRow
       v-if="lone"
+      class="flex-1"
       :action="actions[0]!"
       :decisions="decisionsOf(actions[0]!)"
       :busy
@@ -219,14 +213,12 @@ const settled = computed(() =>
       @comment="(text: string) => comment(actions[0]!, text)"
     />
     <template v-else>
-      <div class="flex min-w-0 items-center gap-2 px-3 py-2.5">
-        <span
-          class="flex size-7 shrink-0 items-center justify-center rounded-normal
-            bg-bg-accent text-accent"
-        >
-          <Icon :name="icon" />
-        </span>
-        <span class="min-w-0 flex-1 truncate text-sm font-semibold">{{
+      <!-- Headed as a lone card is: on its own ground, in words. -->
+      <div
+        class="flex min-w-0 items-center gap-2.5 border-b border-border-1
+          bg-bg-3 px-3 py-2"
+      >
+        <span class="min-w-0 flex-1 truncate py-0.5 text-sm font-semibold">{{
           title
         }}</span>
         <template v-if="pending.length">
@@ -258,21 +250,13 @@ const settled = computed(() =>
         @never="never(action)"
         @comment="(text: string) => comment(action, text)"
       />
+      <!-- Decided as a lone one is: what it says first, the decisions at
+           the end. -->
       <div
         v-if="pending.length && !archived"
-        class="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-t
-          border-border-1 bg-bg-3/35 px-3 py-2"
+        class="flex flex-wrap items-center gap-1.5 border-t border-border-1
+          bg-bg-3 px-3 py-2"
       >
-        <Button
-          class="flex h-8 items-center gap-1.5 font-semibold whitespace-nowrap
-            pointer-coarse:h-11"
-          :disabled="busy || (!chosen.length && !atomic)"
-          data-card-apply
-          @click="applyBundle"
-        >
-          <Icon v-if="busy" name="loading" />
-          {{ phrase.ai_action_apply_count(chosen.length) }}
-        </Button>
         <span class="min-w-32 flex-1 text-xs text-text-3">{{
           atomic
             ? phrase.ai_action_atomic_hint
@@ -280,18 +264,32 @@ const settled = computed(() =>
               ? phrase.ai_action_unticked_hint
               : ''
         }}</span>
-        <Button
-          variant="secondary"
-          size="icon-sm"
-          class="pointer-coarse:size-11"
-          :disabled="busy"
-          :aria-label="phrase.ai_action_reject_all"
-          :data-title-popup="phrase.ai_action_reject_all"
-          data-card-reject
-          @click="reject(pending)"
-        >
-          <Icon name="close" />
-        </Button>
+        <!-- Together, and at the end, however they wrap. -->
+        <span class="ml-auto flex gap-1.5">
+          <Button
+            variant="raised"
+            size="icon-sm"
+            class="pointer-coarse:size-11"
+            :disabled="busy"
+            :aria-label="phrase.ai_action_reject_all"
+            :data-title-popup="phrase.ai_action_reject_all"
+            data-card-reject
+            @click="reject(pending)"
+          >
+            <Icon name="close" />
+          </Button>
+          <Button
+            class="flex h-8 items-center gap-1 px-2.5 text-sm font-semibold
+              whitespace-nowrap pointer-coarse:h-11"
+            :disabled="busy || (!chosen.length && !atomic)"
+            data-card-apply
+            @click="applyBundle"
+          >
+            <Icon :name="busy ? 'loading' : 'check'" />{{
+              phrase.ai_action_apply_count(chosen.length)
+            }}
+          </Button>
+        </span>
       </div>
     </template>
     <ContentInlineLinkDecorator :root :resolver="linkResolver" />

@@ -1,4 +1,5 @@
 import type { AiEntityType, AiMessagePart } from '#layers/thei/shared/ai';
+import type { AiTemplateRunResponse } from '#layers/thei/shared/ai-template';
 import { refuse as fail } from '../../entity-patch/text';
 import { entityFace } from '../../entity-kinds';
 import {
@@ -20,6 +21,8 @@ import { CHECK_BATCH_TOOL } from '../../mcp/tools/checks';
 import {
   busySubjects,
   coverageOf,
+  coveredSince,
+  forgetAll,
   forgetSubjects,
   holdBatch,
   lastAsked,
@@ -80,9 +83,14 @@ export async function runTemplate(
     request?: string;
     /** The model chosen for its session; none for the connection's. */
     model?: string;
+    /**
+     * Over the whole archive, all it looked at is forgotten first: it looks
+     * at everything again, from the start, a run's worth at a time.
+     */
+    again?: boolean;
     now?: number;
   } = {},
-): Promise<{ sessionUuid: string | null }> {
+): Promise<AiTemplateRunResponse> {
   const template =
     findTemplate(templateId) ?? fail('There is no such template.');
   const key =
@@ -96,6 +104,7 @@ export async function runTemplate(
   const worded =
     plainWords(request) !== '' &&
     plainWords(request) !== plainWords(template.instruction);
+  if (options.again && !scope) forgetAll(templateId);
   const dueNow = () =>
     source.due({
       scope,
@@ -123,7 +132,22 @@ export async function runTemplate(
       due = await dueNow();
     }
   }
-  if (!due.length) return { sessionUuid: null };
+  // Nothing new: how much it has looked at, and where it last looked, for
+  // the owner to see what it found — or to have it look again.
+  if (!due.length) {
+    const last = template.lastSession;
+    return {
+      sessionUuid: null,
+      ...(scope ? {} : { looked: coveredSince(templateId, 0) }),
+      ...(last
+        ? {
+            lastSessionUuid: last.sessionUuid,
+            // What waits in an archived session counts nowhere.
+            lastWaiting: last.archived ? 0 : last.waiting,
+          }
+        : {}),
+    };
+  }
 
   const now = options.now ?? Date.now();
   const faces = (scope ?? []).flatMap((item) => faceOf(item) ?? []);
@@ -279,12 +303,13 @@ export async function continueRun(
   const narrowed = [
     ask?.areas?.length ? `the areas ${ask.areas.join(', ')}` : '',
     ask?.refs?.length ? `the refs ${ask.refs.join(', ')}` : '',
+    ask?.count ? `count ${next.next}` : '',
   ]
     .filter(Boolean)
     .join(' and ');
   const messageUuid = postOwnerMessage(sessionUuid, {
     text: words,
-    brief: `${words}\n\n(Thei: the owner goes on with the check «${template.title}». Call ${CHECK_BATCH_TOOL}${narrowed ? ` with ${narrowed}` : ''} for the next batch and do with it as before; call it again for the one after while what the owner asked for is not done.)`,
+    brief: `${words}\n\n(Thei: the owner goes on with the check «${template.title}». Call ${CHECK_BATCH_TOOL} once${narrowed ? ` with ${narrowed}` : ''} for the next batch and do with it as before. Only that batch: the owner asked for ${next.next} more, as the button they pressed said.)`,
   });
   return { messageUuid };
 }

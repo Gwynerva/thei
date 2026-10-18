@@ -226,6 +226,14 @@ test('the tabs that need AI point to the switch', async ({ page }) => {
   await open(page, '/admin/ai/');
   await expect(page.locator('[data-ai-off]')).toHaveCount(0);
   await expect(page.getByRole('switch', { name: 'AI in Thei' })).toBeVisible();
+  // And the site's settings hold the switch itself: with the ✦ gone, that
+  // is where it is looked for.
+  await open(page, '/admin/settings/');
+  await expect(
+    page
+      .locator('[data-ai-switch]')
+      .getByRole('switch', { name: 'AI in Thei' }),
+  ).toBeVisible();
 });
 
 test('what would change AI answers as if it were not there', async ({

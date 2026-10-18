@@ -15,7 +15,8 @@ names itself with an `aria-label`.
 
 - Wrap each field in `Field`, label first.
 - Give every field a label. A switch with no label of its own has its words
-  beside it, which count as one (`FieldToggle`).
+  beside it, which count as one (`FieldToggle`). Under a finger the switch
+  answers in a finger's height around it, its look unchanged.
 - The control the label should focus carries `data-label-focus`;
   `FieldInput`, `FieldTextarea`, `FieldSelect` and `FieldDateButton` already
   do.
@@ -36,15 +37,18 @@ When an AI proposes something for a field, its label turns to the accent and a
 pointer rests on the ✦ for a moment, and stays while the pointer moves into it;
 a tap or the keyboard open it too. It is drawn as its session's card draws it:
 take it into the form, decline it or comment on it. Several proposals at one
-field are gone through one at a time, the pager (‹ 1/2 ›) at the left of the
-card's own row of buttons. A text edit opens in the text's own editor instead.
+field are gone through one at a time, the pager (‹ 1/2 ›) at the start of the
+card's footer, before its decisions. A text edit opens in the text's own editor instead.
 
 With AI on and a model to answer, a quiet ✦ stands at every such label but
 a switch's, and asks about the field: a click opens a small box — a sheet on
 a phone — with the field's ready requests («Опиши файл», «Предложи
 название») and room for the owner's own words. A session answers in the
 background; the ✦ runs meanwhile, its box says so and can stop it, and what
-the model proposes waits at the label as any proposal. With AI off there is no
+the model proposes waits at the label as any proposal; an answer with nothing
+to propose puts the box away and stays beside the ✦, one line of the model's
+words. A request that only mends what is there — check the dates, make it
+shorter — is offered once the field holds something. With AI off there is no
 ✦; with nothing proposed the label stays plain. A list with no label of its
 own — tags, relations — asks from its heading (`SectionHeader`'s `ai`), its
 proposals standing among its chips. See [AI in the UI](../patterns/ai-in-the-ui.md).

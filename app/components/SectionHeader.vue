@@ -34,8 +34,17 @@ defineSlots<{ action?: () => unknown }>();
           font-semibold text-text-2 sm:flex-row sm:justify-start"
       >
         <Icon v-if="icon" :name="icon" />
-        <h2 v-if="title" class="text-center sm:text-left">{{ title }}</h2>
-        <AiFieldOffer v-if="ai" :place="ai" ask-only />
+        <!-- The ✦ stays on the title's line, centred with it on a phone,
+             rather than on a line of its own like an ornament. -->
+        <span
+          v-if="title"
+          class="inline-flex max-w-full flex-wrap items-center justify-center
+            gap-xs text-center sm:justify-start sm:text-left"
+        >
+          <h2>{{ title }}</h2>
+          <AiFieldOffer v-if="ai" :place="ai" :label="title" ask-only />
+        </span>
+        <AiFieldOffer v-else-if="ai" :place="ai" ask-only />
       </div>
       <p v-if="description" class="text-center text-text-3 sm:text-left">
         {{ description }}

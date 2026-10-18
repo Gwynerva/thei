@@ -10,7 +10,7 @@ import { typedLines } from '#layers/thei/shared/ai-message-text';
  * wakes up when there is something to send. Enter sends, Shift+Enter breaks
  * the line; on a touch screen Enter breaks it and the button sends.
  */
-defineProps<{
+const props = defineProps<{
   about?: string;
   aboutIcon?: IconName;
   /** Ready answers to send at a tap; an action's two by default. */
@@ -48,7 +48,10 @@ function keydown(event: KeyboardEvent) {
 
 onMounted(() => {
   grow();
-  area.value?.focus();
+  // On a touch screen the keyboard would come up over the ready answers,
+  // which are what a finger takes most: there the field waits for a tap.
+  const answers = (props.quick ?? phrase.value.ai_comment_quick).length;
+  if (!answers || !matchMedia('(pointer: coarse)').matches) area.value?.focus();
 });
 defineExpose({ focus: () => area.value?.focus() });
 </script>

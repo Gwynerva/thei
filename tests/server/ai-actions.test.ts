@@ -1,9 +1,11 @@
+import { actionsById } from '../../server/thei/ai/sessions/view';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readEventEdit, saveEventEdit } from '../../server/thei/events/edit';
 import type { EventEditData } from '../../shared/event';
 import {
   createSession,
   findSession,
+  insertMessage,
 } from '../../server/thei/ai/sessions/store';
 import {
   proposeActions,
@@ -1512,6 +1514,38 @@ describe('a relation', () => {
   });
 });
 
+describe('a new version after a comment', () => {
+  it('replaces the commented one, though the model did not say so', async () => {
+    const sessionUuid = session();
+    const first = await proposed(sessionUuid, {
+      kind: 'field',
+      target: `project:${PROJECT}`,
+      field: 'summary',
+      value: 'A remake',
+    });
+    // The owner comments on it: their message names the action.
+    const { db, schema } = THEI_SERVER.useDb();
+    db.transaction((tx) =>
+      insertMessage(tx, schema, sessionUuid, {
+        role: 'owner',
+        text: 'Shorter',
+        parts: [{ type: 'comment', actionUuid: first }],
+      }),
+    );
+    const second = await proposed(sessionUuid, {
+      kind: 'field',
+      target: `project:${PROJECT}`,
+      field: 'summary',
+      value: 'Remake',
+    });
+    expect(findAction(first)).toMatchObject({ state: 'superseded' });
+    expect(findAction(second)).toMatchObject({
+      state: 'pending',
+      supersedes: first,
+    });
+  });
+});
+
 describe('never again', () => {
   it('said of a declined action reaches a page watching its session', async () => {
     const sessionUuid = session();
@@ -1529,5 +1563,22 @@ describe('never again', () => {
     neverAgain(actionUuid);
     stop();
     expect(heard).toEqual([actionUuid]);
+  });
+
+  it('is taken back with the action brought back to be decided', async () => {
+    const sessionUuid = session();
+    const actionUuid = await proposed(sessionUuid, {
+      kind: 'field',
+      target: `project:${PROJECT}`,
+      field: 'summary',
+      value: 'A remake of a remake',
+    });
+    rejectActions([actionUuid], { never: true });
+    expect((await actionsById([actionUuid]))[0]).toMatchObject({ never: true });
+    await restoreActions([actionUuid]);
+    expect((await actionsById([actionUuid]))[0]).toMatchObject({
+      state: 'pending',
+      never: false,
+    });
   });
 });

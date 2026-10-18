@@ -20,13 +20,18 @@ export function cleanSessionTitle(value: string, max = 200): string {
   return normalizeHeadingText(value.replace(/\s+/g, ' ').trim().slice(0, max));
 }
 
-/** The start of the owner's first words, as a session goes by until named. */
-export function titleFromWords(text: string): string {
-  const line = text
+/** Words with their Markdown dropped — a link by its words — on one line. */
+function plainLine(text: string): string {
+  return text
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/[*_`#>\\]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** The start of the owner's first words, as a session goes by until named. */
+export function titleFromWords(text: string): string {
+  const line = plainLine(text);
   if (line.length <= FIRST_WORDS_MAX) return cleanSessionTitle(line);
   const cut = line.slice(0, FIRST_WORDS_MAX);
   const space = cut.lastIndexOf(' ');
@@ -67,8 +72,11 @@ export function nameSession(
   if (!live()) return 'The turn was stopped; it was not named.';
   const session = findSession(sessionUuid);
   if (!session || !sessionUnnamed(session)) return 'It has its name already.';
+  // A name is shown as words: a link the model wrote in it, by its words.
   const title =
-    typeof name === 'string' ? cleanSessionTitle(name, SESSION_NAME_MAX) : '';
+    typeof name === 'string'
+      ? cleanSessionTitle(plainLine(name), SESSION_NAME_MAX)
+      : '';
   if (!title) return 'A name needs its words.';
   updateSession(sessionUuid, { title });
   publishSession(sessionUuid, { type: 'session' });

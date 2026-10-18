@@ -72,6 +72,12 @@ export interface PopupMiddlewareOptions {
   /** Kept clear of the window's edge. */
   padding: number;
   shiftCrossAxis?: boolean;
+  /**
+   * Placed once and still open: it keeps that side. What it holds may grow —
+   * an answer coming in — and it scrolls in the room it has rather than jump
+   * to the other side of its anchor.
+   */
+  keepSide?: boolean;
   /** The arrow's square, or nothing for a popup without one. */
   arrowSize?: number;
   arrowElement?: MaybeRefOrGetter<HTMLElement | null | undefined>;
@@ -182,16 +188,20 @@ export function popupMiddleware(options: PopupMiddlewareOptions): Middleware[] {
   const reach = arrowSize ? Math.round(arrowSize * Math.SQRT1_2) : 0;
   return [
     offsetMiddleware(options.gap + reach),
-    flip({
-      padding,
-      fallbackPlacements: popupFallbacks(
-        options.placement,
-        options.fallbackPlacements,
-      ),
-      // Going past the window along its side is the sliding's to mend: only
-      // no room at the side it stands on turns it elsewhere.
-      crossAxis: 'alignment',
-    }),
+    ...(options.keepSide
+      ? []
+      : [
+          flip({
+            padding,
+            fallbackPlacements: popupFallbacks(
+              options.placement,
+              options.fallbackPlacements,
+            ),
+            // Going past the window along its side is the sliding's to mend:
+            // only no room at the side it stands on turns it elsewhere.
+            crossAxis: 'alignment',
+          }),
+        ]),
     shift({ padding, crossAxis: Boolean(options.shiftCrossAxis) }),
     size({
       padding,
@@ -304,9 +314,13 @@ export function usePopupPlacement(
   arrowElement: Ref<HTMLElement | null | undefined>,
   options: PopupPlacementOptions,
 ) {
+  /** The side it was placed on, kept while it stays open. */
+  const kept = ref<Placement>();
+  watch(options.open, () => (kept.value = undefined));
   const middleware = computed(() =>
     popupMiddleware({
-      placement: toValue(options.placement),
+      placement: kept.value ?? toValue(options.placement),
+      keepSide: Boolean(kept.value),
       fallbackPlacements: toValue(options.fallbackPlacements),
       gap: toValue(options.gap),
       padding: toValue(options.padding),
@@ -325,7 +339,7 @@ export function usePopupPlacement(
       // transform, at the window's corner.
       transform: false,
       open: options.open,
-      placement: computed(() => toValue(options.placement)),
+      placement: computed(() => kept.value ?? toValue(options.placement)),
       middleware,
       whileElementsMounted(anchor, element, performUpdate) {
         return autoUpdate(anchor, element, performUpdate, {
@@ -333,6 +347,11 @@ export function usePopupPlacement(
         });
       },
     });
+
+  watch(isPositioned, (positioned) => {
+    if (positioned && options.open.value && !kept.value)
+      kept.value = placement.value;
+  });
 
   const side = computed(() => popupSide(placement.value));
   const hidden = computed(() =>

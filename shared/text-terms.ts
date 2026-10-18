@@ -154,3 +154,101 @@ export function containsPhrase(normalizedText: string, phrase: string) {
 function isWordCharacter(character: string | undefined) {
   return character !== undefined && /[\p{L}\p{N}]/u.test(character);
 }
+
+/** Shorter words say little on their own: prepositions, pronouns. */
+const MIN_MEANINGFUL_LENGTH = 4;
+/**
+ * Words that say nothing of what a text is about, for an archive still too
+ * small for their frequency to rule them out. Stems of the normalized forms.
+ */
+const FUNCTION_STEMS = new Set(
+  [
+    'который',
+    'которая',
+    'которые',
+    'этого',
+    'этот',
+    'этой',
+    'этом',
+    'этих',
+    'было',
+    'была',
+    'были',
+    'будет',
+    'очень',
+    'тоже',
+    'также',
+    'когда',
+    'потом',
+    'сейчас',
+    'просто',
+    'только',
+    'можно',
+    'нужно',
+    'чтобы',
+    'если',
+    'даже',
+    'всего',
+    'всех',
+    'себя',
+    'меня',
+    'тебя',
+    'него',
+    'своей',
+    'свой',
+    'того',
+    'тому',
+    'есть',
+    'вообще',
+    'ещё',
+    'уже',
+    'тогда',
+    'там',
+    'тут',
+    'that',
+    'this',
+    'with',
+    'from',
+    'have',
+    'were',
+    'will',
+    'would',
+    'there',
+    'their',
+    'about',
+    'which',
+    'what',
+    'when',
+    'into',
+    'than',
+    'then',
+    'them',
+    'they',
+    'been',
+    'also',
+    'just',
+    'some',
+    'more',
+    'very',
+    'around',
+    'after',
+    'before',
+    'could',
+    'should',
+    'other',
+    'these',
+    'those',
+    'where',
+    'while',
+  ].map((word) => stemTerm(normalizeTermText(word))),
+);
+
+/**
+ * A normalized word too short or too common in any text to say what a text
+ * is about: a keyword, a word a tag is recognized by.
+ */
+export function saysLittle(token: string): boolean {
+  return (
+    token.length < MIN_MEANINGFUL_LENGTH || FUNCTION_STEMS.has(stemTerm(token))
+  );
+}

@@ -196,6 +196,7 @@ useModalCloseGuard(
         <ModalHeaderButton
           v-if="!builtin"
           variant="accent"
+          :phone-icon="canSave || isNew ? 'save' : 'check'"
           :label="canSave || isNew ? phrase.save : phrase.saved"
           :disabled="!canSave"
           data-template-save

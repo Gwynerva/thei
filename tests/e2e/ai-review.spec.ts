@@ -77,6 +77,15 @@ const CORRECTIONS: Record<string, Record<string, unknown>[]> = {
     },
     { find: 'sea', replace: 'Sea', category: 'case', reason: 'A name.' },
   ],
+  // Its own, since a proposal declined lately is not made again.
+  fifth: [
+    {
+      find: 'captain',
+      replace: 'Captain',
+      category: 'case',
+      reason: 'A title.',
+    },
+  ],
 };
 
 function lastOwnerWords(request: FakeRequest): string {
@@ -284,9 +293,14 @@ test.afterAll(async ({ request }) => {
 });
 
 let errors: string[] = [];
-test.beforeEach(({ page }) => {
+test.beforeEach(async ({ page }) => {
   errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  // These read the text as it will be; the view it opens on unchosen is
+  // checked on its own.
+  await page.addInitScript(() =>
+    localStorage.setItem('thei-review-view', 'read'),
+  );
 });
 test.afterEach(() => {
   expect(errors).toEqual([]);
@@ -391,9 +405,11 @@ test('keeps a part left as it was in reach, and closing keeps the word on it', a
   await expect(card(page)).toBeHidden();
   await expect(review(page)).toBeVisible();
 
-  // Nothing taken, the finish only closes; Escape does the same, and the
-  // word on the part left goes to its session.
-  await expect(page.locator('[data-review-finish]')).toHaveText('Close');
+  // Nothing taken yet, the finish offers the sure part still waiting;
+  // Escape only closes, and the word on the part left goes to its session.
+  await expect(page.locator('[data-review-finish]')).toContainText(
+    'Accept the sure ones',
+  );
   await page.keyboard.press('Escape');
   await expect(review(page)).toBeHidden();
   await expect
@@ -408,6 +424,35 @@ test('keeps a part left as it was in reach, and closing keeps the word on it', a
         .join();
     })
     .toContain(`${left}:kept`);
+
+  // Declined, it no longer waits in the entry's editor for the tests after.
+  const detail = await (
+    await page.request.get(`/api/admin/ai/sessions/${sessionUuid}`)
+  ).json();
+  expect(
+    (
+      await page.request.post(
+        `/api/admin/ai/actions/${detail.actions[0].actionUuid}/reject`,
+        { data: {} },
+      )
+    ).ok(),
+  ).toBe(true);
+});
+
+test('opens on what goes and what comes until a view is chosen', async ({
+  page,
+}) => {
+  // No view chosen yet: a correction is seen with the words it replaces.
+  await page.addInitScript(() => localStorage.removeItem('thei-review-view'));
+  await page.setViewportSize(DESKTOP);
+  await propose(page, 'Proofread the fifth time');
+  const sessionUuid = new URL(page.url()).searchParams.get('session')!;
+  await page.locator('[data-action-open]').last().click();
+  await expect(review(page)).toBeVisible();
+  await expect(review(page).locator('del').first()).toBeVisible();
+  await expect(review(page).locator('ins').first()).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(review(page)).toBeHidden();
 
   // Declined, it no longer waits in the entry's editor for the tests after.
   const detail = await (
@@ -487,8 +532,12 @@ test('takes corrections into the editor as one change, the save button never fli
   await expect(review(page)).toBeVisible();
   await expect(review(page).locator('.review-mark')).toHaveText('the');
 
-  await page.locator('[data-review-sure]').click();
-  await page.locator('[data-review-finish]').click();
+  // Nothing taken yet, the finish takes the sure ones; then it applies them.
+  const finishing = page.locator('[data-review-finish]');
+  await expect(finishing).toHaveText('Accept the sure ones · 1');
+  await finishing.click();
+  await expect(finishing).toHaveText('Put in · 1');
+  await finishing.click();
   await expect(review(page)).toBeHidden();
   await expect(page.locator('dialog .content-editor')).toContainText(
     'for the captain',

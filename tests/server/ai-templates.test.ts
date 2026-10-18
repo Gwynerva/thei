@@ -239,7 +239,7 @@ describe('the built-in checks', () => {
       'Mistakes in the text',
       'File descriptions',
       'Broken links',
-      'Relations and links between entities',
+      'Relations and links',
       'Tag audit',
     ]);
     const keys = Object.keys(findTemplate(id('proofread'))!);
@@ -309,6 +309,27 @@ describe('a run', () => {
 
     expect(await run('proofread')).toBeNull();
     expect(model!.requests).toHaveLength(1);
+    // Nothing new: how much it has looked at, and where it last looked,
+    // with nothing waiting there.
+    const nothing = await runTemplate(id('proofread'));
+    expect(nothing).toEqual({
+      sessionUuid: null,
+      looked: coverageOf(id('proofread')).size,
+      lastSessionUuid: first,
+      lastWaiting: 0,
+    });
+    expect(nothing.looked).toBeGreaterThan(0);
+  });
+
+  it('looks at all of the archive again when asked to', async () => {
+    expect(await run('proofread')).not.toBeNull();
+    expect(await run('proofread')).toBeNull();
+    const requests = model!.requests.length;
+    // Asked to look again, it forgets what it looked at and starts over.
+    const again = await run('proofread', { again: true });
+    expect(again).not.toBeNull();
+    expect(model!.requests.length).toBeGreaterThan(requests);
+    expect(brief(again!)).toContain('Went to the Kuzova islnds');
   });
 
   it('is given, of a text changed since, only the paragraph changed', async () => {
@@ -570,7 +591,7 @@ describe('a ready-made request', () => {
       ['Mistakes in the text', 'proofread'],
       ['File descriptions', 'describe'],
       ['Broken links', 'links'],
-      ['Relations and links between entities', 'graph'],
+      ['Relations and links', 'graph'],
       // A diary entry carries no tags: their audit is not offered on it.
       ['Look over', null],
       ['Project look', null],
@@ -1234,7 +1255,11 @@ describe('batches the owner asks for', () => {
       sessionMessages(sessionUuid!)
         .flatMap((message) => message.parts as AiMessagePart[])
         .find((part) => part.type === 'continue');
-    expect(offer()).toMatchObject({ type: 'continue', full: true });
+    // What is next, and how much it looked at so far.
+    const first = offer() as { next: number; looked: number };
+    // As many as the model asked for, as the button will say.
+    expect(first.next).toBe(1);
+    expect(first.looked).toBeGreaterThan(0);
 
     calls = 0;
     reply = () =>
@@ -1249,8 +1274,30 @@ describe('batches the owner asks for', () => {
     )!;
     expect(words).toMatchObject({ role: 'owner', text: 'Go on' });
     expect(JSON.stringify(words.transcript)).toContain('check_batch');
+    // Told to take that one batch, of as many as the button promised.
+    expect(JSON.stringify(words.transcript)).toContain('count 1');
+    expect(JSON.stringify(words.transcript)).toContain('Only that batch');
     expect(await due('proofread')).toEqual([]);
-    expect(offer()).toBeUndefined();
+    // Nothing left: the last answer says all of it was looked at.
+    expect(offer()).toMatchObject({ type: 'continue', next: 0, looked: 0 });
     expect(await continueRun(sessionUuid!)).toEqual({ messageUuid: null });
+  });
+
+  it('are offered to go on after a turn paused at its limits', async () => {
+    // A model that never stops asking runs into the turn's own limit: a
+    // pause, which gets the offer all the same.
+    reply = () => ({
+      toolCalls: [{ name: 'check_batch', input: { count: 1 } }],
+    });
+    const sessionUuid = await run('proofread', { request: 'All of it.' });
+    const parts = sessionMessages(sessionUuid!)
+      .filter((message) => message.role === 'model')
+      .at(-1)!.parts as AiMessagePart[];
+    expect(parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'notice', kind: 'turns' }),
+        expect.objectContaining({ type: 'continue' }),
+      ]),
+    );
   });
 });

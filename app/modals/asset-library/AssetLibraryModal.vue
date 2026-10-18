@@ -9,6 +9,7 @@ import {
   type AssetLibraryResponse,
   type AssetLibraryFilesResponse,
   type AssetLibraryItem,
+  type AssetLibraryDescribed,
   type AssetLibraryWhere,
   type AssetSelectionConstraints,
 } from '#layers/thei/shared/asset-library';
@@ -39,6 +40,7 @@ const query = ref('');
 const type = ref<AssetType | ''>('');
 /** Where the files shown are used. */
 const where = ref<AssetLibraryWhere>('all');
+const described = ref<AssetLibraryDescribed | ''>('');
 /** How the last answer counted each choice of the filters. */
 const facets = ref<AssetLibraryFacets>();
 const sections = ref<AssetLibrarySection[]>([]);
@@ -74,6 +76,7 @@ const requestQuery = () => ({
   ...assetLibraryWhereQuery(where.value),
   q: query.value,
   type: type.value || undefined,
+  described: described.value || undefined,
 });
 function selectionErrorLabel(error: AssetLibraryItem['selectionError']) {
   if (error === 'size') return phrase.value.asset_selection_size;
@@ -249,7 +252,7 @@ watch(search, (value) => {
     void load(true);
   }, 250);
 });
-watch([type, where], () => {
+watch([type, where, described], () => {
   void load(true);
 });
 onMounted(() => {
@@ -276,6 +279,7 @@ onBeforeUnmount(() => {
           v-model:search="search"
           v-model:type="type"
           v-model:where="where"
+          v-model:described="described"
           :facets
           @element="searchInput = $event"
         />

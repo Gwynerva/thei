@@ -20,7 +20,8 @@ The header:
 
 - One slim row: the kind's icon and the title, then icon buttons, then the main
   action (Save, Done) in the accent. On a phone it holds the title and one or
-  two controls; nothing more.
+  two controls; nothing more. Save is a square with a floppy disk there
+  (`ModalHeaderButton`'s `phoneIcon`).
 - Say what is open: its kind, by its icon, and its name. The rest of what
   makes a modal informative — when, who, the cost, a source, the counts of
   what it holds — goes at the top of the body, not into the sticky row.

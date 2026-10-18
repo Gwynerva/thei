@@ -18,6 +18,7 @@ import {
   type AssetLibraryAssetsResponse,
   type AssetLibraryFacets,
   type AssetLibraryResponse,
+  type AssetLibraryDescribed,
   type AssetLibrarySourceFilter,
   type AssetUsagesResponse,
 } from '../../../shared/asset-library';
@@ -41,6 +42,8 @@ export interface LibraryQuery extends AssetSelectionConstraints {
   usage?: string;
   /** Only the groups of this kind of entity; sections listing only. */
   source?: AssetLibrarySourceFilter;
+  /** Only files without a description, or only those with one. */
+  described?: AssetLibraryDescribed;
   page?: number;
 }
 
@@ -162,6 +165,9 @@ function connection() {
  * (`source`) is the member row's kind in a group listing, and any placement
  * of the file in an entity of that kind in a flat one.
  */
+/** Whether a file's family has a description, in words. */
+const DESCRIBED_SQL = `EXISTS (SELECT 1 FROM "asset-descriptions" d WHERE d.familyUuid=a.familyUuid AND trim(d.text)<>'')`;
+
 function matchSql(query: LibraryQuery, scoped = false) {
   const parts = ['a.settings IS NOT NULL'];
   const args: (string | number)[] = [];
@@ -203,6 +209,8 @@ function matchSql(query: LibraryQuery, scoped = false) {
     );
     args.push(query.source);
   }
+  if (query.described)
+    parts.push(`${query.described === 'none' ? 'NOT ' : ''}${DESCRIBED_SQL}`);
   if (query.usage === 'used')
     parts.push(
       'EXISTS (SELECT 1 FROM placements p WHERE p.assetUuid=a.assetUuid)',
@@ -476,10 +484,19 @@ function libraryFacets(
           )
           .get(...byPlace.args) as { count: number }
       ).count;
+  const byDescription = matchSql({ ...query, described: undefined }, scoped);
+  const described = counted<{ value: number; count: number }>(
+    `SELECT ${DESCRIBED_SQL} AS value,count(DISTINCT a.assetUuid) AS count ${files} WHERE ${byDescription.where} GROUP BY value`,
+    byDescription.args,
+  );
   return {
     types: Object.fromEntries(types.map((row) => [row.value, row.count])),
     sources: Object.fromEntries(places.map((row) => [row.value, row.count])),
     anywhere,
+    described: {
+      none: described.find((row) => !row.value)?.count ?? 0,
+      some: described.find((row) => row.value)?.count ?? 0,
+    },
   };
 }
 export function listLibraryAssets(

@@ -117,10 +117,11 @@ export type AiMessagePart =
       scope?: string[];
     }
   /**
-   * A check's run has more to look at: `next` subjects, `full` when that is
-   * a whole batch, with maybe more after it. Offered as one button to go on.
+   * A check's run has more to look at: `next` subjects in its next batch,
+   * `looked` looked at in its session so far. Offered as one button to go
+   * on; `next: 0` says all of it was looked at.
    */
-  | { type: 'continue'; next: number; full: boolean }
+  | { type: 'continue'; next: number; looked: number }
   /**
    * The owner's words asked at a field's ✦: the entity or file, by ref, and
    * the place of its form, as `<Field ai>` names it.

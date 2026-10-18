@@ -98,8 +98,12 @@ const reviewScreen = (page: Page) => page.locator('[data-review]');
 
 /** Takes all of what the version has, and the editor gets it. */
 async function takeAll(page: Page) {
-  await page.locator('[data-review-sure]').click();
-  await page.locator('[data-review-finish]').click();
+  // Nothing taken yet, the finish takes all; then it takes it in.
+  const finish = page.locator('[data-review-finish]');
+  await expect(finish).toHaveText(/^Take all · /);
+  await finish.click();
+  await expect(finish).toHaveText(/^Take · /);
+  await finish.click();
   await expect(reviewScreen(page)).toBeHidden();
 }
 

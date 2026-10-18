@@ -1,6 +1,7 @@
 import { bindShortWords, generalNormalize } from '../general-normalize';
 import { defineI18nBase } from '../define';
 import { slugify } from '../slugify';
+import type { AiBuiltinTemplateKey } from '../../ai-template';
 
 function joinDuration(parts: string[]) {
   if (parts.length < 3) return parts.join(' and ');
@@ -33,6 +34,18 @@ function normalize(text: string): string {
       .replace(/(\w)'(\w)/g, '$1\u2019$2'),
     BOUND_WORDS,
   );
+}
+
+/** So many of what a check looks at, by the check. */
+function checkUnits(count: number, key: AiBuiltinTemplateKey) {
+  const words = {
+    describe: ['file', 'files'],
+    graph: ['entry', 'entries'],
+    tags: ['entry', 'entries'],
+    links: ['link', 'links'],
+    proofread: ['text', 'texts'],
+  }[key] as [string, string];
+  return plural(count, ...words);
 }
 
 export function plural(
@@ -195,6 +208,10 @@ export default defineI18nBase({
     asset_library_more: 'Show more',
     asset_library_insert: 'Insert selected',
     asset_library_usage: 'Used in',
+    asset_library_described: 'Description',
+    asset_library_described_any: 'With a description or without',
+    asset_library_described_none: 'Without a description',
+    asset_library_described_some: 'With a description',
     asset_used_elsewhere: 'Also used in',
     asset_library_properties: 'File properties',
     asset_library_settings: 'How this file was made',
@@ -743,10 +760,13 @@ export default defineI18nBase({
       `${files} files, ${size}`,
     ai_access_on_hint:
       'On: AI apps connect with access keys, and your model may answer in ' +
-      'sessions. Turn it off, and everything about AI leaves the site.',
+      'sessions. Turn it off, and AI hides from the site; sessions, memory ' +
+      'and keys stay for when it is on.',
     ai_access_off_hint:
       'Off: no app can connect, Thei calls no model, and no session or ' +
-      'proposal shows. Keys and settings are kept for when it is on.',
+      'proposal shows. Sessions, memory, keys and settings are kept and ' +
+      'come back once you turn AI on — here, or first thing in the site ' +
+      'settings.',
     api_token_create: 'Create a key',
     api_token_label: 'What it is for',
     api_token_label_placeholder: 'Claude Code on the laptop',
@@ -1053,7 +1073,7 @@ export default defineI18nBase({
     tag_usage: 'Usage',
     tag_usage_summary: (projects, events) =>
       `${projects} ${plural(projects, 'project', 'projects', false)} · ${events} ${plural(events, 'event', 'events', false)}`,
-    tag_delete_hint: 'Deleting the tag detaches it from every related entity.',
+    tag_delete_hint: 'Deleting the tag takes it off every project and event.',
     tag_usage_sentence: (projects, events) => {
       const parts = [
         projects ? plural(projects, 'project', 'projects') : '',
@@ -1191,7 +1211,7 @@ export default defineI18nBase({
       "Detailed write-ups of the project's parts and of the stages it went through.",
     project_sections_dated: 'Dated stages',
     project_sections_undated: 'General sections',
-    related_entities: 'Related entities',
+    related_entities: 'Relations',
     related_entities_hint:
       'Projects, events and diary entries tied to this one. A relation is visible from both sides.',
     related_entity_add: 'Add a relation',
@@ -1213,7 +1233,7 @@ export default defineI18nBase({
           : 'No related diary entries yet.',
     project_sections_empty_of: (group) =>
       group === 'dated' ? 'No dated stages yet.' : 'No general sections yet.',
-    relation_entity: 'Related entity',
+    relation_entity: 'Related to',
     relation_entity_choose: 'A project, an event or a diary entry',
     relation: 'Relation',
     relation_edit: (title) => `Edit the relation to “${title}”`,
@@ -1341,7 +1361,7 @@ export default defineI18nBase({
     content_link_loading: 'Loading link details…',
     content_link_broken_title: 'Link unavailable',
     content_link_broken_description:
-      'The linked entity could not be found or its details are unavailable.',
+      'Where the link leads could not be found, or its details are unavailable.',
     content_link_remove: 'Remove link',
     content_private_section: 'Private section',
     content_private_section_start: 'Start of private section',
@@ -1711,11 +1731,10 @@ export default defineI18nBase({
       'A reminder and private notes. Only you ever see them — they stay out of the page, the search and the Markdown copy.',
     entity_reminder: 'Reminder',
     entity_reminder_hint:
-      'Something still to do here. While it is set, a yellow mark follows this entity through every list.',
+      'Something still to do here. While it is set, a yellow mark follows it through every list.',
     entity_reminder_placeholder: 'Find the photos from that week',
     entity_notes: 'Notes',
-    entity_notes_hint:
-      'Anything worth keeping next to this entity without publishing it.',
+    entity_notes_hint: 'Anything worth keeping at hand without publishing it.',
     entity_notes_show_all: 'Show all',
     entity_reminder_badge: 'There is a reminder on this one',
     content_strikethrough: 'Strikethrough',
@@ -1756,17 +1775,17 @@ export default defineI18nBase({
     og_image_alt: (kind, title, site) => `${kind} “${title}” — ${site}`,
     ai_tab_sessions: 'Sessions',
     ai_tab_memory: 'Memory',
-    ai_tab_templates: 'Templates',
-    ai_templates_title: 'Session templates',
+    ai_tab_templates: 'Ready requests',
+    ai_templates_title: 'Ready requests',
     ai_templates_hint:
-      'Requests to the AI, ready to go — here, on a new session and in every ✦.',
-    ai_templates_column_template: 'Template',
+      'Run them from here, from a new session and from every ✦.',
+    ai_templates_column_template: 'Request',
     ai_templates_column_last: 'Last run',
-    ai_templates_builtin_section: 'Built-in templates',
-    ai_templates_own_section: 'Your templates',
+    ai_templates_builtin_section: 'Built-in checks',
+    ai_templates_own_section: 'Your requests',
     ai_templates_own_empty: 'None of your own yet.',
     ai_templates_new: 'New',
-    ai_templates_presets: 'Templates',
+    ai_templates_presets: 'Ready requests',
     ai_template_open: 'Open in a new session',
     ai_open_full: 'Open on the AI page',
     select_filter: 'Filter',
@@ -1798,27 +1817,31 @@ export default defineI18nBase({
     content_block_settings: 'Block settings. Drag to move',
     content_block_toolbox: 'Blocks',
     ai_template_run: 'Check what is new in the archive',
-    ai_template_nothing_new: (title) => `“${title}”: nothing new to check`,
+    ai_template_nothing_new: (title) => `“${title}”: nothing to check`,
+    ai_template_looked_all: (title, looked, key) =>
+      `“${title}”: nothing new — all of it looked at (${checkUnits(looked, key)})`,
+    ai_template_last_open: 'Last check',
+    ai_template_again: 'Check again',
     ai_template_nothing_here: (title) => `“${title}”: nothing here to check`,
     ai_template_edit: 'Settings',
     ai_template_running: 'running now',
     ai_template_never_run: 'not run yet',
     ai_template_started: (title) => `Session “${title}” started`,
-    ai_template_saved: 'Template saved',
-    ai_template_deleted: 'Template deleted',
+    ai_template_saved: 'Request saved',
+    ai_template_deleted: 'Request deleted',
     ai_template_copied: 'Copy made: a ready-made request of yours',
-    ai_template_modal_title: 'Template',
-    ai_template_modal_new: 'New template',
+    ai_template_modal_title: 'Ready request',
+    ai_template_modal_new: 'New request',
     ai_template_name: 'Name',
     ai_template_name_placeholder: 'For example, “A week of travel”',
     ai_template_instruction: 'Request',
     ai_template_instruction_placeholder:
       'What the model should do — as you would tell a person. For example: “Look over this entry and say what is missing…”',
-    ai_template_sessions: 'Sessions of this template',
+    ai_template_sessions: 'Sessions of this request',
     ai_template_copy: 'Make a copy',
-    ai_template_delete: 'Delete template',
+    ai_template_delete: 'Delete request',
     ai_template_delete_confirm: (title) =>
-      `Delete the template “${title}”? Its sessions stay.`,
+      `Delete the request “${title}”? Its sessions stay.`,
     ai_sessions_search: 'Find a session',
     ai_sessions_filter: 'Which sessions',
     ai_sessions_filters: {
@@ -1827,7 +1850,7 @@ export default defineI18nBase({
       applied: 'With something applied',
       rejected: 'With something declined',
       app: 'From apps',
-      template: 'From templates',
+      template: 'From ready requests',
     },
     ai_session_new: 'New session',
     ai_session_groups: {
@@ -1840,12 +1863,17 @@ export default defineI18nBase({
     },
     ai_session_untitled: 'New session',
     ai_session_you: 'You',
-    ai_session_template: 'Template',
+    ai_session_template: 'Ready request',
     ai_session_running: 'Working',
     ai_session_recent: 'Recently done',
+    ai_session_starting: 'Starting the session…',
     ai_session_waiting: (count) => `Waiting for your decision: ${count}`,
     ai_sessions_archive_note: 'Deleted after 30 days',
     ai_sessions_empty: 'No sessions yet',
+    ai_session_about_more: (count) => `${count} more`,
+    ai_session_about_less: 'Fewer',
+    ai_sessions_empty_description:
+      'A session is a conversation with the AI: ask about anything in the archive, and the answer and its proposals stay here.',
     ai_sessions_more: 'Show more',
     ai_sessions_back: 'To sessions',
     ai_no_model_title: 'No model is set up',
@@ -1870,14 +1898,16 @@ export default defineI18nBase({
     ai_session_archived_note: 'Archived: nothing can be written here',
     ai_session_model: 'Model',
     ai_steps: {
-      read: (count) => `read ${plural(count, 'entity', 'entities')}`,
+      read: (count) =>
+        `read ${plural(count, 'page of the archive', 'pages of the archive')}`,
       search: (queries) => `searched ${queries}`,
       list: 'looked through a list',
       graph: 'looked at the map of relations',
       timeline: 'looked at the timeline',
       tags: 'looked for tags',
-      digests: (count) => `skimmed ${plural(count, 'entity', 'entities')}`,
-      proposed: (count) => `proposed ${plural(count, 'time', 'times')}`,
+      digests: (count) =>
+        `skimmed ${plural(count, 'page of the archive', 'pages of the archive')}`,
+      proposed: (count) => plural(count, 'proposal', 'proposals'),
       refused: (count) =>
         `${plural(count, 'proposal', 'proposals')} turned away`,
       refused_hint:
@@ -1888,8 +1918,8 @@ export default defineI18nBase({
     ai_question: 'Question',
     ai_question_own: 'Own answer…',
     ai_notices: {
-      stopped: 'Stopped by you.',
-      timeout: 'Stopped: it took too long.',
+      stopped: 'Paused by you. Answer it to go on.',
+      timeout: 'Paused: one turn took too long. Answer it to go on.',
       interrupted: 'Cut off when the site restarted.',
       limit:
         'The month’s limit is spent. The session goes on next month, or once you raise the limit.',
@@ -1900,7 +1930,7 @@ export default defineI18nBase({
       model: 'The service does not know this model.',
       refused: 'The model declined to answer.',
       length: 'Cut off: the answer ran out of room.',
-      turns: 'Stopped: it took too many steps.',
+      turns: 'Paused: one turn has only so many steps. Answer it to go on.',
       error: 'Something went wrong.',
     },
     ai_notice_connection: 'Connection',
@@ -1908,24 +1938,34 @@ export default defineI18nBase({
     ai_action_open_file: 'Open the file',
     ai_field_ask: (field) => `Ask the AI about “${field}”`,
     ai_field_ask_placeholder: 'What to do with it?',
+    ai_editor_ask: 'AI about this text',
+    ai_editor_ask_about: (title) => `Ask the AI about “${title}”`,
+    ai_editor_ask_placeholder: 'What to do with the text?',
+    ai_editor_ask_nothing: 'Answered, nothing to edit',
     ai_field_asking: 'The AI is answering…',
     ai_field_ask_nothing: 'Answered, proposing nothing',
     ai_field_ask_open: 'Session',
     ai_field_ask_quick: {
       title: ['Propose a title'],
-      summary: ['Write the summary', 'Make it shorter'],
+      summary: ['Write the summary'],
       description: ['Write a description'],
       synonyms: ['Propose synonyms'],
       slogan: ['Propose a slogan'],
       reminder: ['Write a reminder'],
-      periods: ['Check the dates'],
+      periods: [],
       tags: ['Propose tags'],
       relations: ['Find relations'],
-      text: ['Check for mistakes'],
+      text: [],
       file: ['Describe the file'],
       other: ['Propose something'],
     },
-    ai_action_edit: 'Correct',
+    ai_field_ask_empty: 'Nothing here yet to check. Ask in your own words',
+    ai_field_ask_quick_filled: {
+      summary: ['Make it shorter'],
+      periods: ['Check the dates'],
+      text: ['Check for mistakes', 'Mend the links', 'Put it in order'],
+    },
+    ai_action_edit: 'Correct it yourself',
     ai_action_edit_cancel: 'Back to its words',
     ai_action_edit_apply: 'Apply as corrected',
     ai_action_edit_save: 'Keep as corrected',
@@ -1942,11 +1982,16 @@ export default defineI18nBase({
       'note-this': 'From this side',
       'note-other': 'From the other side',
     },
-    ai_message_template: (title) => `Template “${title}”`,
+    ai_message_template: (title) => `Ready request “${title}”`,
     ai_message_field: (field) => `At the field “${field}”`,
     ai_continue_text: 'Go on',
-    ai_continue_more: (count) => `${count} more`,
+    ai_continue_more: (count, key) =>
+      `Check ${key ? checkUnits(count, key) : count} more`,
+    ai_continue_looked: (count, key) =>
+      `${key ? checkUnits(count, key) : count} looked at`,
+    ai_continue_hint: 'The next batch, in this same session',
     ai_continue_nothing: 'Nothing more to look at',
+    ai_continue_done: 'All of it is looked at',
     ai_answer_to: (question) => `Answer: ${question}`,
     ai_composer_placeholder: 'What to do?',
     ai_composer_running: 'You can add to it — the model will take it in',
@@ -1985,27 +2030,27 @@ export default defineI18nBase({
       describe: {
         title: 'File descriptions',
         instruction:
-          'Add descriptions to the files that have none. When you write one, look not only at the file itself but at the places it is used in (the entity it belongs to, captions, the text around it and so on).\n\n' +
+          'Add descriptions to the files that have none. When you write one, look not only at the file itself but at the places it is used in (the project, event or section it stands in, captions, the text around it and so on).\n\n' +
           'If you are not sure, or cannot describe a file for any reason, tell me.',
       },
       links: {
         title: 'Broken links',
         instruction:
-          'Find the broken internal links. For each, work out why it broke: the entity it led to was deleted, the heading it led to was removed or renamed, and so on.\n\n' +
+          'Find the broken internal links. For each, work out why it broke: what it led to was deleted, the heading it led to was removed or renamed, and so on.\n\n' +
           'Try to mend it, finding a sure replacement that keeps what the link meant. Taking the link off altogether is the last resort.',
       },
       graph: {
-        title: 'Relations and links between entities',
+        title: 'Relations and links',
         instruction:
           'Look over the relations and links between projects, events and diary entries.\n\n' +
           'Propose the relations that are missing, and removing the weak ones — those without good grounds.\n\n' +
-          'Look in the texts for mentions of other entities without a link and, where you are quite sure a link belongs, propose it — to the sections of projects and to particular headings too. Propose removing links that are plainly wrong or redundant.',
+          'Look in the texts for mentions of other projects, events and entries without a link and, where you are quite sure a link belongs, propose it — to the sections of projects and to particular headings too. Propose removing links that are plainly wrong or redundant.',
       },
       tags: {
         title: 'Tag audit',
         instruction:
-          'Check the tags: which entities need a fitting tag added or a needless one taken off, which tags to create or delete, and which synonyms to give tags.\n\n' +
-          'Propose creating or deleting a tag only on sure grounds, with examples of the entities it touches.',
+          'Check the tags: which projects and events need a fitting tag added or a needless one taken off, which tags to create or delete, and which synonyms to give tags.\n\n' +
+          'Propose creating or deleting a tag only on sure grounds, with examples of the projects and events it touches.',
       },
     },
     ai_template_copy_title: (title) => `${title} (copy)`,
@@ -2073,6 +2118,7 @@ export default defineI18nBase({
         accept: 'Accept',
         keep: 'Keep as it was',
         sure: 'Accept the sure corrections',
+        take_sure: (count) => `Accept the sure ones · ${count}`,
         was: 'Was',
         will: 'Will be',
         accepted: 'Accepted',
@@ -2086,6 +2132,7 @@ export default defineI18nBase({
         accept: 'Take',
         keep: 'Keep as it is',
         sure: 'Take all',
+        take_sure: (count) => `Take all · ${count}`,
         was: 'Now',
         will: 'There',
         accepted: 'Taken',
@@ -2096,6 +2143,7 @@ export default defineI18nBase({
           'What you take goes into the text here; the rest stays as it is.',
       },
     },
+    ai_review_put: (count) => `Put in · ${count}`,
     ai_review_finish_editor:
       'What you accepted goes into the text here; save as usual. What is undecided waits in the session.',
     ai_review_close: 'Close',
@@ -2182,9 +2230,9 @@ export default defineI18nBase({
     ai_memory_kinds_title: 'General rules',
     ai_memory_kinds_hint:
       'Not about one thing, but about all things of a kind at once: every diary entry, every project, every file. For example: “All diary entries: offer no tags”. A model keeps to a rule whenever it works with any of them.',
-    ai_memory_entities_title: 'About entities',
+    ai_memory_entities_title: 'About projects, events and entries',
     ai_memory_entities_hint:
-      'A model reads this together with the entity. Its form shows it too.',
+      'A model reads this together with what it is about. Its form shows it too.',
     ai_memory_entity_kinds: {
       project: 'project',
       'project-section': 'project section',
@@ -2201,10 +2249,14 @@ export default defineI18nBase({
     ai_memory_allow: 'May be offered again',
     ai_memory_forgotten: 'Forgotten',
     ai_memory_restore: 'Bring back',
-    ai_offer_take: 'Accept — the field fills in; save the form',
+    ai_offer_take: 'Goes into the form — changes once you save it',
+    ai_offer_put: { put: 'Put in', add: 'Add', remove: 'Remove' },
     ai_offer_in_session: 'Open in its session',
-    ai_offer_taken: 'Taken into the form — save it',
+    ai_offer_taken: 'The form changed — save it',
+    ai_offer_taken_file: 'Description put in — save it',
     ai_offer_take_back: 'Undo',
+    ai_offer_take_back_hint: 'Put the form back as it was',
+    ai_offer_taken_row: 'In the form — changes once you save it',
     ai_offer_chip: (label) => `Proposed by AI: ${label}`,
     ai_field_offers: (count) =>
       count === 1 ? 'Proposed by AI' : `Proposed by AI: ${count}`,
@@ -2284,6 +2336,13 @@ export default defineI18nBase({
     ai_action_open: 'Open',
     ai_action_undo: 'Undo',
     ai_action_restore: 'Back to deciding',
+    ai_action_restore_never: 'Back to deciding — and may be offered again',
+    ai_action_accept_short: 'Accept',
+    ai_action_restore_short: 'Back',
+    ai_entity_offer_at: (field) => `A proposal waits at “${field}”`,
+    ai_entity_offer_came: 'A proposal waits in the form',
+    ai_entity_offers_came: (count) => `${count} proposals wait in the form`,
+    ai_entity_offer_show: 'Show',
     ai_action_never: 'Never offer again',
     ai_action_pick: 'Include in applying',
     ai_action_unsure: 'Your call.',
@@ -2325,7 +2384,7 @@ export default defineI18nBase({
       'depends-on': 'depends on',
       affects: 'affects',
     },
-    ai_action_relation_removed: 'Relation taken away',
+    ai_action_relation_removed: 'Take the relation away',
     ai_action_write_modes: {
       new: 'New text',
       append: 'Add to the text',
@@ -2371,6 +2430,10 @@ export default defineI18nBase({
       favicon: 'Site icon',
     },
     ai_action_flag: { on: 'yes', off: 'no' },
+    ai_action_cleared: 'empty',
+    ai_action_more: (count) => `${count} more`,
+    ai_action_term_note: 'Note',
+    ai_action_term_forms: 'Forms',
     ai_action_create: {
       project: 'Create a project',
       'project-section': 'Create a section',
@@ -2394,10 +2457,15 @@ export default defineI18nBase({
       count === 1 ? 'Declined' : `Declined: ${count}`,
     ai_toast_never: 'It will not be offered again',
     ai_toast_comment_sent: 'Sent — the model answers with a new version',
-    ai_toast_answer_sent: 'Answer sent — the model goes on',
     ai_toast_pinned: 'Pinned — it stays on top and never goes to the archive',
     ai_toast_unpinned: 'Unpinned',
     ai_toast_undone: 'Undone',
+    ai_toast_applied: (count) =>
+      count === 1 ? 'Applied' : `Applied: ${count}`,
+    ai_session_waiting_next: 'To the next one waiting',
+    ai_session_apply_sure: (count) => `Apply the sure ones · ${count}`,
+    ai_session_apply_sure_hint:
+      'Applies every sure proposal of this session. The rest wait for your decision',
     ai_toast_restored: 'Back to deciding',
     ai_comment_label: 'Comment',
     ai_comment_placeholder: 'What to change?',
@@ -2460,9 +2528,8 @@ export default defineI18nBase({
     ai_model_limit_tokens_link: 'What are tokens?',
     ai_model_limit_invalid: 'The limit is a number of millions above zero.',
     ai_model_usage_line: (month, spent, limit) =>
-      `${month}: ${spent} of ${limit} million tokens`,
-    ai_model_average: (thousands) =>
-      `An answer takes about ${thousands}k tokens`,
+      `${month}: ${spent} of ${limit} tokens`,
+    ai_model_average: (amount) => `An answer takes about ${amount} tokens`,
     ai_model_check: 'Check',
     ai_model_check_outcomes: {
       ok: 'works',

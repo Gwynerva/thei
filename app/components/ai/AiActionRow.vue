@@ -2,8 +2,6 @@
 import { contentReviewModal } from '#layers/thei/app/modals/content-review/modal';
 import type { IconName } from '#thei/icons';
 import type { AiActionItem } from '#layers/thei/shared/ai';
-import { relationWordIcon } from '#layers/thei/shared/relation-display';
-import { diffContentText } from '#layers/thei/shared/content-diff';
 import {
   AI_ACTION_INFO,
   type AiActionKind,
@@ -14,12 +12,13 @@ import {
 } from '#layers/thei/shared/ai-action-texts';
 
 /**
- * One action in its card. A lone one answers on its own row — comment (or
- * open, for a text edit), decline, and the accept last and wider, at the
- * edge; a row of a bundle keeps a checkbox, and the bundle is applied at its
- * foot. Under it: what it changes, why, and once decided, what became of it.
- * A new entity lists its parts — sections, tags, relations — each to be left
- * out on its own; a text edit is gone through on a screen of its own.
+ * One action in its card, in the one shape every card has: a head on its
+ * own ground saying what changes, the change itself old → new, the model's
+ * reason, and a footer — correct and comment at its start, decline (✕) and
+ * apply at its end. A row of a bundle keeps a checkbox and its tools on its
+ * first line, and the bundle is decided at the card's foot. A new entity
+ * lists its parts — sections, tags, relations — each to be left out on its
+ * own; a text edit is gone through on a screen of its own.
  */
 const props = defineProps<{
   action: AiActionItem;
@@ -43,10 +42,17 @@ const props = defineProps<{
   /** The ref of the entity whose form shows it, left unnamed there. */
   here?: string;
   /**
-   * Already in a popup: the comment field opens in the row, where a popup
-   * of its own would count as a click outside the one it is in.
+   * Already in a popup: the card takes the popup's one ground, its head and
+   * footer parted by rules, so the popup and its arrow stay one surface; and
+   * the comment field opens in the card, where a popup of its own would
+   * count as a click outside the one it is in.
    */
-  inlineComment?: boolean;
+  inPopup?: boolean;
+  /**
+   * Taken into the form, which is not saved yet: it says so where it stood,
+   * with the way to take it back, rather than leave and move the form.
+   */
+  taken?: boolean;
 }>();
 const emit = defineEmits<{
   pick: [];
@@ -64,6 +70,44 @@ const info = computed(
   () => AI_ACTION_INFO[props.action.kind as AiActionKind] ?? {},
 );
 const pending = computed(() => props.action.state === 'pending');
+/** It waits for the owner's word: pending, and not taken into the form. */
+const deciding = computed(() => pending.value && !props.taken);
+const slots = useSlots();
+/** Applied, and still reading as it left it. */
+const undoable = computed(
+  () =>
+    props.action.state === 'applied' &&
+    props.action.undo === 'ready' &&
+    !info.value.final,
+);
+const restorable = computed(
+  () => props.action.state === 'rejected' || props.action.state === 'undone',
+);
+/**
+ * Its own tools — correct, open, comment — end its head's line; a row of a
+ * bundle, whose decisions are the card's, says its undo or restore there
+ * too. A row of its own decides in a footer across the card, as a bundle
+ * does: the decisions at its end, and what leads them — a pager — at its
+ * start.
+ */
+const hasTools = computed(
+  () =>
+    (pending.value && (!editing.value || props.inBundle)) ||
+    (props.inBundle && (undoable.value || restorable.value)),
+);
+/** Neutral buttons stand out from the footer's ground: a card's, or a popup's. */
+const footerButtons = computed(() =>
+  props.inPopup ? ('secondary' as const) : ('raised' as const),
+);
+const hasFooter = computed(
+  () =>
+    !props.inBundle &&
+    (pending.value ||
+      props.taken ||
+      Boolean(slots['actions-start']) ||
+      undoable.value ||
+      restorable.value),
+);
 /** In an archived session, an action is read, not decided. */
 const archived = useAiArchived();
 /** It waits, is being made, or holds: what it changes is told in colour. */
@@ -83,18 +127,6 @@ const MARKS: Record<string, IconName> = {
   superseded: 'edit',
   applying: 'loading',
 };
-const leadIcon = computed<IconName>(() => {
-  const state = props.action.state;
-  if (state === 'applied') return 'check';
-  if (state === 'failed' || props.action.error) return 'warning';
-  if (state === 'stale') return 'refresh';
-  if (props.action.kind === 'relation')
-    return relationWordIcon(payload.value.relation);
-  if (props.action.kind === 'access')
-    return payload.value.access === 'private' ? 'lock-close' : 'lock-open';
-  return (info.value.icon as IconName | undefined) ?? 'blocks';
-});
-
 // ---- Parts -------------------------------------------------------------------
 
 interface PartRow {
@@ -204,6 +236,30 @@ const saving = ref(false);
 const drafts = reactive<Record<string, string>>({});
 const editor = ref<HTMLElement>();
 
+/** Brought back to be decided, a «never» said of it is taken back too. */
+const restoreLabel = computed(() =>
+  props.action.never
+    ? phrase.value.ai_action_restore_never
+    : phrase.value.ai_action_restore,
+);
+
+/**
+ * The undo and the way back stand where the button just pressed stood: a
+ * double click would apply and undo at once. For a moment after the state
+ * changes, a press there is taken as the end of the last one.
+ */
+let changedAt = 0;
+watch(
+  () => [props.action.state, props.taken],
+  () => (changedAt = Date.now()),
+);
+function settled(run: () => void) {
+  // A row of a bundle says its undo on its own line, away from the foot's
+  // apply: nothing to guard there.
+  if (!props.inBundle && Date.now() - changedAt < 500) return;
+  run();
+}
+
 function startEdit() {
   if (!editable.value || editing.value) return;
   for (const text of texts.value) drafts[text.key] = text.value;
@@ -284,44 +340,28 @@ const undoHint = computed(() => {
 });
 
 /**
- * The quote under a text written, an idea noted, a fact remembered, a word's
- * note — and the facts a memory is said again in.
+ * The word on the accept button. Where it changes the archive at once —
+ * a session, what the AI remembers — «Применить»; in a form, what it does to
+ * the form, which changes once saved: a value put in its place, items added
+ * to a list or taken from it. Its hint says the rest.
  */
-const quote = computed(() => {
-  const kind = props.action.kind;
-  if (kind === 'write' || kind === 'note')
-    return plainWords(String(payload.value.markdown ?? ''));
-  if (kind === 'remember') return publicText(String(payload.value.text ?? ''));
-  if (kind === 'term') return publicText(String(payload.value.note ?? ''));
-  if (kind === 'memory-compact')
-    return ((payload.value.facts ?? []) as string[])
-      .map((fact) => publicText(fact))
-      .join(' · ');
-  return '';
-});
-
-/** A field's value and the one it replaces. */
-const fieldChange = computed(() => {
-  if (props.action.kind !== 'field') return null;
-  return {
-    before: fieldValueWords(base.value.value),
-    after: fieldValueWords(payload.value.value),
+const applyWord = computed(() => {
+  if (props.form !== 'takes') return phrase.value.ai_action_apply;
+  const payload = (props.action.payload ?? {}) as {
+    add?: unknown[];
+    remove?: unknown[];
+    op?: string;
   };
+  const put = phrase.value.ai_offer_put;
+  if (props.action.kind === 'relation')
+    return payload.op === 'remove' ? put.remove : put.add;
+  if (props.action.kind === 'tags') {
+    const adds = Boolean(payload.add?.length);
+    const removes = Boolean(payload.remove?.length);
+    return adds && removes ? put.put : removes ? put.remove : put.add;
+  }
+  return put.put;
 });
-
-/**
- * A description said again, word by word: what goes and what comes. A new
- * one is all words that come.
- */
-const descriptionChange = computed(() => {
-  if (props.action.kind !== 'describe') return null;
-  return diffContentText(
-    publicText(String(base.value.text ?? '')),
-    publicText(String(payload.value.text ?? '')),
-  );
-});
-
-/** In a form: accepting lays it into the form, or opens its session. */
 const applyLabel = computed(() => {
   if (props.form === 'takes') return phrase.value.ai_offer_take;
   if (info.value.final) return phrase.value.ai_action_apply_final;
@@ -355,132 +395,425 @@ function sendComment(text: string) {
 </script>
 
 <template>
+  <!-- One shape everywhere: the head says what changes; under it the
+       change, old → new, then why; and a footer, its own tools at the start
+       and the decision at the end. A row of a bundle keeps its checkbox and
+       its tools on its first line: the bundle is decided at its foot. -->
   <div
-    class="group/row grid grid-cols-[auto_minmax(0,1fr)_auto] items-center
-      gap-x-2.5 gap-y-1 border-t border-border-1/70 px-3 py-2 text-sm
-      first:border-t-0 @max-[26rem]:gap-x-2 @max-[26rem]:px-2.5"
-    :class="inBundle ? '' : '@max-[26rem]:grid-cols-[auto_minmax(0,1fr)]'"
+    class="flex min-w-0 flex-col text-sm"
+    :class="inBundle ? 'border-t border-border-1 first:border-t-0' : ''"
     :data-action="action.actionUuid"
     :data-action-kind="action.kind"
     :data-action-state="action.state"
   >
-    <!-- Lead: a checkbox in a bundle, a glyph of the kind alone, a mark once decided -->
-    <button
-      v-if="inBundle && pending && !fixed && !archived"
-      type="button"
-      role="checkbox"
-      :aria-checked="picked"
-      :aria-label="phrase.ai_action_pick"
-      class="-m-1.5 flex cursor-pointer items-center justify-center self-start
-        rounded-sm bg-transparent p-1.5 focus-visible:ring-2
-        focus-visible:ring-accent pointer-coarse:-m-2.5 pointer-coarse:p-2.5"
-      data-action-pick
-      @click="emit('pick')"
-    >
-      <span
-        class="flex size-4.5 items-center justify-center rounded-sm
-          border-[1.5px] transition"
-        :class="
-          picked
-            ? 'border-accent bg-accent text-white dark:text-bg-1'
-            : info.final
-              ? 'border-text-error bg-bg-1'
-              : unsure
-                ? 'border-text-warning bg-bg-1'
-                : 'border-border-2 bg-bg-1'
-        "
-      >
-        <Icon v-if="picked" name="check" class="text-xs" />
-      </span>
-    </button>
-    <span
-      v-else-if="inBundle"
-      class="flex size-5 items-center justify-center self-start text-text-3"
-      :class="{
-        'text-text-success': action.state === 'applied',
-        'text-text-error': action.state === 'failed',
-      }"
-    >
-      <Icon :name="pending ? 'check' : (MARKS[action.state] ?? 'check')" />
-    </span>
-    <span
-      v-else
-      class="flex size-7 shrink-0 items-center justify-center self-start
-        rounded-normal"
-      :class="
-        action.state === 'applied'
-          ? 'bg-bg-success text-text-success'
-          : action.state === 'failed' || action.error
-            ? 'bg-bg-error text-text-error'
-            : info.final
-              ? 'bg-bg-error text-text-error'
-              : unsure && pending
-                ? 'bg-bg-warning text-text-warning'
-                : 'bg-bg-3 text-text-2'
-      "
-    >
-      <Icon :name="leadIcon" />
-    </span>
-
-    <AiActionWhat
-      :action
-      :plain
-      :here
-      :class="{
-        'opacity-55': ['rejected', 'superseded', 'undone'].includes(
-          action.state,
-        ),
-        'line-through decoration-text-3': action.state === 'superseded',
-      }"
-    />
-
-    <!-- What can be done with it now -->
     <div
-      v-if="!archived"
-      class="flex items-center gap-0.5 self-start"
+      class="flex min-w-0 items-start gap-2.5 px-3"
       :class="
         inBundle
-          ? ''
-          : `@max-[26rem]:order-last @max-[26rem]:col-span-full
-            @max-[26rem]:justify-end @max-[26rem]:gap-1.5`
+          ? 'pt-2.5'
+          : ['border-b border-border-1 py-2', inPopup ? '' : 'bg-bg-3']
       "
+      data-action-head
     >
-      <!-- What leads the buttons: a pager of the proposals at one field. -->
-      <slot name="actions-start" />
-      <!-- Correcting its words: back as it was, or kept — and applied, for
-           a row that answers on its own. -->
-      <template v-if="pending && editing">
+      <!-- In a bundle: a checkbox, or a mark once decided -->
+      <button
+        v-if="inBundle && pending && !fixed && !archived"
+        type="button"
+        role="checkbox"
+        :aria-checked="picked"
+        :aria-label="phrase.ai_action_pick"
+        class="-m-1.5 flex shrink-0 cursor-pointer items-center justify-center
+          rounded-sm bg-transparent p-1.5 focus-visible:ring-2
+          focus-visible:ring-accent pointer-coarse:-m-2.5 pointer-coarse:p-2.5"
+        data-action-pick
+        @click="emit('pick')"
+      >
+        <span
+          class="flex size-4.5 items-center justify-center rounded-sm
+            border-[1.5px] transition"
+          :class="
+            picked
+              ? 'border-accent bg-accent text-white dark:text-bg-1'
+              : info.final
+                ? 'border-text-error bg-bg-1'
+                : unsure
+                  ? 'border-text-warning bg-bg-1'
+                  : 'border-border-2 bg-bg-1'
+          "
+        >
+          <Icon v-if="picked" name="check" class="text-xs" />
+        </span>
+      </button>
+      <span
+        v-else-if="inBundle"
+        class="flex size-4.5 shrink-0 items-center justify-center text-text-3"
+        :class="{
+          'text-text-success': action.state === 'applied',
+          'text-text-error': action.state === 'failed',
+        }"
+      >
+        <Icon :name="pending ? 'check' : (MARKS[action.state] ?? 'check')" />
+      </span>
+
+      <AiActionWhat
+        :action
+        :plain
+        :here
+        class="flex-1 py-0.5"
+        :class="{
+          'opacity-55': ['rejected', 'superseded', 'undone'].includes(
+            action.state,
+          ),
+          'line-through decoration-text-3': action.state === 'superseded',
+        }"
+      />
+      <!-- The owner's call: said at the end of the head, its words in its
+           hint. -->
+      <span
+        v-if="pending && unsure"
+        role="img"
+        class="mt-0.5 flex shrink-0 text-base text-text-warning"
+        :aria-label="phrase.ai_action_unsure"
+        :data-title-popup="phrase.ai_action_unsure"
+        data-action-unsure
+        ><Icon name="warning"
+      /></span>
+
+      <!-- A row of a bundle: its own tools here -->
+      <div
+        v-if="inBundle && !archived && hasTools"
+        class="-my-1 flex shrink-0 items-center gap-0.5"
+        data-action-tools
+      >
+        <template v-if="pending && editing">
+          <Button
+            variant="secondary"
+            size="icon-sm"
+            class="pointer-coarse:size-11"
+            :aria-label="phrase.ai_action_edit_cancel"
+            :data-title-popup="phrase.ai_action_edit_cancel"
+            data-action-edit-cancel
+            @click="cancelEdit"
+          >
+            <Icon name="undo" />
+          </Button>
+          <Button
+            size="icon-sm"
+            class="pointer-coarse:size-11"
+            :disabled="saving || busy"
+            :aria-label="phrase.ai_action_edit_save"
+            :data-title-popup="phrase.ai_action_edit_save"
+            data-action-edit-apply
+            @click="saveEdit"
+          >
+            <Icon :name="saving ? 'loading' : 'check'" />
+          </Button>
+        </template>
+        <template v-else-if="pending">
+          <Button
+            v-if="editable"
+            variant="secondary"
+            size="icon-sm"
+            class="pointer-coarse:size-11"
+            :aria-label="phrase.ai_action_edit"
+            :data-title-popup="phrase.ai_action_edit"
+            data-action-edit
+            @click="startEdit"
+          >
+            <Icon name="edit" />
+          </Button>
+          <Button
+            v-if="revisable && !from"
+            variant="secondary"
+            size="icon-sm"
+            class="pointer-coarse:size-11"
+            :aria-label="phrase.ai_action_open"
+            :data-title-popup="phrase.ai_action_open"
+            data-action-open
+            @click="openParts"
+          >
+            <Icon name="chevron-right" />
+          </Button>
+          <span v-else class="inline-flex">
+            <Button
+              ref="commentTrigger"
+              variant="secondary"
+              size="icon-sm"
+              class="pointer-coarse:size-11"
+              :aria-label="phrase.ai_action_comment"
+              :data-title-popup="phrase.ai_action_comment"
+              data-action-comment
+              @click="commenting = !commenting"
+            >
+              <Icon name="comment" />
+            </Button>
+          </span>
+        </template>
         <Button
+          v-else-if="undoable"
           variant="secondary"
-          size="icon-sm"
-          class="pointer-coarse:size-11"
-          :aria-label="phrase.ai_action_edit_cancel"
-          :data-title-popup="phrase.ai_action_edit_cancel"
-          data-action-edit-cancel
-          @click="cancelEdit"
+          class="flex h-8 items-center gap-1 px-2 text-sm pointer-coarse:h-11"
+          :disabled="busy"
+          :data-title-popup="phrase.ai_action_undo"
+          data-action-undo
+          @click="settled(() => emit('undo'))"
         >
-          <Icon name="close" />
+          <Icon name="history" />{{ phrase.ai_action_undo }}
         </Button>
         <Button
-          size="icon-sm"
-          class="pointer-coarse:size-11"
-          :disabled="saving || busy"
-          :aria-label="
-            inBundle ? phrase.ai_action_edit_save : phrase.ai_action_edit_apply
-          "
-          :data-title-popup="
-            inBundle ? phrase.ai_action_edit_save : phrase.ai_action_edit_apply
-          "
-          data-action-edit-apply
-          @click="saveEdit"
+          v-else-if="restorable"
+          variant="secondary"
+          class="flex h-8 items-center gap-1 px-2 text-sm pointer-coarse:h-11"
+          :disabled="busy"
+          :aria-label="restoreLabel"
+          :data-title-popup="restoreLabel"
+          data-action-restore
+          @click="settled(() => emit('restore'))"
         >
-          <Icon :name="saving ? 'loading' : 'check'" />
+          <Icon name="undo" />{{ phrase.ai_action_restore_short }}
         </Button>
-      </template>
-      <template v-else-if="pending">
+      </div>
+    </div>
+
+    <div
+      class="flex min-w-0 flex-col gap-1.5 px-3 pt-2 pb-2.5"
+      :class="{ 'opacity-55': partsOff, 'flex-1': !inBundle }"
+      data-action-body
+    >
+      <!-- Its words, corrected in place -->
+      <div
+        v-if="editing"
+        ref="editor"
+        class="flex min-w-0 flex-col gap-2"
+        data-action-editing
+        @keydown.esc.stop.prevent="cancelEdit"
+        @keydown.enter.ctrl.prevent="saveEdit"
+        @keydown.enter.meta.prevent="saveEdit"
+      >
+        <label
+          v-for="text in texts"
+          :key="text.key"
+          class="flex min-w-0 flex-col gap-1"
+        >
+          <span v-if="texts.length > 1" class="text-xs text-text-2">{{
+            textLabel(text)
+          }}</span>
+          <FieldInput
+            v-if="text.shape === 'line'"
+            v-model="drafts[text.key]"
+            :aria-label="textLabel(text) || phrase.ai_action_edit"
+            :data-action-text="text.key"
+          />
+          <FieldTextarea
+            v-else
+            v-model="drafts[text.key]"
+            :rows="
+              text.shape === 'markdown' ? 8 : text.shape === 'lines' ? 4 : 3
+            "
+            :aria-label="textLabel(text) || phrase.ai_action_edit"
+            :data-action-text="text.key"
+          />
+        </label>
+      </div>
+
+      <!-- What it changes: old → new -->
+      <AiActionChange v-else :action :here :live :editable @edit="startEdit" />
+
+      <p
+        v-if="info.final && pending"
+        class="flex items-center gap-1 text-xs font-semibold text-text-error"
+      >
+        <Icon name="warning" />{{ phrase.ai_action_final_note }}
+      </p>
+
+      <!-- A new entity's parts, each left out on its own -->
+      <ul
+        v-if="parts.length"
+        class="flex min-w-0 flex-col gap-0.5"
+        :class="{ 'pointer-events-none': partsOff }"
+        data-action-parts
+      >
+        <li
+          v-for="part in parts"
+          :key="part.id"
+          class="flex min-w-0 items-start gap-2 text-sm"
+          :data-part="part.id"
+          :data-part-state="part.state ?? 'pending'"
+        >
+          <button
+            v-if="
+              pending && !archived && (!part.state || part.state === 'pending')
+            "
+            type="button"
+            role="checkbox"
+            :aria-checked="partOn(part)"
+            :aria-label="part.label"
+            class="-m-1 flex shrink-0 cursor-pointer items-center justify-center
+              rounded-sm bg-transparent p-1 focus-visible:ring-2
+              focus-visible:ring-accent pointer-coarse:-m-2 pointer-coarse:p-2"
+            :disabled="partsOff"
+            data-part-pick
+            @click="togglePart(part)"
+          >
+            <span
+              class="flex size-4 items-center justify-center rounded-sm
+                border-[1.5px] transition"
+              :class="
+                partOn(part)
+                  ? 'border-accent bg-accent text-white dark:text-bg-1'
+                  : part.certainty === 'unsure'
+                    ? 'border-text-warning bg-bg-1'
+                    : 'border-border-2 bg-bg-1'
+              "
+            >
+              <Icon v-if="partOn(part)" name="check" class="text-2xs" />
+            </span>
+          </button>
+          <Icon
+            v-else
+            :name="
+              part.state === 'applied'
+                ? 'check'
+                : part.state === 'stale'
+                  ? 'refresh'
+                  : 'close'
+            "
+            class="mt-0.5 shrink-0"
+            :class="
+              part.state === 'applied' ? 'text-text-success' : 'text-text-3'
+            "
+          />
+          <span class="min-w-0 wrap-anywhere">
+            <span class="mr-1 text-text-3">{{ part.detail }}:</span>
+            <span
+              :class="{ 'text-text-3 line-through': part.state === 'kept' }"
+              >{{ part.label }}</span
+            >
+          </span>
+        </li>
+      </ul>
+
+      <!-- Why -->
+      <p
+        v-if="pending && action.reason"
+        class="text-xs leading-snug wrap-anywhere text-text-2"
+      >
+        {{ action.reason }}
+      </p>
+      <p v-if="pending && modelWords && !editing" class="text-xs text-text-2">
+        <span
+          class="underline decoration-text-2/35 decoration-dotted"
+          :data-title-popup="phrase.ai_action_model_words(modelWords)"
+          data-action-corrected
+          >{{ phrase.ai_action_corrected }}</span
+        >
+      </p>
+      <p
+        v-if="from"
+        class="flex min-w-0 items-center gap-1 text-xs text-text-2"
+        data-action-from
+      >
+        <TheiLink
+          :to="sessionPath"
+          class="inline-flex min-w-0 items-center gap-1 underline
+            decoration-text-2/35 underline-offset-2 transition-colors
+            hocus:text-accent"
+          :data-title-popup="sessionTitle(from)"
+          data-title-popup-clipped
+        >
+          <Icon name="ai-chat" class="shrink-0" />
+          <span class="truncate" data-title-popup-clip>{{
+            phrase.quoted(sessionTitle(from))
+          }}</span>
+        </TheiLink>
+        <span class="shrink-0">· {{ shortWhen(action.createdAt) }}</span>
+      </p>
+      <!-- What became of it -->
+      <p
+        v-if="pending && action.error"
+        class="text-xs leading-snug wrap-anywhere text-text-error"
+        data-action-error
+      >
+        <b class="font-semibold">{{ phrase.ai_action_states.failed }}</b>
+        {{ action.error }}
+      </p>
+      <p
+        v-else-if="taken"
+        class="text-xs leading-snug wrap-anywhere text-text-2"
+        data-action-sub
+        data-action-taken
+      >
+        {{ phrase.ai_offer_taken_row }}
+      </p>
+      <p
+        v-else-if="!pending"
+        class="text-xs leading-snug wrap-anywhere text-text-2"
+        data-action-sub
+      >
+        <template v-if="action.state === 'applied'">
+          {{ appliedLine
+          }}<template v-if="modelWords">
+            ·
+            <span
+              class="underline decoration-text-2/35 decoration-dotted"
+              :data-title-popup="phrase.ai_action_model_words(modelWords)"
+              data-action-corrected
+              >{{ phrase.ai_action_corrected }}</span
+            ></template
+          ><template v-if="undoHint"> · {{ undoHint }}</template>
+        </template>
+        <template v-else-if="action.state === 'rejected'">
+          <template v-if="action.never">{{
+            phrase.ai_action_states.never
+          }}</template>
+          <template v-else>
+            {{ phrase.ai_action_states.rejected
+            }}<template v-if="!archived"> ·</template>
+            <button
+              v-if="!archived"
+              type="button"
+              class="ml-1 cursor-pointer bg-transparent font-semibold
+                text-accent pointer-coarse:py-2 hocus:underline"
+              data-action-never
+              @click="emit('never')"
+            >
+              {{ phrase.ai_action_never }}
+            </button>
+          </template>
+        </template>
+        <template v-else>
+          {{
+            phrase.ai_action_states[
+              action.state as keyof typeof phrase.ai_action_states
+            ] ?? action.state
+          }}
+        </template>
+      </p>
+    </div>
+
+    <!-- A comment written in the card: over its footer -->
+    <div v-if="commenting && inPopup" class="border-t border-border-1">
+      <AiCommentBox
+        :about="commentAbout"
+        about-icon="comment"
+        @send="sendComment"
+      />
+    </div>
+
+    <!-- A row of its own decides in its footer: its tools at the start —
+         after a pager, where there is one — the decision at the end. -->
+    <div
+      v-if="!archived && hasFooter"
+      class="flex flex-wrap items-center gap-1.5 border-t border-border-1 px-3
+        py-2"
+      :class="{ 'bg-bg-3': !inPopup }"
+      data-action-decisions
+    >
+      <slot name="actions-start" />
+      <template v-if="deciding && !editing">
         <Button
           v-if="editable"
-          variant="secondary"
+          :variant="footerButtons"
           size="icon-sm"
           class="pointer-coarse:size-11"
           :aria-label="phrase.ai_action_edit"
@@ -492,7 +825,7 @@ function sendComment(text: string) {
         </Button>
         <Button
           v-if="revisable && !from"
-          variant="secondary"
+          :variant="footerButtons"
           size="icon-sm"
           class="pointer-coarse:size-11"
           :aria-label="phrase.ai_action_open"
@@ -502,10 +835,10 @@ function sendComment(text: string) {
         >
           <Icon name="chevron-right" />
         </Button>
-        <span v-else class="inline-flex">
+        <span v-if="!(revisable && !from)" class="inline-flex">
           <Button
             ref="commentTrigger"
-            variant="secondary"
+            :variant="footerButtons"
             size="icon-sm"
             class="pointer-coarse:size-11"
             :aria-label="phrase.ai_action_comment"
@@ -516,9 +849,48 @@ function sendComment(text: string) {
             <Icon name="comment" />
           </Button>
         </span>
-        <template v-if="!inBundle">
+      </template>
+      <!-- Together, and at the end, however they wrap. -->
+      <span class="ml-auto flex gap-1.5">
+        <!-- Correcting its words: back as it was, or applied as corrected. -->
+        <template v-if="pending && editing">
           <Button
-            variant="secondary"
+            :variant="footerButtons"
+            size="icon-sm"
+            class="pointer-coarse:size-11"
+            :aria-label="phrase.ai_action_edit_cancel"
+            :data-title-popup="phrase.ai_action_edit_cancel"
+            data-action-edit-cancel
+            @click="cancelEdit"
+          >
+            <Icon name="undo" />
+          </Button>
+          <Button
+            class="flex h-8 items-center gap-1 px-2.5 text-sm font-semibold
+              pointer-coarse:h-11"
+            :disabled="saving || busy"
+            :aria-label="phrase.ai_action_edit_apply"
+            :data-title-popup="phrase.ai_action_edit_apply"
+            data-action-edit-apply
+            @click="saveEdit"
+          >
+            <Icon :name="saving ? 'loading' : 'check'" />{{ applyWord }}
+          </Button>
+        </template>
+        <!-- Taken into the form: taken back from where it stood. -->
+        <Button
+          v-else-if="taken"
+          :variant="footerButtons"
+          class="flex h-8 items-center gap-1 px-2.5 text-sm pointer-coarse:h-11"
+          :data-title-popup="phrase.ai_offer_take_back_hint"
+          data-action-take-back
+          @click="settled(() => emit('undo'))"
+        >
+          <Icon name="undo" />{{ phrase.ai_offer_take_back }}
+        </Button>
+        <template v-else-if="pending">
+          <Button
+            :variant="footerButtons"
             size="icon-sm"
             class="pointer-coarse:size-11"
             :disabled="busy"
@@ -533,30 +905,28 @@ function sendComment(text: string) {
                what the form cannot take is applied from its session. -->
           <Button
             v-if="from && action.kind === 'revise'"
-            size="icon-sm"
-            class="pointer-coarse:size-11"
-            :aria-label="phrase.ai_action_open"
+            class="flex h-8 items-center gap-1 px-2.5 text-sm font-semibold
+              pointer-coarse:h-11"
             :data-title-popup="phrase.ai_action_open"
             data-action-open
             @click="openParts"
           >
-            <Icon name="chevron-right" />
+            <Icon name="chevron-right" />{{ phrase.ai_action_open }}
           </Button>
           <Button
             v-else-if="from && form === 'session'"
             :to="sessionPath"
-            size="icon-sm"
-            class="pointer-coarse:size-11"
-            :aria-label="phrase.ai_offer_in_session"
+            class="flex h-8 items-center gap-1 px-2.5 text-sm font-semibold
+              pointer-coarse:h-11"
             :data-title-popup="phrase.ai_offer_in_session"
             data-action-session
           >
-            <Icon name="ai-chat" />
+            <Icon name="ai-chat" />{{ phrase.ai_offer_in_session }}
           </Button>
           <Button
             v-else
-            size="icon-sm"
-            class="pointer-coarse:size-11"
+            class="flex h-8 items-center gap-1 px-2.5 text-sm font-semibold
+              pointer-coarse:h-11"
             :class="
               info.final
                 ? `bg-bg-error! text-text-error! hocus:bg-text-error!
@@ -569,337 +939,44 @@ function sendComment(text: string) {
             data-action-apply
             @click="emit('apply')"
           >
-            <Icon :name="busy ? 'loading' : revisable ? 'done-all' : 'check'" />
+            <Icon
+              :name="busy ? 'loading' : revisable ? 'done-all' : 'check'"
+            />{{ applyWord }}
           </Button>
         </template>
-      </template>
-      <Button
-        v-else-if="
-          action.state === 'applied' && action.undo === 'ready' && !info.final
-        "
-        variant="secondary"
-        size="icon-sm"
-        class="pointer-coarse:size-11"
-        :disabled="busy"
-        :aria-label="phrase.ai_action_undo"
-        :data-title-popup="phrase.ai_action_undo"
-        data-action-undo
-        @click="emit('undo')"
-      >
-        <Icon name="history" />
-      </Button>
-      <Button
-        v-else-if="action.state === 'rejected' || action.state === 'undone'"
-        variant="secondary"
-        size="icon-sm"
-        class="pointer-coarse:size-11"
-        :disabled="busy"
-        :aria-label="phrase.ai_action_restore"
-        :data-title-popup="phrase.ai_action_restore"
-        data-action-restore
-        @click="emit('restore')"
-      >
-        <Icon name="rotate-right" />
-      </Button>
-    </div>
-
-    <!-- Its words, corrected in place -->
-    <div
-      v-if="editing"
-      ref="editor"
-      class="col-start-2 col-end-4 flex min-w-0 flex-col gap-2"
-      data-action-editing
-      @keydown.esc.stop.prevent="cancelEdit"
-      @keydown.enter.ctrl.prevent="saveEdit"
-      @keydown.enter.meta.prevent="saveEdit"
-    >
-      <label
-        v-for="text in texts"
-        :key="text.key"
-        class="flex min-w-0 flex-col gap-1"
-      >
-        <span v-if="texts.length > 1" class="text-xs text-text-2">{{
-          textLabel(text)
-        }}</span>
-        <FieldInput
-          v-if="text.shape === 'line'"
-          v-model="drafts[text.key]"
-          :aria-label="textLabel(text) || phrase.ai_action_edit"
-          :data-action-text="text.key"
-        />
-        <FieldTextarea
-          v-else
-          v-model="drafts[text.key]"
-          :rows="text.shape === 'markdown' ? 8 : text.shape === 'lines' ? 4 : 3"
-          :aria-label="textLabel(text) || phrase.ai_action_edit"
-          :data-action-text="text.key"
-        />
-      </label>
-    </div>
-
-    <!-- What it changes -->
-    <div
-      v-else-if="fieldChange"
-      :class="editable ? 'cursor-text' : ''"
-      :data-title-popup="editable ? phrase.ai_action_edit : undefined"
-      @click="startEdit"
-      class="col-start-2 col-end-4 min-w-0 border-l-2 border-border-2 pl-2.5
-        text-sm leading-normal wrap-anywhere"
-    >
-      <!-- A change that no longer stands to be made, or made, is told
-           quietly: its colours are for one that waits or holds. -->
-      <template v-if="fieldChange.before">
-        <span
-          class="line-through decoration-1"
-          :class="live ? 'text-text-error' : 'text-text-3'"
-          >{{ fieldChange.before }}</span
+        <Button
+          v-else-if="undoable"
+          :variant="footerButtons"
+          class="flex h-8 items-center gap-1 px-2.5 text-sm pointer-coarse:h-11"
+          :disabled="busy"
+          :data-title-popup="phrase.ai_action_undo"
+          data-action-undo
+          @click="settled(() => emit('undo'))"
         >
-        <span class="mx-1 text-text-3">→</span>
-      </template>
-      <span
-        class="font-medium"
-        :class="live ? 'text-text-success' : 'text-text-2'"
-        >{{ fieldChange.after }}</span
-      >
-    </div>
-    <p
-      v-else-if="descriptionChange"
-      :class="editable ? 'cursor-text' : ''"
-      :data-title-popup="editable ? phrase.ai_action_edit : undefined"
-      @click="startEdit"
-      class="col-start-2 col-end-4 min-w-0 border-l-2 border-border-2 pl-2.5
-        text-sm leading-normal wrap-anywhere"
-      data-action-description
-    >
-      <template v-for="(part, index) in descriptionChange" :key="index">
-        <span
-          v-if="part.kind === 'removed'"
-          class="line-through decoration-1"
-          :class="live ? 'text-text-error' : 'text-text-3'"
-          >{{ part.text }}</span
-        ><span
-          v-else-if="part.kind === 'added'"
-          class="font-medium"
-          :class="live ? 'text-text-success' : 'text-text-2'"
-          >{{ part.text }}</span
-        ><span v-else>{{ part.text }}</span>
-      </template>
-    </p>
-    <p
-      v-else-if="quote"
-      :class="editable ? 'cursor-text' : ''"
-      :data-title-popup="editable ? phrase.ai_action_edit : undefined"
-      @click="startEdit"
-      class="col-start-2 col-end-4 line-clamp-3 min-w-0 border-l-2 border-accent
-        pl-2.5 text-sm leading-normal"
-    >
-      {{ quote }}
-    </p>
-    <p
-      v-if="info.final && pending"
-      class="col-start-2 col-end-4 flex items-center gap-1 text-xs font-semibold
-        text-text-error"
-    >
-      <Icon name="warning" />{{ phrase.ai_action_final_note }}
-    </p>
-
-    <!-- Its parts -->
-    <ul
-      v-if="parts.length"
-      class="col-start-2 col-end-4 flex min-w-0 flex-col gap-0.5"
-      :class="{ 'pointer-events-none opacity-45': partsOff }"
-      data-action-parts
-    >
-      <li
-        v-for="part in parts"
-        :key="part.id"
-        class="flex min-w-0 items-start gap-2 text-sm"
-        :data-part="part.id"
-        :data-part-state="part.state ?? 'pending'"
-      >
-        <button
-          v-if="
-            pending && !archived && (!part.state || part.state === 'pending')
-          "
-          type="button"
-          role="checkbox"
-          :aria-checked="partOn(part)"
-          :aria-label="part.label"
-          class="-m-1 flex shrink-0 cursor-pointer items-center justify-center
-            rounded-sm bg-transparent p-1 focus-visible:ring-2
-            focus-visible:ring-accent pointer-coarse:-m-2 pointer-coarse:p-2"
-          :disabled="partsOff"
-          data-part-pick
-          @click="togglePart(part)"
+          <Icon name="history" />{{ phrase.ai_action_undo }}
+        </Button>
+        <Button
+          v-else-if="restorable"
+          :variant="footerButtons"
+          class="flex h-8 items-center gap-1 px-2.5 text-sm pointer-coarse:h-11"
+          :disabled="busy"
+          :aria-label="restoreLabel"
+          :data-title-popup="restoreLabel"
+          data-action-restore
+          @click="settled(() => emit('restore'))"
         >
-          <span
-            class="flex size-4 items-center justify-center rounded-sm
-              border-[1.5px] transition"
-            :class="
-              partOn(part)
-                ? 'border-accent bg-accent text-white dark:text-bg-1'
-                : part.certainty === 'unsure'
-                  ? 'border-text-warning bg-bg-1'
-                  : 'border-border-2 bg-bg-1'
-            "
-          >
-            <Icon v-if="partOn(part)" name="check" class="text-2xs" />
-          </span>
-        </button>
-        <Icon
-          v-else
-          :name="
-            part.state === 'applied'
-              ? 'check'
-              : part.state === 'stale'
-                ? 'refresh'
-                : 'close'
-          "
-          class="mt-0.5 shrink-0"
-          :class="
-            part.state === 'applied' ? 'text-text-success' : 'text-text-3'
-          "
-        />
-        <Icon :name="part.icon" class="mt-0.5 shrink-0 text-text-3" />
-        <span class="min-w-0 wrap-anywhere">
-          <span
-            :class="{ 'text-text-3 line-through': part.state === 'kept' }"
-            >{{ part.label }}</span
-          >
-          <span
-            v-if="part.detail"
-            class="block text-xs"
-            :class="
-              part.certainty === 'unsure' ? 'text-text-warning' : 'text-text-2'
-            "
-            >{{ part.detail }}</span
-          >
-        </span>
-      </li>
-    </ul>
-
-    <!-- Why, or what became of it -->
-    <p
-      v-if="pending && unsure"
-      class="col-start-2 col-end-4 text-xs leading-snug wrap-anywhere
-        text-text-2"
-    >
-      <b class="font-semibold text-text-warning">{{
-        phrase.ai_action_unsure
-      }}</b>
-      {{ action.reason }}
-    </p>
-    <p
-      v-else-if="pending && action.reason"
-      class="col-start-2 col-end-4 text-xs leading-snug wrap-anywhere
-        text-text-2"
-    >
-      {{ action.reason }}
-    </p>
-    <p
-      v-if="pending && modelWords && !editing"
-      class="col-start-2 col-end-4 text-xs text-text-2"
-    >
-      <span
-        class="underline decoration-text-2/35 decoration-dotted"
-        :data-title-popup="phrase.ai_action_model_words(modelWords)"
-        data-action-corrected
-        >{{ phrase.ai_action_corrected }}</span
-      >
-    </p>
-    <p
-      v-if="from"
-      class="col-start-2 col-end-4 flex min-w-0 items-center gap-1 text-xs
-        text-text-2"
-      data-action-from
-    >
-      <TheiLink
-        :to="sessionPath"
-        class="inline-flex min-w-0 items-center gap-1 underline
-          decoration-text-2/35 underline-offset-2 transition-colors
-          hocus:text-accent"
-        :data-title-popup="sessionTitle(from)"
-        data-title-popup-clipped
-      >
-        <Icon name="ai-chat" class="shrink-0" />
-        <span class="truncate" data-title-popup-clip>{{
-          phrase.quoted(sessionTitle(from))
-        }}</span>
-      </TheiLink>
-      <span class="shrink-0">· {{ shortWhen(action.createdAt) }}</span>
-    </p>
-    <p
-      v-if="pending && action.error"
-      class="col-start-2 col-end-4 text-xs leading-snug wrap-anywhere
-        text-text-error"
-      data-action-error
-    >
-      <b class="font-semibold">{{ phrase.ai_action_states.failed }}</b>
-      {{ action.error }}
-    </p>
-    <p
-      v-else-if="!pending"
-      class="col-start-2 col-end-4 text-xs leading-snug wrap-anywhere
-        text-text-2"
-      data-action-sub
-    >
-      <template v-if="action.state === 'applied'">
-        {{ appliedLine
-        }}<template v-if="modelWords">
-          ·
-          <span
-            class="underline decoration-text-2/35 decoration-dotted"
-            :data-title-popup="phrase.ai_action_model_words(modelWords)"
-            data-action-corrected
-            >{{ phrase.ai_action_corrected }}</span
-          ></template
-        ><template v-if="undoHint"> · {{ undoHint }}</template>
-      </template>
-      <template v-else-if="action.state === 'rejected'">
-        <template v-if="action.never">{{
-          phrase.ai_action_states.never
-        }}</template>
-        <template v-else>
-          {{ phrase.ai_action_states.rejected
-          }}<template v-if="!archived"> ·</template>
-          <button
-            v-if="!archived"
-            type="button"
-            class="cursor-pointer bg-transparent font-semibold text-accent
-              pointer-coarse:py-2 hocus:underline"
-            data-action-never
-            @click="emit('never')"
-          >
-            {{ phrase.ai_action_never }}
-          </button>
-        </template>
-      </template>
-      <template v-else>
-        {{
-          phrase.ai_action_states[
-            action.state as keyof typeof phrase.ai_action_states
-          ] ?? action.state
-        }}
-      </template>
-    </p>
-
-    <div
-      v-if="commenting && inlineComment"
-      class="col-span-full -mx-3 -mb-2 border-t border-border-1/70"
-    >
-      <AiCommentBox
-        :about="commentAbout"
-        about-icon="comment"
-        @send="sendComment"
-      />
+          <Icon name="undo" />{{ phrase.ai_action_restore_short }}
+        </Button>
+      </span>
     </div>
+
     <!-- Kept in the page while closed, so it closes as it opened. -->
     <FloatingPopup
-      v-if="commentMounted && !inlineComment"
+      v-if="commentMounted && !inPopup"
       :open="commenting"
       :anchor="commentButton ?? null"
       max-width="22rem"
-      placement="bottom-end"
+      placement="bottom-start"
       complex
       @update:open="commenting = $event"
     >

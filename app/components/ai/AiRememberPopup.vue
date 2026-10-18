@@ -28,7 +28,17 @@ async function save() {
   try {
     await ai.remember(words);
     open.value = false;
-    showToast(phrase.value.ai_remember_saved);
+    // Where it now stands: the form's memory block, far down the form.
+    const block = document.querySelector('[data-ai-memory-block]');
+    showToast(
+      phrase.value.ai_remember_saved,
+      block
+        ? {
+            label: phrase.value.ai_entity_offer_show,
+            run: () => block.scrollIntoView({ block: 'center' }),
+          }
+        : undefined,
+    );
   } catch (caught) {
     error.value = errorMessage(caught, phrase.value.ai_error);
   } finally {

@@ -105,11 +105,12 @@ useModalCloseGuard(
             initial ? phrase.profile_edit_status : phrase.profile_new_status
           "
           class="min-w-0"
-        /><Button class="shrink-0" :disabled="!canSave" @click="save">{{
-          initial ? phrase.save : phrase.add
-        }}</Button>
-      </div></template
-    >
+        /><AdminSaveButton
+          :label="initial ? phrase.save : phrase.add"
+          :disabled="!canSave"
+          @click="save"
+        /></div
+    ></template>
     <div class="flex flex-col gap-md p-md">
       <div class="flex min-w-0 items-start gap-md">
         <ProfileMediaField

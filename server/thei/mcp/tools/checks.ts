@@ -103,7 +103,6 @@ export function registerCheckTools(server: McpServer, context: McpCallContext) {
         // Asked again, the run went through what it had: that counts as
         // looked at, and makes room for the next.
         settleTemplateTurn(own.sessionUuid, true);
-        rememberAsked(own.sessionUuid, { areas, refs });
         const input = {
           scope,
           areas: areas?.length ? new Set(areas) : undefined,
@@ -125,6 +124,12 @@ export function registerCheckTools(server: McpServer, context: McpCallContext) {
             'Nothing of that is due: the check has looked at all of it as it reads now.',
           );
         const left = due.length - held.length;
+        // Kept for «go on»: the next batch is as much as was asked for.
+        rememberAsked(own.sessionUuid, {
+          areas,
+          refs,
+          ...(count ? { count, left } : {}),
+        });
         return toolResult(
           [
             source.brief(held),

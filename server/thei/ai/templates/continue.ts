@@ -7,7 +7,7 @@ import {
   sessionMessages,
   updateMessage,
 } from '../sessions/store';
-import { busySubjects, coverageOf, lastAsked } from './coverage';
+import { busySubjects, coverageOf, coveredSince, lastAsked } from './coverage';
 import { TEMPLATE_SOURCES } from './sources';
 import { findTemplate } from './store';
 
@@ -40,13 +40,14 @@ function runOf(sessionUuid: string) {
 
 /**
  * What the run would be given next, as its model last asked for it: how
- * many subjects, and whether that is a whole batch, with more maybe after.
+ * many subjects, and how many it looked at in this session.
+ * `null` when nothing is due; `undefined` when the session runs no check.
  */
 export async function dueNext(
   sessionUuid: string,
-): Promise<Omit<ContinuePart, 'type'> | null> {
+): Promise<Omit<ContinuePart, 'type'> | null | undefined> {
   const run = runOf(sessionUuid);
-  if (!run) return null;
+  if (!run) return undefined;
   const source = TEMPLATE_SOURCES[run.key];
   const ask = lastAsked(sessionUuid);
   const bound = run.scope?.flatMap((ref) => findTarget(ref) ?? []);
@@ -59,9 +60,15 @@ export async function dueNext(
     busy: busySubjects(run.template.templateId),
   });
   if (!due.length) return null;
+  // A number the model asked for is what goes on, as far as it reaches.
+  const asked = ask?.count
+    ? Math.min(ask.count, Math.max(ask.left ?? ask.count, 1))
+    : undefined;
+  // How far it is: what it looked at in this session, counted, never what
+  // is left, which would read the whole archive at the end of every turn.
   return {
-    next: due.length,
-    full: source.size === undefined || due.length >= source.size,
+    next: asked ?? due.length,
+    looked: coveredSince(run.template.templateId, run.session.createdAt),
   };
 }
 
@@ -81,21 +88,25 @@ export function withdrawContinue(sessionUuid: string) {
 }
 
 /**
- * Under the answer of a check's turn that went through: whether more is
- * due, offered as one button to go on.
+ * Under the answer of a check's turn that went through, or paused at its
+ * limits: whether more is due, offered as one button to go on — or, with
+ * nothing left, that all of it was looked at (`next: 0`).
  */
 export async function offerToContinue(
   sessionUuid: string,
   messageUuid: string,
 ) {
   try {
-    const next = await dueNext(sessionUuid);
-    if (!next) return;
+    const due = await dueNext(sessionUuid);
+    if (due === undefined) return;
+    const next = due ?? { next: 0, looked: 0 };
     const message = findMessage(messageUuid);
     // A question waits for its answer first.
     if (
       !message ||
-      (message.parts as AiMessagePart[]).some((part) => part.type === 'question')
+      (message.parts as AiMessagePart[]).some(
+        (part) => part.type === 'question',
+      )
     )
       return;
     withdrawContinue(sessionUuid);

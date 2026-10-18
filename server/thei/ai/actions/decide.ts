@@ -200,7 +200,8 @@ export function neverPart(
 /**
  * Brings back declined or undone actions: they wait again, unless the
  * archive has moved on since and they no longer stand. An undone one starts
- * afresh, as if never applied.
+ * afresh, as if never applied. A «never» said of a declined one is taken
+ * back with it: brought back to be decided, it may be offered again.
  */
 export async function restoreActions(
   actionUuids: string[],
@@ -229,6 +230,18 @@ export async function restoreActions(
         ),
       )
       .run();
+    const banned = rows
+      .filter((row) => row.state === 'rejected')
+      .map((row) => row.fingerprint);
+    if (banned.length)
+      tx.delete(schema.aiMemory)
+        .where(
+          and(
+            eq(schema.aiMemory.type, 'never'),
+            inArray(schema.aiMemory.fingerprint, banned),
+          ),
+        )
+        .run();
     // Parts kept or applied before wait again too.
     for (const row of rows)
       if (row.parts)

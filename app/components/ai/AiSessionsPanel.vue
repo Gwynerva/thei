@@ -98,6 +98,16 @@ function usePreset(preset: AiPresetItem) {
   composer.value?.prefill(preset.instruction, preset.templateId);
 }
 
+// A new session is come to to write: its field takes the keys at once,
+// wherever it was opened from — a form's menu, the admin bar's, the list.
+watch(
+  [() => selected.value === 'new', composer],
+  ([fresh, field]) => {
+    if (fresh && field) void nextTick(() => field.focus());
+  },
+  { immediate: true },
+);
+
 // Opened with one: its words go in once, as the screen comes up.
 const presetAsked = computed(() =>
   selected.value === 'new' && typeof route.query.template === 'string'
@@ -248,6 +258,17 @@ async function deleted() {
           class="px-sm pt-1.5
             pb-[calc(var(--spacing-sm)+env(safe-area-inset-bottom,0px))]"
         >
+          <!-- Sent, the words leave the field at once: what happens meanwhile
+               is said over it until the session opens. -->
+          <p
+            v-if="starting"
+            class="mx-auto flex w-full max-w-184 items-center gap-xs pb-1.5
+              text-sm text-text-2"
+            role="status"
+            data-session-starting
+          >
+            <AiRunningDots />{{ phrase.ai_session_starting }}
+          </p>
           <AiComposer
             ref="composer"
             :busy="starting"

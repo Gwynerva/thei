@@ -63,6 +63,7 @@ async function load(keepTyped = false) {
     offers.value = read.offers ?? [];
     asking.value = read.asking ?? [];
     modelReady.value = Boolean(read.modelReady);
+    if (read.waiting !== undefined) setAiWaiting(read.waiting);
     loaded.value = true;
   } catch (caught) {
     if (ticket !== reading) return;
@@ -210,9 +211,10 @@ watch(
             : notice?.text
         }}
       </p>
+      <!-- Shown only with words to save: the window's action then, in its
+           own colour, as a form's «Save» lights up. -->
       <Button
         v-if="dirty && !embedded"
-        variant="secondary"
         class="flex h-9 items-center gap-xs"
         :disabled="saving || tooLong || !loaded"
         data-file-description-save

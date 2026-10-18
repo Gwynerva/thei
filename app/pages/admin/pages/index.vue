@@ -17,7 +17,9 @@ const list = computed<PageListResponse | undefined>(() => data.value);
 <template>
   <StickyGlassHeader width="var(--width-wide)">
     <div class="flex items-center justify-between gap-xs py-xs">
-      <div class="flex min-w-0 items-center gap-xs text-xl font-bold">
+      <div
+        class="flex min-w-0 items-center gap-xs text-lg font-bold sm:text-xl"
+      >
         <Icon name="page" class="shrink-0" />
         <span class="truncate">{{ phrase.admin_pages }}</span>
       </div>

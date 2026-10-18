@@ -196,3 +196,18 @@ export function plainWords(markdown: string, max = 400): string {
     .trim();
   return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 }
+
+/**
+ * The words of editing Markdown as lines: a heading and the paragraph after
+ * it stay apart, the marks and addresses dropped. For a text shown whole.
+ */
+export function plainLines(markdown: string, max = 600): string {
+  const text = stripMarks(markdown)
+    .replace(/^#+\s*/gm, '')
+    .replace(/^\s*[-*>]\s+/gm, '')
+    .replace(/::\w+(\[[^\]]*\])?\{[^}]*\}/g, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s*\n\s*/g, '\n')
+    .trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}

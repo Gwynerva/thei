@@ -278,6 +278,7 @@ async function deleteItem() {
           />
           <ModalHeaderButton
             variant="accent"
+            :phone-icon="isDirty || !exists ? 'save' : 'check'"
             :label="phrase.save"
             :disabled="!canSave"
             @click="save"

@@ -171,7 +171,7 @@ test('the Markdown copy lists the relations as the page does: by kind, with the 
   const response = await request.get(`${projectPath}index.md`);
   expect(response.ok()).toBe(true);
   const markdown = (await response.text()).replaceAll('\u00a0', ' ');
-  const related = markdown.slice(markdown.indexOf('## Related entities'));
+  const related = markdown.slice(markdown.indexOf('## Relations'));
   // One list per kind, in the order of the tabs.
   expect(related.indexOf('### Projects')).toBeGreaterThan(-1);
   expect(related.indexOf('### Events')).toBeGreaterThan(

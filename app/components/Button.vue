@@ -8,7 +8,8 @@ const {
   dragHandle = false,
   to,
 } = defineProps<{
-  variant?: 'primary' | 'secondary' | 'delete';
+  /** `raised`: a neutral one on a `bg-bg-3` ground, a card's footer. */
+  variant?: 'primary' | 'secondary' | 'raised' | 'delete';
   size?: 'default' | 'icon-overlay' | 'icon-sm' | 'icon' | 'icon-lg';
   dragHandle?: boolean;
   /**
@@ -26,6 +27,10 @@ const variantClasses = {
     hocus:not-disabled:bg-accent popup-open:bg-accent`,
   secondary: `bg-bg-3 text-text-2
     disabled:bg-bg-3/40 disabled:text-text-3/80
+    hocus:not-disabled:bg-accent/25 hocus:not-disabled:text-accent
+    popup-open:bg-accent/25 popup-open:text-accent`,
+  raised: `bg-bg-4 text-text-2
+    disabled:bg-bg-4/40 disabled:text-text-3/80
     hocus:not-disabled:bg-accent/25 hocus:not-disabled:text-accent
     popup-open:bg-accent/25 popup-open:text-accent`,
   delete: `bg-bg-3 text-text-2 hocus:not-disabled:text-text-error

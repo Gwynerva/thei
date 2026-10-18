@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, count, eq, gte, inArray } from 'drizzle-orm';
 import {
   AI_BUILTIN_TEMPLATE_KEYS,
   builtinTemplateId,
@@ -35,6 +35,27 @@ export function coverageOf(templateId: string): Map<string, Covered> {
       row.subject,
       { fingerprint: row.fingerprint, parts: row.parts },
     ]),
+  );
+}
+
+/**
+ * How many subjects a check has looked at since a moment — a session's
+ * start: one count, never a read of what is left, which over a whole
+ * archive would hold the server up.
+ */
+export function coveredSince(templateId: string, since: number): number {
+  const { db, schema } = THEI_SERVER.useDb();
+  return (
+    db
+      .select({ count: count() })
+      .from(schema.aiTemplateCoverage)
+      .where(
+        and(
+          eq(schema.aiTemplateCoverage.templateId, templateId),
+          gte(schema.aiTemplateCoverage.at, since),
+        ),
+      )
+      .get()?.count ?? 0
   );
 }
 
@@ -272,6 +293,17 @@ export function forgetSubjects(templateId: string, subjects: string[]) {
       .run();
 }
 
+/**
+ * Forgets all a check has looked at, for it to look at everything from the
+ * start: the owner asked it to look again.
+ */
+export function forgetAll(templateId: string) {
+  const { db, schema } = THEI_SERVER.useDb();
+  db.delete(schema.aiTemplateCoverage)
+    .where(eq(schema.aiTemplateCoverage.templateId, templateId))
+    .run();
+}
+
 /** Lets go of what runs of these sessions were given: they are gone. */
 export function dropBatches(tx: any, schema: any, sessionUuids: string[]) {
   if (!sessionUuids.length) return;
@@ -294,17 +326,24 @@ export function forgetCoverage(
 }
 
 /** What a check's run last asked for, by session: its areas and refs. */
-const asked = new Map<string, { areas?: string[]; refs?: string[] }>();
+/**
+ * What a run's model last asked for: the areas and refs, and the number of
+ * subjects it asked for with what was left of that after the batch it got.
+ */
+interface Asked {
+  areas?: string[];
+  refs?: string[];
+  count?: number;
+  left?: number;
+}
+const asked = new Map<string, Asked>();
 
 /**
  * What a run's model last asked `check_batch` for, kept for «go on»: the
  * next batch is of the same. Kept in memory: after a restart the run goes
  * on over all it is about.
  */
-export function rememberAsked(
-  sessionUuid: string,
-  ask: { areas?: string[]; refs?: string[] },
-) {
+export function rememberAsked(sessionUuid: string, ask: Asked) {
   asked.set(sessionUuid, ask);
 }
 

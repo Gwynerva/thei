@@ -427,7 +427,12 @@ export const aiApi = {
    */
   runCheck(
     templateId: string,
-    body: { about?: string[]; request?: string; model?: string } = {},
+    body: {
+      about?: string[];
+      request?: string;
+      model?: string;
+      again?: boolean;
+    } = {},
   ) {
     return $fetch<AiTemplateRunResponse>(
       `/api/admin/ai/templates/${templateId}/run`,

@@ -701,6 +701,32 @@ async function loadAiReviews() {
   }
 }
 
+/**
+ * The entity whose text this is, by ref, for its ✦ to ask about the text:
+ * none for a text of an entity not made yet, nor with AI off.
+ */
+const askTarget = computed(() => {
+  const field = props.modalData.history?.field;
+  if (!aiEnabled.value || !field || isNewContentOwnerRef(field.ownerRef))
+    return undefined;
+  return { ref: `${field.ownerType}:${field.ownerRef}`, slot: field.slot };
+});
+
+/**
+ * Asked from the editor's ✦, the edits its session proposed come up on the
+ * comparison at once — the first of them, unless another is open already;
+ * the rest wait in the notice over the text.
+ */
+async function openProposed(actionUuids: string[]) {
+  await loadAiReviews();
+  if (disposed || review.value) return;
+  // Nothing new: what waits for the text already is what it found.
+  const action =
+    aiReviews.value.find((item) => actionUuids.includes(item.actionUuid)) ??
+    waitingReviews.value[0];
+  if (action) await openAiReview(action);
+}
+
 /** Over the text as it is this moment: the last words typed included. */
 async function openAiReview(action: AiActionItem) {
   const data = await editorSession.synchronize();
@@ -746,6 +772,7 @@ async function reviewDone(decisions: Record<string, ReviewDecision>) {
   ).length;
   try {
     const result = current.model.result(decisions);
+    const changed = firstChangedBlock(current.model.result({}), result);
     const restored = await editorSession.restore(
       result,
       current.kind === 'version' && current.target.adoptRef
@@ -774,9 +801,39 @@ async function reviewDone(decisions: Record<string, ReviewDecision>) {
       showToast(phrase.value.ai_review_applied(taken), undoToast());
     }
     closeReview();
+    if (changed) void showBlock(changed);
   } finally {
     reviewBusy.value = false;
   }
+}
+
+/**
+ * The first block what was taken changes — or brings — by its id: the text
+ * opens on it rather than at its top, where the owner would not see it.
+ */
+function firstChangedBlock(
+  before: ContentOutputData,
+  after: ContentOutputData,
+) {
+  const was = new Map(
+    before.blocks.map((block) => [block.id, JSON.stringify(block)]),
+  );
+  return after.blocks.find(
+    (block) => block.id && was.get(block.id) !== JSON.stringify(block),
+  )?.id;
+}
+
+async function showBlock(id: string) {
+  await nextTick();
+  await new Promise(requestAnimationFrame);
+  holder.value
+    ?.querySelector(`.ce-block[data-id="${CSS.escape(id)}"]`)
+    ?.scrollIntoView({
+      block: 'center',
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'auto'
+        : 'smooth',
+    });
 }
 
 /** What was just taken can be put back at once, from its word too. */
@@ -1679,6 +1736,16 @@ function editorJsI18nMessages() {
           >
             <Icon name="rotate-right" class="-scale-x-100" />
           </ModalHeaderButton>
+          <!-- The AI about this text, before its history. -->
+          <AiTextAsk
+            v-if="askTarget"
+            :target="askTarget.ref"
+            :text-slot="askTarget.slot"
+            :title="modalData.title || phrase.content_editor_title"
+            :waiting="waitingReviews.length"
+            :filled="headerSummary.blockCount > 0"
+            @proposed="openProposed"
+          />
           <div class="relative flex shrink-0">
             <ModalHeaderButton
               ref="historyTrigger"
@@ -1704,6 +1771,7 @@ function editorJsI18nMessages() {
           />
           <ModalHeaderButton
             variant="accent"
+            :phone-icon="isDirty ? 'save' : 'check'"
             :label="phrase.save"
             :disabled="saving || !isDirty"
             data-editor-save

@@ -37,6 +37,8 @@ import { buildTagItems } from './tags';
  */
 
 const INDEX_TTL_MS = 10 * 60_000;
+/** A word in more than this share of the archive sets no tag apart. */
+const COMMON_SHARE = 0.25;
 
 export type TagRecommendationIndex = {
   builtAt: number;
@@ -176,6 +178,11 @@ export function buildTagRecommendationIndex(): TagRecommendationIndex {
       frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
   const idf = (term: string) =>
     inverseDocumentFrequency(counted.length, frequencies.get(term) ?? 0);
+  // A word in a quarter of the archive or more sets no tag apart.
+  const commonIdf = inverseDocumentFrequency(
+    counted.length,
+    counted.length * COMMON_SHARE,
+  );
 
   const documents: TagEvidenceDocument[] = counted.map((document) => ({
     ...document,
@@ -217,7 +224,9 @@ export function buildTagRecommendationIndex(): TagRecommendationIndex {
     builtAt: Date.now(),
     documents,
     byKey: new Map(documents.map((document) => [document.key, document])),
-    profiles: [...tagRows.values()].map((tag) => buildTagProfile(tag, idf)),
+    profiles: [...tagRows.values()].map((tag) =>
+      buildTagProfile(tag, idf, commonIdf),
+    ),
     tagRows,
     idf,
     frequency: (term) => frequencies.get(term) ?? 0,

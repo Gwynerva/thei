@@ -44,6 +44,9 @@ The complex popups today:
 A new popup takes the side of the rule its content falls on. A sheet takes the
 width of the screen and up to 85% of its height; what it holds is centred when
 it has a width of its own.
+A sheet never hides what it was opened from: an anchor it would cover is
+scrolled up to just above it — the page, or the modal it is in — so the field
+asked about stays in sight.
 
 ## Rules
 
@@ -64,6 +67,10 @@ it has a width of its own.
   when the window is too short for it. With `none`, the content scrolls
   itself within `--floating-popup-available-height`, as the select's list,
   the ✦ menus (`AiSessionsMenu`) and a proposal at a label do.
+- **Placed, it keeps its side while it stays open.** What it holds may grow —
+  an answer coming into a ✦'s box — and it scrolls in the room that side has
+  rather than jump over its anchor (`usePopupPlacement`). Opened again, it
+  chooses afresh.
 - **Rows of a menu are `popup-item`:** one height, one rounding, one shade
   under the pointer; a row that deletes shades with
   `[--popup-item-hover:var(--color-bg-error)]`. The row Enter would choose is
@@ -129,7 +136,9 @@ choice, before the click goes on to wherever it was aimed; and `closed` once
 it has gone. It gives what it holds the room left on the screen as
 `--floating-popup-available-height` and `--floating-popup-available-width`,
 and the anchor's width as `--floating-popup-anchor-width`, for a list as wide
-as the field it opens under. A content that scrolls takes its height from the
+as the field it opens under. Before its room is known it is measured at its
+full width: left to shrink to what it holds, a content sized by its box made
+it a thin, tall strip that turned beside its anchor and stayed squeezed there. A content that scrolls takes its height from the
 first:
 
 ```vue

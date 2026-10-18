@@ -5,6 +5,7 @@ import {
   containsPhrase,
   cosineSimilarity,
   normalizeTermText,
+  saysLittle,
   stemTerm,
   wordTokens,
   type TermCounts,
@@ -127,7 +128,11 @@ export type TagProfile = {
    * things — «C++, .NET & API» — is split into them.
    */
   names: TagNamePart[][];
-  /** The rarest words of the description, not already in the name. */
+  /**
+   * The rarest words of the description, not already in the name — never a
+   * word that says little («как», «было») or one most texts hold: a tag is
+   * not recognized by the words of every text.
+   */
   descriptionStems: string[];
   /** Each stem as the tag itself writes it, to name a match found by stem. */
   words: Map<string, string>;
@@ -160,6 +165,8 @@ export function buildTagProfile(
     synonyms?: string[];
   },
   idf: (term: string) => number,
+  /** Words this common or more — a quarter of the archive — say nothing of it. */
+  commonIdf = 0,
 ): TagProfile {
   const aliases = [...tag.title.matchAll(NAME_ALIAS)].map((match) => match[1]!);
   // A synonym is a name like any other: found in a text, it counts in full.
@@ -179,9 +186,13 @@ export function buildTagProfile(
     if (!words.has(stem)) words.set(stem, token);
   }
   const descriptionStems = [
-    ...new Set(wordTokens(tag.description ?? '').map(stemTerm)),
+    ...new Set(
+      wordTokens(tag.description ?? '')
+        .filter((token) => !saysLittle(token))
+        .map(stemTerm),
+    ),
   ]
-    .filter((stem) => stem.length > 2 && !nameStems.has(stem))
+    .filter((stem) => !nameStems.has(stem) && idf(stem) > commonIdf)
     .sort((left, right) => idf(right) - idf(left))
     .slice(0, TAG_RECOMMENDATION.descriptionTerms);
   return {

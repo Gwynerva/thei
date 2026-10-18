@@ -33,6 +33,11 @@ neutral — and in square icon-only sizes.
 - A button that drops its words on a phone keeps its name:
   `max-sm:w-9 max-sm:justify-center max-sm:px-0` on the button,
   `max-sm:hidden` on the words, and an `aria-label`.
+- A form's Save stays at the end of its header on a phone too, as a square
+  with the `save` icon, its words for its name: `app/components/admin/AdminSaveButton.vue`
+  on a page (`done` once all of it is saved), `ModalHeaderButton`'s
+  `phoneIcon` in a modal. Once everything is saved the square shows `check`:
+  a pale floppy disk alone did not say whether the save had gone through.
 - Under a finger, small square buttons grow: `pointer-coarse:size-11`.
 - A row of a list the owner orders by hand — the profile's links, the files
   of a group in a text — has a grip: a square `Button` with `dragHandle` and
@@ -60,6 +65,7 @@ neutral — and in square icon-only sizes.
 | ----------- | ---------------------------------------------------------------------------- |
 | `primary`   | The default: `bg-accent/80` and white words, full accent on hover and focus. |
 | `secondary` | `bg-bg-3` and `text-text-2`, tinted with the accent on hover and focus.      |
+| `raised`    | `secondary` one step off a `bg-bg-3` ground, `bg-bg-4`: a card's foot.       |
 | `delete`    | Like `secondary`, turning to the error colours on hover and focus.           |
 
 | `size`         | Box                                        |

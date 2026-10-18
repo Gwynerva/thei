@@ -123,6 +123,55 @@ async function stop(sessionUuid: string) {
   }
 }
 
+/**
+ * Once what was sent from the menu proposes something here, the menu gives
+ * way — over the form it would hide the very field — and says where the
+ * proposal waits, a click away.
+ */
+watch(waiting, (now, before) => {
+  if (!open.value || !sent.value || now <= before) return;
+  open.value = false;
+  const place = ai?.offers.value.at(-1)?.place;
+  // What belongs to the whole form waits at its head: brought into view,
+  // with no toast laid over it.
+  if (place === 'form') {
+    void nextTick(() =>
+      document
+        .querySelector('[data-ai-offers="form"]')
+        ?.scrollIntoView({ block: 'center' }),
+    );
+    return;
+  }
+  const star = place
+    ? document.querySelector<HTMLElement>(
+        `[data-ai-field-offer="${CSS.escape(place)}"]`,
+      )
+    : null;
+  const label = star?.closest('[data-field-label]')?.cloneNode(true) as
+    HTMLElement | undefined;
+  for (const extra of label?.querySelectorAll('[data-field-label-extra]') ?? [])
+    extra.remove();
+  const name = label?.textContent?.replace(/\s+/g, ' ').trim();
+  // Several at once are counted; «Показать» goes to the latest of them.
+  const came = now - before;
+  showToast(
+    came > 1
+      ? phrase.value.ai_entity_offers_came(came)
+      : name
+        ? phrase.value.ai_entity_offer_at(name)
+        : phrase.value.ai_entity_offer_came,
+    star
+      ? {
+          label: phrase.value.ai_entity_offer_show,
+          run: () => {
+            star.scrollIntoView({ block: 'center' });
+            if (star.dataset.aiFieldState === 'offers') star.click();
+          },
+        }
+      : undefined,
+  );
+});
+
 // What the session proposes reaches the form's labels as it is made.
 watch(
   () => [
@@ -157,6 +206,7 @@ function openFull() {
         ref="trigger"
         variant="secondary"
         size="icon"
+        class="pointer-coarse:size-11"
         :aria-label="phrase.ai_entity_menu(kindName)"
         :data-title-popup="phrase.ai_entity_menu(kindName)"
         aria-haspopup="dialog"

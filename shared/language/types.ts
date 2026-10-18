@@ -13,6 +13,21 @@ export const languageCodes = Object.keys(languagesInfo) as LanguageCode[];
 
 export type LanguageCode = keyof typeof languagesInfo;
 
+/** The kinds of field a ✦ offers ready requests for. */
+export type AiFieldAskKind =
+  | 'title'
+  | 'summary'
+  | 'description'
+  | 'synonyms'
+  | 'slogan'
+  | 'reminder'
+  | 'periods'
+  | 'tags'
+  | 'relations'
+  | 'text'
+  | 'file'
+  | 'other';
+
 export type LanguageSizeUnits = {
   b: string;
   kb: string;
@@ -120,6 +135,11 @@ export type LanguagePhrases = {
   asset_library_more: string;
   asset_library_insert: string;
   asset_library_usage: string;
+  /** The library's filter by description: its name and its choices. */
+  asset_library_described: string;
+  asset_library_described_any: string;
+  asset_library_described_none: string;
+  asset_library_described_some: string;
   asset_used_elsewhere: string;
   asset_library_properties: string;
   asset_library_settings: string;
@@ -1355,7 +1375,18 @@ export type LanguagePhrases = {
   /** The grid of blocks the "+" opens. */
   content_block_toolbox: string;
   ai_template_run: string;
+  /** A check with nothing to look at, and nothing looked at before either. */
   ai_template_nothing_new: (title: string) => string;
+  /** A check with nothing new: all of it looked at, so many of its subjects. */
+  ai_template_looked_all: (
+    title: string,
+    looked: number,
+    key: import('../ai-template').AiBuiltinTemplateKey,
+  ) => string;
+  /** Where a check with nothing new last looked, while proposals wait there. */
+  ai_template_last_open: string;
+  /** A check with nothing new looks at all of it again, from the start. */
+  ai_template_again: string;
   ai_template_nothing_here: (title: string) => string;
   ai_template_edit: string;
   ai_template_running: string;
@@ -1393,8 +1424,15 @@ export type LanguagePhrases = {
   /** The dashboard's group of sessions done within the week. */
   ai_session_recent: string;
   ai_session_waiting: (count: number) => string;
+  /** A new session sent, until it opens. */
+  ai_session_starting: string;
   ai_sessions_archive_note: string;
   ai_sessions_empty: string;
+  /** Under it: what a session is, in a newcomer's words. */
+  ai_sessions_empty_description: string;
+  /** A session's long list of what it is about, shown a few at first. */
+  ai_session_about_more: (count: number) => string;
+  ai_session_about_less: string;
   ai_sessions_more: string;
   ai_sessions_back: string;
   ai_no_model_title: string;
@@ -1454,6 +1492,12 @@ export type LanguagePhrases = {
   /** The ✦ of a field, asking about it: its hint and its box. */
   ai_field_ask: (field: string) => string;
   ai_field_ask_placeholder: string;
+  /** The ✦ of a text's editor: its name, what it asks about, its field. */
+  ai_editor_ask: string;
+  ai_editor_ask_about: (title: string) => string;
+  ai_editor_ask_placeholder: string;
+  /** Answered with no edit of the text to go through. */
+  ai_editor_ask_nothing: string;
   /** While the model answers what a field was asked. */
   ai_field_asking: string;
   /** The model answered a field's ask, proposing nothing. */
@@ -1461,21 +1505,12 @@ export type LanguagePhrases = {
   /** The link to the session of a field's ask. */
   ai_field_ask_open: string;
   /** Ready requests of a field's ✦, by field. */
-  ai_field_ask_quick: Record<
-    | 'title'
-    | 'summary'
-    | 'description'
-    | 'synonyms'
-    | 'slogan'
-    | 'reminder'
-    | 'periods'
-    | 'tags'
-    | 'relations'
-    | 'text'
-    | 'file'
-    | 'other',
-    readonly string[]
-  >;
+  /** A field's ready requests, by the kind of field. */
+  ai_field_ask_quick: Record<AiFieldAskKind, readonly string[]>;
+  /** An empty field with nothing to offer but the owner's own words. */
+  ai_field_ask_empty: string;
+  /** Those that only mend what is there: offered once the field holds something. */
+  ai_field_ask_quick_filled: Partial<Record<AiFieldAskKind, readonly string[]>>;
   /** Correcting a proposal's words before applying it. */
   ai_action_edit: string;
   ai_action_edit_cancel: string;
@@ -1507,9 +1542,20 @@ export type LanguagePhrases = {
   /** What the owner says, and the button says, to go on with a check's run. */
   ai_continue_text: string;
   /** The button to go on, when fewer than a whole batch remain. */
-  ai_continue_more: (count: number) => string;
+  ai_continue_more: (
+    count: number,
+    key?: import('../ai-template').AiBuiltinTemplateKey,
+  ) => string;
+  /** How much a check has looked at in its session, beside its button to go on. */
+  ai_continue_looked: (
+    count: number,
+    key?: import('../ai-template').AiBuiltinTemplateKey,
+  ) => string;
+  ai_continue_hint: string;
   /** Gone on with a check that had nothing left. */
   ai_continue_nothing: string;
+  /** Under a check's last answer: all of what it checks was looked at. */
+  ai_continue_done: string;
   ai_answer_to: (question: string) => string;
   ai_composer_placeholder: string;
   ai_composer_running: string;
@@ -1561,6 +1607,8 @@ export type LanguagePhrases = {
       accept: string;
       keep: string;
       sure: string;
+      /** The finish while nothing is taken yet: take the sure ones, so many. */
+      take_sure: (count: number) => string;
       was: string;
       will: string;
       accepted: string;
@@ -1570,6 +1618,8 @@ export type LanguagePhrases = {
       finish_hint: string;
     }
   >;
+  /** A text edit's parts put into the editor's text, which is saved after. */
+  ai_review_put: (count: number) => string;
   ai_review_finish_editor: string;
   ai_review_close: string;
   ai_review_go_on: string;
@@ -1651,10 +1701,21 @@ export type LanguagePhrases = {
   ai_memory_allow: string;
   ai_memory_forgotten: string;
   ai_memory_restore: string;
+  /** The hint of a proposal's accept in a form: what it does there. */
   ai_offer_take: string;
+  /**
+   * A form's accept, by what it does to the form: a value put in place,
+   * items added to a list, or taken from it. In a session it is «Apply».
+   */
+  ai_offer_put: Record<'put' | 'add' | 'remove', string>;
   ai_offer_in_session: string;
   ai_offer_taken: string;
+  /** A file's description put in its field, in the file's window. */
+  ai_offer_taken_file: string;
   ai_offer_take_back: string;
+  ai_offer_take_back_hint: string;
+  /** A proposal at the form's head taken into the form, not saved yet. */
+  ai_offer_taken_row: string;
   ai_offer_chip: (label: string) => string;
   /** The ✦ at a field's label: what an AI proposes for the field. */
   ai_field_offers: (count: number) => string;
@@ -1801,6 +1862,13 @@ export type LanguagePhrases = {
     string
   >;
   ai_action_flag: Record<'on' | 'off', string>;
+  /** A value a proposal empties, where its new value would stand. */
+  ai_action_cleared: string;
+  /** The parts of a text edit its card does not show. */
+  ai_action_more: (count: number) => string;
+  /** A dictionary word's note and forms, as a change of them names them. */
+  ai_action_term_note: string;
+  ai_action_term_forms: string;
   ai_action_create: Record<
     'project' | 'project-section' | 'event' | 'diary-entry' | 'page' | 'tag',
     string
@@ -1811,11 +1879,27 @@ export type LanguagePhrases = {
   ai_toast_declined: (count: number) => string;
   ai_toast_never: string;
   ai_toast_comment_sent: string;
-  ai_toast_answer_sent: string;
   ai_toast_pinned: string;
   ai_toast_unpinned: string;
   ai_toast_undone: string;
+  /** Applied from a card or all the sure ones of a session at once. */
+  ai_toast_applied: (count: number) => string;
+  ai_session_waiting_next: string;
+  /** Applies the sure proposals of a session; the rest wait. */
+  ai_session_apply_sure: (count: number) => string;
+  ai_session_apply_sure_hint: string;
   ai_toast_restored: string;
+  /** Bringing back what was said never to offer again: that goes too. */
+  ai_action_restore_never: string;
+  /** Short words on a proposal's buttons; the whole meaning is in the hint. */
+  ai_action_accept_short: string;
+  ai_action_restore_short: string;
+  /** Said once a request from a form's ✦ menu proposes something in it. */
+  ai_entity_offer_at: (field: string) => string;
+  ai_entity_offer_came: string;
+  /** Several came at once: how many, the first of them a click away. */
+  ai_entity_offers_came: (count: number) => string;
+  ai_entity_offer_show: string;
   ai_comment_label: string;
   ai_comment_placeholder: string;
   ai_comment_quick: [string, string];
@@ -1858,8 +1942,9 @@ export type LanguagePhrases = {
   ai_model_limit_tokens: string;
   ai_model_limit_tokens_link: string;
   ai_model_limit_invalid: string;
+  /** This month's spending, as the sessions' list says it: compact amounts. */
   ai_model_usage_line: (month: string, spent: string, limit: string) => string;
-  ai_model_average: (thousands: string) => string;
+  ai_model_average: (amount: string) => string;
   ai_model_check: string;
   ai_model_check_outcomes: Record<
     'ok' | 'key' | 'model' | 'address' | 'busy' | 'error',

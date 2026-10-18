@@ -30,10 +30,17 @@ Not for:
   go through the formatter (`publicText()`).
 - At most one action, named by a verb.
 - It goes by itself: `TOAST_MS`, or `TOAST_ACTION_MS` when it has an action,
-  so the action can be reached. Pointing at it or focusing it holds it; once
-  it fades out nothing holds it any more.
-- It stands just under the admin bar, never at the foot of the window, where
-  it would cover the composer of a session or a form's last field.
+  so the action can be reached. A mouse or a pen resting on it, or the focus
+  in it, holds it — never a finger; once it fades out nothing holds it any
+  more.
+- A press anywhere else takes it away at once: the owner has gone on.
+- It speaks of the page it was said on: gone to another page, it goes too.
+  Said of a form's unsaved state («save it»), it goes once the form is saved
+  (`hideToast(id)`).
+- It stands just under the admin bar and the page's sticky header (the height
+  `useStickyHeaderContext()` keeps), never over a form's own buttons, and
+  never at the foot of the window, where it would cover the composer of a
+  session or a form's last field.
 
 ## How it is built
 
@@ -59,9 +66,17 @@ showToast(phrase.value.ai_toast_declined(1), {
 ## Why
 
 - A toast at the foot of the window covered what the owner was writing in;
-  under the admin bar it covers nothing that is typed.
+  under the admin bar it covers nothing that is typed. Just under the admin
+  bar it still covered a form's sticky header on a phone — «Taken into the
+  form — save it» over the very «Save» it asked for, for four seconds — so it
+  stands under that header too.
 - A toast pointed at while it faded out was held for ever, unseen in the top
   layer, and took the clicks meant for the page under it.
+- On a phone a finger lifted where a toast then appeared left a hover behind
+  it, which held «Taken into the form — save it» over the form's first field
+  until the next tap elsewhere — nine seconds in the AI lab, over the fields
+  the owner went on to. A finger holds nothing now, and the next press
+  anywhere takes the toast away.
 
 ## How it is checked
 

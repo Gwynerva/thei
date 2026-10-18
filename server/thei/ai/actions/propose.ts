@@ -1,10 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import {
   AI_ACTION_INFO,
   type AiActionKind,
 } from '#layers/thei/shared/ai-actions';
-import type { AiCertainty, AiEntityType } from '#layers/thei/shared/ai';
+import type {
+  AiCertainty,
+  AiEntityType,
+  AiMessagePart,
+} from '#layers/thei/shared/ai';
 import { EntityPrefix } from '../../entity-id';
 import { EntityPatchError, refuse as fail } from '../../entity-patch/text';
 import { findEntity } from '../../entity-kinds';
@@ -18,7 +22,7 @@ import {
 import { publishActions } from '../sessions/bus';
 import { declinedLately, fingerprintOf, neverOffered } from './declined';
 import { actionDef } from './registry';
-import { findAction } from './rows';
+import { findAction, targetOf } from './rows';
 import type { PreparedAction } from './types';
 
 /**
@@ -140,7 +144,7 @@ async function check(
         `${proposal.supersedes} is decided already (${previous.state}): propose this one on its own.`,
       );
     supersedes = previous.actionUuid;
-  }
+  } else supersedes = commentedOn(sessionUuid, kind, target);
   return {
     kind,
     target,
@@ -150,6 +154,47 @@ async function check(
     reason,
     supersedes,
   };
+}
+
+/**
+ * The action the owner's last message commented on, when this proposal is
+ * its new version — the same kind about the same target, the commented one
+ * still waiting. A model that forgets to say so would leave both open, and
+ * «apply the sure ones» would apply the version the owner asked to change.
+ */
+function commentedOn(
+  sessionUuid: string,
+  kind: string,
+  target: ActionTarget | undefined,
+): string | undefined {
+  const { db, schema } = THEI_SERVER.useDb();
+  const last = db
+    .select({ parts: schema.aiMessages.parts })
+    .from(schema.aiMessages)
+    .where(
+      and(
+        eq(schema.aiMessages.sessionUuid, sessionUuid),
+        eq(schema.aiMessages.role, 'owner'),
+      ),
+    )
+    .orderBy(desc(schema.aiMessages.seq))
+    .limit(1)
+    .get() as { parts: AiMessagePart[] } | undefined;
+  const comment = last?.parts.find(
+    (part): part is Extract<AiMessagePart, { type: 'comment' }> =>
+      part.type === 'comment',
+  );
+  if (!comment) return undefined;
+  const previous = findAction(comment.actionUuid);
+  if (!previous || previous.sessionUuid !== sessionUuid) return undefined;
+  if (previous.state !== 'pending' || previous.kind !== kind) return undefined;
+  const was = targetOf(previous);
+  // By kind and id: a diary entry's ref may name its day or its id.
+  const same =
+    was && target
+      ? was.kind === target.kind && was.id === target.id
+      : !was && !target;
+  return same ? previous.actionUuid : undefined;
 }
 
 /**

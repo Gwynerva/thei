@@ -3,6 +3,7 @@ import { readAssetDescription } from '../../../../thei/assets/descriptions';
 import { fileOffers } from '../../../../thei/ai/file-panel';
 import { asksRunning } from '../../../../thei/ai/field-ask';
 import { sessionModel } from '../../../../thei/ai/model/settings';
+import { aiWaiting } from '../../../../thei/ai/sessions/view';
 import { markReadOnlyRequest } from '../../../../thei/read-only-request';
 
 /**
@@ -24,6 +25,7 @@ export default defineEventHandler(
             offers: await fileOffers(assetUuid),
             asking: asksRunning(`asset:${assetUuid}`),
             modelReady: Boolean(sessionModel()),
+            waiting: aiWaiting(),
           }
         : {}),
     };

@@ -127,7 +127,7 @@ test('runs a check from its row, and says when nothing new is left', async ({
     await links.locator('[data-template-run]').click();
     await expect(toast(page)).toBeVisible();
     const said = await toast(page).innerText();
-    if (said.includes('nothing new to check')) break;
+    if (said.includes('nothing new')) break;
     expect(said).toContain('Broken links');
     started++;
     await expect(links.locator('[data-template-last]:visible')).toBeVisible({
@@ -136,10 +136,14 @@ test('runs a check from its row, and says when nothing new is left', async ({
   }
   expect(started).toBeGreaterThan(0);
   await expect(toast(page)).toContainText(
-    '“Broken links”: nothing new to check',
+    // Short words are bound with a non-breaking space: \s, not a space.
+    /“Broken\slinks”:\snothing\snew\s—\sall\sof\sit\slooked\sat\s\(\d+\slinks?\)/,
   );
-  // From the whole archive there is no looking again from the start.
-  await expect(toast(page).getByRole('button')).toHaveCount(0);
+  // Nothing waits where it last looked: the way on is to look at all of it
+  // again, from the start.
+  await expect(toast(page).getByRole('button')).toHaveText(['Check again']);
+  await toast(page).getByRole('button').click();
+  await expect(toast(page)).toContainText(/Session\s“Broken\slinks”\sstarted/);
   const asked = JSON.stringify(
     model.requests.find((request) =>
       JSON.stringify(request.body.messages).includes(`p-gone-${run}`),
@@ -206,7 +210,7 @@ test('narrows a check by the words added on a new session', async ({
     { timeout: 20_000 },
   );
   const brief = JSON.stringify(model.requests[asked]!.body.messages);
-  expect(brief).toContain('asked, in their own words');
+  expect(brief).toContain('wrote, in their own words');
   expect(brief).toContain(`Only the titles ${run}.`);
   expect(brief).toContain('check_batch');
 });
@@ -221,7 +225,7 @@ test('copies a check into a request of the owner’s, opened in a new session', 
   await expect(modal).toHaveCount(0);
   const copy = page
     .locator('[data-template-row]')
-    .filter({ hasText: 'Relations and links between entities (copy)' })
+    .filter({ hasText: 'Relations and links (copy)' })
     .first();
   await expect(copy).toBeVisible();
   await copy.locator('[data-template-edit]').click();

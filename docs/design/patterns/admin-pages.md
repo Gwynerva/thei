@@ -13,6 +13,13 @@ rather than from a switch.
   the title, then the controls, then the main action. The settings and "about
   me" pages use `app/components/admin/AdminSaveHeader.vue`, whose button says
   "Save" while there are changes and "Saved" when there are none.
+- Save stays at the top, at the end of the header, on every screen: on a
+  phone it is a square with a floppy disk (`app/components/admin/AdminSaveButton.vue`),
+  so the title and the header's squares keep to one row.
+- Every button of a header is one size: the ✦, delete and any other icon
+  are `Button`'s `size="icon"` squares, and Save is as tall, a square too on
+  a phone. A header's delete is never a padded text-size button. Under a finger
+  they grow together, to `size-11`.
 - Status is an icon with a hint; words only for what is urgent. Counts say
   what there is, without noise.
 - One control per meaning.

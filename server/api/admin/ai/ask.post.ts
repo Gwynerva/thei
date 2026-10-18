@@ -8,8 +8,8 @@ import { rememberOrigin } from '../../../thei/ai/runner/background-event';
 /**
  * The owner asks at a field's ✦: `ref` the entity or file, `place` the
  * field as its form names it, `text` the words, `current` what the form
- * holds there unsaved. A session answers it in the background; what it
- * proposes waits at the field.
+ * holds there unsaved, `label` the field as the form names it. A session
+ * answers it in the background; what it proposes waits at the field.
  */
 export default defineEventHandler((event) =>
   withRefusals(async () => {
@@ -24,6 +24,7 @@ export default defineEventHandler((event) =>
       place: body.place,
       text: body.text,
       current: body.current,
+      label: body.label,
       ...(model ? { model } : {}),
     });
   }),

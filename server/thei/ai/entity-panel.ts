@@ -13,7 +13,12 @@ import type { ActionRow } from './actions/types';
 import { entityMemory } from './memory/read';
 import { sessionModel } from './model/settings';
 import { sessionName, sessionsAbout } from './sessions/store';
-import { actionItems, entityRef, listSessions } from './sessions/view';
+import {
+  actionItems,
+  aiWaiting,
+  entityRef,
+  listSessions,
+} from './sessions/view';
 import { TEMPLATE_SOURCES } from './templates/sources';
 import { listTemplates } from './templates/store';
 import { asksRunning } from './field-ask';
@@ -296,5 +301,6 @@ export async function entityPanel(key: EntityKey): Promise<AiEntityPanel> {
       })),
     modelReady: Boolean(sessionModel()),
     asking: asksRunning(refOf(key)),
+    waiting: aiWaiting(),
   };
 }

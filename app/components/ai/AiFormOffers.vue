@@ -13,7 +13,13 @@ function reload() {
 
 <template>
   <div
-    v-if="ai?.shown.value && (ai.outdated.value || ai.offersAt('form').length)"
+    v-if="
+      ai?.shown.value &&
+      (ai.outdated.value ||
+        ai.offersAt('form').length ||
+        ai.takenAt('form').length ||
+        ai.declinedAt('form').length)
+    "
     class="flex flex-col gap-sm"
   >
     <div

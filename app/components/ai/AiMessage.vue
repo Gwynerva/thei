@@ -29,8 +29,6 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   answer: [question: string, text: string];
-  /** The owner goes on with the check: its next batch. */
-  continue: [];
 }>();
 
 const linkResolver = useContentLinkResolver('admin');
@@ -72,16 +70,16 @@ function partsOf<T extends AiMessagePart['type']>(type: T) {
 const steps = computed(() => partsOf('steps').flatMap((part) => part.steps));
 const question = computed(() => partsOf('question')[0]);
 const notices = computed(() => partsOf('notice'));
-/** A check with more to look at, under its last answer. */
-const more = computed(() =>
-  props.last && props.answerable ? partsOf('continue')[0] : undefined,
+/**
+ * A check that looked at all there was says so under its last answer; one
+ * with more to look at goes on from the strip over the composer.
+ */
+const lookedAtAll = computed(
+  () =>
+    props.last &&
+    props.answerable &&
+    partsOf('continue').some((part) => !part.next),
 );
-const goingOn = ref(false);
-function goOn() {
-  if (goingOn.value) return;
-  goingOn.value = true;
-  emit('continue');
-}
 const comment = computed(() => partsOf('comment')[0]);
 /** What a comment is about, in a few words: the kind and what it is on. */
 const commentAbout = computed(() => {
@@ -192,9 +190,11 @@ const NOTICE_ICONS = {
   model: 'warning',
   refused: 'warning',
   length: 'warning',
-  turns: 'warning',
+  turns: 'pause-circle',
   error: 'warning',
 } as const;
+/** How a turn may end short and be gone on with: a pause, said quietly. */
+const PAUSES = new Set(['stopped', 'timeout', 'turns']);
 
 // ---- The question --------------------------------------------------------------
 
@@ -380,30 +380,22 @@ function answer(text: string) {
         @send="(text) => answer(text)"
       />
     </div>
-    <Button
-      v-if="more"
-      variant="secondary"
-      class="flex h-9 items-center gap-xs self-start font-semibold
-        pointer-coarse:h-11"
-      :disabled="goingOn"
-      data-message-continue
-      @click="goOn"
-    >
-      {{
-        more.full ? phrase.ai_continue_text : phrase.ai_continue_more(more.next)
-      }}
-      <Icon :name="goingOn ? 'loading' : 'chevron-right'" />
-    </Button>
     <div
       v-for="(notice, index) in notices"
       :key="index"
-      class="flex items-start gap-2.5 rounded-normal border
-        border-border-warning bg-bg-warning px-3 py-2.5 text-sm leading-snug"
+      class="flex items-start gap-2.5 rounded-normal border px-3 py-2.5 text-sm
+        leading-snug"
+      :class="
+        PAUSES.has(notice.kind)
+          ? 'border-border-1 bg-bg-2'
+          : 'border-border-warning bg-bg-warning'
+      "
       :data-notice="notice.kind"
     >
       <Icon
         :name="NOTICE_ICONS[notice.kind] ?? 'warning'"
-        class="mt-0.5 shrink-0 text-text-warning"
+        class="mt-0.5 shrink-0"
+        :class="PAUSES.has(notice.kind) ? 'text-text-2' : 'text-text-warning'"
       />
       <div class="flex min-w-0 flex-col gap-1.5">
         <span>{{ phrase.ai_notices[notice.kind] }}</span>
@@ -423,6 +415,15 @@ function answer(text: string) {
         >
       </div>
     </div>
+    <!-- After a pause too: a check that has looked at all there was. -->
+    <p
+      v-if="lookedAtAll"
+      class="flex items-center gap-1.5 text-sm text-text-2"
+      data-message-done
+    >
+      <Icon name="check" class="shrink-0" />
+      {{ phrase.ai_continue_done }}
+    </p>
   </div>
 
   <p

@@ -28,3 +28,11 @@ export function showToast(text: string, action?: Toast['action']): number {
   current.value = { id, text, action };
   return id;
 }
+
+/**
+ * Takes a toast away once what it says no longer holds — «save it», after
+ * the save — unless another has taken its place since.
+ */
+export function hideToast(id: number | undefined) {
+  if (id !== undefined && current.value?.id === id) current.value = null;
+}

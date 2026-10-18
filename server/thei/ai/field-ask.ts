@@ -6,6 +6,7 @@ import {
   FIELD_ASK_MAX,
   placeField,
 } from '#layers/thei/shared/ai-field-ask';
+import { readPlacements } from '../assets/library';
 import { refuse as fail } from '../entity-patch/text';
 import { entityFace, entityTextOfSlot, refOf } from '../entity-kinds';
 import { findTarget, isFileKey, targetRef } from './actions/target';
@@ -55,6 +56,28 @@ function placeName(kind: string, place: string, file: boolean): string {
 }
 
 /**
+ * How a file is named to the owner, in its session's title: by the place it
+ * stands in, the latest changed — a file's own name is a camera's number or
+ * a hash more often than not, and tells nothing — else by its kind and
+ * format.
+ */
+function fileFace(assetUuid: string): { title: string; placed: boolean } {
+  const place = (readPlacements([assetUuid]).get(assetUuid) ?? [])
+    .filter(
+      (placement) =>
+        placement.source.type !== 'ai-session' && placement.source.title,
+    )
+    .sort((a, b) => b.source.updatedAt - a.source.updatedAt)[0];
+  if (place) return { title: place.source.title, placed: true };
+  const info = libraryFile(assetUuid);
+  if (!info) return { title: assetUuid, placed: false };
+  const phrase = THEI_SERVER.phrase as Record<string, unknown>;
+  const kind = typeof phrase[info.type] === 'string' ? phrase[info.type] : '';
+  const title = [kind, info.extension.toUpperCase()].filter(Boolean).join(' ');
+  return { title, placed: false };
+}
+
+/**
  * Starts the session that answers an ask at a field. `current` is what the
  * form holds there now, unsaved; `model` the one chosen, if any.
  */
@@ -63,6 +86,8 @@ export function askAtField(input: {
   place: unknown;
   text: unknown;
   current?: unknown;
+  /** The field as the owner's form names it, for the session's title. */
+  label?: unknown;
   model?: string;
 }): { sessionUuid: string } {
   if (!sessionModel(input.model)) fail('No model is set up to answer.');
@@ -80,19 +105,29 @@ export function askAtField(input: {
   if (file && place !== 'field:description')
     fail('A file is asked about its description alone.');
   const ref = targetRef(target);
-  const face = file
-    ? (libraryFile(target.id)?.slug ?? target.id)
+  const shown = isFileKey(target) ? fileFace(target.id) : undefined;
+  const face = isFileKey(target)
+    ? shown!.title
     : (entityFace(target)?.title ?? refOf(target));
+  const which = !shown
+    ? `«${face}»`
+    : shown.placed
+      ? `used in «${face}»`
+      : 'placed nowhere yet';
   const current =
     typeof input.current === 'string'
       ? input.current.trim().slice(0, CURRENT_MAX)
       : '';
   const fields = THEI_SERVER.phrase.ai_action_fields as Record<string, string>;
+  const named =
+    typeof input.label === 'string'
+      ? input.label.replace(/\s+/g, ' ').trim().slice(0, 80)
+      : '';
   const label = file
     ? THEI_SERVER.phrase.asset_description
-    : (fields[placeField(place)] ?? placeField(place));
+    : named || (fields[placeField(place)] ?? placeField(place));
   const brief = [
-    `The owner asks at ${placeName(target.kind, place, file)} of ${ref} — «${face}» — in their own words:`,
+    `The owner asks at ${placeName(target.kind, place, file)} of ${ref} — ${which} — in their own words:`,
     words,
     current
       ? `What the owner has typed there in the form, not saved yet — their own words, which the form will save over the stored ones: «${current}»`

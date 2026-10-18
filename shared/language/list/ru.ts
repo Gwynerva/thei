@@ -1,6 +1,7 @@
 ﻿import { bindShortWords, generalNormalize } from '../general-normalize';
 import { defineI18nModule } from '../define';
 import { slugify, transliterateCyrillic } from '../slugify';
+import type { AiBuiltinTemplateKey } from '../../ai-template';
 
 /**
  * Предлоги, союзы и частицы, которые не должны оставаться в конце строки.
@@ -68,6 +69,18 @@ export function plural(
     count % 100 > 10 && count % 100 < 20 ? 0 : Math.min(count % 10, 5)
   ]!;
   return includeNumber ? `${count} ${text}` : text;
+}
+
+/** So many of what a check looks at, by the check. */
+function checkUnits(count: number, key: AiBuiltinTemplateKey) {
+  const words = {
+    describe: ['файл', 'файла', 'файлов'],
+    graph: ['запись', 'записи', 'записей'],
+    tags: ['запись', 'записи', 'записей'],
+    links: ['ссылка', 'ссылки', 'ссылок'],
+    proofread: ['текст', 'текста', 'текстов'],
+  }[key] as [string, string, string];
+  return plural(count, ...words);
 }
 
 function joinDuration(parts: string[]) {
@@ -238,6 +251,10 @@ export default defineI18nModule({
     asset_library_more: 'Показать ещё',
     asset_library_insert: 'Вставить выбранное',
     asset_library_usage: 'Где используется',
+    asset_library_described: 'Описание',
+    asset_library_described_any: 'С описанием и без',
+    asset_library_described_none: 'Без описания',
+    asset_library_described_some: 'С описанием',
     asset_used_elsewhere: 'Где ещё используется',
     asset_library_properties: 'Свойства файла',
     asset_library_settings: 'Как получен файл',
@@ -717,7 +734,7 @@ export default defineI18nModule({
     admin_kind_project_what:
       'Проект — самостоятельный, крупный эпизод жизни со своей структурой: разделы — общие и этапы с датами, — витрина, файлы и ссылки.',
     admin_kind_project_rank:
-      'Самая весомая сущность. Проект собирает вокруг себя события и записи дневника — связи с ними задаются именно здесь. Если хватает названия и пары абзацев, это скорее событие.',
+      'Самое весомое в архиве. Проект собирает вокруг себя события и записи дневника — связи с ними задаются именно здесь. Если хватает названия и пары абзацев, это скорее событие.',
     admin_kind_project_examples:
       'Например: своё приложение, учёба в университете, ремонт квартиры, подготовка к марафону.',
     admin_kind_event_title: 'Что такое событие',
@@ -729,7 +746,7 @@ export default defineI18nModule({
       'Например: концерт любимой группы, доклад на митапе, получение водительских прав, поездка на выходные.',
     admin_kind_diary_title: 'Что такое запись дневника',
     admin_kind_diary_what:
-      'Запись дневника — самая простая сущность: день и текст о нём. Одна запись на день, без заголовка и тегов, поэтому написать её ничего не стоит.',
+      'Запись дневника — самое простое в архиве: день и текст о нём. Одна запись на день, без заголовка и тегов, поэтому написать её ничего не стоит.',
     admin_kind_diary_rank:
       'Легче события: если момент хочется назвать и потом находить отдельно, это событие. Связать запись с проектом можно в самом проекте.',
     admin_kind_diary_examples:
@@ -802,12 +819,13 @@ export default defineI18nModule({
       `${files} файл(ов), ${size}`,
     ai_access_on_hint:
       'Включено: ИИ-приложения подключаются по ключам доступа, а в сессиях ' +
-      'может отвечать ваша модель. Выключите — и всё, что связано с ИИ, ' +
-      'исчезнет с сайта.',
+      'может отвечать ваша модель. Выключите — и ИИ спрячется с сайта; ' +
+      'сессии, память и ключи останутся до включения.',
     ai_access_off_hint:
       'Выключено: ни одно приложение не подключится, Thei не обращается к ' +
-      'модели, сессий и предложений не видно. Ключи и настройки сохраняются ' +
-      'до включения.',
+      'модели, сессий и предложений не видно. Сессии, память, ключи и ' +
+      'настройки сохранены и вернутся, как только вы включите ИИ — здесь ' +
+      'или первым блоком «Настроек сайта».',
     api_token_create: 'Создать ключ',
     api_token_label: 'Для чего он',
     api_token_label_placeholder: 'Claude Code на ноутбуке',
@@ -1114,8 +1132,7 @@ export default defineI18nModule({
     tag_usage: 'Использование',
     tag_usage_summary: (projects, events) =>
       `${plural(projects, 'проект', 'проекта', 'проектов')} · ${plural(events, 'событие', 'события', 'событий')}`,
-    tag_delete_hint:
-      'При удалении тег будет отвязан от всех связанных сущностей.',
+    tag_delete_hint: 'При удалении тег будет снят со всех проектов и событий.',
     tag_usage_sentence: (projects, events) => {
       const parts = [
         projects ? plural(projects, 'проекте', 'проектах', 'проектах') : '',
@@ -1254,9 +1271,9 @@ export default defineI18nModule({
       'Детальные описания составных частей проекта и этапов, через которые он прошел.',
     project_sections_dated: 'Этапы с датами',
     project_sections_undated: 'Общие разделы',
-    related_entities: 'Связанные сущности',
+    related_entities: 'Связи',
     related_entities_hint:
-      'Проекты, события и записи дневника, связанные с этой сущностью. Связь видна с обеих сторон.',
+      'Проекты, события и записи дневника, с которыми это связано. Связь видна с обеих сторон.',
     related_entity_add: 'Добавить связь',
     relation_direction: 'Тип связи',
     relation_label_related: 'Связан',
@@ -1278,7 +1295,7 @@ export default defineI18nModule({
       group === 'dated'
         ? 'Этапов с датами пока нет.'
         : 'Общих разделов пока нет.',
-    relation_entity: 'Связанная сущность',
+    relation_entity: 'С чем связано',
     relation_entity_choose: 'Проект, событие или запись дневника',
     relation: 'Связь',
     relation_edit: (title) => `Изменить связь с «${title}»`,
@@ -1404,7 +1421,7 @@ export default defineI18nModule({
     content_link_loading: 'Загрузка данных ссылки…',
     content_link_broken_title: 'Ссылка недоступна',
     content_link_broken_description:
-      'Не удалось найти связанную сущность или получить данные ссылки.',
+      'Не удалось найти, куда ведёт ссылка, или получить её данные.',
     content_link_remove: 'Убрать ссылку',
     content_private_section: 'Приватная секция',
     content_private_section_start: 'Начало приватной секции',
@@ -1775,13 +1792,12 @@ export default defineI18nModule({
       'Напоминание и личные заметки. Их видите только вы — ни в поиск, ни в Markdown-копию они не попадают.',
     entity_reminder: 'Напоминание',
     entity_reminder_hint:
-      'Что здесь ещё надо сделать. Пока оно заполнено, сущность помечена жёлтым во всех списках.',
+      'Что здесь ещё надо сделать. Пока оно заполнено, во всех списках здесь стоит жёлтая метка.',
     entity_reminder_placeholder: 'Найти фотографии за ту неделю',
     entity_notes: 'Заметки',
-    entity_notes_hint:
-      'Всё, что стоит держать рядом с этой сущностью, но не публиковать.',
+    entity_notes_hint: 'Всё, что стоит держать под рукой, но не публиковать.',
     entity_notes_show_all: 'Показать всё',
-    entity_reminder_badge: 'У этой сущности есть напоминание',
+    entity_reminder_badge: 'Здесь есть напоминание',
     content_strikethrough: 'Зачёркнутый',
     content_hint: 'Подсказка',
     content_hint_placeholder: 'Что здесь имеется в виду',
@@ -1820,17 +1836,16 @@ export default defineI18nModule({
     og_image_alt: (kind, title, site) => `${kind} «${title}» — ${site}`,
     ai_tab_sessions: 'Сессии',
     ai_tab_memory: 'Память',
-    ai_tab_templates: 'Шаблоны',
-    ai_templates_title: 'Шаблоны сессий',
-    ai_templates_hint:
-      'Готовые просьбы к ИИ — здесь, в новой сессии и в каждом ✦.',
-    ai_templates_column_template: 'Шаблон',
+    ai_tab_templates: 'Готовые просьбы',
+    ai_templates_title: 'Готовые просьбы',
+    ai_templates_hint: 'Запускаются отсюда, из новой сессии и из каждого ✦.',
+    ai_templates_column_template: 'Просьба',
     ai_templates_column_last: 'Последний запуск',
-    ai_templates_builtin_section: 'Встроенные шаблоны',
-    ai_templates_own_section: 'Ваши шаблоны',
-    ai_templates_own_empty: 'Своих шаблонов пока нет.',
+    ai_templates_builtin_section: 'Встроенные проверки',
+    ai_templates_own_section: 'Ваши просьбы',
+    ai_templates_own_empty: 'Своих просьб пока нет.',
     ai_templates_new: 'Новый',
-    ai_templates_presets: 'Шаблоны',
+    ai_templates_presets: 'Готовые просьбы',
     ai_template_open: 'Открыть в новой сессии',
     ai_open_full: 'На странице ИИ',
     select_filter: 'Фильтр',
@@ -1862,27 +1877,31 @@ export default defineI18nModule({
     content_block_settings: 'Настройки блока. Потяните, чтобы переместить',
     content_block_toolbox: 'Блоки',
     ai_template_run: 'Проверить новое в архиве',
-    ai_template_nothing_new: (title) => `«${title}»: нового для проверки нет`,
+    ai_template_nothing_new: (title) => `«${title}»: проверять нечего`,
+    ai_template_looked_all: (title, looked, key) =>
+      `«${title}»: нового нет — всё просмотрено (${checkUnits(looked, key)})`,
+    ai_template_last_open: 'Прошлая проверка',
+    ai_template_again: 'Проверить заново',
     ai_template_nothing_here: (title) => `«${title}»: здесь нечего проверять`,
     ai_template_edit: 'Настроить',
     ai_template_running: 'идёт сейчас',
-    ai_template_never_run: 'ещё не запускался',
+    ai_template_never_run: 'ещё не запускалась',
     ai_template_started: (title) => `Сессия «${title}» начата`,
-    ai_template_saved: 'Шаблон сохранён',
-    ai_template_deleted: 'Шаблон удалён',
-    ai_template_copied: 'Копия сделана — теперь это ваша заготовка',
-    ai_template_modal_title: 'Шаблон',
-    ai_template_modal_new: 'Новый шаблон',
+    ai_template_saved: 'Просьба сохранена',
+    ai_template_deleted: 'Просьба удалена',
+    ai_template_copied: 'Копия сделана — теперь это ваша просьба',
+    ai_template_modal_title: 'Готовая просьба',
+    ai_template_modal_new: 'Новая просьба',
     ai_template_name: 'Название',
     ai_template_name_placeholder: 'Например, «Неделя путешествия»',
     ai_template_instruction: 'Запрос',
     ai_template_instruction_placeholder:
       'Что сделать модели — как сказали бы человеку. Например: «Посмотри эту запись и скажи, чего в ней не хватает…»',
-    ai_template_sessions: 'Сессии этого шаблона',
+    ai_template_sessions: 'Сессии по этой просьбе',
     ai_template_copy: 'Сделать копию',
-    ai_template_delete: 'Удалить шаблон',
+    ai_template_delete: 'Удалить просьбу',
     ai_template_delete_confirm: (title) =>
-      `Удалить шаблон «${title}»? Его сессии останутся.`,
+      `Удалить просьбу «${title}»? Её сессии останутся.`,
     ai_sessions_search: 'Найти сессию',
     ai_sessions_filter: 'Какие сессии',
     ai_sessions_filters: {
@@ -1891,7 +1910,7 @@ export default defineI18nModule({
       applied: 'С применённым',
       rejected: 'С отклонённым',
       app: 'Из приложений',
-      template: 'Из шаблонов',
+      template: 'Из готовых просьб',
     },
     ai_session_new: 'Новая сессия',
     ai_session_groups: {
@@ -1904,12 +1923,17 @@ export default defineI18nModule({
     },
     ai_session_untitled: 'Новая сессия',
     ai_session_you: 'Вы',
-    ai_session_template: 'Шаблон',
+    ai_session_template: 'Готовая просьба',
     ai_session_running: 'Работает',
     ai_session_recent: 'Недавно завершены',
     ai_session_waiting: (count) => `Ждут решения: ${count}`,
+    ai_session_starting: 'Начинаю сессию…',
     ai_sessions_archive_note: 'Старше 30 дней удаляются',
     ai_sessions_empty: 'Сессий пока нет',
+    ai_session_about_more: (count) => `ещё ${count}`,
+    ai_session_about_less: 'Свернуть',
+    ai_sessions_empty_description:
+      'Сессия — это разговор с ИИ: спросите о чём угодно в архиве, и ответ с предложениями останется здесь.',
     ai_sessions_more: 'Показать ещё',
     ai_sessions_back: 'К сессиям',
     ai_no_model_title: 'Модель не настроена',
@@ -1938,15 +1962,16 @@ export default defineI18nModule({
     ai_session_model: 'Модель',
     ai_steps: {
       read: (count) =>
-        `прочитал ${plural(count, 'сущность', 'сущности', 'сущностей')}`,
+        `прочитал ${plural(count, 'страницу архива', 'страницы архива', 'страниц архива')}`,
       search: (queries) => `искал ${queries}`,
       list: 'смотрел список',
       graph: 'смотрел граф связей',
       timeline: 'смотрел хронологию',
       tags: 'подбирал теги',
       digests: (count) =>
-        `пролистал ${plural(count, 'сущность', 'сущности', 'сущностей')}`,
-      proposed: (count) => `предложил ${plural(count, 'раз', 'раза', 'раз')}`,
+        `пролистал ${plural(count, 'страницу архива', 'страницы архива', 'страниц архива')}`,
+      proposed: (count) =>
+        plural(count, 'предложение', 'предложения', 'предложений'),
       refused: (count) =>
         `${plural(count, 'предложение отсеяно', 'предложения отсеяны', 'предложений отсеяно')}`,
       refused_hint:
@@ -1958,8 +1983,8 @@ export default defineI18nModule({
     ai_question: 'Вопрос',
     ai_question_own: 'Свой ответ…',
     ai_notices: {
-      stopped: 'Остановлено вами.',
-      timeout: 'Остановлено: слишком долго.',
+      stopped: 'Остановлено вами. Ответьте, чтобы продолжить.',
+      timeout: 'Пауза: ход шёл слишком долго. Ответьте, чтобы продолжить.',
       interrupted: 'Прервано перезапуском сайта.',
       limit:
         'Месячный лимит исчерпан. Сессия продолжится в следующем месяце или когда вы поднимете лимит.',
@@ -1970,7 +1995,8 @@ export default defineI18nModule({
       model: 'Сервис не знает такой модели.',
       refused: 'Модель отказалась отвечать.',
       length: 'Оборвано: ответу не хватило места.',
-      turns: 'Остановлено: слишком много шагов.',
+      turns:
+        'Пауза: за один ход ИИ делает ограниченное число шагов. Ответьте, чтобы продолжить.',
       error: 'Что-то пошло не так.',
     },
     ai_notice_connection: 'Подключение',
@@ -1978,24 +2004,35 @@ export default defineI18nModule({
     ai_action_open_file: 'Открыть файл',
     ai_field_ask: (field) => `Спросить ИИ о поле «${field}»`,
     ai_field_ask_placeholder: 'Что сделать с полем?',
+    ai_editor_ask: 'ИИ об этом тексте',
+    ai_editor_ask_about: (title) => `Спросить ИИ о тексте «${title}»`,
+    ai_editor_ask_placeholder: 'Что сделать с текстом?',
+    ai_editor_ask_nothing: 'Ответил, править нечего',
     ai_field_asking: 'ИИ отвечает…',
     ai_field_ask_nothing: 'Ответил, ничего не предложив',
     ai_field_ask_open: 'Сессия',
     ai_field_ask_quick: {
       title: ['Предложи название'],
-      summary: ['Напиши суть', 'Сделай короче'],
+      summary: ['Напиши суть'],
       description: ['Напиши описание'],
       synonyms: ['Предложи синонимы'],
       slogan: ['Предложи слоган'],
       reminder: ['Напиши напоминание'],
-      periods: ['Проверь даты'],
+      periods: [],
       tags: ['Предложи теги'],
       relations: ['Найди связи'],
-      text: ['Проверь ошибки'],
+      text: [],
       file: ['Опиши файл'],
       other: ['Предложи вариант'],
     },
-    ai_action_edit: 'Поправить',
+    ai_field_ask_empty:
+      'Здесь пока пусто — проверять нечего. Попросите своими словами',
+    ai_field_ask_quick_filled: {
+      summary: ['Сделай короче'],
+      periods: ['Проверь даты'],
+      text: ['Проверь ошибки', 'Почини ссылки', 'Наведи порядок'],
+    },
+    ai_action_edit: 'Исправить самому',
     ai_action_edit_cancel: 'Вернуть как было',
     ai_action_edit_apply: 'Применить с правкой',
     ai_action_edit_save: 'Сохранить правку',
@@ -2012,11 +2049,16 @@ export default defineI18nModule({
       'note-this': 'С этой стороны',
       'note-other': 'С той стороны',
     },
-    ai_message_template: (title) => `Шаблон «${title}»`,
+    ai_message_template: (title) => `Готовая просьба «${title}»`,
     ai_message_field: (field) => `У поля «${field}»`,
     ai_continue_text: 'Дальше',
-    ai_continue_more: (count) => `Ещё ${count}`,
+    ai_continue_more: (count, key) =>
+      `Проверить ещё ${key ? checkUnits(count, key) : count}`,
+    ai_continue_looked: (count, key) =>
+      `Просмотрено: ${key ? checkUnits(count, key) : count}`,
+    ai_continue_hint: 'Следующая порция — в этой же сессии',
     ai_continue_nothing: 'Больше смотреть нечего',
+    ai_continue_done: 'Просмотрено всё, что было',
     ai_answer_to: (question) => `Ответ: ${question}`,
     ai_composer_placeholder: 'Что сделать?',
     ai_composer_running: 'Можно дописать — модель учтёт',
@@ -2061,27 +2103,27 @@ export default defineI18nModule({
       describe: {
         title: 'Описания файлов',
         instruction:
-          'Добавь описания для файлов, у которых их нет. При составлении описания анализируй не только сам файл, но и контекст мест, в которых он используется (родительская сущность, подписи, окружающий текст и т. д.).\n\n' +
+          'Добавь описания для файлов, у которых их нет. При составлении описания анализируй не только сам файл, но и контекст мест, в которых он используется (проект, событие или раздел, где он стоит, подписи, окружающий текст и т. д.).\n\n' +
           'Если нет уверенности или описание для файла составить не получается по любой причине, сообщай мне.',
       },
       links: {
         title: 'Битые ссылки',
         instruction:
-          'Найди сломанные внутренние ссылки. Для каждой разбери, в чем проблема поломки: целевая сущность была удалена, целевой заголовок был удален или изменен и так далее.\n\n' +
+          'Найди сломанные внутренние ссылки. Для каждой разбери, в чем проблема поломки: то, на что вела ссылка, удалено, заголовок, на который она вела, удалён или изменён и так далее.\n\n' +
           'Попытайся исправить ситуацию и найти уверенную замену с сохранением сути ссылки. Крайняя мера — убрать ссылку совсем.',
       },
       graph: {
-        title: 'Связи и ссылки между сущностями',
+        title: 'Связи и ссылки',
         instruction:
           'Проанализируй связи и ссылки между проектами, событиями и записями дневника.\n\n' +
           'Предложи недостающие связи и удаление слабых — тех, у которых нет достаточного обоснования.\n\n' +
-          'Ищи в текстах упоминания других сущностей без ссылки и, если сильно уверен, что ссылка нужна, предлагай её — в том числе на разделы проектов и на конкретные заголовки. Явно ошибочные или лишние ссылки предлагай удалить.',
+          'Ищи в текстах упоминания других проектов, событий и записей без ссылки и, если сильно уверен, что ссылка нужна, предлагай её — в том числе на разделы проектов и на конкретные заголовки. Явно ошибочные или лишние ссылки предлагай удалить.',
       },
       tags: {
         title: 'Аудит тегов',
         instruction:
-          'Проверь теги: каким сущностям нужно добавить подходящие теги или убрать лишние, какие теги создать, а какие удалить, и какие синонимы добавить тегам.\n\n' +
-          'Создание или удаление тега — только с уверенным обоснованием и примерами сущностей, которых это коснётся.',
+          'Проверь теги: каким проектам и событиям нужно добавить подходящие теги или убрать лишние, какие теги создать, а какие удалить, и какие синонимы добавить тегам.\n\n' +
+          'Создание или удаление тега — только с уверенным обоснованием и примерами проектов и событий, которых это коснётся.',
       },
     },
     ai_template_copy_title: (title) => `${title} (копия)`,
@@ -2149,6 +2191,7 @@ export default defineI18nModule({
         accept: 'Принять',
         keep: 'Оставить как было',
         sure: 'Принять уверенные правки',
+        take_sure: (count) => `Принять уверенные · ${count}`,
         was: 'Было',
         will: 'Будет',
         accepted: 'Принято',
@@ -2162,6 +2205,7 @@ export default defineI18nModule({
         accept: 'Взять',
         keep: 'Оставить как сейчас',
         sure: 'Взять всё',
+        take_sure: (count) => `Взять всё · ${count}`,
         was: 'Сейчас',
         will: 'Там',
         accepted: 'Взято',
@@ -2172,6 +2216,7 @@ export default defineI18nModule({
           'Взятое ляжет в текст окна; остальное останется как сейчас.',
       },
     },
+    ai_review_put: (count) => `Подставить · ${count}`,
     ai_review_finish_editor:
       'Принятое ляжет в текст окна; сохраните, как обычно. Нерешённое подождёт в сессии.',
     ai_review_close: 'Закрыть',
@@ -2258,9 +2303,9 @@ export default defineI18nModule({
     ai_memory_kinds_title: 'Общие правила',
     ai_memory_kinds_hint:
       'Не про что-то одно, а про всё такое сразу: все записи дневника, все проекты, все файлы. Например: «Все записи дневника: теги не предлагать». Модель держится правила, когда работает с любым из них.',
-    ai_memory_entities_title: 'У сущностей',
+    ai_memory_entities_title: 'О проектах, событиях и записях',
     ai_memory_entities_hint:
-      'Модель читает это вместе с сущностью. То же видно в её форме.',
+      'Модель читает это вместе с тем, о чём оно. То же видно в его форме.',
     ai_memory_entity_kinds: {
       project: 'проект',
       'project-section': 'раздел проекта',
@@ -2277,10 +2322,14 @@ export default defineI18nModule({
     ai_memory_allow: 'Снова можно предлагать',
     ai_memory_forgotten: 'Забыто',
     ai_memory_restore: 'Вернуть',
-    ai_offer_take: 'Принять — поле заполнится, сохраните форму',
+    ai_offer_take: 'Попадёт в форму — изменится, когда вы её сохраните',
+    ai_offer_put: { put: 'Подставить', add: 'Добавить', remove: 'Убрать' },
     ai_offer_in_session: 'Открыть в сессии',
-    ai_offer_taken: 'Взято в форму — сохраните её',
+    ai_offer_taken: 'Форма изменена — сохраните её',
+    ai_offer_taken_file: 'Описание подставлено — сохраните его',
     ai_offer_take_back: 'Отменить',
+    ai_offer_take_back_hint: 'Вернуть в форме, как было',
+    ai_offer_taken_row: 'В форме — изменится, когда вы её сохраните',
     ai_offer_chip: (label) => `Предложено ИИ: ${label}`,
     ai_field_offers: (count) =>
       count === 1 ? 'Предложение ИИ' : `Предложения ИИ: ${count}`,
@@ -2361,6 +2410,14 @@ export default defineI18nModule({
     ai_action_open: 'Открыть',
     ai_action_undo: 'Отменить',
     ai_action_restore: 'Вернуть к решению',
+    ai_action_restore_never: 'Вернуть к решению — и снова предлагать такое',
+    ai_action_accept_short: 'Принять',
+    ai_action_restore_short: 'Вернуть',
+    ai_entity_offer_at: (field) => `Предложение ждёт у поля «${field}»`,
+    ai_entity_offer_came: 'Предложение ждёт в форме',
+    ai_entity_offers_came: (count) =>
+      `${plural(count, 'предложение ждёт', 'предложения ждут', 'предложений ждут')} в форме`,
+    ai_entity_offer_show: 'Показать',
     ai_action_never: 'Больше не предлагать',
     ai_action_pick: 'Включить в применение',
     ai_action_unsure: 'На ваше решение.',
@@ -2368,7 +2425,7 @@ export default defineI18nModule({
     ai_action_by: { owner: 'вами', app: 'приложением' },
     ai_action_states: {
       rejected: 'Отклонено',
-      never: 'Не предлагать',
+      never: 'Больше не предложит',
       undone: 'Отменено',
       stale: 'Устарело: изменилось после предложения',
       failed: 'Не применилось:',
@@ -2402,7 +2459,7 @@ export default defineI18nModule({
       'depends-on': 'зависит от',
       affects: 'влияет на',
     },
-    ai_action_relation_removed: 'Связь убрать',
+    ai_action_relation_removed: 'Убрать связь',
     ai_action_write_modes: {
       new: 'Новый текст',
       append: 'Дописать',
@@ -2448,6 +2505,10 @@ export default defineI18nModule({
       favicon: 'Иконка сайта',
     },
     ai_action_flag: { on: 'да', off: 'нет' },
+    ai_action_cleared: 'пусто',
+    ai_action_more: (count) => `ещё ${count}`,
+    ai_action_term_note: 'Пояснение',
+    ai_action_term_forms: 'Формы',
     ai_action_create: {
       project: 'Создать проект',
       'project-section': 'Создать раздел',
@@ -2471,10 +2532,15 @@ export default defineI18nModule({
       count === 1 ? 'Отклонено' : `Отклонено: ${count}`,
     ai_toast_never: 'Больше не предложит',
     ai_toast_comment_sent: 'Отправлено — модель ответит новой версией',
-    ai_toast_answer_sent: 'Ответ отправлен — модель продолжит',
     ai_toast_pinned: 'Закреплена — останется наверху и не уйдёт в архив',
     ai_toast_unpinned: 'Откреплена',
     ai_toast_undone: 'Отменено',
+    ai_toast_applied: (count) =>
+      count === 1 ? 'Применено' : `Применено: ${count}`,
+    ai_session_waiting_next: 'К следующему ждущему',
+    ai_session_apply_sure: (count) => `Применить уверенные · ${count}`,
+    ai_session_apply_sure_hint:
+      'Применит все уверенные предложения этой сессии. Остальные будут ждать вашего решения',
     ai_toast_restored: 'Возвращено к решению',
     ai_comment_label: 'Комментарий',
     ai_comment_placeholder: 'Что изменить?',
@@ -2539,9 +2605,8 @@ export default defineI18nModule({
     ai_model_limit_tokens_link: 'Что такое токены?',
     ai_model_limit_invalid: 'Лимит — число миллионов больше нуля.',
     ai_model_usage_line: (month, spent, limit) =>
-      `${month}: ${spent} из ${limit} млн токенов`,
-    ai_model_average: (thousands) =>
-      `Ответ в среднем ≈ ${thousands} тыс. токенов`,
+      `${month}: ${spent} из ${limit} токенов`,
+    ai_model_average: (amount) => `Ответ в среднем ≈ ${amount} токенов`,
     ai_model_check: 'Проверить',
     ai_model_check_outcomes: {
       ok: 'работает',

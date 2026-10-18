@@ -4,6 +4,7 @@ import {
   ASSET_LIBRARY_QUERY_LIMIT,
   ASSET_LIBRARY_SOURCE_FILTERS,
   type AssetLibraryFacets,
+  type AssetLibraryDescribed,
   type AssetLibraryWhere,
 } from '#layers/thei/shared/asset-library';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
@@ -27,6 +28,10 @@ const props = defineProps<{
 const search = defineModel<string>('search', { required: true });
 const type = defineModel<AssetType | ''>('type', { required: true });
 const where = defineModel<AssetLibraryWhere>('where', { required: true });
+/** Whether the files have their description: either way, none, or one. */
+const described = defineModel<AssetLibraryDescribed | ''>('described', {
+  required: true,
+});
 
 const emit = defineEmits<{ element: [HTMLInputElement] }>();
 
@@ -94,6 +99,38 @@ const whereOptions = computed<SelectOption<AssetLibraryWhere>[]>(() => {
     },
   ];
 });
+
+/**
+ * Either way; then the files still waiting for a description — what
+ * describing them, by hand or with the AI, starts from — and those with one.
+ */
+const describedOptions = computed<SelectOption<AssetLibraryDescribed | ''>[]>(
+  () => {
+    const counts = props.facets?.described;
+    const value = phrase.value;
+    return [
+      {
+        value: '',
+        label: value.asset_library_described_any,
+        icon: 'text',
+        count: counts && counts.none + counts.some,
+        divider: true,
+      },
+      {
+        value: 'none',
+        label: value.asset_library_described_none,
+        icon: 'missing',
+        count: counts?.none,
+      },
+      {
+        value: 'some',
+        label: value.asset_library_described_some,
+        icon: 'check',
+        count: counts?.some,
+      },
+    ];
+  },
+);
 </script>
 
 <template>
@@ -125,6 +162,16 @@ const whereOptions = computed<SelectOption<AssetLibraryWhere>[]>(() => {
       compact
       collapsible
       class="max-w-56 shrink-0"
+    />
+    <FieldSelect
+      v-model="described"
+      :options="describedOptions"
+      :label="phrase.asset_library_described"
+      filter
+      compact
+      collapsible
+      class="max-w-52 shrink-0"
+      data-library-described
     />
   </div>
 </template>

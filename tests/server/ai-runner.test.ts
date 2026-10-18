@@ -264,6 +264,14 @@ describe('a session turn', () => {
     );
     expect(nameSession(named, 'Theirs')).toBe('It has its name already.');
     expect(findSession(named)!.title).toBe('Mine');
+
+    // A name is words: a link written in it is kept by its words alone.
+    const linked = startOwnerSession({ text: 'Look at it' });
+    await turnsSettled();
+    expect(
+      nameSession(linked, '[Film year](thei:project/p-1) **summary**'),
+    ).toBe('Named.');
+    expect(findSession(linked)!.title).toBe('Film year summary');
   });
 
   it('asks the owner, and goes on with their answer', async () => {

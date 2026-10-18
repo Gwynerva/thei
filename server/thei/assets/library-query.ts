@@ -2,6 +2,7 @@ import { createError } from 'h3';
 import type { LibraryQuery } from './library';
 import {
   ASSET_LIBRARY_QUERY_LIMIT,
+  isAssetLibraryDescribed,
   isAssetLibrarySourceFilter,
   type AssetSelectionConstraints,
 } from '../../../shared/asset-library';
@@ -28,11 +29,18 @@ export function parseLibraryQuery(
   const source = string('source');
   if (source && !isAssetLibrarySourceFilter(source))
     throw createError({ statusCode: 400, message: 'Invalid source filter' });
+  const described = string('described');
+  if (described && !isAssetLibraryDescribed(described))
+    throw createError({
+      statusCode: 400,
+      message: 'Invalid description filter',
+    });
   return {
     q: string('q'),
     type: string('type'),
     usage: string('usage'),
     source: isAssetLibrarySourceFilter(source) ? source : undefined,
+    described: isAssetLibraryDescribed(described) ? described : undefined,
     page: Number(string('page') || 1),
     ...parseSelectionConstraints(query),
   };

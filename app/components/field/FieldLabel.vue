@@ -29,6 +29,7 @@ function handleClick() {
   <div
     ref="root"
     class="cursor-pointer font-semibold tracking-tight transition-colors"
+    data-field-label
     :class="offered ? 'text-accent' : ''"
     @click="handleClick"
   >
@@ -36,7 +37,13 @@ function handleClick() {
     ><span
       v-if="required"
       class="relative -top-1 -right-1.5 text-xs text-accent"
+      data-field-label-extra
       >*</span
-    ><AiFieldOffer v-if="place" :place :class="required ? 'ml-3' : 'ml-1.5'" />
+    ><AiFieldOffer
+      v-if="place"
+      :place
+      :class="required ? 'ml-3' : 'ml-1.5'"
+      data-field-label-extra
+    />
   </div>
 </template>

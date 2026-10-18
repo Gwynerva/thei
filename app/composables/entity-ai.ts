@@ -58,7 +58,23 @@ export interface EntityAi {
    */
   modeOf: (offer: AiEntityOffer) => 'takes' | 'applies' | 'session';
   accept: (offer: AiEntityOffer) => Promise<void>;
+  /**
+   * Declines: the proposal stays where it stood in its declined state —
+   * to bring back, or never to offer again — until its place lets it go.
+   */
   reject: (offer: AiEntityOffer) => Promise<void>;
+  /** What was declined here and still stands at a place. */
+  declinedAt: (place: AiOfferPlace) => AiEntityOffer[];
+  /** Brings a proposal declined here back to wait. */
+  restore: (offer: AiEntityOffer) => Promise<void>;
+  /** Never offers what was declined here again. */
+  never: (offer: AiEntityOffer) => Promise<void>;
+  /** A place done with: what was declined at it goes. */
+  letGoDeclined: (place: AiOfferPlace) => void;
+  /** What is taken into the form, not saved yet, at a place. */
+  takenAt: (place: AiOfferPlace) => AiEntityOffer[];
+  /** Takes a proposal back out of the form, while the form reads as it left it. */
+  untake: (offer: AiEntityOffer) => void;
   comment: (offer: AiEntityOffer, text: string) => Promise<void>;
   /** Edits taken in a text's editor, told to their sessions once saved. */
   noteTaken: (taken: Record<string, Record<string, string>>) => void;
@@ -75,8 +91,13 @@ export interface EntityAi {
   askingAt: (place: AiOfferPlace) => string | undefined;
   /** An ask that ended with nothing proposed at its field: its session. */
   answeredAt: (place: AiOfferPlace) => string | undefined;
+  /**
+   * The field holds something to work on — words, a date, an item: a request
+   * that only mends what is there is offered only then.
+   */
+  filledAt: (place: AiOfferPlace) => boolean;
   /** Asks the model about one field; what it proposes comes to the label. */
-  ask: (place: AiOfferPlace, text: string) => Promise<void>;
+  ask: (place: AiOfferPlace, text: string, label?: string) => Promise<void>;
   /** Stops the session answering at a field. */
   stopAsk: (place: AiOfferPlace) => Promise<void>;
 }
@@ -137,7 +158,7 @@ function useFieldAsks(options: {
     );
     onScopeDispose(() => clearTimeout(timer));
   }
-  async function ask(place: string, text: string) {
+  async function ask(place: string, text: string, label?: string) {
     const target = options.ref();
     if (!target || !text.trim()) return;
     const current = options.current(place);
@@ -150,6 +171,7 @@ function useFieldAsks(options: {
           place,
           text,
           ...(current !== undefined ? { current } : {}),
+          ...(label ? { label } : {}),
         },
       },
     );
@@ -174,6 +196,81 @@ function useFieldAsks(options: {
   };
 }
 
+/**
+ * Proposals declined in a form, kept where they stood in their declined
+ * state, as a session's card stays — «Вернуть» and «Больше не предлагать»
+ * beside it — rather than a toast at the top of the window, far from the
+ * field. A place lets them go when the owner is done with it: a field's
+ * popup closed, the form saved.
+ */
+function useDeclinedHere(options: {
+  /** Hides a proposal from the form's own, or shows it again. */
+  hide: (id: string, on: boolean) => void;
+  refresh: () => Promise<void> | void;
+}) {
+  const declined = shallowRef(new Map<string, AiEntityOffer>());
+  function keep(id: string, offer: AiEntityOffer | undefined) {
+    const next = new Map(declined.value);
+    if (offer) next.set(id, offer);
+    else next.delete(id);
+    declined.value = next;
+  }
+  async function reject(offer: AiEntityOffer) {
+    const id = offer.action.actionUuid;
+    options.hide(id, true);
+    try {
+      await aiApi.reject(id);
+    } catch (caught) {
+      options.hide(id, false);
+      showToast(errorMessage(caught, phrase.value.ai_error));
+      return;
+    }
+    keep(id, {
+      ...offer,
+      action: { ...offer.action, state: 'rejected', never: false },
+    });
+    // Read again, so the counts — the admin bar's too — drop it at once.
+    void options.refresh();
+  }
+  async function restore(offer: AiEntityOffer) {
+    const id = offer.action.actionUuid;
+    try {
+      await aiApi.restore(id);
+    } catch (caught) {
+      showToast(errorMessage(caught, phrase.value.ai_error));
+      return;
+    }
+    keep(id, undefined);
+    options.hide(id, false);
+    await options.refresh();
+  }
+  async function never(offer: AiEntityOffer) {
+    const id = offer.action.actionUuid;
+    try {
+      await aiApi.never(id);
+    } catch (caught) {
+      showToast(errorMessage(caught, phrase.value.ai_error));
+      return;
+    }
+    if (declined.value.has(id))
+      keep(id, { ...offer, action: { ...offer.action, never: true } });
+  }
+  return {
+    reject,
+    restore,
+    never,
+    declinedAt: (place: string) =>
+      [...declined.value.values()].filter((offer) => offer.place === place),
+    letGo(place?: string) {
+      declined.value = new Map(
+        [...declined.value].filter(
+          ([, offer]) => place !== undefined && offer.place !== place,
+        ),
+      );
+    },
+  };
+}
+
 /** What a form holds at a place, as words: a list one item a line. */
 function wordsAt(form: object | undefined, place: string): string | undefined {
   if (!form || place.startsWith('text:')) return undefined;
@@ -182,6 +279,20 @@ function wordsAt(form: object | undefined, place: string): string | undefined {
   if (Array.isArray(value) && value.every((item) => typeof item === 'string'))
     return value.join('\n');
   return undefined;
+}
+
+/**
+ * Whether the form holds something at a place: words, an item of a list. A
+ * text's field says it of itself (`FieldAi`); what is not known counts as
+ * held, so no request is kept from a field that may have something.
+ */
+function filledAt(form: object | undefined, place: string): boolean {
+  if (!form) return true;
+  const value = (form as Record<string, unknown>)[placeField(place)];
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim() !== '';
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
 }
 
 /** Kinds that change only what the AI remembers: applied from the form. */
@@ -258,6 +369,8 @@ function noteFromOtherEnd(note: unknown): RelationNote | undefined {
  */
 interface Take {
   keys: string[];
+  /** The fields as they were before it, and as it left them. */
+  before: string;
   after: string;
   undo: () => void;
 }
@@ -287,6 +400,30 @@ function savedWords(
       : String(value ?? '');
   }
   return Object.keys(values).length ? values : undefined;
+}
+
+/**
+ * «Taken into the form — save it», with a way back while the form still
+ * holds what was taken. Its id, to take it away once the form is saved.
+ */
+function showTakenToast(
+  id: string,
+  taken: Ref<Map<string, Take>>,
+  untouched: (id: string) => boolean,
+  said = phrase.value.ai_offer_taken,
+): number {
+  return showToast(said, {
+    label: phrase.value.ai_offer_take_back,
+    run: () => {
+      const back = taken.value.get(id);
+      // Corrected since, it is the owner's own words: not undone for them.
+      if (!back || !untouched(id)) return;
+      back.undo();
+      const next = new Map(taken.value);
+      next.delete(id);
+      taken.value = next;
+    },
+  });
 }
 
 /** Tells the sessions of proposals taken into a form what the form saved. */
@@ -329,9 +466,11 @@ function setFields(
     return typeof now === typeof next || (now === undefined && next !== null);
   });
   if (!fits) return undefined;
+  const was = fieldsOf(form, keys);
   Object.assign(form, JSON.parse(JSON.stringify(values)));
   return {
     keys,
+    before: was,
     after: fieldsOf(form, keys),
     undo: () => Object.assign(form, before),
   };
@@ -472,6 +611,8 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
   );
   /** Proposals laid into the form, until it is saved or they are taken back. */
   const taken = ref(new Map<string, Take>());
+  /** The toast that says to save what was taken, gone once it is saved. */
+  let takenToast: number | undefined;
   /** Proposals answered here, until the panel is read again. */
   const answered = ref(new Set<string>());
   /** Text edits taken in an editor, by action: told once the form is saved. */
@@ -518,6 +659,8 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
         () => options.version?.(),
         (now, before) => {
           if (now === before) return;
+          // Saved, what was declined in it is done with.
+          declined.letGo();
           // Saved by the owner — not read again for being outdated — what
           // was taken is told as saved.
           const took = outdated.value
@@ -529,7 +672,15 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
                   )?.action ?? [],
               );
           const form = options.form?.() as Record<string, unknown> | undefined;
+          // Saved, what was taken waits no more: counted so at once, rather
+          // than counted again until the form's AI is read anew.
+          if (panel.value && took.length)
+            panel.value = {
+              ...panel.value,
+              waiting: Math.max(0, panel.value.waiting - took.length),
+            };
           taken.value = new Map();
+          hideToast(takenToast);
           outdated.value = false;
           void Promise.all([tellTaken(), tellTakenWords(took, form)]).then(
             refresh,
@@ -570,10 +721,17 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
   }
 
   /**
-   * A proposal taken into the form stays out of sight while the form reads
-   * as the take left it; changed back by hand, it is offered again.
+   * A proposal taken into the form stays out of sight while the form holds
+   * anything but what it held before — corrected words included; changed
+   * back by hand, it is offered again. Undone from its toast only while
+   * the form reads as the take left it.
    */
   function stillTaken(id: string) {
+    const done = taken.value.get(id);
+    const form = options.form?.() as Record<string, unknown> | undefined;
+    return Boolean(done && form && fieldsOf(form, done.keys) !== done.before);
+  }
+  function untouched(id: string) {
     const done = taken.value.get(id);
     const form = options.form?.() as Record<string, unknown> | undefined;
     return Boolean(done && form && fieldsOf(form, done.keys) === done.after);
@@ -586,6 +744,21 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
         !answered.value.has(offer.action.actionUuid),
     ),
   );
+
+  // The admin bar's ✦ counts what waits for the owner, as the server read
+  // it with this form — less what is taken into the form, which waits only
+  // for its save, as the header's ✦ counts it.
+  if (import.meta.client)
+    watch(
+      () =>
+        [
+          panel.value?.waiting,
+          [...taken.value.keys()].filter((id) => stillTaken(id)).length,
+        ] as const,
+      ([waiting, takes]) => {
+        if (waiting !== undefined) setAiWaiting(Math.max(0, waiting - takes));
+      },
+    );
 
   function modeOf(offer: AiEntityOffer) {
     if (MEMORY_KINDS.has(offer.action.kind)) return 'applies' as const;
@@ -625,47 +798,36 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
     if (!undo) return;
     const id = offer.action.actionUuid;
     taken.value = new Map(taken.value).set(id, undo);
-    showToast(phrase.value.ai_offer_taken, {
-      label: phrase.value.ai_offer_take_back,
-      run: () => {
-        const back = taken.value.get(id);
-        if (!back || !stillTaken(id)) return;
-        back.undo();
-        const next = new Map(taken.value);
-        next.delete(id);
-        taken.value = next;
-      },
-    });
+    // At the form's head its row says so itself, where it stood: no toast
+    // laid over the form's first fields.
+    if (offer.place !== 'form')
+      takenToast = showTakenToast(id, taken, untouched);
+  }
+
+  function untake(offer: AiEntityOffer) {
+    const id = offer.action.actionUuid;
+    const back = taken.value.get(id);
+    // Corrected since, it is the owner's own words: not undone for them.
+    if (!back || !untouched(id)) return;
+    back.undo();
+    const next = new Map(taken.value);
+    next.delete(id);
+    taken.value = next;
   }
 
   function answer(id: string) {
     answered.value = new Set(answered.value).add(id);
   }
 
-  async function reject(offer: AiEntityOffer) {
-    const id = offer.action.actionUuid;
-    answer(id);
-    try {
-      await aiApi.reject(id);
-    } catch (caught) {
+  const declined = useDeclinedHere({
+    hide: (id, on) => {
       const next = new Set(answered.value);
-      next.delete(id);
+      if (on) next.add(id);
+      else next.delete(id);
       answered.value = next;
-      showToast(errorMessage(caught, phrase.value.ai_error));
-      return;
-    }
-    showToast(phrase.value.ai_toast_declined(1), {
-      label: phrase.value.ai_action_never,
-      run: () => {
-        void aiApi
-          .never(id)
-          .then(() => showToast(phrase.value.ai_toast_never))
-          .catch((caught) =>
-            showToast(errorMessage(caught, phrase.value.ai_error)),
-          );
-      },
-    });
-  }
+    },
+    refresh,
+  });
 
   async function comment(offer: AiEntityOffer, text: string) {
     try {
@@ -695,7 +857,16 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
     refresh,
     modeOf,
     accept,
-    reject,
+    reject: declined.reject,
+    declinedAt: declined.declinedAt,
+    restore: declined.restore,
+    never: declined.never,
+    letGoDeclined: declined.letGo,
+    takenAt: (place) =>
+      (panel.value?.offers ?? []).filter(
+        (offer) => offer.place === place && stillTaken(offer.action.actionUuid),
+      ),
+    untake,
     comment,
     remember,
     // A form tells what it took as its version moves, saved.
@@ -703,6 +874,7 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
     askable: computed(() => shown.value && Boolean(panel.value?.modelReady)),
     askingAt: asks.askingAt,
     answeredAt: asks.answeredAt,
+    filledAt: (place) => filledAt(options.form?.(), place),
     ask: asks.ask,
     stopAsk: asks.stop,
     noteTaken: (taken) => {
@@ -744,9 +916,14 @@ export function provideFileAi(options: FileAiOptions): EntityAi {
   const aiEnabled = useAiEnabled();
   const target = computed(() => options.ref());
   const taken = ref(new Map<string, Take>());
+  let takenToast: number | undefined;
   const answered = ref(new Set<string>());
 
   function stillTaken(id: string) {
+    const done = taken.value.get(id);
+    return Boolean(done && fieldsOf(options.form(), done.keys) !== done.before);
+  }
+  function untouched(id: string) {
     const done = taken.value.get(id);
     return Boolean(done && fieldsOf(options.form(), done.keys) === done.after);
   }
@@ -767,6 +944,10 @@ export function provideFileAi(options: FileAiOptions): EntityAi {
     else next.delete(id);
     answered.value = next;
   }
+  const declined = useDeclinedHere({
+    hide: (id, on) => answer(id, on),
+    refresh: () => options.reload(),
+  });
   async function refresh() {
     await options.reload();
     taken.value = new Map();
@@ -794,40 +975,22 @@ export function provideFileAi(options: FileAiOptions): EntityAi {
       if (!undo) return;
       const id = offer.action.actionUuid;
       taken.value = new Map(taken.value).set(id, undo);
-      showToast(phrase.value.ai_offer_taken, {
-        label: phrase.value.ai_offer_take_back,
-        run: () => {
-          const back = taken.value.get(id);
-          if (!back || !stillTaken(id)) return;
-          back.undo();
-          const next = new Map(taken.value);
-          next.delete(id);
-          taken.value = next;
-        },
-      });
+      // The file's window has no form: its description field is saved alone.
+      takenToast = showTakenToast(
+        id,
+        taken,
+        untouched,
+        phrase.value.ai_offer_taken_file,
+      );
     },
-    async reject(offer) {
-      const id = offer.action.actionUuid;
-      answer(id);
-      try {
-        await aiApi.reject(id);
-      } catch (caught) {
-        answer(id, false);
-        showToast(errorMessage(caught, phrase.value.ai_error));
-        return;
-      }
-      showToast(phrase.value.ai_toast_declined(1), {
-        label: phrase.value.ai_action_never,
-        run: () => {
-          void aiApi
-            .never(id)
-            .then(() => showToast(phrase.value.ai_toast_never))
-            .catch((caught) =>
-              showToast(errorMessage(caught, phrase.value.ai_error)),
-            );
-        },
-      });
-    },
+    reject: declined.reject,
+    declinedAt: declined.declinedAt,
+    restore: declined.restore,
+    never: declined.never,
+    letGoDeclined: declined.letGo,
+    // A file's window has no form head: what is taken is its one field.
+    takenAt: () => [],
+    untake: () => {},
     async comment(offer, text) {
       try {
         await aiApi.comment(offer.action.actionUuid, text);
@@ -840,9 +1003,11 @@ export function provideFileAi(options: FileAiOptions): EntityAi {
     askable: computed(() => aiEnabled.value && options.modelReady()),
     askingAt: (place) => asks.askingAt(place),
     answeredAt: (place) => asks.answeredAt(place),
-    ask: (place, text) => asks.ask(place, text),
+    filledAt: () => true,
+    ask: (place, text, label) => asks.ask(place, text, label),
     stopAsk: (place) => asks.stop(place),
     async saved() {
+      hideToast(takenToast);
       await tellTakenWords(
         [...taken.value.keys()].flatMap(
           (id) =>

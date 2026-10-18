@@ -34,6 +34,15 @@ export function builtinTemplateId(key: AiBuiltinTemplateKey) {
   return `builtin-${key}`;
 }
 
+/** The built-in check a template id is, if it is one. */
+export function builtinKeyOf(
+  templateId: string | null | undefined,
+): AiBuiltinTemplateKey | undefined {
+  return AI_BUILTIN_TEMPLATE_KEYS.find(
+    (key) => builtinTemplateId(key) === templateId,
+  );
+}
+
 export interface AiTemplateItem {
   templateId: string;
   /** For a built-in check, which: its words are the code's. */
@@ -66,7 +75,15 @@ export interface AiTemplateDetail {
   sessions: AiSessionItem[];
 }
 
-/** A check run: its session, or none when nothing new was there to look at. */
+/**
+ * A check run: its session, or none when nothing new was there to look at —
+ * and then the session where it last looked, if it ever did.
+ */
 export interface AiTemplateRunResponse {
   sessionUuid: string | null;
+  /** With nothing new over the whole archive: how much it has looked at. */
+  looked?: number;
+  lastSessionUuid?: string;
+  /** The proposals still waiting in that last session. */
+  lastWaiting?: number;
 }

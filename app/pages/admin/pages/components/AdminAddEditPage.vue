@@ -293,7 +293,9 @@ await useAdminTabTitle(
 <template>
   <StickyGlassHeader width="var(--width-wide)" :error="error">
     <div class="flex items-center justify-between gap-xs py-xs">
-      <div class="flex min-w-0 items-center gap-xs text-xl font-bold">
+      <div
+        class="flex min-w-0 items-center gap-xs text-lg font-bold sm:text-xl"
+      >
         <Icon name="page" />
         <span class="truncate">{{
           isEdit ? phrase.edit_page : phrase.new_page
@@ -304,16 +306,21 @@ await useAdminTabTitle(
         <Button
           v-if="isEdit"
           variant="delete"
+          size="icon"
+          class="pointer-coarse:size-11"
           :aria-label="phrase.delete"
           :data-title-popup="phrase.delete"
           @click="remove"
         >
           <Icon name="delete" />
         </Button>
-        <Button class="font-semibold" :disabled="!canSave" @click="save">
-          <Icon v-if="saving" name="loading" class="mr-xs" />
-          {{ isEdit ? (dirty ? phrase.save : phrase.saved) : phrase.create }}
-        </Button>
+        <AdminSaveButton
+          :label="isEdit ? (dirty ? phrase.save : phrase.saved) : phrase.create"
+          :saving
+          :done="isEdit && !dirty"
+          :disabled="!canSave"
+          @click="save"
+        />
       </div>
     </div>
   </StickyGlassHeader>

@@ -93,6 +93,9 @@ const MODEL_CALLS = 40;
  * so only a model going round in circles meets it.
  */
 const TURN_TOKEN_CAP = 3_000_000;
+/** How a turn may end short and still be gone on with: a pause, not a failure. */
+const PAUSES = new Set(['turns', 'timeout', 'stopped']);
+
 /**
  * How much of a tool's answer the model is handed: every answer is reread
  * on every later call, so one huge answer costs many times over.
@@ -818,6 +821,9 @@ export async function runSessionTurn(
       updateSession(sessionUuid, { state: 'idle' });
       publishSession(sessionUuid, { type: 'session' });
     }
+    // A check cut short by a turn's own limits, or by the owner, has more to
+    // go on with: the same offer as after a turn that went through.
+    if (stop && PAUSES.has(stop.kind)) await afterwards?.();
     return;
   }
   close?.();

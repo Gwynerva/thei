@@ -140,6 +140,16 @@ export interface AssetLibraryFacets {
   types: Partial<Record<AssetType, number>>;
   sources: Partial<Record<AssetSourceType, number>>;
   anywhere: number;
+  /** Files without a description and with one: what describing them asks. */
+  described: Record<AssetLibraryDescribed, number>;
+}
+/** Whether a file has its description: either way, without one, with one. */
+export const ASSET_LIBRARY_DESCRIBED = ['none', 'some'] as const;
+export type AssetLibraryDescribed = (typeof ASSET_LIBRARY_DESCRIBED)[number];
+export function isAssetLibraryDescribed(
+  value: unknown,
+): value is AssetLibraryDescribed {
+  return ASSET_LIBRARY_DESCRIBED.includes(value as AssetLibraryDescribed);
 }
 export type AssetLibraryResponse = PaginatedResponse<AssetLibrarySection> & {
   /**

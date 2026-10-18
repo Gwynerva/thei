@@ -12,8 +12,17 @@ export interface FieldAi {
   place: Readonly<Ref<AiOfferPlace | undefined>>;
   /** Opens a text edit in the text's own editor. */
   open: Readonly<Ref<((actionUuid: string) => void) | undefined>>;
+  /**
+   * Whether what claimed the place holds anything — a text, any block — as
+   * it says of itself; unknown for a field that claimed nothing.
+   */
+  filled: Readonly<Ref<(() => boolean) | undefined>>;
   /** Claims the field's place for what is inside it; returns letting go. */
-  claim(place: AiOfferPlace, open?: (actionUuid: string) => void): () => void;
+  claim(
+    place: AiOfferPlace,
+    open?: (actionUuid: string) => void,
+    filled?: () => boolean,
+  ): () => void;
   /** The field has a label, which shows the proposals rather than a switch. */
   labelled: Ref<boolean>;
 }
@@ -23,16 +32,20 @@ const FIELD_AI: InjectionKey<FieldAi> = Symbol('field-ai');
 export function provideFieldAi(named: () => AiOfferPlace | undefined): FieldAi {
   const claimed = shallowRef<AiOfferPlace>();
   const open = shallowRef<(actionUuid: string) => void>();
+  const filled = shallowRef<() => boolean>();
   const field: FieldAi = {
     place: computed(() => claimed.value ?? named()),
     open,
-    claim(place, opener) {
+    filled,
+    claim(place, opener, holds) {
       claimed.value = place;
       open.value = opener;
+      filled.value = holds;
       return () => {
         if (claimed.value !== place) return;
         claimed.value = undefined;
         open.value = undefined;
+        filled.value = undefined;
       };
     },
     labelled: ref(false),
