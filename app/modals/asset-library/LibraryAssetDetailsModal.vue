@@ -27,6 +27,7 @@ import AssetModalPreviewAudio from '../asset-modal/AssetModalPreviewAudio.vue';
 import AssetModalPreviewMedia from '../asset-modal/AssetModalPreviewMedia.vue';
 import AssetModalFileInfo from '../asset-modal/AssetModalFileInfo.vue';
 import AssetPanelSection from '../asset-modal/AssetPanelSection.vue';
+import AssetPreviewFrameSection from '../asset-modal/AssetPreviewFrameSection.vue';
 import AssetUsageChip from './AssetUsageChip.vue';
 import FilePreviewContent from '#layers/thei/app/components/file-preview/FilePreviewContent.vue';
 import { isAssetExtensionSafeInline } from '#layers/thei/shared/assets/formats';
@@ -64,6 +65,29 @@ const videoMeta = computed(() =>
     ? asset.value.meta
     : undefined,
 );
+const mediaPreview =
+  useTemplateRef<InstanceType<typeof AssetModalPreviewMedia>>('mediaPreview');
+/**
+ * A frame taken for the family: the window shows every video of it as the
+ * server now does, without reading it again.
+ */
+function takeVariants(variants: AssetVariantInfo[]) {
+  const taken = new Map(
+    variants.map((variant) => [variant.assetUuid, variant]),
+  );
+  const usages = data.value;
+  const shown = usages && taken.get(usages.asset.assetUuid);
+  if (usages && shown) data.value = { ...usages, asset: shown };
+  if (family.value)
+    family.value = {
+      ...family.value,
+      variants: family.value.variants.map((variant) => {
+        const now = taken.get(variant.assetUuid);
+        // The same file, so of the same kind: only its still has moved.
+        return now ? ({ ...variant, ...now } as typeof variant) : variant;
+      }),
+    };
+}
 const audioMeta = computed(() =>
   asset.value.type === AssetType.Audio && asset.value.meta
     ? asset.value.meta
@@ -141,9 +165,11 @@ const humanSize = useHumanSize();
       <AssetModalPreviewMedia
         v-if="asset.media"
         :key="`media:${asset.assetUuid}`"
+        ref="mediaPreview"
         :extension="asset.extension"
         :src="asset.media.src"
         :poster="videoPosterOf(asset.media)"
+        :poster-at="videoMeta?.previewAt"
         :has-audio="asset.media.hasAudio"
       />
       <AssetModalPreviewAudio
@@ -212,6 +238,16 @@ const humanSize = useHumanSize();
         <AssetPanelSection>
           <FileDescriptionField :asset-uuid="modalData.asset.assetUuid" />
         </AssetPanelSection>
+        <AssetPreviewFrameSection
+          v-if="asset.type === AssetType.Video"
+          :asset-uuid="asset.assetUuid"
+          :poster="videoPosterOf(asset.media)"
+          :preview-at="videoMeta?.previewAt"
+          :chosen="videoMeta?.previewChosen"
+          :current-time="mediaPreview?.playbackTime"
+          @chosen="takeVariants"
+          @seek="mediaPreview?.seek($event)"
+        />
         <AssetPanelSection
           :title="phrase.asset_library_usage"
           :count="usagesShown ? usageGroups.length : undefined"

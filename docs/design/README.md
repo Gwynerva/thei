@@ -117,8 +117,9 @@ Components:
 - [Modals](components/modals.md) — the slim header, the body, sticky footer,
   tabs, closing one step at a time.
 - [File window](components/file-window.md) — a file and its panel: sections
-  under small captions, facts, the file's description, places as chips, the
-  editor's screens, a visitor's «Где ещё используется».
+  under small captions, facts, the file's description, a video's still chosen
+  by hand, places as chips, the editor's screens, a visitor's «Где ещё
+  используется».
 - [Review of a text](components/review.md) — an edit or a version gone
   through part by part: the views, parts left in reach, changes drawn, the
   foot, closing in one step.

@@ -23,6 +23,8 @@ const props = defineProps<{
   displayDimensions?: { width: number; height: number };
   /** Clockwise quarter turns to show the media at. */
   rotation?: AssetRotation;
+  /** Of a video: seconds into it its still was taken at, marked on the bar. */
+  posterAt?: number;
 }>();
 
 const isVideo = isExtensionAllowed(props.extension, videoExtensionProfile);
@@ -164,10 +166,19 @@ function onVideoMeta(e: Event): void {
   );
 }
 
+/** Where a video's player stands, once it can tell; nothing for a picture. */
+const playbackTime = computed(() =>
+  isVideo && isReady.value && playback.value.duration > 0
+    ? playback.value.currentTime
+    : undefined,
+);
+
 defineExpose({
   zoomPercent,
   handleZoomButtonClick,
   resetView,
+  playbackTime,
+  seek: (seconds: number) => playbackController.seek(seconds),
 });
 </script>
 
@@ -254,6 +265,7 @@ defineExpose({
       :is-muted="playback.muted"
       :volume="playback.volume"
       :has-audio="hasAudio"
+      :mark="posterAt"
       @toggle-play="playbackController.togglePlay()"
       @seek="playbackController.seek($event)"
       @toggle-mute="playbackController.toggleMute()"

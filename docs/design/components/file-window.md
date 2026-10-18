@@ -47,10 +47,29 @@ The file's description:
 - A visitor's window always shows it, when it has one, first in its «Файл»
   group, before the facts.
 
+A video's still:
+
+- A video's window has a «Превью» ("Preview") section: the still small, at
+  the left, and beside it how it was taken — «Выбран вручную · 0:12» or
+  «Подобран сам» — and, when the owner chose it, «Подобрать самому» to let it
+  be picked by itself again.
+- Under them, one wide button, «Взять текущий кадр · 0:12.4», takes the frame
+  the player stands at; its time follows the player to a tenth of a second,
+  and it is off while the player cannot tell its time or stands at the frame
+  already chosen. Its hint says the frame becomes the still of every variant,
+  wherever they are shown.
+- Pressing the small still puts the player at its moment, so a frame next to
+  it is a step away. A tick in the accent on the player's bar marks that
+  moment too.
+- The choice is the file's, for every video of its family, like the
+  description. Once taken, the window shows the new still, and every other
+  place that draws the video — the library's tiles, a text's blocks, the form
+  behind the window — takes it at once, without reading anything again.
+
 The library's window:
 
-- Its sections: the facts; the description, saved on its own; «Где
-  используется»; «Как получен файл»; «Другие варианты».
+- Its sections: the facts; the description, saved on its own; «Превью», for
+  a video; «Где используется»; «Как получен файл»; «Другие варианты».
 - «Где используется» lists each place as a chip: the place's picture along
   the chip's right edge (its kind's icon when it has none), its name, and
   under it every way the file is used there, with how many times and how many
@@ -85,7 +104,10 @@ A placement's window:
 
 - The facts, then «Здесь» — what this place says of the file: its caption or
   title and description, whether it is private — then «Файл», the
-  description, marked «Глобально».
+  description, marked «Глобально», and, for a video, «Превью». A place that
+  keeps a video without its meta — a text's block — has it read in the
+  background; until then «Превью» holds a placeholder where it says how the
+  still was taken.
 - Its foot: remove from the place, «Изменить», and the main action.
 
 A visitor's window:
@@ -122,6 +144,16 @@ A visitor's window:
   `required` the hint of why; an `embedded` one has no button of its own, and
   the window's action saves it through the exposed `save()`, reading `filled`
   and `saving`.
+- `app/modals/asset-modal/AssetPreviewFrameSection.vue` — «Превью»: takes
+  the still, its moment, whether it was chosen and the player's time
+  (`playbackTime`, exposed by
+  `app/modals/asset-modal/AssetModalPreviewMedia.vue` with `seek()`); it asks
+  `POST /api/admin/assets/<uuid>/preview` and emits the family's videos as
+  they now are. `posterAt` on the player draws the tick
+  (`app/modals/asset-modal/AssetModalVideoControls.vue`).
+- `app/composables/video-stills.ts` keeps the stills taken in the tab by the
+  video's address; `app/components/Media.vue` draws a video with the one
+  taken since its place read it.
 - The windows: `app/modals/asset-library/LibraryAssetDetailsModal.vue`,
   `app/modals/upload-settings/ModalUploadSettings.vue`,
   `app/modals/asset-details/AssetDetailsModal.vue`,
@@ -173,6 +205,10 @@ A visitor's window:
 - The description comes last and is required because it is what a reader
   gets who cannot see the picture, and what search and an AI read; going on
   without it stays possible, on purpose and visibly.
+- The owner asked to choose a video's still by hand: a section of the panel
+  with the frame the player stands at, the way back to the automatic pick,
+  and a tick on the bar. The choice used to be remade by a button that picked
+  again by itself, which changed nothing once the update had picked well.
 - A visitor's «Где ещё используется» is there to draw a reader further in,
   and the owner asked for it with care not to leak anything private: hence a
   stranger's view built by the pages' own builders rather than a second set
@@ -183,7 +219,12 @@ A visitor's window:
 - `tests/e2e/admin-project-files.spec.ts` takes a file through the editor's
   screens and its description into a placement.
 - `tests/e2e/asset-editor.spec.ts` and `tests/e2e/asset-library.spec.ts`
-  cover the editor's screens and the library's chips.
+  cover the editor's screens and the library's chips;
+  `tests/e2e/asset-library.spec.ts` also takes a video's frame and sees the
+  still change in the window and on its tile.
+- `tests/server/assets/preview-frame.test.ts` covers the frame taken: exact,
+  for the family, kept by a new variant, the old still left to the cleanup,
+  the route, and the public address that moves with it.
 - `tests/e2e/file-description.spec.ts` saves a description in the library
   and reads it on a public page.
 - `tests/server/public/file-places.test.ts` and

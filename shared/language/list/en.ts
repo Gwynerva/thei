@@ -253,6 +253,15 @@ export default defineI18nBase({
     asset_library_held_by_ai_line: 'Only in AI actions',
     asset_open_place: (title) => `Open “${title}” in a new tab`,
     asset_open_variant: 'Open this variant',
+    asset_preview_frame: 'Preview',
+    asset_preview_frame_chosen: (time) => `Chosen by hand · ${time}`,
+    asset_preview_frame_auto: 'Picked automatically',
+    asset_preview_frame_take: (time) => `Take the current frame · ${time}`,
+    asset_preview_frame_take_hint:
+      'The frame becomes the preview of this video and its other variants, wherever they are shown',
+    asset_preview_frame_auto_take: 'Pick automatically',
+    asset_preview_frame_seek: 'Go to this frame',
+    asset_preview_frame_error: 'Failed to take the frame.',
     asset_description_save: 'Save the file description',
     asset_description_saved: 'File description saved',
     asset_description_conflict:

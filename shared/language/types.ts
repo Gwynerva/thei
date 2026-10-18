@@ -179,6 +179,14 @@ export type LanguagePhrases = {
   asset_library_held_by_ai_line: string;
   asset_open_place: (title: string) => string;
   asset_open_variant: string;
+  asset_preview_frame: string;
+  asset_preview_frame_chosen: (time: string) => string;
+  asset_preview_frame_auto: string;
+  asset_preview_frame_take: (time: string) => string;
+  asset_preview_frame_take_hint: string;
+  asset_preview_frame_auto_take: string;
+  asset_preview_frame_seek: string;
+  asset_preview_frame_error: string;
   asset_description_save: string;
   asset_description_saved: string;
   asset_description_conflict: string;

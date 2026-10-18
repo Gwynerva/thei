@@ -214,8 +214,8 @@ describe('video preview refresh', () => {
     const result = await refreshVideoPreviews();
 
     expect(result).toEqual({ total: 1, failed: 1 });
-    // Still without a chosen frame: it keeps its old preview, and the file
-    // card in the library can remake it by hand.
+    // Still without a chosen frame: it keeps its old preview, until the
+    // owner chooses its frame by hand in its file window.
     expect(await findVideosWithUnscoredPreviews()).toHaveLength(1);
   }, 60_000);
 });
