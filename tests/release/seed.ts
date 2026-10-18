@@ -5,9 +5,10 @@
  *
  * It holds one of everything a site can hold rather than a lot of anything:
  * each kind of entity at each access level, sections with several periods,
- * every content block, tags, relations, statuses, and media of each type
- * used in each place a file can go. Links point at an address the server
- * refuses to fetch, so nothing here reaches the network.
+ * every content block, tags, synonyms, relations, statuses, and media of
+ * each type used in each place a file can go, some with descriptions. Links
+ * point at an address the server refuses to fetch, so nothing here reaches
+ * the network.
  *
  * The requests speak the last release's API. When a release changes one of
  * them, this file follows once the release is out.
@@ -48,7 +49,7 @@ const seedDir = join(workDir, 'seed');
 export const seedCopy = join(seedDir, 'content');
 const manifestPath = join(seedDir, 'manifest.json');
 
-type EntityKind = 'projects' | 'events' | 'pages' | 'diary';
+type EntityKind = 'projects' | 'events' | 'pages' | 'diary' | 'tags';
 
 /** What the seed site holds, for checking it wherever it is restored. */
 export interface SeedManifest {
@@ -62,9 +63,11 @@ export interface SeedManifest {
     sections?: number;
     /** The words written for each of a project's hand-made links. */
     links?: string[];
+    /** The other names it is found by. */
+    synonyms?: string[];
   }[];
-  /** Files as stored, by the hash of their bytes. */
-  assets: { uuid: string; contentHash: string }[];
+  /** Files as stored, by the hash of their bytes, and what each one is. */
+  assets: { uuid: string; contentHash: string; description?: string }[];
   slogan: string;
   /** Every public address the site had on the last release. */
   sitemap: string[];
@@ -113,6 +116,7 @@ function article(files: Files, pageUuid: string) {
     {
       type: 'contentGallery',
       data: {
+        title: 'Кадры',
         items: [
           { id: 'g1', asset: { assetUuid: files.picture }, caption: 'Кадр' },
           { id: 'g2', asset: { assetUuid: files.video } },
@@ -121,8 +125,32 @@ function article(files: Files, pageUuid: string) {
       },
     },
     {
+      type: 'contentAudio',
+      data: {
+        asset: { assetUuid: files.audio },
+        title: 'Тон',
+        caption: 'Ля <i>первой</i> октавы',
+      },
+    },
+    {
       type: 'contentAttachment',
       data: { asset: { assetUuid: files.notes }, title: 'Заметки' },
+    },
+    {
+      type: 'contentFileGroup',
+      data: {
+        title: 'Материалы',
+        items: [
+          {
+            id: 'f1',
+            asset: { assetUuid: files.notes },
+            title: 'Заметки',
+            caption: 'Текст <b>бенча</b>',
+          },
+          { id: 'f2', asset: { assetUuid: files.audio }, title: 'Тон' },
+          { id: 'f3', asset: { assetUuid: files.picture } },
+        ],
+      },
     },
     { type: 'externalLink', data: { url: offline('external') } },
     {
@@ -145,7 +173,16 @@ function article(files: Files, pageUuid: string) {
 // -------------------------------------------------------------------- files
 
 /** One of each kind of file the library stores: paths, or asset IDs. */
-type Files = Record<'picture' | 'wide' | 'video' | 'drawing' | 'notes', string>;
+type Files = Record<
+  'picture' | 'wide' | 'video' | 'audio' | 'drawing' | 'notes',
+  string
+>;
+
+/** What some of the files are, in the owner's words: their descriptions. */
+const descriptions: Partial<Record<keyof Files, string>> = {
+  picture: 'Шум синего и зелёного, светлеющий слева направо.',
+  audio: 'Ровный тон ля первой октавы, полторы секунды.',
+};
 
 interface StoredAsset {
   assetUuid: string;
@@ -172,6 +209,31 @@ async function photo(width: number, height: number): Promise<Buffer> {
     .toBuffer();
 }
 
+/** A tone as a WAV recording, the same bytes on every run. */
+function tone(seconds: number, frequency: number): Buffer {
+  const rate = 8000;
+  const samples = Math.round(rate * seconds);
+  const wav = Buffer.alloc(44 + samples * 2);
+  wav.write('RIFF', 0, 'ascii');
+  wav.writeUInt32LE(36 + samples * 2, 4);
+  wav.write('WAVEfmt ', 8, 'ascii');
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20); // PCM
+  wav.writeUInt16LE(1, 22); // mono
+  wav.writeUInt32LE(rate, 24);
+  wav.writeUInt32LE(rate * 2, 28);
+  wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34);
+  wav.write('data', 36, 'ascii');
+  wav.writeUInt32LE(samples * 2, 40);
+  for (let index = 0; index < samples; index++) {
+    const fade = Math.min(1, index / 400, (samples - index) / 400);
+    const wave = Math.sin((2 * Math.PI * frequency * index) / rate);
+    wav.writeInt16LE(Math.round(wave * 12_000 * fade), 44 + index * 2);
+  }
+  return wav;
+}
+
 /** Writes one file of each kind into `dir`, the same bytes on every run. */
 export async function writeSampleFiles(dir: string): Promise<Files> {
   mkdirSync(dir, { recursive: true });
@@ -179,6 +241,7 @@ export async function writeSampleFiles(dir: string): Promise<Files> {
     picture: join(dir, 'picture.png'),
     wide: join(dir, 'wide.png'),
     video: join(dir, 'clip.mp4'),
+    audio: join(dir, 'tone.wav'),
     drawing: join(dir, 'drawing.svg'),
     notes: join(dir, 'notes.txt'),
   };
@@ -188,6 +251,7 @@ export async function writeSampleFiles(dir: string): Promise<Files> {
     join(repoRoot, 'tests/e2e/fixture/media/regression-video.mp4'),
     files.video,
   );
+  writeFileSync(files.audio, tone(1.5, 440));
   writeFileSync(
     files.drawing,
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"/></svg>',
@@ -224,12 +288,34 @@ async function uploadFiles(
   ][]) {
     const asset = uploadOrFail(server, path, `the ${name}`);
     files[name] = asset.assetUuid;
+    const description = descriptions[name];
+    if (description) describe(server, asset.assetUuid, description, name);
     manifest.assets.push({
       uuid: asset.assetUuid,
       contentHash: asset.contentHash,
+      description,
     });
   }
   return files;
+}
+
+/** Writes a file's description, kept once for the file and its variants. */
+function describe(
+  server: Server,
+  assetUuid: string,
+  text: string,
+  what: string,
+): void {
+  const response = api(
+    server,
+    'PUT',
+    `/api/admin/assets/${assetUuid}/description`,
+    { text, expectedUpdatedAt: null },
+  );
+  check(
+    response.status === 200 && (response.body as any)?.text === text,
+    `the ${what} described${response.status === 200 ? '' : `: ${response.status} ${response.text.slice(0, 300)}`}`,
+  );
 }
 
 // ----------------------------------------------------------------- entities
@@ -262,11 +348,33 @@ function createSite(
     kind: EntityKind,
     uuid: string,
     name: string,
-    parts?: { sections: number; links?: string[] },
+    parts?: Pick<
+      SeedManifest['entities'][number],
+      'sections' | 'links' | 'synonyms'
+    >,
   ) => manifest.entities.push({ kind, uuid, name, ...parts });
 
-  // Pages first: the article links to one.
+  // A tag of its own first: the event below finds it by a synonym.
+  const tagTitle = 'Бенч';
+  const tagSynonyms = ['Стенд', 'bench'];
+  const tag = create(
+    server,
+    '/api/admin/tags',
+    {
+      title: tagTitle,
+      slug: 'bench',
+      publicId: 'BenchTag',
+      description: 'Всё, что сделал бенч.',
+      synonyms: tagSynonyms,
+      iconAssetUuid: files.drawing,
+    },
+    'a tag with synonyms',
+  );
+  add('tags', tag.tagUuid, tagTitle, { synonyms: tagSynonyms });
+
+  // Pages next: the article links to one.
   const pageTitle = 'Обо мне 📎';
+  const pageSynonyms = ['Профиль', 'about'];
   const page = create(
     server,
     '/api/admin/pages',
@@ -277,10 +385,11 @@ function createSite(
       access: 'public',
       iconAssetUuid: files.picture,
       content: content(paragraph('Страница бенча.')),
+      synonyms: pageSynonyms,
     },
     'a public page',
   );
-  add('pages', page.pageUuid, pageTitle);
+  add('pages', page.pageUuid, pageTitle, { synonyms: pageSynonyms });
   const hiddenPage = create(
     server,
     '/api/admin/pages',
@@ -302,6 +411,7 @@ function createSite(
     precisionNote: 'примерно',
   });
   const projectTitle = 'Северный свет 🌌';
+  const projectSynonyms = ['Аврора', 'Northern lights'];
   const project = create(
     server,
     '/api/admin/projects',
@@ -313,10 +423,12 @@ function createSite(
       access: 'public',
       showcase: true,
       cv: true,
+      synonyms: projectSynonyms,
       descriptionContent: content(paragraph('Описание проекта.'), {
         type: 'contentMedia',
         data: { asset: { assetUuid: files.wide }, layout: 'stretch' },
       }),
+      notes: content(paragraph('Не забыть показать на встрече.')),
       // A general section, then two dated ones: stages.
       sections: [
         {
@@ -392,6 +504,7 @@ function createSite(
   add('projects', project.projectUuid, projectTitle, {
     sections: 3,
     links: ['Сайт проекта'],
+    synonyms: projectSynonyms,
   });
 
   const hiddenProject = create(
@@ -437,6 +550,7 @@ function createSite(
   });
 
   const eventTitle = 'Доклад 🎤';
+  const eventSynonyms = ['Выступление'];
   const event = create(
     server,
     '/api/admin/events',
@@ -451,7 +565,10 @@ function createSite(
         type: 'contentMedia',
         data: { asset: { assetUuid: files.video }, layout: 'natural' },
       }),
-      tags: [{ title: 'Бенч' }],
+      bannerAssetUuid: files.wide,
+      synonyms: eventSynonyms,
+      // The tag's synonym: it lands on the tag, not on a new one.
+      tags: [{ title: 'стенд' }],
       relations: [
         {
           entityType: 'project',
@@ -466,7 +583,13 @@ function createSite(
     },
     'a public event',
   );
-  add('events', event.eventUuid, eventTitle);
+  add('events', event.eventUuid, eventTitle, { synonyms: eventSynonyms });
+  const tagged = api(server, 'GET', `/api/admin/tags/${tag.tagUuid}`).body
+    ?.usageStats;
+  check(
+    tagged?.projects === 1 && tagged?.events === 1,
+    `the tag is found by its synonym (${JSON.stringify(tagged)})`,
+  );
 
   const hiddenEvent = create(
     server,
@@ -582,6 +705,12 @@ export function checkSeedSite(server: Server, manifest: SeedManifest): void {
         `"${entity.name}" keeps the words of its links (${JSON.stringify(words)})`,
       );
     }
+    if (entity.synonyms) {
+      check(
+        JSON.stringify(body.synonyms) === JSON.stringify(entity.synonyms),
+        `"${entity.name}" keeps its other names (${JSON.stringify(body.synonyms)})`,
+      );
+    }
   }
 
   const hashes = mustExec(
@@ -601,6 +730,16 @@ export function checkSeedSite(server: Server, manifest: SeedManifest): void {
   check(
     damaged.length === 0,
     `all ${manifest.assets.length} files serve their bytes${failing(damaged.map((asset) => asset.uuid))}`,
+  );
+  const described = manifest.assets.filter((asset) => asset.description);
+  const forgotten = described.filter(
+    ({ uuid, description }) =>
+      api(server, 'GET', `/api/admin/assets/${uuid}/description`).body?.text !==
+      description,
+  );
+  check(
+    forgotten.length === 0,
+    `all ${described.length} file descriptions are kept${failing(forgotten.map((asset) => asset.uuid))}`,
   );
 
   const about = api(server, 'GET', '/api/admin/about').body as any;
@@ -624,6 +763,21 @@ export function checkSeedSite(server: Server, manifest: SeedManifest): void {
     manifest.privateIds.some((id) => path.includes(id)),
   );
   check(listed.length === 0, `nothing private is listed${failing(listed)}`);
+
+  // A picture's description is its alt wherever it is drawn publicly: in the
+  // section's Markdown copy too, with the site's typography between words.
+  const section = manifest.sitemap.find((path) =>
+    path.includes('BenchSection'),
+  );
+  const words = (text: string) => text.replace(/\s+/gu, ' ');
+  const markdown = section
+    ? api(server, 'GET', `${section}index.md`, undefined, { visitor: true })
+        .text
+    : '';
+  check(
+    words(markdown).includes(`![${words(descriptions.picture!)}]`),
+    `a picture's description reaches the public text of ${section}`,
+  );
 }
 
 /** What went wrong, for a check's message; nothing when all went well. */
