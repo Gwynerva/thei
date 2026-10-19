@@ -51,9 +51,12 @@ async function toggle() {
     opening.value = true;
     failed.value = false;
     try {
-      all.value = await $fetch('/api/search/finds', {
-        query: { q: props.query, ref: props.hit.ref, typing: '1' },
-      });
+      all.value = await $fetch<{ finds: SearchFind[]; more: number }>(
+        '/api/search/finds',
+        {
+          query: { q: props.query, ref: props.hit.ref, typing: '1' },
+        },
+      );
     } catch {
       failed.value = true;
       return;
