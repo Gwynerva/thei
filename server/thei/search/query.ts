@@ -19,6 +19,7 @@ import {
   searchTokens,
   type SearchQuery,
 } from '#layers/thei/shared/search/tokens';
+import { searchKey } from '#layers/thei/shared/search/match';
 import { normalizeTermText } from '#layers/thei/shared/text-terms';
 import { buildPublicTags } from '../public/entities';
 import { runCatalogue } from './catalogue';
@@ -433,6 +434,8 @@ async function searchOnce(
    * stems only, so a word as typed and words standing together reorder the
    * candidates it brought.
    */
+  const typed = searchKey(query.text);
+  const exact = (title: string) => Boolean(typed) && searchKey(title) === typed;
   const hydrate = (rows: DocRow[], keep = rows.length): SearchHit[] =>
     rows
       .map((row, order) => {
@@ -447,7 +450,13 @@ async function searchOnce(
         );
         const day = dayIds.has(row.id);
         if (day) finds.unshift({ where: 'day', label: row.date ?? '', href: card.href, segments: [] });
-        return { hit: hitOf(row, finds.slice(0, findsLimit), more), order, closeness: day ? 100 : closeness };
+        // The very name typed is the one sought, whatever else says the words.
+        const named = exact(row.title);
+        return {
+          hit: hitOf(row, finds.slice(0, findsLimit), more),
+          order,
+          closeness: day || named ? 100 : closeness,
+        };
       })
       .sort((a, b) => b.closeness - a.closeness || a.order - b.order)
       .slice(0, keep)
@@ -498,6 +507,10 @@ async function searchOnce(
         request.groupSize ?? SEARCH_GROUP_SIZE,
       ),
     }));
+    // A result named exactly as typed brings its kind to the top: «где я
+    // была» is the page of that name before the projects that say the words.
+    const first = groups.findIndex((group) => group.hits[0] && exact(group.hits[0].title));
+    if (first > 0) groups.unshift(...groups.splice(first, 1));
   }
   const total = request.kind
     ? (facets.kinds[request.kind] ?? 0)

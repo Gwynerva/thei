@@ -243,6 +243,13 @@ describe('the global search', () => {
     expect(findsOfResult({ q: 'облепиха', audience: 'public', ref: `diary-entry:${PRIVATE_DIARY}` })).toBeUndefined();
   });
 
+  it('puts first what is named exactly as typed', async () => {
+    const groups = (await search('косплей')).groups;
+    expect(groups[0]!.kind).toBe('tag');
+    expect(groups[0]!.hits[0]!.title).toBe('Косплей');
+    expect(groups.map((group) => group.kind)).toContain('project');
+  });
+
   it('finds by another name without showing it', async () => {
     const hit = hits(await search('трактир'))[0]!;
     expect(hit.title).toBe('Косплей на Шедоухарт');
