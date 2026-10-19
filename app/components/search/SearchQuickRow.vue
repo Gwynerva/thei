@@ -126,13 +126,15 @@ defineEmits<{ pick: [event: MouseEvent]; point: [event: PointerEvent] }>();
           >
         </span>
         <!-- A line of its own, in words, under an arrow from the result: a
-             bare «+5» on the picture's fading edge was all but unseen. -->
+             bare «+5» on the picture's fading edge was all but unseen. The
+             arrow's arm stands two thirds down its glyph: raised by the rest,
+             it points at the middle of the words. -->
         <span
           v-if="row.more"
-          class="flex min-w-0 items-center gap-1 text-xs text-text-3 italic"
+          class="flex min-w-0 items-center gap-1.5 text-xs text-text-3 italic"
           ><Icon
             name="subfolder-arrow"
-            class="shrink-0 not-italic"
+            class="shrink-0 -translate-y-[17%] text-sm not-italic"
             aria-hidden="true"
           /><span class="-m-[0.75em] min-w-0 truncate p-[0.75em]">{{
             phrase.search_more_finds(row.more)

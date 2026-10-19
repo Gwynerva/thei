@@ -43,7 +43,8 @@ and behaves.
   first, until the arrows or the pointer choose another, so what was typed
   always shows where Enter goes.
 - ↑ ↓ choose, Enter opens, Ctrl+Enter shows everything on the search page,
-  Esc closes and gives the focus back. The foot says so, on a desktop only.
+  Esc closes and gives the focus back. The foot says so, but for Esc, on a
+  desktop only, in one line.
 - Enter opens where the owner is: the page on the site, the editor in the
   admin; Shift+Enter the other one.
 - The owner, with nothing typed, is offered the day's diary entry, the other

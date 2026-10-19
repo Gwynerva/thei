@@ -619,7 +619,7 @@ export default defineI18nModule({
     search_access_link: 'Видно только тем, у кого есть ссылка',
     search_edit: 'Редактировать',
     search_more_finds: (count) =>
-      `И ещё в ${plural(count, 'месте', 'местах', 'местах')}`,
+      `Ещё в ${plural(count, 'месте', 'местах', 'местах')}`,
     search_results_total: (count) =>
       count
         ? `${plural(count, 'Нашёлся', 'Нашлось', 'Нашлось', false)} ${plural(count, 'результат', 'результата', 'результатов')}`
@@ -653,7 +653,6 @@ export default defineI18nModule({
     search_keys_site: 'на сайте',
     search_keys_edit: 'в редакторе',
     search_keys_all: 'все результаты',
-    search_keys_close: 'закрыть',
     forbidden_title: 'Это личное пространство',
     forbidden_description: 'Только администратор может просматривать это.',
     not_found_title: 'Здесь ничего нет',

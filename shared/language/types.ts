@@ -438,7 +438,6 @@ export type LanguagePhrases = {
   search_keys_site: string;
   search_keys_edit: string;
   search_keys_all: string;
-  search_keys_close: string;
   forbidden_title: string;
   forbidden_description: string;
   not_found_title: string;

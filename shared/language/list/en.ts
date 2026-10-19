@@ -562,7 +562,7 @@ export default defineI18nBase({
     search_access_link: 'Only those with the link see it',
     search_edit: 'Edit',
     search_more_finds: (count) =>
-      `Also in ${count} more ${count === 1 ? 'place' : 'places'}`,
+      `In ${count} more ${count === 1 ? 'place' : 'places'}`,
     search_results_total: (count) =>
       count
         ? `Found ${count} ${count === 1 ? 'result' : 'results'}`
@@ -596,7 +596,6 @@ export default defineI18nBase({
     search_keys_site: 'on the site',
     search_keys_edit: 'in the editor',
     search_keys_all: 'all results',
-    search_keys_close: 'close',
     forbidden_title: 'This place is private',
     forbidden_description: 'Only the administrator can view this.',
     not_found_title: 'Nothing lives here',

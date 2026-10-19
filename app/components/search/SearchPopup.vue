@@ -499,9 +499,6 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
           ><kbd :class="KEY">{{ modifier }} Enter</kbd>
           {{ phrase.search_keys_all }}</span
         >
-        <span class="ml-auto"
-          ><kbd :class="KEY">Esc</kbd> {{ phrase.search_keys_close }}</span
-        >
       </footer>
     </div>
   </FloatingPopup>
