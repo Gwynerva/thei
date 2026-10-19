@@ -505,9 +505,11 @@ export async function profileDocument(audience: SearchAudience): Promise<SearchD
       ),
       ...contentUnits(about),
       ...links.flatMap((link) =>
-        fieldUnit('extra', 'link', link.note, {
-          place: { relation: { title: link.title || link.url }, link: link.url, zone: 'links' },
-        }),
+        [link.name, link.note].flatMap((words) =>
+          fieldUnit('extra', 'link', words, {
+            place: { relation: { title: link.name || link.title || link.url }, link: link.url, zone: 'links' },
+          }),
+        ),
       ),
       ...statusUnits('profile', PROFILE_ID),
     ],

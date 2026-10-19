@@ -137,6 +137,36 @@ beforeEach(async () => {
   text('diary-entry', PRIVATE_DIARY, 'diary-body', [paragraph('d2', 'Только для себя: облепиха.')]);
   insert('diary-entries', { diaryUuid: FUTURE_DIARY, date: tomorrow, access: 'public', createdAt: 1, updatedAt: 1 });
   text('diary-entry', FUTURE_DIARY, 'diary-body', [paragraph('d3', 'Ещё не наступило: черёмуха.')]);
+  text('project', PROJECT, 'project-notes', [paragraph('n1', 'Себе на память: шиповник.')]);
+  insert('entity-relations', {
+    firstType: 'project',
+    firstId: PROJECT,
+    secondType: 'project',
+    secondId: HIDDEN_PROJECT,
+    type: 'related',
+    note: { type: 'shared', text: 'Тот же склад, секвойя' },
+    firstSortOrder: 0,
+    secondSortOrder: 0,
+  });
+  insert('entity-relations', {
+    firstType: 'event',
+    firstId: EVENT,
+    secondType: 'project',
+    secondId: PROJECT,
+    type: 'related',
+    note: { type: 'shared', text: 'Там я показала кедровый посох' },
+    firstSortOrder: 0,
+    secondSortOrder: 1,
+  });
+  insert('statuses', {
+    id: 'st-1',
+    ownerType: 'project',
+    ownerId: PROJECT,
+    kind: 'regular',
+    text: 'Жду ткань цвета фуксии',
+    date: '2025-05-01',
+    createdAt: 1,
+  });
   useSearchStore(':memory:');
   await rebuildSearchIndex();
 });
@@ -185,6 +215,23 @@ describe('the global search', () => {
     expect(titles(await owner('мандрагора'))).toContain('Косплей на Шедоухарт');
     expect(titles(await owner('бергамот')).sort()).toEqual(['Косплей на Шедоухарт', 'Переезд'].sort());
     expect((await owner('черёмуха')).total).toBe(1);
+  });
+
+  it('keeps notes, and relations to what a stranger cannot open, from a stranger', async () => {
+    for (const q of ['шиповник', 'секвойя']) expect((await search(q)).total, q).toBe(0);
+    const notes = hits(await search('шиповник', { audience: 'owner' }))[0]!;
+    expect(notes.finds[0]).toMatchObject({ where: 'notes' });
+    expect(notes.finds[0]!.href).toMatch(/#b-n1:~:text=/);
+    expect((await search('секвойя', { audience: 'owner' })).total).toBeGreaterThan(0);
+  });
+
+  it('leads each find to its place, out of whatever hides it', async () => {
+    const find = async (q: string) => hits(await search(q))[0]!.finds[0]!;
+    const relation = await find('кедровый');
+    expect(relation.where).toBe('relation');
+    expect(relation.href).toMatch(/#r-(event|project)~%2F(events|projects)%2F/);
+    expect((await find('фуксии')).href).toMatch(/#statuses~2025-05-01:~:text=/);
+    expect((await find('жрица')).href).toMatch(/#b-b1:~:text=/);
   });
 
   it('finds by another name without showing it', async () => {
