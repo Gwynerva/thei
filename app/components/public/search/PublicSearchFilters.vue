@@ -42,6 +42,18 @@ const availableTags = computed(() => {
       !facet.state && (!query || searchKey(facet.tag.title).includes(query)),
   );
 });
+/** The years found, newest first, each with its bar's share of the busiest. */
+const yearBars = computed(() => {
+  const years = props.years ?? [];
+  const most = Math.max(1, ...years.map((item) => item.count));
+  return [...years]
+    .sort((left, right) => right.year - left.year)
+    .map((item) => ({
+      ...item,
+      width: `${Math.max(4, Math.round((item.count / most) * 100))}%`,
+    }));
+});
+
 // With a query, the kind belongs to the chips and is not reset from here.
 const activeCount = computed(
   () =>
@@ -165,35 +177,52 @@ function reset() {
       v-if="years && (years.length > 1 || filters.year)"
       :title="phrase.search_years"
     >
+      <!-- How many were found each year, newest first, as bars against the
+           busiest year: a choice and a chart at once. The year chosen is
+           drawn in the accent; choosing it again shows every year. -->
       <div
-        class="flex flex-wrap gap-xs"
+        class="flex flex-col gap-0.5"
         role="radiogroup"
         :aria-label="phrase.search_years"
       >
         <button
-          v-for="option in [
-            { year: undefined, label: phrase.search_year_any, count: 0 },
-            ...years.map((item) => ({ ...item, label: String(item.year) })),
-          ]"
-          :key="option.year ?? 'any'"
+          v-for="item in yearBars"
+          :key="item.year"
           type="button"
           role="radio"
-          :aria-checked="filters.year === option.year"
-          class="inline-flex cursor-pointer items-center gap-1.5 rounded-full
-            border px-sm py-1 text-sm font-semibold tabular-nums transition
+          :aria-checked="filters.year === item.year"
+          :aria-label="phrase.search_year_count(item.year, item.count)"
+          class="grid cursor-pointer grid-cols-[2.75rem_minmax(0,1fr)_2.5rem]
+            items-center gap-xs rounded-sm px-1 py-1 text-xs transition
             focus-visible:ring-2 focus-visible:ring-accent
-            focus-visible:outline-none"
+            focus-visible:outline-none hocus:bg-bg-3/60"
           :class="
-            filters.year === option.year
-              ? 'border-accent/50 bg-bg-accent text-accent'
-              : `border-border-1 text-text-2 hocus:border-border-2
-                hocus:text-text-1`
+            filters.year === item.year
+              ? 'bg-bg-accent font-semibold text-accent'
+              : 'text-text-2 hocus:text-text-1'
           "
-          @click="emit('change', { year: option.year })"
+          @click="
+            emit('change', {
+              year: filters.year === item.year ? undefined : item.year,
+            })
+          "
         >
-          {{ option.label }}
-          <span v-if="option.count" class="text-xs font-normal text-text-3">{{
-            option.count
+          <span class="text-left tabular-nums">{{ item.year }}</span>
+          <span class="h-2 overflow-hidden rounded-full bg-bg-3">
+            <span
+              class="block h-full rounded-full transition-[width]"
+              :class="
+                filters.year === item.year
+                  ? 'bg-accent'
+                  : filters.year
+                    ? 'bg-accent/25'
+                    : 'bg-accent/55'
+              "
+              :style="{ width: item.width }"
+            ></span>
+          </span>
+          <span class="text-right text-text-3 tabular-nums">{{
+            item.count
           }}</span>
         </button>
       </div>

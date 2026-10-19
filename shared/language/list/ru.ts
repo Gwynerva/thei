@@ -634,7 +634,7 @@ export default defineI18nModule({
     search_quick_hint:
       'Проекты, события, дневник, страницы, файлы и теги — по любому слову в них.',
     search_years: 'Годы',
-    search_year_any: 'Любой год',
+    search_year_count: (year, count) => `${year}: найдено ${count}`,
     search_recent: 'Недавние',
     search_actions: 'Действия',
     search_action_diary_today: 'Запись дневника за сегодня',

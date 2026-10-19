@@ -332,12 +332,22 @@ async function tagFacets(
     .sort((left, right) => right.count - left.count || left.tag.title.localeCompare(right.tag.title));
 }
 
-function countFacets(rows: { kind: SearchKind; year: number | null; n: number }[]) {
+/**
+ * Each facet counts across its own choice and within the other: the kinds in
+ * the year chosen, the years in the kind chosen — so a chip and a bar say how
+ * many choosing it shows.
+ */
+function countFacets(
+  rows: { kind: SearchKind; year: number | null; n: number }[],
+  request: Pick<SearchRequest, 'kind' | 'year'>,
+) {
   const kinds: SearchFacets['kinds'] = {};
   const years = new Map<number, number>();
   for (const row of rows) {
-    kinds[row.kind] = (kinds[row.kind] ?? 0) + row.n;
-    if (row.year) years.set(row.year, (years.get(row.year) ?? 0) + row.n);
+    if (!request.year || row.year === request.year)
+      kinds[row.kind] = (kinds[row.kind] ?? 0) + row.n;
+    if (row.year && (!request.kind || row.kind === request.kind))
+      years.set(row.year, (years.get(row.year) ?? 0) + row.n);
   }
   return {
     kinds,
@@ -390,17 +400,21 @@ async function searchOnce(
         .map((item) => item.row)
     : [];
   const dayIds = new Set(dayRows.map((row) => row.id));
-  const facets = countFacets(textRows);
+  const facets = countFacets(textRows, request);
   if (dayRows.length) {
+    const year = request.year ? ' AND d.year = ?' : '';
     const textDiary = match
       ? (store.db
           .prepare(
-            `SELECT d.id FROM ${from} WHERE ${table} MATCH ? AND d.kind = 'diary-entry' AND ${facetFilter.sql}`,
+            `SELECT d.id FROM ${from} WHERE ${table} MATCH ? AND d.kind = 'diary-entry' AND ${facetFilter.sql}${year}`,
           )
           .pluck()
-          .all(match, ...facetFilter.params) as number[])
+          .all(match, ...facetFilter.params, ...(request.year ? [request.year] : [])) as number[])
       : [];
-    const union = new Set([...textDiary, ...dayIds]);
+    const daysInYear = dayRows
+      .filter((row) => !request.year || Number(row.date?.slice(0, 4)) === request.year)
+      .map((row) => row.id);
+    const union = new Set([...textDiary, ...daysInYear]);
     facets.kinds['diary-entry'] = union.size;
   }
   const tagRows = match

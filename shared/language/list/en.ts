@@ -577,7 +577,7 @@ export default defineI18nBase({
     search_quick_hint:
       'Projects, events, the diary, pages, files and tags — by any word in them.',
     search_years: 'Years',
-    search_year_any: 'Any year',
+    search_year_count: (year, count) => `${year}: ${count} found`,
     search_recent: 'Recent',
     search_actions: 'Actions',
     search_action_diary_today: 'Today’s diary entry',

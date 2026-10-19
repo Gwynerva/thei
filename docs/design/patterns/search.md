@@ -64,6 +64,11 @@ and behaves.
   of each and «All N» to the rest; chips above count and choose the kinds,
   each with the faint icon of its kind; the years and tags the results fall
   in beside, in the sheet «Filters» on a phone.
+- The years are a chart and a choice at once: one row a year, newest first,
+  its count as a horizontal bar against the busiest year and as a number;
+  the year chosen in the accent, the others dimmed, chosen again to show
+  them all. Each facet counts within the other's choice: the chips in the
+  year chosen, the years in the kind chosen.
 - The field stands right under the header, with the page's usual small gaps
   on a phone.
 - Typing keeps what was found on screen until the new answer comes; a
