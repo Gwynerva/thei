@@ -19,6 +19,7 @@ import { renderEditorBlock } from './editor-block-render';
  */
 export abstract class VueBlockTool {
   private wrapper?: HTMLElement;
+  private emptyMarks?: MutationObserver;
   /**
    * The block has left the editor. An answer that arrives later — a picked
    * file, an upload, a lookup — has nowhere to go and is dropped.
@@ -38,6 +39,7 @@ export abstract class VueBlockTool {
 
   render(): HTMLElement {
     this.wrapper = createToolWrapper();
+    this.emptyMarks = keepEmptyMarks(this.wrapper);
     this.renderContent();
     this.afterRender();
     return this.wrapper;
@@ -75,8 +77,63 @@ export abstract class VueBlockTool {
     if (this.destroyed) return;
     this.destroyed = true;
     this.onDestroy();
+    this.emptyMarks?.disconnect();
     if (this.wrapper) renderEditorBlock(null, this.wrapper);
   }
+}
+
+/**
+ * Editor.js marks every field of a block `data-empty`, and its styles draw the
+ * field's placeholder by that mark. It marks them again only on a change it
+ * sees, and it sees none in here: the view changes on its own — a gallery
+ * shows another picture's caption — and left alone, the mark of the caption
+ * shown first stays, a placeholder over the words of the next. So whatever
+ * changes in here marks again the fields Editor.js has marked, by its own
+ * test.
+ */
+function keepEmptyMarks(wrapper: HTMLElement) {
+  const observer = new MutationObserver(() => {
+    for (const field of wrapper.querySelectorAll<HTMLElement>('[data-empty]')) {
+      const empty = emptyToEditor(field) ? 'true' : 'false';
+      if (field.dataset.empty !== empty) field.dataset.empty = empty;
+    }
+  });
+  observer.observe(wrapper, {
+    childList: true,
+    characterData: true,
+    subtree: true,
+  });
+  return observer;
+}
+
+const LONE_TAGS = new Set(
+  'AREA BASE BR COL COMMAND EMBED HR IMG INPUT KEYGEN LINK META PARAM SOURCE TRACK WBR'.split(
+    ' ',
+  ),
+);
+const LINE_BREAKS = new Set(['BR', 'WBR']);
+
+/**
+ * Editor.js's own test (`isEmpty`), so that the two never disagree: no leaf
+ * with a letter but its first zero-width space, and no lone tag but a line
+ * break.
+ */
+function emptyToEditor(field: Node) {
+  const nodes: Node[] = [field];
+  for (let node = nodes.shift(); node; node = nodes.shift()) {
+    if (node.childNodes.length) {
+      nodes.push(...node.childNodes);
+      continue;
+    }
+    if (
+      node instanceof Element &&
+      LONE_TAGS.has(node.tagName) &&
+      !LINE_BREAKS.has(node.tagName)
+    )
+      return false;
+    if ((node.textContent ?? '').replace('​', '')) return false;
+  }
+  return true;
 }
 
 function createToolWrapper() {

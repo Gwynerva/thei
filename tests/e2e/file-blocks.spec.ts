@@ -433,6 +433,59 @@ test('a picture shown as a file is the same block, its caption kept with its mar
   await expect(pic.locator('[contenteditable="true"] b')).toHaveText('set');
 });
 
+test('a gallery’s caption shows its placeholder only while the picture shown has no caption', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const [first, second] = [
+    await uploadPicture(page.request),
+    await uploadPicture(page.request),
+  ];
+  const { pageUuid } = await createPage(page.request, [
+    {
+      id: 'gallery',
+      type: 'contentGallery',
+      data: {
+        items: [
+          { id: 'bare', asset: { assetUuid: first.assetUuid } },
+          {
+            id: 'captioned',
+            asset: { assetUuid: second.assetUuid },
+            caption: 'Sun<b>set</b>',
+          },
+        ],
+      },
+    },
+  ]);
+  await openEditor(page, pageUuid);
+  const gallery = page.locator('dialog .ce-block[data-id="gallery"]');
+  const tiles = gallery.locator('[aria-pressed]');
+  const caption = gallery.locator('[data-gallery-view] [data-placeholder]');
+  const placeholder = () =>
+    caption.evaluate((field) => getComputedStyle(field, '::before').content);
+
+  // Editor.js has marked the caption of the picture shown first, which has
+  // none, as empty.
+  await expect(caption).toHaveAttribute('data-empty', 'true');
+  await expect.poll(placeholder).toBe('"Caption"');
+
+  // The next picture's caption takes its place: words, and no placeholder
+  // over them.
+  await tiles.nth(1).click();
+  await expect(caption).toHaveText('Sunset');
+  await expect(caption).toHaveAttribute('data-empty', 'false');
+  await expect.poll(placeholder).toBe('none');
+
+  await tiles.nth(0).click();
+  await expect(caption).toHaveText('');
+  await expect.poll(placeholder).toBe('"Caption"');
+
+  // Showing another picture changes nothing in the text.
+  await expect(
+    page.locator('dialog').getByRole('button', { name: 'Save', exact: true }),
+  ).toBeDisabled();
+});
+
 test('the one file tile places what is picked by its kind', async ({
   page,
 }) => {
