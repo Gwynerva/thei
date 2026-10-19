@@ -34,8 +34,9 @@ and behaves.
   search page: the icon of the kind is in each row already.
 - One row per result (`SearchQuickRow.vue`): the kind's icon in the title's
   line, then its time quiet after it — on a phone its years only, where the
-  days have no room; a section's project, quieter still, gives way before
-  the title does. Under it, from the left edge, the place found best and its
+  days have no room; a section's project, quieter still, after its own
+  small rounded icon, gives way before the title does. Each quiet part
+  follows a dot: «Сияние · ▣ Териберка · 2026». Under it, from the left edge, the place found best and its
   words, the found ones marked, two lines on a phone that stop short of the
   picture; then, on a line of its own under an arrow from the result, in
   italics, how many other places hold the words — a bare «+5» on the
@@ -53,6 +54,13 @@ and behaves.
   found, always a link to all of them.
 - The owner's way to the editor is «✎ Изменить» on the row's last line,
   after «↳ Ещё в N местах», a target of its own apart from the row's link.
+  The two are alike and the faintest of the row, semibold, the accent and
+  underlined under the pointer. In the find's line above them, where it was
+  found is as faint, and its words a tone brighter — never as bright as the
+  title.
+- The row Enter takes has its ring, following the keys and the pointer as a
+  select's option does; it fades in from clear with the row's shade, never
+  from the text's colour.
 - What to do with the query that leads — the day's diary, a part of the
   admin, ✦ for a question — stands first, over what the search says of its
   answer («Все слова вместе…»), a line away from what was found.
@@ -66,7 +74,9 @@ and behaves.
   nothing; a day makes nothing either. Nothing that cannot be undone, nothing
   rare: those stay in their forms.
 - Nothing typed, a visitor is offered the site's busiest tags as words to
-  try; so is anyone whose query found nothing, here and on the page.
+  try, plain chips with no label; so is anyone whose query found nothing,
+  here and on the page. What it says stays while an answer is on its way, so
+  the popup never shrinks to an empty strip.
 
 ## The search page
 
@@ -100,11 +110,15 @@ and behaves.
 
 - A result named exactly as typed comes first, and its kind first among the
   groups: «где я была» is the page of that name before the projects that
-  say the words. Then a kind the query names («фото маяка»), then kinds whose
+  say the words — but for a section, a part, which stands after a whole
+  named in full. Then a kind the query names («фото маяка»), then kinds whose
   best result holds every word in its name; within a kind, a name holding
   the words comes before a text that only says them.
 - A query of words that only hold a sentence together — «где я была» — is
   read as a phrase, or every text with an «я» would answer.
+- A file is found where it is shown: in a text, in a page's showcase or
+  files, as an entity's icon or banner. One no page shows yet, found by the
+  owner alone, leads to the library.
 - A section of a project is a result of its own, under «Project sections»
   right after the projects: its title, description, periods and text are
   found in it, and it names its project. The project keeps only its
@@ -120,7 +134,8 @@ and behaves.
 - A head like the site's other cards: the kind and its time, the title, the
   description, with the result's picture dissolving in from the right
   (`MediaEdge`), or a file's own preview, framed. A section names its
-  project beside its kind, a link of its own. A file with neither title nor
+  project beside its kind, with the project's own icon (`EntityTokenIcon`),
+  a link of its own. A file with neither title nor
   description is called by its kind and where it is shown. The words found
   are marked in the title and the description too.
 - The owner sees its lock with two words beside it («Только вам»), its

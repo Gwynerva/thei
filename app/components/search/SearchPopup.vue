@@ -123,18 +123,33 @@ function hitRow(hit: SearchHit): Row {
     iconLabel: phrase.value.search_kind(hit.kind),
     title: searchHitTitle(hit),
     ...(hit.titleSegments ? { titleSegments: hit.titleSegments } : {}),
-    ...(hit.parent ? { parent: publicText(hit.parent.title) } : {}),
+    ...(hit.parent
+      ? {
+          parent: {
+            title: publicText(hit.parent.title),
+            media: hit.parent.media,
+          },
+        }
+      : {}),
     when: searchHitWhen(hit) || undefined,
-    years: searchHitYears(hit) || undefined,
+    // On a phone a section's line has room for its project, not its years.
+    years: (!hit.parent && searchHitYears(hit)) || undefined,
     access: searchAccessBadge(hit.access),
     ...(find && find.where !== 'title'
       ? {
           // Plain text needs no word for where it stands: the line is short.
-          place: find.where === 'text' && !find.label ? undefined : place?.text,
+          // A file's place is said once, in its title or its facts: the
+          // find says only what it is, «Подпись».
+          place:
+            find.where === 'text' && !find.label
+              ? undefined
+              : hit.kind === 'file'
+                ? phrase.value.search_where(find.where)
+                : place?.text,
           segments: find.segments,
         }
       : hit.file
-        ? { detail: searchFileFacts(hit.file, size) }
+        ? { detail: searchFileLine(hit, size) }
         : hit.summary
           ? {
               detail: publicText(hit.summary),
@@ -388,6 +403,13 @@ const notes = computed(() => {
   ];
 });
 const leads = computed(() => sections.value[0]?.key === 'leading');
+/** An answer to something typed, with nothing in it. */
+const foundNothing = computed(
+  () =>
+    Boolean(query.value && shown.value?.query) &&
+    !shown.value?.total &&
+    !rows.value.length,
+);
 </script>
 
 <template>
@@ -548,11 +570,11 @@ const leads = computed(() => sections.value[0]?.key === 'leading');
           <Icon name="warning" class="shrink-0" />
           {{ phrase.search_failed }}
         </p>
-        <div
-          v-else-if="(query && shown && !loading) || !query"
-          class="flex flex-col gap-sm px-xs py-sm text-sm"
-        >
-          <p v-if="query" class="flex flex-col gap-0.5">
+        <!-- Nothing to list: what the search does, or that it found nothing,
+             and words to try. It stays while an answer is on its way, so the
+             popup never shrinks to an empty strip. -->
+        <div v-else class="flex flex-col gap-sm px-xs py-sm text-sm">
+          <p v-if="foundNothing" class="flex flex-col gap-0.5">
             <span class="font-semibold text-text-1">{{
               phrase.search_empty
             }}</span>
@@ -564,7 +586,6 @@ const leads = computed(() => sections.value[0]?.key === 'leading');
             v-if="shown?.suggestions?.length"
             class="flex flex-wrap items-center gap-xs"
           >
-            <span class="text-text-3">{{ phrase.search_try }}</span>
             <button
               v-for="word in shown.suggestions"
               :key="word"

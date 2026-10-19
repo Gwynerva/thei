@@ -386,7 +386,7 @@ const countLine = computed(() => {
         type="button"
         :aria-pressed="filters.type === chip.kind"
         class="inline-flex shrink-0 cursor-pointer items-center gap-1
-          rounded-full border px-2 py-0.5 text-xs font-semibold transition
+          rounded-full border px-2 py-1 text-xs font-semibold transition
           focus-visible:ring-2 focus-visible:ring-accent
           focus-visible:outline-none sm:gap-1.5 sm:px-sm sm:py-1 sm:text-sm"
         :class="
@@ -519,7 +519,6 @@ const countLine = computed(() => {
         >
           <!-- What the site is most about, as words to try instead. -->
           <template v-if="search.suggestions?.length">
-            <span class="text-sm text-text-3">{{ phrase.search_try }}</span>
             <TheiLink
               v-for="word in search.suggestions"
               :key="word"

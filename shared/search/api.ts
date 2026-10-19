@@ -62,9 +62,12 @@ export interface SearchHit {
   /** `project:<uuid>`, `diary-entry:<uuid>`, `file:<family>`… */
   ref: string;
   title: string;
-  /** Of a section: the project it is a part of. */
-  parent?: { title: string; href: string };
-  /** Of a file: what shows it first, which names one with no title. */
+  /** Of a section: the project it is a part of, with its icon. */
+  parent?: { title: string; href: string; media?: MediaDescriptor };
+  /**
+   * Of a file: what shows it first, by its own name alone — a section's
+   * title, an entity's, a diary entry's day — which names one with no title.
+   */
   shownAt?: string;
   /** The title with the words found in it marked, when there are any. */
   titleSegments?: SearchSegment[];

@@ -461,6 +461,12 @@ describe('the global search', () => {
     expect((await search('бегемота')).total).toBe(0);
   });
 
+  it('reads a question by the words that hold some meaning', async () => {
+    const asked = await search('что шкурила для бегемота');
+    expect(asked.partial).toBeUndefined();
+    expect(titles(asked)).toContain('Парик и рога');
+  });
+
   it('reads a word that names a kind as asking for that kind', async () => {
     expect((await search('проект рога')).groups[0]!.kind).toBe('project');
     expect((await search('раздел рога')).groups[0]!.kind).toBe(

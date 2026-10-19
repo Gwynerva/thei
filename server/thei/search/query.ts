@@ -28,6 +28,7 @@ import {
 import { searchKey } from '#layers/thei/shared/search/match';
 import { normalizeTermText } from '#layers/thei/shared/text-terms';
 import { buildPublicTags } from '../public/entities';
+import { isQuestion } from './actions';
 import { runCatalogue } from './catalogue';
 import { placeHref, type SearchAudience } from './documents';
 import { searchAnalyzer, searchIndexProgress, useSearchStore } from './indexer';
@@ -737,6 +738,13 @@ async function searchOnce(
         if (whole) fullyNamed.add(hit.ref);
         const naming = whole ? 12 : inTitle.held * 4;
         return {
+          // A phrase is asked for near, and its order checked here: what
+          // holds its words in another order shows nothing, and goes.
+          drop:
+            query.phrases.length > 0 &&
+            !query.words.length &&
+            !finds.length &&
+            !inTitle.held,
           hit: {
             ...hit,
             ...(inTitle.segments ? { titleSegments: inTitle.segments } : {}),
@@ -748,6 +756,7 @@ async function searchOnce(
           closeness: day || named ? 100 : closeness + naming,
         };
       })
+      .filter((item) => !item.drop)
       .sort(
         (a, b) => (byDate ? 0 : b.closeness - a.closeness) || a.order - b.order,
       )
@@ -820,10 +829,13 @@ async function searchOnce(
     // A kind the query names comes next, then kinds whose best result holds
     // every word in its name: «пластика» finds the section «Рога из
     // пластика» before the project that only lists it.
+    // A section is a part: named exactly, it still stands after the whole
+    // named in full — «шлем» is the project «Шлем пилота меха» before the
+    // section «Шлем» of another one.
     const rank = (group: SearchGroup) => {
       const top = group.hits[0];
       if (!top) return 0;
-      if (exact(top.title)) return 3;
+      if (exact(top.title) && group.kind !== 'project-section') return 3;
       if (group.kind === hint.kind) return 2;
       return fullyNamed.has(top.ref) ? 1 : 0;
     };
@@ -855,13 +867,16 @@ export async function runSearch(
 ): Promise<SearchResponse> {
   const store = useSearchStore();
   const building = searchIndexProgress();
-  const response = await searchOnce(request, store, request.q);
   const words = (text: string) => {
     const query = parseSearchQuery(text, searchAnalyzer(), {
       typing: request.typing,
     });
     return requiredQueryWords(query).length + query.phrases.length;
   };
+  // A question holds words that only carry it — «что я делала на байкале»:
+  // what holds the rarer of them leads, though it lacks «делала».
+  const asked = isQuestion(request.q) && words(request.q) > 1;
+  const response = await searchOnce(request, store, request.q, asked);
   if (!response.total && response.query) {
     const other = searchAnalyzer().otherKeyboard(normalizeTermText(request.q));
     if (other && other !== normalizeTermText(request.q)) {
@@ -871,7 +886,7 @@ export async function runSearch(
     }
     // Not all the words together: what holds some of them, said so — the
     // one word of several a text lacks need not leave a reader with nothing.
-    if (words(request.q) > 1) {
+    if (!asked && words(request.q) > 1) {
       const some = await searchOnce(request, store, request.q, true);
       if (some.total)
         return { ...some, partial: true, ...(building ? { building } : {}) };

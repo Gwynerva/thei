@@ -59,9 +59,9 @@ export interface SearchDocument {
   /** `project:<uuid>`, `file:<family>`…: one per entity and reader. */
   ref: string;
   title: string;
-  /** Of a section: the project it is a part of. */
-  parent?: { title: string; href: string };
-  /** Of a file: what shows it first. */
+  /** Of a section: the project it is a part of, with its icon. */
+  parent?: { title: string; href: string; media?: MediaDescriptor };
+  /** Of a file: what shows it first, by its own name alone. */
   shownAt?: string;
   href: string;
   editHref?: string;
@@ -250,6 +250,48 @@ function pageFileUnits(
   });
 }
 
+/**
+ * The pictures an entity opens with or is drawn by — its icon, its banner —
+ * as places of their files: what the file is, its description, found where
+ * the page shows it. A stranger names a file by its slug, never its id.
+ */
+function heroFileUnits(
+  containerType: 'project' | 'project-section' | 'event' | 'page',
+  id: string,
+  audience: SearchAudience,
+  media: Partial<Record<'icon' | 'banner', MediaDescriptor | undefined>>,
+): SearchUnit[] {
+  const { rawDb } = THEI_SERVER.useDb();
+  const rows = rawDb
+    .prepare(
+      `SELECT u.role, a.assetUuid, a.slug, a.familyUuid FROM "asset-usages" u
+       JOIN assets a ON a.assetUuid = u.assetUuid
+       WHERE u.containerType = ? AND u.containerId = ? AND u.role IN ('icon', 'banner')`,
+    )
+    .all(containerType, id) as {
+    role: 'icon' | 'banner';
+    assetUuid: string;
+    slug: string;
+    familyUuid: string;
+  }[];
+  if (!rows.length) return [];
+  const descriptions = readFamilyDescriptions(
+    rows.map((row) => row.familyUuid),
+  );
+  return rows.flatMap((row) => {
+    const shown = media[row.role];
+    return fieldUnit('extra', 'file', descriptions.get(row.familyUuid), {
+      place: {
+        file: {
+          familyUuid: row.familyUuid,
+          assetUuid: audience === 'public' ? row.slug : row.assetUuid,
+        },
+      },
+      ...(shown ? { media: shown } : {}),
+    });
+  });
+}
+
 /** The private notes of an entity, each block at its place in them. */
 function noteUnits(notes: Parameters<typeof contentUnits>[0]): SearchUnit[] {
   return placed(contentUnits(notes), { zone: 'owner-notes' }).map((unit) => ({
@@ -389,6 +431,10 @@ export async function projectDocument(
       ...names([project.humanReadableSlug, ...project.synonyms]),
       ...tagUnits(tags),
       ...contentUnits(page.description),
+      ...heroFileUnits('project', project.projectUuid, audience, {
+        icon: page.iconMedia,
+        banner: page.bannerMedia,
+      }),
       ...sectionUnits,
       ...showcaseUnits,
       ...fileUnits,
@@ -444,6 +490,7 @@ export async function sectionDocument(
     parent: {
       title: project.title,
       href: buildProjectUrl(project.humanReadableSlug, project.publicId),
+      ...(built.project.iconMedia ? { media: built.project.iconMedia } : {}),
     },
     href: built.href,
     ...(audience === 'owner'
@@ -471,6 +518,9 @@ export async function sectionDocument(
           place: { zone: 'periods' },
         }),
       ),
+      ...heroFileUnits('project-section', section.sectionUuid, audience, {
+        banner: built.bannerMedia,
+      }),
       ...contentUnits(built.content),
     ]),
   };
@@ -521,6 +571,9 @@ export async function eventDocument(
           place: { zone: 'periods' },
         }),
       ),
+      ...heroFileUnits('event', event.eventUuid, audience, {
+        banner: page.bannerMedia,
+      }),
       ...contentUnits(page.content),
       ...pageFileUnits(page.references.files, 'files'),
       ...referenceUnits(page.references),
@@ -589,6 +642,9 @@ export async function pageDocument(
       ...fieldUnit('title', 'title', stored.title),
       ...fieldUnit('summary', 'summary', stored.summary),
       ...names([stored.slug, ...stored.synonyms]),
+      ...heroFileUnits('page', stored.pageUuid, audience, {
+        icon: page.iconMedia,
+      }),
       ...contentUnits(page.content),
       ...noteUnits(page.notes),
     ]),
@@ -755,9 +811,13 @@ export function fileDocuments(
       kind: 'file',
       ref: `file:${family}`,
       title,
-      ...(first ? { shownAt: first.placeTitle } : {}),
-      // A file lives on the pages that show it: the first of them, at the file.
-      href: first?.href ?? '',
+      // A file lives on the pages that show it: the first of them, at the
+      // file. One no page shows yet, which only the owner finds, lives in
+      // the library.
+      shownAt: first ? first.placeName : THEI_SERVER.phrase.asset_library,
+      href:
+        first?.href ??
+        `/admin/assets/?q=${encodeURIComponent(title || description)}`,
       visibleFrom: 0,
       ...(description ? { summary: description } : {}),
       ...(media ? { media } : {}),

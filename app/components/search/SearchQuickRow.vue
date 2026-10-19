@@ -14,7 +14,7 @@ export interface SearchQuickRowData {
   /** The title with the words found marked. */
   titleSegments?: SearchSegment[];
   /** What it is a part of, quiet after the title: a section's project. */
-  parent?: string;
+  parent?: { title: string; media?: MediaDescriptor };
   /** Its day or period, quiet after the title. */
   when?: string;
   /** Its years, for a phone's line that has no room for its days. */
@@ -72,10 +72,10 @@ defineEmits<{
       role="option"
       :aria-selected="active"
       tabindex="-1"
-      class="group relative flex w-full min-w-0 cursor-pointer items-center
-        overflow-hidden rounded-sm text-left text-text-1 no-underline
-        transition-colors [--row-ground:var(--color-bg-2)] hocus:bg-bg-3
-        hocus:[--row-ground:var(--color-bg-3)]"
+      class="search-row group relative flex w-full min-w-0 cursor-pointer
+        items-center overflow-hidden rounded-sm text-left text-text-1
+        no-underline transition-colors [--row-ground:var(--color-bg-2)]
+        hocus:bg-bg-3 hocus:[--row-ground:var(--color-bg-3)]"
       :class="{
         'search-row-active bg-bg-3 [--row-ground:var(--color-bg-3)]': active,
       }"
@@ -121,10 +121,18 @@ defineEmits<{
                left: there it would cloud the title's last letters. -->
           <span
             v-if="row.parent"
-            class="-my-[0.75em] -mr-[0.75em] min-w-0 shrink-[1000] truncate
-              py-[0.75em] pr-[0.75em] text-xs font-normal text-text-3"
-            >· {{ row.parent }}</span
+            class="-my-[0.75em] -mr-[0.75em] flex min-w-0 shrink-[1000]
+              items-center gap-1 overflow-hidden py-[0.75em] pr-[0.75em] text-xs
+              font-normal text-text-3"
           >
+            <span aria-hidden="true">·</span>
+            <EntityTokenIcon
+              :media="row.parent.media"
+              icon="project"
+              class="size-3.5 rounded-xs"
+            />
+            <span class="min-w-0 truncate">{{ row.parent.title }}</span>
+          </span>
           <Icon
             v-if="row.access"
             :name="row.access.icon"
@@ -154,7 +162,7 @@ defineEmits<{
              short of the picture instead. -->
         <span
           v-if="row.segments?.length || row.detail || row.place"
-          class="flex min-w-0 items-baseline gap-1.5 text-xs text-text-3"
+          class="flex min-w-0 items-baseline gap-1.5 text-xs text-text-2"
           :class="{ 'max-sm:pr-8': row.media && !row.preview }"
         >
           <span
@@ -175,7 +183,8 @@ defineEmits<{
         <!-- The last line: the other places, and the way to the editor. -->
         <span
           v-if="row.more || row.otherIcon"
-          class="flex min-w-0 items-center gap-sm text-xs text-text-3"
+          class="flex min-w-0 items-center gap-md text-xs font-semibold
+            text-text-3"
         >
           <!-- In words, under an arrow from the result: a bare «+5» on the
                picture's fading edge was all but unseen. The arrow's arm
@@ -185,13 +194,13 @@ defineEmits<{
                with this result's places open. -->
           <span
             v-if="row.more"
-            class="flex min-w-0 items-center gap-1.5 italic transition-colors
+            class="flex min-w-0 items-center gap-1.5 transition-colors
               hover:text-accent hover:underline"
             data-row-more
             @click.prevent="$emit('more')"
             ><Icon
               name="subfolder-arrow"
-              class="shrink-0 -translate-y-[17%] text-sm not-italic"
+              class="shrink-0 -translate-y-[17%] text-sm"
               aria-hidden="true"
             /><span class="-m-[0.75em] min-w-0 truncate p-[0.75em]">{{
               phrase.search_more_finds(row.more)
@@ -202,9 +211,8 @@ defineEmits<{
           <span
             v-if="row.otherIcon"
             role="link"
-            class="-my-1 flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-1
-              font-semibold text-text-2 transition-colors hover:bg-bg-4
-              hover:text-text-1 max-sm:-my-1.5 max-sm:py-1.5"
+            class="-my-1.5 flex shrink-0 items-center gap-1 py-1.5
+              transition-colors hover:text-accent hover:underline"
             data-row-other
             @click.prevent="$emit('other')"
           >
@@ -233,10 +241,16 @@ defineEmits<{
 <style scoped>
 /*
  * An outline rather than an inset ring: it is drawn over the picture along
- * the edge, where an inset shadow would not be.
+ * the edge, where an inset shadow would not be. Every row holds one, clear,
+ * so the ring fades in with the row's colours from nothing: an outline that
+ * arrived with its colour faded from the text's colour, a white flash.
  */
-.search-row-active {
-  outline: 2px solid color-mix(in oklab, var(--color-accent) 60%, transparent);
+.search-row {
+  outline: 2px solid transparent;
   outline-offset: -2px;
+}
+
+.search-row-active {
+  outline-color: color-mix(in oklab, var(--color-accent) 60%, transparent);
 }
 </style>

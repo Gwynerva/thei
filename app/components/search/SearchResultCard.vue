@@ -159,7 +159,11 @@ const accent = computed(() =>
                 focus-visible:ring-accent focus-visible:outline-none
                 hocus:text-accent"
             >
-              <Icon name="project" class="shrink-0" />
+              <EntityTokenIcon
+                :media="hit.parent.media"
+                icon="project"
+                class="size-4 rounded-xs"
+              />
               <span class="truncate">{{ publicText(hit.parent.title) }}</span>
             </TheiLink>
             <span v-if="when" class="text-text-3">{{ when }}</span>

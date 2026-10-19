@@ -60,7 +60,36 @@ export function searchHitTitle(hit: SearchHit): string {
   if (hit.kind === 'file' && hit.summary) return publicText(hit.summary);
   if (!hit.file) return '';
   const kind = fileKindName(hit.file.type);
-  return hit.shownAt ? `${kind} · ${publicText(hit.shownAt)}` : kind;
+  return hit.shownAt ? `${kind} · ${searchPlaceName(hit.shownAt)}` : kind;
+}
+
+/**
+ * What shows a file, as a reader names it: a diary entry's day in words,
+ * not as stored.
+ */
+export function searchPlaceName(name: string): string {
+  return /^\d{4}-\d{2}-\d{2}$/u.test(name)
+    ? formatAbsolutePublicDate(name, language.value.code)
+    : publicText(name);
+}
+
+/**
+ * A file's line under its name: where it is shown, its format and size —
+ * or, for a file its name already places, its format and size alone.
+ */
+export function searchFileLine(
+  hit: SearchHit,
+  size: (bytes: number) => string,
+): string {
+  if (!hit.file) return '';
+  const named = Boolean(hit.title || hit.summary);
+  return [
+    named && hit.shownAt ? searchPlaceName(hit.shownAt) : '',
+    hit.file.extension.toUpperCase(),
+    size(hit.file.size),
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 /** What kind of file it is, in a word: a picture, a video, a recording. */
@@ -121,7 +150,7 @@ export function searchFindPlace(find: SearchFind): {
   text: string;
 } {
   const value = phrase.value;
-  const label = find.label ? publicText(find.label) : '';
+  const label = find.label ? searchPlaceName(find.label) : '';
   if (find.place?.section && label)
     return { icon: 'project-section', text: value.search_where_section(label) };
   const where = value.search_where(find.where);

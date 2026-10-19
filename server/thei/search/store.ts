@@ -22,7 +22,7 @@ import { SEARCH_FIELDS, type SearchUnit } from './units';
  * no migration, and may be deleted at any time: a file of another format, or
  * one made by another reading of words, is emptied and built again.
  */
-const FORMAT = 6;
+const FORMAT = 8;
 
 /** What a term may hold for FTS5 to keep it whole. */
 export function ftsTerm(term: string): string {
@@ -61,6 +61,8 @@ export interface StoredFilePlace {
   caption?: string;
   href: string;
   placeTitle: string;
+  /** The place alone, without what holds it: a section's own title. */
+  placeName: string;
   media?: SearchDocument['media'];
 }
 
@@ -365,6 +367,7 @@ function filePlacesOf(document: SearchDocument): StoredFilePlace[] {
         : document.parent
           ? `${document.parent.title} · ${document.title}`
           : document.title,
+      placeName: unit.place?.section?.title ?? document.title,
     };
     // The preview of any of its words at the place: a title may come without.
     if (!entry.media && unit.media) entry.media = unit.media;
