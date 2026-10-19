@@ -476,6 +476,8 @@ export default defineI18nBase({
     llms_txt_diary: 'the short dated entries, and nothing else',
     llms_txt_tags: 'themes that group projects and events',
     llms_txt_pages: 'standalone writing outside the timeline',
+    llms_txt_search:
+      'every public text searched by its words, every form of them: /search/?q=…',
     llms_txt_sitemap: 'every public address on this site',
     llms_txt_markdown_title: 'Markdown',
     llms_txt_markdown:

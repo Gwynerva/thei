@@ -40,6 +40,7 @@ export default defineEventHandler(async (event) => {
     ),
     link('/tags/', phrase.tags, phrase.llms_txt_tags),
     link('/pages/', phrase.pages, phrase.llms_txt_pages),
+    link('/search/', phrase.search, phrase.llms_txt_search),
     link('/sitemap.xml', 'sitemap.xml', phrase.llms_txt_sitemap),
     '',
     `## ${phrase.llms_txt_markdown_title}`,

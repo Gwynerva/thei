@@ -373,6 +373,7 @@ export type LanguagePhrases = {
   llms_txt_diary: string;
   llms_txt_tags: string;
   llms_txt_pages: string;
+  llms_txt_search: string;
   llms_txt_sitemap: string;
   llms_txt_markdown_title: string;
   llms_txt_markdown: string;

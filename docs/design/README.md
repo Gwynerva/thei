@@ -138,3 +138,5 @@ Patterns:
   filters, empty states, suggesting in place, no mode switches.
 - [AI in the UI](patterns/ai-in-the-ui.md) — where the ✦ goes, proposals at
   labels, nothing when AI is off.
+- [Search](patterns/search.md) — one quick search and one page for everyone,
+  the result card, landing on a find and bringing it out of what hides it.

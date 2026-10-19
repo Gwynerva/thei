@@ -529,6 +529,8 @@ export default defineI18nModule({
     llms_txt_diary: 'короткие датированные записи, только они и ничего больше',
     llms_txt_tags: 'темы, которые объединяют проекты и события',
     llms_txt_pages: 'самостоятельные тексты вне хронологии',
+    llms_txt_search:
+      'поиск по всем публичным текстам, по словам в любой их форме: /search/?q=…',
     llms_txt_sitemap: 'все публичные адреса этого сайта',
     llms_txt_markdown_title: 'Markdown',
     llms_txt_markdown:
