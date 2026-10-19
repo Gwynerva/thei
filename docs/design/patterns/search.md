@@ -88,6 +88,12 @@ and behaves.
   in a file. A line between every part.
 - The places the head already shows, its title and description, are not
   listed again.
+- «In N more places» opens the rest under them (`/api/search/finds`, read as
+  the search read the query, for the same reader) and folds them away again.
+  The quick search's line of the same words leads to the search page with
+  that card open and brought into view (`?open=<ref>`).
+- A search says how many it found on its chips; only the catalogue keeps its
+  line of counts. Group names are capitals, larger than the cards' kind.
 
 ## Landing where it was found
 

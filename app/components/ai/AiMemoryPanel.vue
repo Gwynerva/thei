@@ -110,14 +110,23 @@ const kinds = computed(
     [],
 );
 
+const loadingMore = ref(false);
+
 /** The entities shown: the first page, and the ones «more» brought. */
 const more = ref<AiMemoryEntityGroup[]>([]);
 const next = ref<number | undefined>();
+/**
+ * Each answer to the search starts the list over; a page of «more» asked for
+ * the answer before comes too late and is dropped.
+ */
+let listed = 0;
 watch(
   index,
   (value) => {
+    listed++;
     more.value = [];
     next.value = value?.next;
+    loadingMore.value = false;
   },
   { immediate: true },
 );
@@ -126,20 +135,22 @@ const entities = computed(() =>
     group.items.some((item) => !hidden.value.has(item.memoryUuid)),
   ),
 );
-const loadingMore = ref(false);
 async function loadMore() {
   if (loadingMore.value || next.value === undefined) return;
+  const list = listed;
   loadingMore.value = true;
   try {
     const page = await $fetch<AiMemoryIndex>('/api/admin/ai/memory', {
       query: { q: searched.value || undefined, offset: next.value },
     });
+    if (list !== listed) return;
     more.value = [...more.value, ...page.entities];
     next.value = page.next;
   } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
+    if (list === listed)
+      showToast(errorMessage(caught, phrase.value.ai_error));
   } finally {
-    loadingMore.value = false;
+    if (list === listed) loadingMore.value = false;
   }
 }
 

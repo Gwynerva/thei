@@ -310,6 +310,16 @@ function onPick(row: Row, event: MouseEvent) {
   void activate(row);
 }
 
+/** A result's other places: on the search page, opened under it. */
+function openPlaces(row: Row) {
+  close();
+  opener = null;
+  void navigateTo({
+    path: '/search/',
+    query: { q: shown.value?.keyboard ?? query.value, open: row.key },
+  });
+}
+
 function onKeyDown(event: KeyboardEvent) {
   if (event.isComposing) return;
   if (event.key === 'ArrowDown') {
@@ -451,6 +461,7 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
               :active="activeIndex === rowIndex.get(row.key)"
               @point="pointAt($event, rowIndex.get(row.key)!)"
               @pick="onPick(row, $event)"
+              @more="openPlaces(row)"
             />
           </div>
         </div>

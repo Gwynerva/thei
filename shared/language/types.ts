@@ -411,7 +411,7 @@ export type LanguagePhrases = {
   search_access_link: string;
   search_edit: string;
   search_more_finds: (count: number) => string;
-  search_results_total: (count: number) => string;
+  search_fewer_finds: string;
   search_all_of_kind: (count: number) => string;
   search_all_results: (count: number) => string;
   search_keyboard: (read: string) => string;

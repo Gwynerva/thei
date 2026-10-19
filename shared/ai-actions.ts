@@ -2,6 +2,7 @@ import type { Period } from './period';
 import type { RelationNote, RelationWord } from './relation';
 import type { ProofreadCategory, TidyComment, TidyItem } from './ai-revise';
 import type { AiCertainty } from './ai';
+import { normalizeTagTitle } from './tag';
 
 /**
  * The actions a session proposes and the owner applies: one registry for the
@@ -84,7 +85,8 @@ export type AiRememberAbout = (typeof AI_REMEMBER_ABOUT)[number];
 
 /**
  * Whether a tag an entity carries is the one a `tags` action names: by its
- * ref, or — a tag to be made — by its title, case aside.
+ * ref, or — a tag to be made — by its title, as tags tell titles apart
+ * (`normalizeTagTitle`: case and «ё» aside).
  */
 export function namesTag(
   tag: { ref?: string; title: string },
@@ -92,7 +94,7 @@ export function namesTag(
 ): boolean {
   return tag.ref
     ? carried.ref === tag.ref
-    : carried.title.toLowerCase() === tag.title.toLowerCase();
+    : normalizeTagTitle(carried.title) === normalizeTagTitle(tag.title);
 }
 
 /** Fields a `field` action may set, by entity kind. */

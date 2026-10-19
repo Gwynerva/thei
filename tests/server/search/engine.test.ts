@@ -5,7 +5,7 @@ import {
   refreshSearchIndex,
   useSearchStore,
 } from '../../../server/thei/search/indexer';
-import { runSearch, type SearchRequest } from '../../../server/thei/search/query';
+import { findsOfResult, runSearch, type SearchRequest } from '../../../server/thei/search/query';
 import type { SearchHit, SearchResponse } from '../../../shared/search/api';
 import { freshAiTestDb } from '../../helpers/fresh-ai-db';
 
@@ -232,6 +232,15 @@ describe('the global search', () => {
     expect(relation.href).toMatch(/#r-(event|project)~%2F(events|projects)%2F/);
     expect((await find('фуксии')).href).toMatch(/#statuses~2025-05-01:~:text=/);
     expect((await find('жрица')).href).toMatch(/#b-b1:~:text=/);
+  });
+
+  it('opens every place of a result, each once, for its reader alone', async () => {
+    const hit = hits(await search('рога'))[0]!;
+    const all = findsOfResult({ q: 'рога', audience: 'public', ref: hit.ref })!;
+    expect(all.finds.length).toBe(hit.finds.length + hit.more);
+    expect(all.more).toBe(0);
+    expect(new Set(all.finds.map((find) => `${find.where}:${find.href}`)).size).toBe(all.finds.length);
+    expect(findsOfResult({ q: 'облепиха', audience: 'public', ref: `diary-entry:${PRIVATE_DIARY}` })).toBeUndefined();
   });
 
   it('finds by another name without showing it', async () => {

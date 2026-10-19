@@ -224,9 +224,11 @@ const building = computed(() => {
     : undefined;
 });
 
-/** How many were found, in the words of the catalogue or of a search. */
+/**
+ * How many the catalogue holds. A search says it on its chips, which count
+ * every kind and the whole.
+ */
 const countLine = computed(() => {
-  if (typed.value) return phrase.value.search_results_total(search.value.total);
   const { type, showcase, cv } = filters.value;
   const kinds = search.value.facets.kinds;
   if (type === 'project' || showcase || cv)
@@ -319,6 +321,12 @@ const countLine = computed(() => {
           chip.count
         }}</span>
       </button>
+      <Icon
+        v-if="pending"
+        name="loading"
+        class="shrink-0 self-center text-base text-text-3"
+        aria-hidden="true"
+      />
     </nav>
 
     <div
@@ -327,12 +335,13 @@ const countLine = computed(() => {
     >
       <section class="flex min-w-0 flex-col gap-sm" aria-live="polite">
         <div
+          v-if="!typed || failed"
           class="flex min-h-6 flex-wrap items-center gap-x-xs gap-y-0.5 text-sm
             text-text-3"
         >
-          <span>{{ countLine }}</span>
+          <span v-if="!typed">{{ countLine }}</span>
           <Icon
-            v-if="pending"
+            v-if="pending && !typed"
             name="loading"
             class="text-base"
             aria-hidden="true"
@@ -365,11 +374,17 @@ const countLine = computed(() => {
           >
             <h2
               v-if="typed && !filters.type"
-              class="text-sm font-semibold text-text-3"
+              class="text-base font-bold tracking-wider text-text-3 uppercase"
             >
               {{ phrase.search_kind_group(group.kind) }}
             </h2>
-            <SearchResultCard v-for="hit in group.hits" :key="hit.ref" :hit />
+            <SearchResultCard
+              v-for="hit in group.hits"
+              :key="hit.ref"
+              :hit
+              :query="search.keyboard ?? search.query"
+              :opened="route.query.open === hit.ref"
+            />
             <button
               v-if="typed && !filters.type && group.total > group.hits.length"
               type="button"

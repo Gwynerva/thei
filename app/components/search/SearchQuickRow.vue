@@ -41,7 +41,12 @@ export interface SearchQuickRowData {
  * another, so what typing found is always one key away.
  */
 defineProps<{ row: SearchQuickRowData; id: string; active: boolean }>();
-defineEmits<{ pick: [event: MouseEvent]; point: [event: PointerEvent] }>();
+defineEmits<{
+  pick: [event: MouseEvent];
+  point: [event: PointerEvent];
+  /** The other places asked for: the search page, with them open. */
+  more: [];
+}>();
 </script>
 
 <template>
@@ -129,9 +134,15 @@ defineEmits<{ pick: [event: MouseEvent]; point: [event: PointerEvent] }>();
              bare «+5» on the picture's fading edge was all but unseen. The
              arrow's arm stands two thirds down its glyph: raised by the rest,
              it points at the middle of the words. -->
+        <!-- Its own target inside the row: kept from the row's link, it
+             leads to the search page with this result's places open. -->
         <span
           v-if="row.more"
-          class="flex min-w-0 items-center gap-1.5 text-xs text-text-3 italic"
+          class="flex min-w-0 items-center gap-1.5 self-start text-xs
+            text-text-3 italic transition-colors hover:text-accent
+            hover:underline"
+          data-row-more
+          @click.prevent="$emit('more')"
           ><Icon
             name="subfolder-arrow"
             class="shrink-0 -translate-y-[17%] text-sm not-italic"

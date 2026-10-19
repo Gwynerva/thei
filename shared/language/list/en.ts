@@ -563,10 +563,7 @@ export default defineI18nBase({
     search_edit: 'Edit',
     search_more_finds: (count) =>
       `In ${count} more ${count === 1 ? 'place' : 'places'}`,
-    search_results_total: (count) =>
-      count
-        ? `Found ${count} ${count === 1 ? 'result' : 'results'}`
-        : 'Nothing found',
+    search_fewer_finds: 'Show fewer places',
     search_all_of_kind: (count) => `All ${count}`,
     search_all_results: (count) => `All results: ${count}`,
     search_keyboard: (read) =>

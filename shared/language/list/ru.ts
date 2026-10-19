@@ -620,10 +620,7 @@ export default defineI18nModule({
     search_edit: 'Редактировать',
     search_more_finds: (count) =>
       `Ещё в ${plural(count, 'месте', 'местах', 'местах')}`,
-    search_results_total: (count) =>
-      count
-        ? `${plural(count, 'Нашёлся', 'Нашлось', 'Нашлось', false)} ${plural(count, 'результат', 'результата', 'результатов')}`
-        : 'Ничего не нашлось',
+    search_fewer_finds: 'Свернуть места',
     search_all_of_kind: (count) => `Все ${count}`,
     search_all_results: (count) => `Все результаты: ${count}`,
     search_keyboard: (read) =>

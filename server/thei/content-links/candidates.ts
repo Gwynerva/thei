@@ -8,6 +8,7 @@ import { letterSimilarity } from '#layers/thei/shared/text-similarity';
 import { entityPageText } from '../entity-kinds';
 import { listContentEntities } from '../content-entities';
 import { anchorsByBlock, blocksThatHad } from './anchor-ledger';
+import { searchAnalyzer } from '../search/indexer';
 
 /**
  * Where a broken link may lead instead, best first: for a heading no longer
@@ -147,10 +148,13 @@ export async function entityCandidates(
 ): Promise<LinkCandidate[]> {
   const found: LinkCandidate[] = [];
   // By the forms of the words, as the suggester found them: «в музее» names
-  // «Музей». A letter alone — «в», «и» — names nothing.
+  // «Музей». A letter alone or a word that only holds a sentence together —
+  // «в», «на», «of» — names nothing: a recent entity the suggester adds
+  // would share it. A short name — «JS», «2B» — still names.
+  const analyzer = searchAnalyzer();
   const terms = new Set(
     words(linkWords)
-      .filter((word) => word.length > 1)
+      .filter((word) => word.length > 1 && !analyzer.read(word).stop)
       .map(stemTerm),
   );
   if (terms.size) {

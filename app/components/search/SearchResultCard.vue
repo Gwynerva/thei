@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { SearchHit } from '#layers/thei/shared/search/api';
+import type { SearchFind, SearchHit } from '#layers/thei/shared/search/api';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 
 /**
@@ -10,9 +10,16 @@ import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
  * each leading straight to its place; a line between every part.
  *
  * The head is no link itself, so its badges keep their own hints; a link
- * lies over the whole of it.
+ * lies over the whole of it. The places beyond the first few open under
+ * them, asked for as the search read `query`.
  */
-const props = defineProps<{ hit: SearchHit }>();
+const props = defineProps<{
+  hit: SearchHit;
+  query: string;
+  /** Its places opened at once, and the card brought into view. */
+  opened?: boolean;
+}>();
+const root = useTemplateRef<HTMLElement>('root');
 
 const size = useHumanSize();
 const title = computed(() => searchHitTitle(props.hit));
@@ -26,15 +33,57 @@ const facts = computed(() =>
  * The places found, but those the head already shows: the title and the
  * description of the result itself.
  */
+const all = shallowRef<{ finds: SearchFind[]; more: number } | null>(null);
+const open = ref(false);
+const opening = ref(false);
+const failed = ref(false);
+const more = computed(() =>
+  open.value && all.value ? all.value.more : props.hit.more,
+);
+
+/** The rest of the places: asked for once, then shown or folded away. */
+async function toggle() {
+  if (open.value) {
+    open.value = false;
+    return;
+  }
+  if (!all.value) {
+    opening.value = true;
+    failed.value = false;
+    try {
+      all.value = await $fetch('/api/search/finds', {
+        query: { q: props.query, ref: props.hit.ref, typing: '1' },
+      });
+    } catch {
+      failed.value = true;
+      return;
+    } finally {
+      opening.value = false;
+    }
+  }
+  open.value = true;
+}
+
+// Brought into view once open: after the page's own scroll to its top, which
+// a new page makes once it is in.
+onMounted(async () => {
+  if (!props.opened || !props.hit.more) return;
+  await toggle();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  root.value?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+});
+
 const finds = computed(() =>
-  props.hit.finds.filter((find) => {
-    if (find.place?.section || find.label) return true;
-    if (find.where === 'title') return false;
-    const description =
-      find.where === 'summary' ||
-      (props.hit.kind === 'file' && find.where === 'file');
-    return !(description && props.hit.summary);
-  }),
+  (open.value && all.value ? all.value.finds : props.hit.finds).filter(
+    (find) => {
+      if (find.place?.section || find.label) return true;
+      if (find.where === 'title') return false;
+      const description =
+        find.where === 'summary' ||
+        (props.hit.kind === 'file' && find.where === 'file');
+      return !(description && props.hit.summary);
+    },
+  ),
 );
 const accent = computed(() =>
   imageAccentCssColor(props.hit.media?.accent, 'var(--color-accent)'),
@@ -43,8 +92,10 @@ const accent = computed(() =>
 
 <template>
   <article
-    class="flex min-w-0 flex-col overflow-hidden rounded-normal border
-      border-border-1 bg-bg-2 text-text-1 shadow-md shadow-shadow-1"
+    ref="root"
+    class="flex min-w-0 scroll-mt-[var(--public-anchor-offset,8rem)] flex-col
+      overflow-hidden rounded-normal border border-border-1 bg-bg-2 text-text-1
+      shadow-md shadow-shadow-1"
     :style="{ '--card-accent': accent }"
   >
     <MediaInteraction v-slot="{ engaged, events }">
@@ -188,6 +239,7 @@ const accent = computed(() =>
     <ul
       v-if="finds.length || hit.more"
       class="divide-y divide-border-1 border-t border-border-1"
+      :aria-busy="opening || undefined"
     >
       <li v-for="(find, at) in finds" :key="at">
         <TheiLink
@@ -216,17 +268,49 @@ const accent = computed(() =>
           </span>
         </TheiLink>
       </li>
+      <!-- The places beyond the first few: opened here, under them, and
+           folded away again. Past the most a card shows, the rest are only
+           counted. -->
+      <li v-if="hit.more">
+        <button
+          type="button"
+          class="flex w-full cursor-pointer items-center gap-1.5 px-sm py-xs
+            text-left text-xs text-text-3 italic transition focus-visible:ring-2
+            focus-visible:ring-accent focus-visible:outline-none
+            focus-visible:ring-inset sm:px-md hocus:bg-bg-3/60
+            hocus:text-text-1"
+          :aria-expanded="open"
+          @click="toggle"
+        >
+          <Icon
+            :name="open ? 'collapse-vertical' : 'subfolder-arrow'"
+            class="shrink-0"
+            :class="{ '-translate-y-[17%]': !open }"
+            aria-hidden="true"
+          />
+          <span class="min-w-0 flex-1">{{
+            open
+              ? phrase.search_fewer_finds
+              : phrase.search_more_finds(hit.more)
+          }}</span>
+          <Icon
+            v-if="opening"
+            name="loading"
+            class="shrink-0 not-italic"
+            aria-hidden="true"
+          />
+          <span
+            v-else-if="failed"
+            class="shrink-0 text-text-error not-italic"
+            >{{ phrase.search_failed }}</span
+          >
+        </button>
+      </li>
       <li
-        v-if="hit.more"
-        class="flex items-center gap-1.5 px-sm py-1.5 text-xs text-text-3 italic
-          sm:px-md"
+        v-if="open && more"
+        class="px-sm py-xs text-xs text-text-3 italic sm:px-md"
       >
-        <Icon
-          name="subfolder-arrow"
-          class="shrink-0 -translate-y-[17%]"
-          aria-hidden="true"
-        />
-        {{ phrase.search_more_finds(hit.more) }}
+        {{ phrase.search_more_finds(more) }}
       </li>
     </ul>
   </article>

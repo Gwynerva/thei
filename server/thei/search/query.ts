@@ -231,16 +231,20 @@ export function findsOf(
     });
   });
   found.sort((a, b) => b.score - a.score || a.order - b.order);
-  const shown: SearchFind[] = [];
+  // One find for words said twice in the same kind of place; the rest are
+  // counted only once each too.
   const seen = new Set<string>();
-  for (const item of found) {
-    if (shown.length >= limit) break;
-    const { unit } = item;
+  const distinct = found.filter(({ unit }) => {
     const key = unit.hidden
       ? `${unit.where}:${unit.place?.relation?.title ?? ''}`
       : `${unit.where}:${unit.text}`;
-    if (seen.has(key)) continue;
+    if (seen.has(key)) return false;
     seen.add(key);
+    return true;
+  });
+  const shown: SearchFind[] = [];
+  for (const item of distinct.slice(0, limit)) {
+    const { unit } = item;
     const at = placeHref(document, unit.place ?? {});
     const plain = unit.where === 'title' || unit.where === 'summary' || unit.where === 'name';
     shown.push({
@@ -270,7 +274,7 @@ export function findsOf(
   }
   return {
     finds: shown,
-    more: Math.max(0, found.length - shown.length),
+    more: distinct.length - shown.length,
     closeness: asTyped.size * 2 + (together ? 3 : 0),
   };
 }
@@ -535,6 +539,47 @@ const cache = new Map<string, SearchResponse>();
  * `runSearch`, remembered: the last answers, each for the index's generation
  * it was made at, so an answer never outlives a change of what it shows.
  */
+/** The most places one result shows when asked for all of them. */
+const ALL_FINDS = 50;
+
+/**
+ * Every place one result holds the words at, for its card asked to show the
+ * rest: the same reading as the search's, for the same reader. Undefined for
+ * a result this reader may not find.
+ */
+export function findsOfResult(request: {
+  q: string;
+  audience: SearchAudience;
+  ref: string;
+  typing?: boolean;
+  now?: number;
+}): { finds: SearchFind[]; more: number } | undefined {
+  const store = useSearchStore();
+  type Row = { id: number; card: string; visibleFrom: number };
+  // A file is named by the asset its places show, not by its family.
+  const row = (store.db
+    .prepare('SELECT id, card, visibleFrom FROM docs WHERE audience = ? AND ref = ?')
+    .get(request.audience, request.ref) ??
+    (request.ref.startsWith('file:')
+      ? store.db
+          .prepare(
+            "SELECT id, card, visibleFrom FROM docs WHERE audience = ? AND kind = 'file' AND json_extract(card, '$.file.assetUuid') = ?",
+          )
+          .get(request.audience, request.ref.slice('file:'.length))
+      : undefined)) as Row | undefined;
+  if (!row || row.visibleFrom > (request.now ?? Date.now())) return undefined;
+  const query = parseSearchQuery(request.q, searchAnalyzer(), { typing: request.typing });
+  const card = JSON.parse(row.card) as StoredCard;
+  const { finds, more } = findsOf(
+    store.units(row.id),
+    query,
+    { href: card.href },
+    ALL_FINDS,
+    request.audience === 'owner',
+  );
+  return { finds: finds.slice(0, ALL_FINDS), more };
+}
+
 export async function cachedSearch(request: SearchRequest): Promise<SearchResponse> {
   const store = useSearchStore();
   const { now: _now, ...asked } = request;
