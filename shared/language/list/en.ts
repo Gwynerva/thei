@@ -591,6 +591,13 @@ export default defineI18nBase({
     search_sort_best: 'Best match',
     search_sort_new: 'Newest first',
     search_sort_old: 'Oldest first',
+    search_dated: (by, day) =>
+      ({
+        added: `Added ${day}`,
+        shown: day,
+        'last-used': `Last: ${day}`,
+        'first-used': `First: ${day}`,
+      })[by],
     search_no_filters: 'There are no filters for this content',
     search_year_count: (year, count) => `${year}: ${count} found`,
     search_recent: 'Recent',

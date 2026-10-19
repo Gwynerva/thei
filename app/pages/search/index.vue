@@ -282,12 +282,12 @@ const activeChips = computed(() => {
   return chips;
 });
 
-/** Found things with days may be read by them, when there is more than one. */
+/**
+ * What was found may be read by its days, whenever there is more than one:
+ * every kind has days — of a life, or of when it was made.
+ */
 const sortable = computed(
-  () =>
-    typed.value &&
-    (Boolean(filters.value.sort) ||
-      (search.value.total > 1 && search.value.facets.years.length > 0)),
+  () => typed.value && (Boolean(filters.value.sort) || search.value.total > 1),
 );
 
 /**

@@ -78,6 +78,15 @@ export interface SearchHit {
   date?: string;
   /** A period it covers, when it has one. */
   period?: { startDate: string; endDate: string };
+  /**
+   * Read by days, the day it stands at where its card has none to show:
+   * when it was added, when its place was, when a tag was last used — or
+   * first, read oldest first.
+   */
+  dated?: {
+    by: 'added' | 'shown' | 'last-used' | 'first-used';
+    day: string;
+  };
   summary?: string;
   /** The description with the words found in it marked, when there are any. */
   summarySegments?: SearchSegment[];

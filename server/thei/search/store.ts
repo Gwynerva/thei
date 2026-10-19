@@ -22,7 +22,7 @@ import { SEARCH_FIELDS, type SearchUnit } from './units';
  * no migration, and may be deleted at any time: a file of another format, or
  * one made by another reading of words, is emptied and built again.
  */
-const FORMAT = 8;
+const FORMAT = 9;
 
 /** What a term may hold for FTS5 to keep it whole. */
 export function ftsTerm(term: string): string {
@@ -31,6 +31,11 @@ export function ftsTerm(term: string): string {
 
 export interface StoredCard {
   href: string;
+  /**
+   * The day it is read by when sorted, where its card has no days of its
+   * own to show: when it was made, or for a file when its place was.
+   */
+  dated?: { by: 'added' | 'shown'; day: string };
   parent?: SearchDocument['parent'];
   shownAt?: string;
   editHref?: string;
@@ -63,6 +68,8 @@ export interface StoredFilePlace {
   placeTitle: string;
   /** The place alone, without what holds it: a section's own title. */
   placeName: string;
+  /** The days of what shows it, which the file is sorted by. */
+  sort?: SearchDocument['sort'];
   media?: SearchDocument['media'];
 }
 
@@ -109,6 +116,9 @@ export class SearchStore {
         title TEXT NOT NULL,
         date TEXT,
         year INTEGER,
+        sortFrom TEXT,
+        sortTo TEXT,
+        sortLife INTEGER NOT NULL DEFAULT 0,
         visibleFrom INTEGER NOT NULL,
         showcase INTEGER NOT NULL,
         cv INTEGER NOT NULL,
@@ -171,6 +181,7 @@ export class SearchStore {
   private columns(units: SearchUnit[]): string[] {
     const byField = new Map<string, string[]>();
     for (const unit of units) {
+      if (unit.placeOnly) continue;
       const list = byField.get(unit.field) ?? [];
       for (const token of searchTokens(unit.text, this.analyzer, 'index'))
         for (const term of searchIndexTerms(unit.text, token))
@@ -197,6 +208,19 @@ export class SearchStore {
     const card: StoredCard = {
       href: document.href,
       ...(document.parent ? { parent: document.parent } : {}),
+      // A file shows no days of its own; the rest show theirs when they
+      // have them.
+      ...(document.sort && (document.kind === 'file' || !document.sort.life)
+        ? {
+            dated: {
+              by:
+                document.kind === 'file'
+                  ? ('shown' as const)
+                  : ('added' as const),
+              day: document.sort.to,
+            },
+          }
+        : {}),
       ...(document.shownAt ? { shownAt: document.shownAt } : {}),
       ...(document.editHref ? { editHref: document.editHref } : {}),
       ...(document.period ? { period: document.period } : {}),
@@ -212,7 +236,7 @@ export class SearchStore {
         this.removeRow(document.audience, existing.id, document.ref);
       const { lastInsertRowid } = this.db
         .prepare(
-          'INSERT INTO docs (audience, kind, ref, title, date, year, visibleFrom, showcase, cv, fingerprint, card) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO docs (audience, kind, ref, title, date, year, sortFrom, sortTo, sortLife, visibleFrom, showcase, cv, fingerprint, card) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         )
         .run(
           document.audience,
@@ -221,6 +245,9 @@ export class SearchStore {
           document.title,
           document.date ?? null,
           document.date ? Number(document.date.slice(0, 4)) : null,
+          document.sort?.from ?? null,
+          document.sort?.to ?? null,
+          document.sort?.life ? 1 : 0,
           document.visibleFrom,
           document.showcase ? 1 : 0,
           document.cv ? 1 : 0,
@@ -368,6 +395,7 @@ function filePlacesOf(document: SearchDocument): StoredFilePlace[] {
           ? `${document.parent.title} · ${document.title}`
           : document.title,
       placeName: unit.place?.section?.title ?? document.title,
+      ...(document.sort ? { sort: document.sort } : {}),
     };
     // The preview of any of its words at the place: a title may come without.
     if (!entry.media && unit.media) entry.media = unit.media;

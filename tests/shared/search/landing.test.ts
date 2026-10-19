@@ -23,6 +23,8 @@ describe('landing hashes', () => {
     ],
     [{ status: '2025-06-01', zone: 'statuses' }, 'statuses~2025-06-01'],
     [{ zone: 'facts' }, 'facts'],
+    [{ zone: 'icon' }, 'icon'],
+    [{ zone: 'banner' }, 'banner'],
     [{}, ''],
   ];
 

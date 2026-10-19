@@ -94,8 +94,15 @@ and behaves.
   there, so they take two rows rather than four.
 - What was found can be read by its days, newest or oldest first, beside
   the best first: «Сортировка», a `FieldSelect` at the head of the filters,
-  offered when more than one result has a day. Chosen, it counts as a filter
-  and shows among the chips on a phone.
+  offered whenever more than one result was found. Chosen, it counts as a
+  filter and shows among the chips on a phone. Every kind but the profile has
+  days: the diary, events, sections and projects those of a life — newest by
+  where a period ends, never past today, oldest by where it begins — and
+  before what has only the day it was made; a page goes by when it was
+  added, a file by the days of the place that shows it, a tag by the days of
+  what carries it. The years keep to the days of a life alone.
+- Read by days, a card with no days of its own says the one it stands at:
+  «Добавлено …», a file's place's day, a tag's «Последний раз …».
 - The years are a chart and a choice at once: one row a year, newest first,
   its count as a horizontal bar against the busiest year and as a number;
   the year chosen in the accent, the others dimmed, chosen again to show
@@ -117,8 +124,11 @@ and behaves.
 - A query of words that only hold a sentence together — «где я была» — is
   read as a phrase, or every text with an «я» would answer.
 - A file is found where it is shown: in a text, in a page's showcase or
-  files, as an entity's icon or banner. One no page shows yet, found by the
-  owner alone, leads to the library.
+  files, as an entity's icon or banner — where it leads to the page's hero,
+  lit. An icon's description finds the file, not its entity a second time.
+  One no page shows yet, found by the owner alone, leads to the library.
+- A phrase holds its words in their order: what holds them apart is neither
+  shown nor counted.
 - A section of a project is a result of its own, under «Project sections»
   right after the projects: its title, description, periods and text are
   found in it, and it names its project. The project keeps only its

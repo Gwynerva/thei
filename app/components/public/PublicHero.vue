@@ -164,6 +164,7 @@ const heroPill = `inline-flex items-center gap-2 rounded-full bg-white/9 text-sm
                 muted
                 class="size-24 shrink-0 rounded-normal"
                 data-hero-icon
+                data-landing-zone="icon"
               />
               <h1
                 class="hero-title max-w-full min-w-0 text-3xl leading-tight

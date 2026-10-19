@@ -363,9 +363,21 @@ describe('the global search', () => {
       createdAt: 1,
       updatedAt: 1,
     });
+    // The same words near, in another order: neither found nor counted.
+    insert('diary-entries', {
+      diaryUuid: 'd-apart',
+      date: '2025-08-01',
+      access: 'public',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    text('diary-entry', 'd-apart', 'diary-body', [
+      paragraph('a1', 'Была я там, где нет связи.'),
+    ]);
     await rebuildSearchIndex();
     const response = await search('где я была');
     expect(titles(response)).toEqual(['Где я была']);
+    expect(response.total).toBe(1);
     expect(response.groups[0]!.hits[0]!.titleSegments?.[0]?.mark).toBe(true);
   });
 
@@ -502,6 +514,77 @@ describe('the global search', () => {
         .find((group) => group.kind === 'diary-entry')!
         .hits.map((hit) => hit.date),
     ).toEqual(['2025-09-14', '2025-10-01']);
+  });
+
+  it('reads every kind by its days: of a life, or of when it was made', async () => {
+    const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+    // Pages by when they were added, saying so.
+    for (const [uuid, title, createdAt] of [
+      ['g-old', 'Заметки о шитье', Date.parse('2024-03-01')],
+      ['g-new', 'Шитьё и выкройки', Date.parse('2026-01-15')],
+    ] as const)
+      insert('pages', {
+        pageUuid: uuid,
+        title,
+        summary: '',
+        slug: uuid,
+        access: 'public',
+        createdAt,
+        updatedAt: Date.now(),
+      });
+    // A project with a dated section reads by its days; one with none comes
+    // after it, by when it was made.
+    insert('periods', {
+      ownerType: 'project-section',
+      ownerId: SECTION,
+      sortOrder: 0,
+      startDate: '2025-02-01',
+      endDate: '2025-04-01',
+      precision: 'exact',
+      precisionNote: '',
+      label: '',
+    });
+    project(
+      'p-44444444-4444-4444-8444-444444444444',
+      'Косплей для штор',
+      'public',
+      {
+        createdAt: Date.parse('2026-06-01'),
+      },
+    );
+    await rebuildSearchIndex();
+    const pages = await search('шитьё', { kind: 'page', sort: 'new' });
+    expect(titles(pages)).toEqual(['Шитьё и выкройки', 'Заметки о шитье']);
+    expect(hits(pages)[0]!.dated).toEqual({
+      by: 'added',
+      day: day(Date.parse('2026-01-15')),
+    });
+    expect(
+      titles(await search('шитьё', { kind: 'page', sort: 'old' })),
+    ).toEqual(['Заметки о шитье', 'Шитьё и выкройки']);
+    // Without sorting, no day is said for it.
+    expect(
+      hits(await search('шитьё', { kind: 'page' }))[0]!.dated,
+    ).toBeUndefined();
+
+    for (const sort of ['new', 'old'] as const) {
+      const projects = await search('косплей', { kind: 'project', sort });
+      expect(titles(projects)).toEqual([
+        'Косплей на Шедоухарт',
+        'Косплей для штор',
+      ]);
+      expect(hits(projects)[0]!.dated).toBeUndefined();
+      expect(hits(projects)[1]!.dated).toEqual({
+        by: 'added',
+        day: '2026-06-01',
+      });
+    }
+    // A tag goes by the days of what carries it.
+    const tags = await search('косплей', { kind: 'tag', sort: 'new' });
+    expect(hits(tags)[0]!.dated).toEqual({
+      by: 'last-used',
+      day: '2025-04-01',
+    });
   });
 
   it('puts first what is named exactly as typed', async () => {

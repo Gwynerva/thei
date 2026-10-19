@@ -106,7 +106,10 @@ export function searchTitleIsSummary(hit: SearchHit): boolean {
   return hit.kind === 'file' && !hit.title && Boolean(hit.summary);
 }
 
-/** When it was: its period, or its day — none for a diary entry, named by it. */
+/**
+ * When it was: its period, or its day — none for a diary entry, named by it.
+ * Read by days, one with neither says the day it stands at: «Добавлено …».
+ */
 export function searchHitWhen(hit: SearchHit): string {
   if (hit.period)
     return hit.period.startDate === hit.period.endDate
@@ -114,6 +117,11 @@ export function searchHitWhen(hit: SearchHit): string {
       : formatPublicDateRange(hit.period, language.value.code);
   if (hit.date && hit.kind !== 'diary-entry')
     return formatAbsolutePublicDate(hit.date, language.value.code);
+  if (hit.dated)
+    return phrase.value.search_dated(
+      hit.dated.by,
+      formatAbsolutePublicDate(hit.dated.day, language.value.code),
+    );
   return '';
 }
 

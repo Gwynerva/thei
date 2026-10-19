@@ -19,6 +19,8 @@
  * keeps no id for is found by them all the same.
  */
 export const LANDING_ZONES = [
+  'icon',
+  'banner',
   'showcase',
   'files',
   'links',

@@ -430,6 +430,10 @@ export type LanguagePhrases = {
   search_sort_best: string;
   search_sort_new: string;
   search_sort_old: string;
+  search_dated: (
+    by: 'added' | 'shown' | 'last-used' | 'first-used',
+    day: string,
+  ) => string;
   search_no_filters: string;
   search_year_count: (year: number, count: number) => string;
   search_recent: string;

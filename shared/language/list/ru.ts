@@ -649,6 +649,13 @@ export default defineI18nModule({
     search_sort_best: 'Сначала точные',
     search_sort_new: 'Сначала новые',
     search_sort_old: 'Сначала старые',
+    search_dated: (by, day) =>
+      ({
+        added: `Добавлено ${day}`,
+        shown: day,
+        'last-used': `Последний раз ${day}`,
+        'first-used': `Впервые ${day}`,
+      })[by],
     search_no_filters: 'Для этого контента фильтров нет',
     search_year_count: (year, count) => `${year}: найдено ${count}`,
     search_recent: 'Недавние',

@@ -9,6 +9,7 @@ import {
   coverDatedPeriods,
   type DatedPeriod,
 } from '#layers/thei/shared/date-precision';
+import { utcDayOf } from '#layers/thei/shared/date-range';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
@@ -65,6 +66,12 @@ export interface SearchDocument {
   shownAt?: string;
   href: string;
   editHref?: string;
+  /**
+   * How it is read by days: by the days of its life where it has them, by
+   * when it was made where it has not — a page, a project with no dated
+   * section. `life` keeps the two apart, those of a life first.
+   */
+  sort?: SearchSortDays;
   /** The day it is ordered and filtered by. */
   date?: string;
   period?: { startDate: string; endDate: string };
@@ -78,6 +85,23 @@ export interface SearchDocument {
   cv?: boolean;
   tags: string[];
   units: SearchUnit[];
+}
+
+/** The days a document is sorted by, `from` read oldest first, `to` newest. */
+export interface SearchSortDays {
+  from: string;
+  to: string;
+  life: boolean;
+}
+
+/** Its period when it has one, else the day it was made. */
+function sortOf(
+  period: { startDate: string; endDate: string } | undefined,
+  createdAt: number,
+): SearchSortDays {
+  if (period) return { from: period.startDate, to: period.endDate, life: true };
+  const day = utcDayOf(createdAt);
+  return { from: day, to: day, life: false };
 }
 
 /** The fingerprint of what a document shows: a pass rewrites only changed ones. */
@@ -286,7 +310,9 @@ function heroFileUnits(
           familyUuid: row.familyUuid,
           assetUuid: audience === 'public' ? row.slug : row.assetUuid,
         },
+        zone: row.role,
       },
+      placeOnly: true,
       ...(shown ? { media: shown } : {}),
     });
   });
@@ -418,6 +444,7 @@ export async function projectDocument(
           period: { startDate: period.startDate, endDate: period.endDate },
         }
       : {}),
+    sort: sortOf(period, project.createdAt),
     visibleFrom: 0,
     ...accessOf(audience, project.access),
     summary: project.summary,
@@ -504,6 +531,7 @@ export async function sectionDocument(
           period: { startDate: period.startDate, endDate: period.endDate },
         }
       : {}),
+    sort: sortOf(period, section.createdAt),
     visibleFrom: 0,
     ...accessOf(audience, section.isPrivate ? 'private' : project.access),
     summary: section.summary,
@@ -555,6 +583,7 @@ export async function eventDocument(
           period: { startDate: period.startDate, endDate: period.endDate },
         }
       : {}),
+    sort: sortOf(period, event.createdAt),
     visibleFrom:
       audience === 'public' && period ? dayArrives(period.startDate) : 0,
     ...accessOf(audience, event.access),
@@ -603,6 +632,7 @@ export async function diaryDocument(
       ? { editHref: `/admin/diary/${entry.diaryUuid}/edit/` }
       : {}),
     date: entry.date,
+    sort: { from: entry.date, to: entry.date, life: true },
     visibleFrom: audience === 'public' ? dayArrives(entry.date) : 0,
     ...accessOf(audience, entry.access),
     media: page.media,
@@ -633,6 +663,7 @@ export async function pageDocument(
     ...(audience === 'owner'
       ? { editHref: `/admin/pages/${stored.pageUuid}/edit/` }
       : {}),
+    sort: sortOf(undefined, stored.createdAt),
     visibleFrom: 0,
     ...accessOf(audience, stored.access),
     summary: stored.summary,
@@ -815,6 +846,7 @@ export function fileDocuments(
       // file. One no page shows yet, which only the owner finds, lives in
       // the library.
       shownAt: first ? first.placeName : THEI_SERVER.phrase.asset_library,
+      ...(first?.sort ? { sort: first.sort } : {}),
       href:
         first?.href ??
         `/admin/assets/?q=${encodeURIComponent(title || description)}`,
@@ -881,7 +913,11 @@ export function placeHref(
   const page = place.section?.href ?? document.href;
   const hash = landingHash({
     ...(place.block ? { block: place.block } : {}),
-    ...(place.file && (place.block || place.zone)
+    // The hero's picture is found by its part of the page, the rest by
+    // the file.
+    ...(place.file &&
+    (place.block ||
+      (place.zone && place.zone !== 'icon' && place.zone !== 'banner'))
       ? { file: place.file.assetUuid }
       : {}),
     ...(place.relation?.kind && place.relation.href

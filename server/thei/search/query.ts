@@ -217,6 +217,20 @@ function textFragment(href: string, words: string[]): string {
   return href.includes('#') ? `${href}${directive}` : `${href}#${directive}`;
 }
 
+/** Whether every phrase of a query stands in a row in one of the units. */
+function holdsPhrases(units: SearchUnit[], query: SearchQuery): boolean {
+  const analyzer = searchAnalyzer();
+  const left = new Set(query.phrases);
+  for (const unit of units) {
+    if (unit.placeOnly) continue;
+    const tokens = searchTokens(unit.text, analyzer, 'index');
+    for (const phrase of left)
+      if (phraseSpans(tokens, phrase).length) left.delete(phrase);
+    if (!left.size) return true;
+  }
+  return false;
+}
+
 /**
  * Where in an entity the query's words stand, best first: units holding more
  * of the words, then units in weightier fields. Another name of the entity
@@ -252,6 +266,7 @@ export function findsOf(
     words: string[];
   }[] = [];
   units.forEach((unit, order) => {
+    if (unit.placeOnly) return;
     const lower = normalizeTermText(unit.text);
     if (!probes.some((probe) => lower.includes(probe)) && !query.phrases.length)
       return;
@@ -608,8 +623,21 @@ async function searchOnce(
     );
   const table = `fts_${request.audience}`;
   const base = baseFilters(request, store);
-  const facetFilter = { sql: base.sql, params: base.params };
   const from = `${table} JOIN docs d ON d.id = ${table}.rowid`;
+  // A phrase is asked of FTS by its words near one another (`ftsMatch`):
+  // what holds them in another order is left out here, from the counts too,
+  // so no group stands counted and empty.
+  if (match && query.phrases.length && !query.words.length) {
+    const near = store.db
+      .prepare(
+        `SELECT d.id FROM ${from} WHERE ${table} MATCH ? AND ${base.sql} LIMIT 2000`,
+      )
+      .pluck()
+      .all(match, ...base.params) as number[];
+    const apart = near.filter((id) => !holdsPhrases(store.units(id), query));
+    if (apart.length) base.sql += ` AND d.id NOT IN (${apart.join(', ')})`;
+  }
+  const facetFilter = { sql: base.sql, params: base.params };
   const textRows = match
     ? (store.db
         .prepare(
@@ -737,16 +765,25 @@ async function searchOnce(
         const whole = inTitle.held > 0 && inTitle.held === inTitle.of;
         if (whole) fullyNamed.add(hit.ref);
         const naming = whole ? 12 : inTitle.held * 4;
+        const dated = !byDate
+          ? undefined
+          : row.kind === 'tag'
+            ? (() => {
+                const day = tagDay(row.ref);
+                return day
+                  ? {
+                      by: newest
+                        ? ('last-used' as const)
+                        : ('first-used' as const),
+                      day,
+                    }
+                  : undefined;
+              })()
+            : card.dated;
         return {
-          // A phrase is asked for near, and its order checked here: what
-          // holds its words in another order shows nothing, and goes.
-          drop:
-            query.phrases.length > 0 &&
-            !query.words.length &&
-            !finds.length &&
-            !inTitle.held,
           hit: {
             ...hit,
+            ...(dated ? { dated } : {}),
             ...(inTitle.segments ? { titleSegments: inTitle.segments } : {}),
             ...(inSummary?.segments
               ? { summarySegments: inSummary.segments }
@@ -756,18 +793,61 @@ async function searchOnce(
           closeness: day || named ? 100 : closeness + naming,
         };
       })
-      .filter((item) => !item.drop)
       .sort(
         (a, b) => (byDate ? 0 : b.closeness - a.closeness) || a.order - b.order,
       )
       .slice(0, keep)
       .map((item) => item.hit);
+  const today = utcDayOf(now);
+  /**
+   * The order of a kind read by days. What has days of a life comes first,
+   * by them — newest by where it ends, never past today, so what still runs
+   * is now and its end stays unsaid; oldest by where it begins — then what
+   * has only the day it was made. A tag goes by what carries it: its last
+   * use, or its first.
+   */
+  const newest = request.sort !== 'old';
+  // What carries a tag, as this reader finds it: «tag:<uuid>» names it.
+  const tagUse = {
+    sql: `(SELECT ${newest ? 'max(min(c.sortTo, ?))' : 'min(c.sortFrom)'}
+      FROM doc_tags t JOIN docs c ON c.id = t.doc
+      WHERE t.tag = substr(d.ref, 5) AND c.audience = d.audience
+        AND c.sortLife = 1 AND c.visibleFrom <= ?)`,
+    params: newest ? [today, now] : [now],
+  };
+  const dayOrder = (kind: SearchKind): { sql: string; params: unknown[] } => {
+    if (kind === 'tag')
+      return {
+        sql: `${tagUse.sql} IS NULL, ${tagUse.sql} ${newest ? 'DESC' : 'ASC'}, `,
+        params: [...tagUse.params, ...tagUse.params],
+      };
+    return newest
+      ? {
+          sql: 'd.sortTo IS NULL, d.sortLife DESC, min(d.sortTo, ?) DESC, ',
+          params: [today],
+        }
+      : {
+          sql: 'd.sortFrom IS NULL, d.sortLife DESC, d.sortFrom ASC, ',
+          params: [],
+        };
+  };
+  /** The day a tag was last used, or first, as its card says when sorted. */
+  const tagDay = (ref: string): string | undefined =>
+    (
+      store.db
+        .prepare(
+          `SELECT ${tagUse.sql} AS day FROM docs d WHERE d.audience = ? AND d.ref = ?`,
+        )
+        .get(...tagUse.params, request.audience, ref) as
+        { day: string | null } | undefined
+    )?.day ?? undefined;
   const ranked = (
     kind: SearchKind,
     limit: number,
     offset: number,
   ): DocRow[] => {
     const filters = narrowed(base, request, kind);
+    const order = byDate ? dayOrder(kind) : { sql: '', params: [] };
     // The diary of a day the query names comes first, then the text's hits.
     const mergesDays = kind === 'diary-entry' && dayRows.length > 0;
     const textHits = match
@@ -775,11 +855,12 @@ async function searchOnce(
           .prepare(
             `SELECT d.id, d.kind, d.ref, d.title, d.date, d.card FROM ${from}
              WHERE ${table} MATCH ? AND ${filters.sql}
-             ORDER BY ${byDate ? `d.date IS NULL, d.date ${request.sort === 'old' ? 'ASC' : 'DESC'}, ` : ''}bm25(${table}, ${WEIGHTS}) LIMIT ? OFFSET ?`,
+             ORDER BY ${order.sql}bm25(${table}, ${WEIGHTS}) LIMIT ? OFFSET ?`,
           )
           .all(
             match,
             ...filters.params,
+            ...order.params,
             mergesDays ? offset + limit + dayRows.length : limit,
             mergesDays ? 0 : offset,
           ) as DocRow[])

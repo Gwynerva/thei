@@ -69,6 +69,11 @@ export interface SearchUnit {
   place?: SearchPlace;
   /** Found by, never shown: another name of the entity. */
   hidden?: true;
+  /**
+   * Not found in the entity at all, only told to the file it names: an
+   * icon's description belongs to the file, whose own result leads here.
+   */
+  placeOnly?: true;
   /** A file's preview, for a find in a file. */
   media?: MediaDescriptor;
 }
@@ -99,7 +104,8 @@ function inlineNotes(html: unknown, place: SearchPlace): SearchUnit[] {
 /** Every string of inline markup a block holds, deep. */
 function blockStrings(value: unknown, into: string[] = []): string[] {
   if (typeof value === 'string') into.push(value);
-  else if (Array.isArray(value)) for (const item of value) blockStrings(item, into);
+  else if (Array.isArray(value))
+    for (const item of value) blockStrings(item, into);
   else if (value && typeof value === 'object')
     for (const [key, item] of Object.entries(value))
       if (key !== 'asset' && key !== 'media') blockStrings(item, into);
@@ -107,7 +113,12 @@ function blockStrings(value: unknown, into: string[] = []): string[] {
 }
 
 interface FileShown {
-  asset: { assetUuid: string; familyUuid?: string; alt?: string; media?: MediaDescriptor } | null;
+  asset: {
+    assetUuid: string;
+    familyUuid?: string;
+    alt?: string;
+    media?: MediaDescriptor;
+  } | null;
   title?: string;
   caption?: string;
 }
@@ -145,14 +156,21 @@ export function contentUnits(
       const type: string = block.type;
       if (type === 'privateSectionPlaceholder') continue;
       if (type === 'privateSectionExpanded') {
-        visit(((block.data as { blocks?: unknown[] }).blocks ?? []) as unknown[]);
+        visit(
+          ((block.data as { blocks?: unknown[] }).blocks ?? []) as unknown[],
+        );
         continue;
       }
-      const place: SearchPlace = { ...base, ...(block.id ? { block: block.id } : {}) };
+      const place: SearchPlace = {
+        ...base,
+        ...(block.id ? { block: block.id } : {}),
+      };
       const data = (block.data ?? {}) as Record<string, unknown>;
-      for (const html of blockStrings(data)) units.push(...inlineNotes(html, place));
+      for (const html of blockStrings(data))
+        units.push(...inlineNotes(html, place));
       if (isContentFileBlockType(block.type)) {
-        const group = typeof data.title === 'string' ? richTextToPlainText(data.title) : '';
+        const group =
+          typeof data.title === 'string' ? richTextToPlainText(data.title) : '';
         if (group && Array.isArray(data.items))
           units.push({ field: 'extra', where: 'caption', text: group, place });
         for (const file of shownFiles(block)) {
@@ -168,7 +186,13 @@ export function contentUnits(
           for (const words of [file.title, file.caption]) {
             const text = words ? richTextToPlainText(words) : '';
             if (text)
-              units.push({ field: 'extra', where: 'caption', text, place: filePlace, media: file.asset.media });
+              units.push({
+                field: 'extra',
+                where: 'caption',
+                text,
+                place: filePlace,
+                media: file.asset.media,
+              });
           }
           if (file.asset.alt?.trim())
             units.push({
@@ -182,8 +206,10 @@ export function contentUnits(
         continue;
       }
       if (block.type === 'entityLink' || block.type === 'externalLink') {
-        const note = typeof data.note === 'string' ? richTextToPlainText(data.note) : '';
-        if (note) units.push({ field: 'extra', where: 'link', text: note, place });
+        const note =
+          typeof data.note === 'string' ? richTextToPlainText(data.note) : '';
+        if (note)
+          units.push({ field: 'extra', where: 'link', text: note, place });
         continue;
       }
       const text = contentBlockTextParts(block, false)
