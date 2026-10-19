@@ -22,7 +22,7 @@ import {
  * description or caption — bring up the hint, the card of the link or the
  * file's window, where they are read.
  */
-export const LANDING_EVENT = 'theilanding';
+const LANDING_EVENT = 'theilanding';
 
 type Revealer = (target: LandingTarget) => unknown;
 const revealers = new Set<Revealer>();

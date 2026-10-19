@@ -1,4 +1,6 @@
 import { utcDayOf } from '#layers/thei/shared/date-range';
+import { lifeArrivalCutoff } from '#layers/thei/shared/life';
+import { tagUuidsBySlug } from '../tags';
 import { dayQueryRank, parseDayQuery } from '#layers/thei/shared/day-query';
 import { resolvePagination } from '#layers/thei/shared/pagination';
 import {
@@ -28,7 +30,7 @@ import {
 } from '#layers/thei/shared/search/tokens';
 import { searchKey } from '#layers/thei/shared/search/match';
 import { normalizeTermText } from '#layers/thei/shared/text-terms';
-import { buildPublicTags } from '../public/entities';
+import { buildPublicTagRows } from '../public/entities';
 import { runCatalogue } from './catalogue';
 import { placeHref, type SearchAudience } from './documents';
 import { searchAnalyzer } from './analyzer';
@@ -37,7 +39,7 @@ import { ftsTerm, type SearchStore, type StoredCard } from './store';
 import { SEARCH_FIELD_WEIGHTS, SEARCH_FIELDS, type SearchUnit } from './units';
 
 /** How many of each kind the search answers at once when no kind is chosen. */
-export const SEARCH_GROUP_SIZE = 3;
+const SEARCH_GROUP_SIZE = 3;
 /** How many of a kind are weighed to choose those few. */
 const SEARCH_GROUP_CANDIDATES = 12;
 export { SEARCH_PAGE_SIZE };
@@ -114,17 +116,6 @@ function ftsMatch(query: SearchQuery, any = false): string | undefined {
 interface Filters {
   sql: string;
   params: unknown[];
-}
-
-function tagUuidsBySlug(slugs: string[] | undefined): string[] {
-  if (!slugs?.length) return [];
-  const { rawDb } = THEI_SERVER.useDb();
-  return slugs.flatMap((slug) => {
-    const row = rawDb
-      .prepare('SELECT tagUuid FROM tags WHERE slug = ?')
-      .get(slug) as { tagUuid: string } | undefined;
-    return row ? [row.tagUuid] : [];
-  });
 }
 
 /** The conditions every hit meets, but the kind and the year, which facets count across. */
@@ -235,7 +226,7 @@ function holdsPhrases(units: SearchUnit[], query: SearchQuery): boolean {
  * of the words, then units in weightier fields. Another name of the entity
  * is said to have matched and never shown.
  */
-export function findsOf(
+function findsOf(
   units: SearchUnit[],
   query: SearchQuery,
   document: { href: string },
@@ -477,15 +468,7 @@ async function tagFacets(
     .from(schema.tags)
     .all()
     .filter((tag) => counts.has(tag.tagUuid));
-  const summaries = await buildPublicTags(
-    tags.map((tag) => ({
-      tagUuid: tag.tagUuid,
-      title: tag.title,
-      slug: tag.slug,
-      publicId: tag.publicId,
-      description: tag.description || undefined,
-    })),
-  );
+  const summaries = await buildPublicTagRows(tags);
   return tags
     .map((tag, at) => ({
       tag: summaries[at]!,
@@ -1020,7 +1003,7 @@ export function findsOfResult(request: {
  */
 function cacheKey(request: SearchRequest, generation: number): string {
   const { now = Date.now(), ...asked } = request;
-  const days = `${utcDayOf(now)}/${utcDayOf(now + 14 * 60 * 60 * 1000)}`;
+  const days = `${utcDayOf(now)}/${lifeArrivalCutoff(now)}`;
   return `${generation}\u0000${days}\u0000${JSON.stringify(asked)}`;
 }
 

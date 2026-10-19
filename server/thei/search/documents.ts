@@ -10,6 +10,7 @@ import {
   type DatedPeriod,
 } from '#layers/thei/shared/date-precision';
 import { utcDayOf } from '#layers/thei/shared/date-range';
+import { dayArrives } from '#layers/thei/shared/life';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
@@ -33,7 +34,7 @@ import {
   buildPublicPage,
   buildPublicProject,
   buildPublicProjectSection,
-  buildPublicTags,
+  buildPublicTagRows,
   canListPublicEntity,
 } from '../public/entities';
 import { resolvePublicRelated } from '../public/related';
@@ -93,7 +94,7 @@ export interface SearchDocument {
 }
 
 /** The days a document is sorted by, `from` read oldest first, `to` newest. */
-export interface SearchSortDays {
+interface SearchSortDays {
   from: string;
   to: string;
   life: boolean;
@@ -125,14 +126,6 @@ function accessOf(audience: SearchAudience, access: string) {
   return access === 'link-only' || access === 'private'
     ? { access: access as 'link-only' | 'private' }
     : {};
-}
-
-/**
- * A day as the moment it may first be found by a stranger: when it has come
- * somewhere on Earth, as on the life timeline.
- */
-export function dayArrives(day: string): number {
-  return Date.parse(`${day}T00:00:00Z`) - 14 * 60 * 60 * 1000;
 }
 
 const names = (values: (string | undefined)[]) =>
@@ -725,15 +718,7 @@ export async function tagDocuments(
         carried.add(usage.tagUuid);
     shown = tags.filter((tag) => carried.has(tag.tagUuid));
   }
-  const summaries = await buildPublicTags(
-    shown.map((tag) => ({
-      tagUuid: tag.tagUuid,
-      title: tag.title,
-      slug: tag.slug,
-      publicId: tag.publicId,
-      description: tag.description || undefined,
-    })),
-  );
+  const summaries = await buildPublicTagRows(shown);
   return shown.map((tag, at) => ({
     audience,
     kind: 'tag' as const,

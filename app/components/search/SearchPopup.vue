@@ -1,9 +1,10 @@
 <script lang="ts" setup>
-import type {
-  SearchAction,
-  SearchAdminSection,
-  SearchHit,
-  SearchKind,
+import {
+  searchAdminSectionName,
+  type SearchAction,
+  type SearchAdminSection,
+  type SearchHit,
+  type SearchKind,
 } from '#layers/thei/shared/search/api';
 import type { IconName } from '#thei/icons';
 import { SEARCH_QUERY_MAX_LENGTH } from '#layers/thei/shared/search/tokens';
@@ -85,22 +86,6 @@ const SECTION_ICONS: Record<SearchAdminSection, IconName> = {
   updates: 'refresh',
   ai: 'sparkles',
 };
-
-function sectionName(section: SearchAdminSection): string {
-  const value = phrase.value;
-  return {
-    projects: value.projects,
-    events: value.events,
-    diary: value.diary,
-    pages: value.pages,
-    tags: value.tags,
-    files: value.asset_library,
-    profile: value.about_me,
-    settings: value.settings,
-    updates: value.admin_updates,
-    ai: value.ai_page,
-  }[section];
-}
 
 function titleOf(kind: SearchKind, title: string) {
   return kind === 'diary-entry'
@@ -225,7 +210,7 @@ function actionRow(action: SearchAction, at: number): Row {
       return {
         key,
         icon: SECTION_ICONS[action.section],
-        title: sectionName(action.section),
+        title: searchAdminSectionName(action.section, phrase.value),
         detail: value.search_action_section,
         href: action.href,
       };

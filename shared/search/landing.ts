@@ -18,7 +18,7 @@
  * before them, the page is looked through for the words: a block a text
  * keeps no id for is found by them all the same.
  */
-export const LANDING_ZONES = [
+const LANDING_ZONES = [
   'icon',
   'banner',
   'showcase',

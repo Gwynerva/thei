@@ -12,7 +12,7 @@ import type {
  * `documents.ts` and `units.ts`; a stranger's are built with the page's own
  * builders, never wider than the page.
  */
-export type SearchSource = { found: string } | { skipped: string };
+type SearchSource = { found: string } | { skipped: string };
 
 const ID = { skipped: 'an id, a key or a hash, never words' };
 const STATE = { skipped: 'a state or a setting, not words' };

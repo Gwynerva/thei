@@ -67,7 +67,7 @@ export function searchHitTitle(hit: SearchHit): string {
  * What shows a file, as a reader names it: a diary entry's day in words,
  * not as stored.
  */
-export function searchPlaceName(name: string): string {
+function searchPlaceName(name: string): string {
   return /^\d{4}-\d{2}-\d{2}$/u.test(name)
     ? formatAbsolutePublicDate(name, language.value.code)
     : publicText(name);

@@ -21,7 +21,7 @@ export const SEARCH_FIELDS = [
   'text',
   'extra',
 ] as const;
-export type SearchField = (typeof SEARCH_FIELDS)[number];
+type SearchField = (typeof SEARCH_FIELDS)[number];
 export const SEARCH_FIELD_WEIGHTS: Record<SearchField, number> = {
   title: 10,
   names: 6,

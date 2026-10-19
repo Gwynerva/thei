@@ -31,7 +31,7 @@ let fallback: SearchAnalyzer | undefined;
  * Reads both scripts whatever the site speaks: enough for names, and the
  * same on the server and in the page.
  */
-export function nameAnalyzer(): SearchAnalyzer {
+function nameAnalyzer(): SearchAnalyzer {
   fallback ??= createSearchAnalyzer('en');
   return fallback;
 }
@@ -72,13 +72,7 @@ export function prepareNameQuery(
  * word of the query in a word of the name, in the order typed or in any
  * order; the query as a piece of the name, «пле» in «Косплей», below all.
  */
-export const NAME_TIERS = [
-  'exact',
-  'start',
-  'ordered',
-  'words',
-  'inside',
-] as const;
+const NAME_TIERS = ['exact', 'start', 'ordered', 'words', 'inside'] as const;
 export type NameTier = (typeof NAME_TIERS)[number];
 
 /** Where a name stands in a list, by how it was found and what it is. */
@@ -160,7 +154,7 @@ function matchWords(
   return place(0) ? { ordered: false } : undefined;
 }
 
-export interface NameMatch {
+interface NameMatch {
   /** The words stand in the order typed. */
   ordered: boolean;
   /** The query is the whole name. */

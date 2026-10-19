@@ -53,15 +53,6 @@ export interface StoredCard {
   cv?: boolean;
 }
 
-export interface StoredDocument {
-  id: number;
-  kind: SearchDocument['kind'];
-  ref: string;
-  title: string;
-  date: string | null;
-  card: StoredCard;
-}
-
 /** A file shown at a place of a document: what its own document is built from. */
 export interface StoredFilePlace {
   familyUuid: string;

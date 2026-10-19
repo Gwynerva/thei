@@ -37,7 +37,7 @@ const LATIN_LETTER = /\p{Script=Latin}/u;
 const LATIN_WORD = /^[a-z]+(?:['’][a-z]+)?$/u;
 const MARKS = /\p{M}+/gu;
 
-export interface SearchWord {
+interface SearchWord {
   /** What the word is compared by. */
   term: string;
   /** A word a query does not insist on. */

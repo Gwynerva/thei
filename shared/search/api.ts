@@ -1,5 +1,6 @@
 import type { PublicTagSummary } from '../api/public';
 import type { MediaDescriptor } from '../media';
+import type { LanguagePhrases } from '../language/types';
 import type { SearchSegment } from './snippet';
 
 /**
@@ -125,6 +126,37 @@ export const SEARCH_ADMIN_SECTIONS = [
   'ai',
 ] as const;
 export type SearchAdminSection = (typeof SEARCH_ADMIN_SECTIONS)[number];
+
+/** A part of the admin by its name, in the site's language. */
+export function searchAdminSectionName(
+  section: SearchAdminSection,
+  phrase: Pick<
+    LanguagePhrases,
+    | 'projects'
+    | 'events'
+    | 'diary'
+    | 'pages'
+    | 'tags'
+    | 'asset_library'
+    | 'about_me'
+    | 'settings'
+    | 'admin_updates'
+    | 'ai_page'
+  >,
+): string {
+  return {
+    projects: phrase.projects,
+    events: phrase.events,
+    diary: phrase.diary,
+    pages: phrase.pages,
+    tags: phrase.tags,
+    files: phrase.asset_library,
+    profile: phrase.about_me,
+    settings: phrase.settings,
+    updates: phrase.admin_updates,
+    ai: phrase.ai_page,
+  }[section];
+}
 
 /**
  * Something the owner may do from the quick search, as data: the page puts it

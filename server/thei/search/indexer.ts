@@ -75,7 +75,7 @@ interface IndexState {
 
 const state: IndexState = { passedAt: 0, complete: false, again: 'none' };
 
-export function searchIndexPath() {
+function searchIndexPath() {
   return THEI_SERVER.projectPath('.thei', 'search.db');
 }
 

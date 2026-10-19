@@ -11,9 +11,8 @@ export const ROBOTS_DISALLOWED = [
   '/test/',
   '/api/',
   '/share/',
-  // A search's results: thin pages of what the site already serves. The
-  // presets (`/projects/`, `/cv/`…) take no query and stay open.
-  '/search/*q=',
+  // Not a search's results: they say `noindex` themselves, which a crawler
+  // turned away at the door would never read.
 ];
 
 /**

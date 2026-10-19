@@ -10,11 +10,13 @@ import {
   type SearchResponse,
 } from '#layers/thei/shared/search/api';
 import { siteViewer } from '../access-links/viewer';
+import { tagUuidsBySlug } from '../tags';
 import {
   buildPublicEventSummary,
   buildPublicProjectSummary,
-  buildPublicTags,
+  buildPublicTagRows,
   canListPublicEntity,
+  listablePublicEntityWhere,
 } from '../public/entities';
 
 /**
@@ -24,7 +26,7 @@ import {
  * first request after an installation, and the presets' Open Graph cards
  * count what the page lists.
  */
-export interface CatalogueEntry {
+interface CatalogueEntry {
   type: 'project' | 'event';
   uuid: string;
   showcase: boolean;
@@ -125,17 +127,6 @@ export function catalogueEntries(isAdmin: boolean): CatalogueEntry[] {
   );
 }
 
-function tagUuidsBySlug(slugs: string[]): string[] {
-  if (!slugs.length) return [];
-  const { db, schema } = THEI_SERVER.useDb();
-  return db
-    .select({ tagUuid: schema.tags.tagUuid })
-    .from(schema.tags)
-    .where(inArray(schema.tags.slug, slugs))
-    .all()
-    .map((row) => row.tagUuid);
-}
-
 /** The entries a set of filters keeps, and how often each tag is among them. */
 export function filterCatalogue(
   entries: CatalogueEntry[],
@@ -165,10 +156,7 @@ export function filterCatalogue(
   return { entries: kept, tagCounts, included, excluded };
 }
 
-export function hitOfSummary(
-  summary: PublicEntitySummary,
-  ref: string,
-): SearchHit {
+function hitOfSummary(summary: PublicEntitySummary, ref: string): SearchHit {
   return {
     kind: summary.type,
     ref,
@@ -201,19 +189,51 @@ export function hitOfSummary(
  * quick search with nothing typed offers to try.
  */
 export function popularTagTitles(isAdmin: boolean, limit = 6): string[] {
-  const { rawDb } = THEI_SERVER.useDb();
-  return (
-    rawDb
-      .prepare(
-        `SELECT t.title, count(*) AS n FROM "tag-usages" u
-         JOIN tags t ON t.tagUuid = u.tagUuid
-         LEFT JOIN projects p ON u.containerType = 'project' AND p.projectUuid = u.containerId
-         LEFT JOIN events e ON u.containerType = 'event' AND e.eventUuid = u.containerId
-         WHERE ? OR p.access = 'public' OR e.access = 'public'
-         GROUP BY t.tagUuid ORDER BY n DESC, t.title LIMIT ?`,
+  const { db, schema } = THEI_SERVER.useDb();
+  const usages = schema.tagUsages;
+  // What carries a tag, as this reader may list it.
+  const carried = [
+    ...db
+      .select({ tagUuid: usages.tagUuid })
+      .from(usages)
+      .innerJoin(
+        schema.projects,
+        and(
+          eq(usages.containerType, 'project'),
+          eq(usages.containerId, schema.projects.projectUuid),
+        ),
       )
-      .all(isAdmin ? 1 : 0, limit) as { title: string }[]
-  ).map((row) => row.title);
+      .where(listablePublicEntityWhere(schema.projects.access, isAdmin))
+      .all(),
+    ...db
+      .select({ tagUuid: usages.tagUuid })
+      .from(usages)
+      .innerJoin(
+        schema.events,
+        and(
+          eq(usages.containerType, 'event'),
+          eq(usages.containerId, schema.events.eventUuid),
+        ),
+      )
+      .where(listablePublicEntityWhere(schema.events.access, isAdmin))
+      .all(),
+  ];
+  const counts = new Map<string, number>();
+  for (const { tagUuid } of carried)
+    counts.set(tagUuid, (counts.get(tagUuid) ?? 0) + 1);
+  if (!counts.size) return [];
+  return db
+    .select({ tagUuid: schema.tags.tagUuid, title: schema.tags.title })
+    .from(schema.tags)
+    .where(inArray(schema.tags.tagUuid, [...counts.keys()]))
+    .all()
+    .sort(
+      (left, right) =>
+        counts.get(right.tagUuid)! - counts.get(left.tagUuid)! ||
+        left.title.localeCompare(right.title),
+    )
+    .slice(0, limit)
+    .map((tag) => tag.title);
 }
 
 /** A page of the catalogue, as the search page and its presets show it. */
@@ -281,15 +301,7 @@ export async function runCatalogue(
         .where(inArray(schema.tags.tagUuid, facetUuids))
         .all()
     : [];
-  const summaries = await buildPublicTags(
-    tagRows.map((tag) => ({
-      tagUuid: tag.tagUuid,
-      title: tag.title,
-      slug: tag.slug,
-      publicId: tag.publicId,
-      description: tag.description || undefined,
-    })),
-  );
+  const summaries = await buildPublicTagRows(tagRows);
   return {
     query: '',
     total: entries.length,
