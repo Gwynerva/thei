@@ -52,6 +52,8 @@ const openable = computed(() =>
         :icon-media="file.media"
         icon="media"
         button
+        :data-file="file.key"
+        data-opens-viewer
         @activate="openPublicAssets(openable, file)"
       />
       <PublicCompactResourceItem
@@ -61,6 +63,8 @@ const openable = computed(() =>
         :extension="file.extension"
         icon="file"
         button
+        :data-file="file.key"
+        data-opens-viewer
         @activate="openPublicAssets(openable, file)"
       />
       <PublicCompactResourceItem
@@ -71,6 +75,7 @@ const openable = computed(() =>
         :href="sitePath(file.href)"
         icon="file"
         download
+        :data-file="file.key"
       />
     </template>
   </div>

@@ -188,7 +188,7 @@ function emptyData(): DiaryEditData {
     // A new entry is about today until told otherwise, which is what makes
     // one quick enough to write on the way past — the writer's today, not
     // UTC's, or a late evening east of Greenwich would date it yesterday.
-    date: toDateString(new Date()),
+    date: dateFromQuery() ?? toDateString(new Date()),
     access: ProjectEventAccessLevel.Public,
     content: null,
     relations: [],

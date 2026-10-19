@@ -30,6 +30,7 @@ const neighboursTitle = computed(() => {
     <PublicCollapsibleSection
       v-if="data.periods?.length"
       :title="phrase.public_details_timeline"
+      data-landing-zone="periods"
     >
       <PublicPeriodTimeline :periods="data.periods" />
     </PublicCollapsibleSection>
@@ -39,12 +40,17 @@ const neighboursTitle = computed(() => {
     >
       <PublicDetailTimeline :items="data.chronology" />
     </PublicCollapsibleSection>
-    <PublicCollapsibleSection v-if="data.tags?.length" :title="phrase.tags">
+    <PublicCollapsibleSection
+      v-if="data.tags?.length"
+      :title="phrase.tags"
+      data-landing-zone="tags"
+    >
       <PublicTagLinks :tags="data.tags" />
     </PublicCollapsibleSection>
     <PublicCollapsibleSection
       v-if="data.references?.links.length"
       :title="phrase.public_details_links"
+      data-landing-zone="links"
     >
       <PublicLimitedList v-slot="{ items }" :items="data.references.links">
         <PublicReferenceLinks :links="items" />
@@ -53,6 +59,7 @@ const neighboursTitle = computed(() => {
     <PublicCollapsibleSection
       v-if="data.references?.files.length"
       :title="phrase.public_details_files"
+      data-landing-zone="files"
     >
       <PublicLimitedList v-slot="{ items }" :items="data.references.files">
         <PublicFiles :files="items" compact />

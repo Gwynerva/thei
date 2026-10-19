@@ -69,6 +69,7 @@ const popup = computed(() => ({
     v-bind="popup"
     class="min-h-14 items-center"
     :data-public-secret="secret || undefined"
+    :data-relation-href="href"
     data-relation-card
   >
     <template #fallback>

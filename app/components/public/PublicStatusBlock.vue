@@ -23,10 +23,26 @@ async function toggle() {
 }
 // The life timeline links a status point straight at this block.
 useHashDisclosure('#statuses', expanded, history.load);
+// A find of the search lands on a status: the history opens and is read on
+// to its day.
+useLandingReveal(async (target) => {
+  if (target.zone !== 'statuses') return;
+  expanded.value = true;
+  await history.load();
+  const day = target.status;
+  const listed = () => history.items.value.some((item) => item.date === day);
+  for (
+    let more = 0;
+    day && more < 40 && !listed() && history.cursor.value && !history.error.value;
+    more++
+  )
+    await history.load();
+});
 </script>
 <template>
   <ProfileInfoBlock
     id="statuses"
+    data-landing-zone="statuses"
     :title="title"
     :compact="compact"
     class="scroll-mt-[var(--public-anchor-offset,8rem)]"
@@ -38,6 +54,7 @@ useHashDisclosure('#statuses', expanded, history.load);
           v-for="item in history.items.value"
           :key="item.id"
           :item="item"
+          :data-status-date="item.date"
           short-date
         />
       </div>

@@ -1,17 +1,28 @@
 <script lang="ts" setup>
-import type { PublicSearchTagFacet } from '#layers/thei/shared/api/public';
+import type { SearchFacets } from '#layers/thei/shared/search/api';
 import type { IconName } from '#thei/icons';
 import {
   countPublicSearchFilters,
-  normalizePublicSearchText,
   type PublicSearchFilters,
   type PublicSearchType,
 } from '#layers/thei/shared/public-search';
+import { searchKey } from '#layers/thei/shared/search/match';
 import { tagAccentCssColor } from '#layers/thei/shared/tag';
 
+/**
+ * The filters beside the search. Without a query they narrow the catalogue
+ * to projects or events, the showcase and the résumé; with one, the kinds are
+ * the chips above the results, and here are the years the results fall in.
+ * Tags narrow both.
+ */
 const props = defineProps<{
   filters: PublicSearchFilters;
-  tags: PublicSearchTagFacet[];
+  tags: SearchFacets['tags'];
+  years?: SearchFacets['years'];
+  /** A query is typed: the kind is chosen by the chips. */
+  query?: boolean;
+  /** What was found may be read by its days. */
+  sortable?: boolean;
 }>();
 const emit = defineEmits<{
   change: [patch: Partial<PublicSearchFilters>];
@@ -27,14 +38,46 @@ const types = computed<
 ]);
 const activeTags = computed(() => props.tags.filter((facet) => facet.state));
 const availableTags = computed(() => {
-  const query = normalizePublicSearchText(tagQuery.value.trim());
+  const query = searchKey(tagQuery.value);
   return props.tags.filter(
     (facet) =>
-      !facet.state &&
-      (!query || normalizePublicSearchText(facet.tag.title).includes(query)),
+      !facet.state && (!query || searchKey(facet.tag.title).includes(query)),
   );
 });
-const activeCount = computed(() => countPublicSearchFilters(props.filters));
+/**
+ * Whether there is anything to narrow by: with a query, the kind is chosen
+ * above, and what was found may have neither years nor tags.
+ */
+const showsYears = computed(() =>
+  Boolean(props.years && (props.years.length > 1 || props.filters.year)),
+);
+const hasFilters = computed(
+  () =>
+    !props.query ||
+    props.sortable ||
+    props.filters.type === 'project' ||
+    showsYears.value ||
+    props.tags.length > 0,
+);
+
+/** The years found, newest first, each with its bar's share of the busiest. */
+const yearBars = computed(() => {
+  const years = props.years ?? [];
+  const most = Math.max(1, ...years.map((item) => item.count));
+  return [...years]
+    .sort((left, right) => right.year - left.year)
+    .map((item) => ({
+      ...item,
+      width: `${Math.max(4, Math.round((item.count / most) * 100))}%`,
+    }));
+});
+
+// With a query, the kind belongs to the chips and is not reset from here.
+const activeCount = computed(
+  () =>
+    countPublicSearchFilters(props.filters) -
+    (props.query && props.filters.type ? 1 : 0),
+);
 
 function without(slugs: string[], slug: string) {
   return slugs.filter((item) => item !== slug);
@@ -61,21 +104,50 @@ function removeTag(slug: string) {
   });
 }
 
+/** Best first is no choice at all: the order a search reads in. */
+const sortOptions = computed(() => ({
+  best: phrase.value.search_sort_best,
+  new: phrase.value.search_sort_new,
+  old: phrase.value.search_sort_old,
+}));
+const sort = computed({
+  get: () => props.filters.sort ?? 'best',
+  set: (value: 'best' | 'new' | 'old') =>
+    emit('change', { sort: value === 'best' ? undefined : value }),
+});
+
 function reset() {
   tagQuery.value = '';
   emit('change', {
-    type: undefined,
+    ...(props.query ? {} : { type: undefined }),
+    sort: undefined,
     showcase: false,
     cv: false,
     tags: [],
     exclude: [],
+    year: undefined,
   });
 }
 </script>
 
 <template>
   <div class="flex min-w-0 flex-col gap-md">
-    <PublicCollapsibleSection :title="phrase.search_filter_type">
+    <!-- Nothing to narrow by: said, rather than an empty column. -->
+    <PublicEmptyState
+      v-if="!hasFilters"
+      icon="tune"
+      :title="phrase.search_no_filters"
+    />
+    <PublicCollapsibleSection v-if="sortable" :title="phrase.search_sort">
+      <FieldSelect
+        v-model="sort"
+        :options="sortOptions"
+        :aria-label="phrase.search_sort"
+        wide
+      />
+    </PublicCollapsibleSection>
+
+    <PublicCollapsibleSection v-if="!query" :title="phrase.search_filter_type">
       <div
         class="grid grid-cols-3 gap-1 rounded-normal bg-bg-3/60 p-1"
         role="radiogroup"
@@ -109,7 +181,7 @@ function reset() {
     </PublicCollapsibleSection>
 
     <PublicCollapsibleSection
-      v-if="filters.type !== 'event'"
+      v-if="query ? filters.type === 'project' : filters.type !== 'event'"
       :title="phrase.search_filter_projects"
     >
       <div class="flex flex-wrap gap-xs">
@@ -143,6 +215,58 @@ function reset() {
         >
           <Icon :name="flag.icon" class="shrink-0" />
           {{ flag.label }}
+        </button>
+      </div>
+    </PublicCollapsibleSection>
+
+    <PublicCollapsibleSection v-if="showsYears" :title="phrase.search_years">
+      <!-- How many were found each year, newest first, as bars against the
+           busiest year: a choice and a chart at once. The year chosen is
+           drawn in the accent; choosing it again shows every year. -->
+      <div
+        class="flex flex-col gap-0.5"
+        role="radiogroup"
+        :aria-label="phrase.search_years"
+      >
+        <button
+          v-for="item in yearBars"
+          :key="item.year"
+          type="button"
+          role="radio"
+          :aria-checked="filters.year === item.year"
+          :aria-label="phrase.search_year_count(item.year, item.count)"
+          class="grid cursor-pointer grid-cols-[2.75rem_minmax(0,1fr)_2.5rem]
+            items-center gap-xs rounded-sm px-1 py-1 text-xs transition
+            focus-visible:ring-2 focus-visible:ring-accent
+            focus-visible:outline-none hocus:bg-bg-3/60"
+          :class="
+            filters.year === item.year
+              ? 'bg-bg-accent font-semibold text-accent'
+              : 'text-text-2 hocus:text-text-1'
+          "
+          @click="
+            emit('change', {
+              year: filters.year === item.year ? undefined : item.year,
+            })
+          "
+        >
+          <span class="text-left tabular-nums">{{ item.year }}</span>
+          <span class="h-2 overflow-hidden rounded-full bg-bg-3">
+            <span
+              class="block h-full rounded-full transition-[width]"
+              :class="
+                filters.year === item.year
+                  ? 'bg-accent'
+                  : filters.year
+                    ? 'bg-accent/25'
+                    : 'bg-accent/55'
+              "
+              :style="{ width: item.width }"
+            ></span>
+          </span>
+          <span class="text-right text-text-3 tabular-nums">{{
+            item.count
+          }}</span>
         </button>
       </div>
     </PublicCollapsibleSection>

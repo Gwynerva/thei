@@ -12,6 +12,10 @@
 //                                                 AI lab (`.ai-lab/`, never
 //                                                 committed), opened as
 //                                                 http://lab.localhost:3003
+//   bun scripts/dev-server.ts search-lab          nuxt dev on 3004, the search
+//                                                 lab (`.search-lab/`, never
+//                                                 committed), opened as
+//                                                 http://search.localhost:3004
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -23,6 +27,7 @@ const targets = {
   fixture: { dir: 'tests/e2e/fixture', port: E2E_PORT, fork: false },
   realdata: { dir: '.realdata', port: 3002, fork: true },
   lab: { dir: '.ai-lab/site', port: 3003, fork: true },
+  'search-lab': { dir: '.search-lab/site', port: 3004, fork: true },
 } as const;
 
 const root = fileURLToPath(new URL('..', import.meta.url));

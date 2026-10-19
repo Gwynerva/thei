@@ -85,8 +85,13 @@ export function paginateAdminEntities<T extends SearchableAdminEntity>(
           item.contentText ?? '',
           ...(item.synonyms ?? []),
         ].map(normalizeAdminSearchText);
+        // An address and an id are found by any part of them, as they are
+        // pasted; words, only as words.
+        const ids = [item.humanReadableSlug, item.publicId].map(
+          normalizeAdminSearchText,
+        );
         return (
-          texts.some((text) => text.includes(q)) ||
+          ids.some((id) => id.includes(q)) ||
           byWords(texts) ||
           matches?.(item)
         );

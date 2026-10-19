@@ -11,6 +11,9 @@ export const ROBOTS_DISALLOWED = [
   '/test/',
   '/api/',
   '/share/',
+  // A search's results: thin pages of what the site already serves. The
+  // presets (`/projects/`, `/cv/`…) take no query and stay open.
+  '/search/*q=',
 ];
 
 /**

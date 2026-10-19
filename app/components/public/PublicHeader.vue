@@ -18,6 +18,22 @@ const items = computed<{ to: string; icon: IconName; label: string }[]>(() => [
 function active(to: string) {
   return route.path === to || route.path.startsWith(to);
 }
+
+/**
+ * The search icon opens the quick search; it stays a link to the search page
+ * for a click that asks for a new tab or window. Caught on the way down,
+ * before the link would go.
+ */
+const { show: showSearch } = useSiteSearch();
+function openSearch(event: MouseEvent) {
+  const link = (event.target as Element | null)?.closest(
+    `[${SITE_SEARCH_ANCHOR}]`,
+  );
+  if (!link) return;
+  if (event.button || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  event.preventDefault();
+  showSearch(link);
+}
 </script>
 
 <template>
@@ -49,6 +65,7 @@ function active(to: string) {
       <nav
         class="flex shrink-0 items-stretch"
         :aria-label="phrase.public_navigation"
+        @click.capture="openSearch"
       >
         <TheiLink
           v-for="item in items"
@@ -59,6 +76,7 @@ function active(to: string) {
           :aria-current="active(item.to) ? 'page' : undefined"
           :aria-label="item.label"
           :data-title-popup="item.label"
+          v-bind="item.to === '/search/' ? { [SITE_SEARCH_ANCHOR]: '' } : {}"
           class="relative flex min-w-11 items-center justify-center gap-2 px-2
             text-text-2 transition focus-visible:ring-2
             focus-visible:ring-accent focus-visible:ring-inset sm:px-3

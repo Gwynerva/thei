@@ -25,6 +25,7 @@ function rememberDimensions(width: number, height: number) {
     :style="{ '--media-ratio': ratio }"
     class="hero-banner pointer-events-none absolute! inset-0 size-full"
     aria-hidden="true"
+    data-landing-zone="banner"
     @dimensions="rememberDimensions"
   />
 </template>

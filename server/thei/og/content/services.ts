@@ -11,10 +11,7 @@ import {
   listPublicPages,
 } from '../../public/entities';
 import { countLifePointsByYear } from '../../public/life';
-import {
-  getPublicSearchIndex,
-  searchPublicDocuments,
-} from '../../public/search-index';
+import { catalogueEntries, filterCatalogue } from '../../search/catalogue';
 import { listPublicTagCountsByUse } from '../../public/tags';
 import { getProfileIdentity } from '../../profile';
 import { ownerText } from '../../owner-text';
@@ -208,11 +205,12 @@ async function presetContent(
   const preset = PUBLIC_SEARCH_PRESETS.find(
     (item) => item.id === PRESET_OF[id],
   )!;
-  const { documents } = searchPublicDocuments(
-    getPublicSearchIndex(),
-    { q: '', tags: [], exclude: [], ...preset.filters },
-    false,
-  );
+  const { entries: documents } = filterCatalogue(catalogueEntries(false), {
+    q: '',
+    tags: [],
+    exclude: [],
+    ...preset.filters,
+  });
   const { db, schema } = THEI_SERVER.useDb();
   const tiles = (
     await Promise.all(

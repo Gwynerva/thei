@@ -1,5 +1,9 @@
 <script lang="ts" setup>
-import type { PublicSearchResponse } from '#layers/thei/shared/api/public';
+import {
+  SEARCH_KINDS,
+  type SearchKind,
+  type SearchResponse,
+} from '#layers/thei/shared/search/api';
 import {
   countPublicSearchFilters,
   parsePublicSearchFilters,
@@ -12,6 +16,13 @@ import {
   type PublicSearchPresetId,
 } from '#layers/thei/shared/public-search';
 
+/**
+ * The search page. Without a query it is the catalogue of projects and
+ * events, with its presets; with one, what was found across the site,
+ * grouped by kind — the best three of each and the way to all of them —
+ * with chips that count and choose the kinds, and the years and tags the
+ * results fall in beside.
+ */
 definePageMeta({ layout: 'public' });
 const route = useRoute();
 const router = useRouter();
@@ -28,15 +39,52 @@ const filters = computed<PublicSearchFilters>(() => {
   const { page: _page, ...rest } = parsed.value;
   return rest;
 });
-const resource = await useFetch<PublicSearchResponse>('/api/search', {
-  query: computed(() =>
-    publicSearchQuery(filters.value, draft.value ? 1 : parsed.value.page),
-  ),
+// Read as the quick search reads it, the last word as the start of one, so
+// the two find the same and count it alike.
+const request = computed(() => {
+  const query = publicSearchQuery(
+    filters.value,
+    draft.value ? 1 : parsed.value.page,
+  );
+  return query.q ? { ...query, typing: '1' } : query;
 });
-const search = useRequiredResource(resource);
+const resource = await useFetch<SearchResponse>('/api/search', {
+  query: request,
+});
+if (resource.error.value) throw createResourceError(resource.error.value);
+if (!resource.data.value)
+  throw createResourceError({
+    statusCode: 502,
+    statusMessage: 'Empty API response',
+  });
+
+// A search that fails while typing keeps what was found before: too many at
+// once waits as long as it was told to and asks again.
+let held: SearchResponse = resource.data.value;
+const search = computed(() => {
+  if (resource.data.value) held = resource.data.value;
+  return held;
+});
+const failed = ref(false);
+let retry: ReturnType<typeof setTimeout> | undefined;
+watch(resource.error, (error) => {
+  clearTimeout(retry);
+  failed.value = false;
+  if (!error) return;
+  const status = (error as { statusCode?: number }).statusCode;
+  if (status === 429) retry = setTimeout(() => void resource.refresh(), 1500);
+  else failed.value = true;
+});
+onBeforeUnmount(() => clearTimeout(retry));
+
 const pending = computed(() => resource.status.value === 'pending');
-const activeFilterCount = computed(() =>
-  countPublicSearchFilters(filters.value),
+const typed = computed(() => Boolean(search.value.query));
+// With a query, the kind is the chips' choice, shown on them, not a filter
+// the sheet counts.
+const activeFilterCount = computed(
+  () =>
+    countPublicSearchFilters(filters.value) -
+    (filters.value.q.trim() && filters.value.type ? 1 : 0),
 );
 const hasCriteria = computed(
   () => Boolean(filters.value.q.trim()) || activeFilterCount.value > 0,
@@ -146,19 +194,154 @@ function clearText() {
 }
 
 onMounted(() => input.value?.focus({ preventScroll: true }));
+
+// ---- With a query --------------------------------------------------------
+
+/** The kinds found, each with its count, and «everything» before them. */
+const kindChips = computed(() => {
+  const kinds = search.value.facets.kinds;
+  const all = SEARCH_KINDS.reduce((sum, kind) => sum + (kinds[kind] ?? 0), 0);
+  return [
+    { kind: undefined, label: phrase.value.search_type_all, count: all },
+    ...SEARCH_KINDS.filter(
+      (kind) => kinds[kind] || filters.value.type === kind,
+    ).map((kind) => ({
+      kind,
+      label: phrase.value.search_kind_group(kind),
+      count: kinds[kind] ?? 0,
+    })),
+  ];
+});
+
+function chooseKind(kind: SearchKind | undefined) {
+  void applyFilters({
+    type: kind,
+    // The showcase and the résumé hold projects only.
+    ...(kind === 'project' ? {} : { showcase: false, cv: false }),
+  });
+}
+
+/**
+ * What narrows the results, as chips to undo it with one touch: on a phone,
+ * where the filters wait in a sheet, the results say what holds them.
+ */
+const activeChips = computed(() => {
+  const value = filters.value;
+  const chips: {
+    key: string;
+    label: string;
+    icon?: 'plus' | 'minus';
+    patch: Partial<PublicSearchFilters>;
+  }[] = [];
+  if (value.sort)
+    chips.push({
+      key: 'sort',
+      label:
+        value.sort === 'old'
+          ? phrase.value.search_sort_old
+          : phrase.value.search_sort_new,
+      patch: { sort: undefined },
+    });
+  if (value.year)
+    chips.push({
+      key: 'year',
+      label: String(value.year),
+      patch: { year: undefined },
+    });
+  if (value.showcase)
+    chips.push({
+      key: 'showcase',
+      label: phrase.value.showcase,
+      patch: { showcase: false },
+    });
+  if (value.cv)
+    chips.push({
+      key: 'cv',
+      label: phrase.value.cv_project_label,
+      patch: { cv: false },
+    });
+  const titleOf = (slug: string) =>
+    publicText(
+      search.value.facets.tags.find((facet) => facet.tag.slug === slug)?.tag
+        .title ?? slug,
+    );
+  for (const slug of value.tags)
+    chips.push({
+      key: `+${slug}`,
+      label: titleOf(slug),
+      icon: 'plus',
+      patch: { tags: value.tags.filter((item) => item !== slug) },
+    });
+  for (const slug of value.exclude)
+    chips.push({
+      key: `-${slug}`,
+      label: titleOf(slug),
+      icon: 'minus',
+      patch: { exclude: value.exclude.filter((item) => item !== slug) },
+    });
+  return chips;
+});
+
+/**
+ * What was found may be read by its days, whenever there is more than one:
+ * every kind has days — of a life, or of when it was made.
+ */
+const sortable = computed(
+  () => typed.value && (Boolean(filters.value.sort) || search.value.total > 1),
+);
+
+/**
+ * Whether the filters have anything to offer: with a query, what was found
+ * may have neither years nor tags nor days, and then the sheet has nothing
+ * to open.
+ */
+const filtersOffered = computed(
+  () =>
+    !typed.value ||
+    sortable.value ||
+    filters.value.type === 'project' ||
+    search.value.facets.years.length > 1 ||
+    Boolean(filters.value.year) ||
+    search.value.facets.tags.length > 0,
+);
+
+const building = computed(() => {
+  const state = search.value.building;
+  return state && state.total
+    ? Math.min(99, Math.floor((state.done / state.total) * 100))
+    : undefined;
+});
+
+/**
+ * How many the catalogue holds. A search says it on its chips, which count
+ * every kind and the whole.
+ */
+const countLine = computed(() => {
+  const { type, showcase, cv } = filters.value;
+  const kinds = search.value.facets.kinds;
+  if (type === 'project' || showcase || cv)
+    return phrase.value.search_results_count(search.value.total, 0);
+  if (type === 'event')
+    return phrase.value.search_results_count(0, search.value.total);
+  return phrase.value.search_results_count(
+    kinds.project ?? 0,
+    kinds.event ?? 0,
+  );
+});
 </script>
 
 <template>
   <main
-    class="m-auto flex w-(--width-wide) flex-col gap-md px-window py-lg
-      pb-[calc(4.5rem+env(safe-area-inset-bottom))] sm:gap-lg sm:pb-lg"
+    class="m-auto flex w-(--width-wide) flex-col gap-sm px-window pt-sm
+      pb-[calc(4.5rem+env(safe-area-inset-bottom))] sm:gap-lg sm:py-lg"
   >
     <h1 class="sr-only">{{ phrase.search }}</h1>
     <form role="search" class="group relative" @submit.prevent="commitText">
       <Icon
         name="search"
-        class="pointer-events-none absolute top-1/2 left-sm z-1 -translate-y-1/2
-          text-2xl text-text-3 transition group-focus-within:text-accent"
+        class="pointer-events-none absolute top-1/2 left-3 z-1 -translate-y-1/2
+          text-base text-text-3 transition group-focus-within:text-accent
+          sm:left-4 sm:text-2xl"
       />
       <input
         ref="input"
@@ -166,22 +349,24 @@ onMounted(() => input.value?.focus({ preventScroll: true }));
         type="search"
         enterkeyhint="search"
         autocomplete="off"
+        data-search-page-field
         :maxlength="PUBLIC_SEARCH_QUERY_MAX_LENGTH"
         :placeholder="phrase.search_placeholder"
         :aria-label="phrase.search_placeholder"
-        class="search-input h-16 w-full rounded-normal border-2 border-border-1
-          bg-bg-1/80 pr-14 pl-14 text-lg font-semibold shadow-lg shadow-shadow-1
-          backdrop-blur-sm transition outline-none placeholder:font-normal
-          placeholder:text-text-3 focus:border-accent/60 sm:text-xl
-          hocus:border-border-2"
+        class="search-input h-12 w-full rounded-normal border-2 border-border-1
+          bg-bg-1/80 pr-10.5 pl-10.5 text-base font-semibold shadow-lg
+          shadow-shadow-1 backdrop-blur-sm transition outline-none
+          placeholder:font-normal placeholder:text-text-3 focus:border-accent/60
+          sm:h-16 sm:pr-14 sm:pl-15 sm:text-xl hocus:border-border-2"
       />
       <button
         v-if="text"
         type="button"
-        class="absolute top-1/2 right-xs flex size-10 -translate-y-1/2
+        class="absolute top-1/2 right-0.5 flex size-10 -translate-y-1/2
           cursor-pointer items-center justify-center rounded-sm text-xl
           text-text-3 transition focus-visible:ring-2 focus-visible:ring-accent
-          focus-visible:outline-none hocus:bg-bg-3 hocus:text-text-1"
+          focus-visible:outline-none sm:right-2.5 hocus:bg-bg-3
+          hocus:text-text-1"
         :aria-label="phrase.search_clear"
         :data-title-popup="phrase.search_clear"
         @click="clearText"
@@ -190,42 +375,166 @@ onMounted(() => input.value?.focus({ preventScroll: true }));
       </button>
     </form>
 
+    <nav
+      v-if="typed && search.total"
+      class="flex flex-wrap gap-xs"
+      :aria-label="phrase.search_filter_type"
+    >
+      <button
+        v-for="chip in kindChips"
+        :key="chip.kind ?? 'all'"
+        type="button"
+        :aria-pressed="filters.type === chip.kind"
+        class="inline-flex shrink-0 cursor-pointer items-center gap-1
+          rounded-full border px-2 py-1 text-xs font-semibold transition
+          focus-visible:ring-2 focus-visible:ring-accent
+          focus-visible:outline-none sm:gap-1.5 sm:px-sm sm:py-1 sm:text-sm"
+        :class="
+          filters.type === chip.kind
+            ? 'border-accent/50 bg-bg-accent text-accent'
+            : `border-border-1 bg-bg-1/60 text-text-2 hocus:border-border-2
+              hocus:text-text-1`
+        "
+        @click="chooseKind(chip.kind)"
+      >
+        <Icon
+          v-if="chip.kind"
+          :name="SEARCH_KIND_ICONS[chip.kind]"
+          class="shrink-0 opacity-50"
+          aria-hidden="true"
+        />
+        {{ chip.label }}
+        <span class="text-xs font-normal text-text-3 tabular-nums">{{
+          chip.count
+        }}</span>
+      </button>
+      <Icon
+        v-if="pending"
+        name="loading"
+        class="shrink-0 self-center text-base text-text-3"
+        aria-hidden="true"
+      />
+    </nav>
+
     <div
       class="grid min-w-0 items-start gap-md
         sm:grid-cols-[minmax(0,1fr)_minmax(15rem,16rem)] sm:gap-lg"
     >
       <section class="flex min-w-0 flex-col gap-sm" aria-live="polite">
-        <div class="flex min-h-6 items-center gap-xs text-sm text-text-3">
-          <span>{{
-            phrase.search_results_count(
-              search.totals.project,
-              search.totals.event,
-            )
-          }}</span>
+        <div
+          v-if="!typed || failed"
+          class="flex min-h-6 flex-wrap items-center gap-x-xs gap-y-0.5 text-sm
+            text-text-3"
+        >
+          <span v-if="!typed">{{ countLine }}</span>
           <Icon
-            v-if="pending"
+            v-if="pending && !typed"
             name="loading"
             class="text-base"
             aria-hidden="true"
           />
+          <span v-if="failed" class="text-text-error">{{
+            phrase.search_failed
+          }}</span>
         </div>
+        <!-- What holds the results, on a phone: undone with a touch. -->
+        <ul
+          v-if="activeChips.length"
+          class="flex flex-wrap gap-xs sm:hidden"
+          :aria-label="phrase.search_filters"
+        >
+          <li v-for="chip in activeChips" :key="chip.key">
+            <button
+              type="button"
+              class="inline-flex cursor-pointer items-center gap-1 rounded-sm
+                border border-accent/45 bg-bg-accent py-0.5 pr-0.5 pl-1.5
+                text-xs font-semibold text-accent transition
+                focus-visible:ring-2 focus-visible:ring-accent
+                focus-visible:outline-none"
+              :aria-label="phrase.search_filter_remove(chip.label)"
+              @click="applyFilters(chip.patch)"
+            >
+              <Icon v-if="chip.icon" :name="chip.icon" class="shrink-0" />
+              {{ chip.label }}
+              <Icon name="close" class="shrink-0 text-base text-text-3" />
+            </button>
+          </li>
+        </ul>
+        <p v-if="search.keyboard" class="text-sm text-text-2">
+          {{ phrase.search_keyboard(search.keyboard) }}
+        </p>
+        <p v-if="search.partial" class="text-sm text-text-2">
+          {{ phrase.search_partial }}
+        </p>
+        <p
+          v-if="building !== undefined"
+          class="flex items-center gap-xs text-sm text-text-2"
+        >
+          <Icon name="loading" class="shrink-0" aria-hidden="true" />
+          {{ phrase.search_building(building) }}
+        </p>
+
         <div
-          v-if="search.items.length"
-          class="flex flex-col gap-sm transition-opacity"
+          v-if="search.groups.length"
+          class="flex flex-col gap-md transition-opacity"
           :class="{ 'opacity-60': pending }"
         >
-          <PublicSearchResult
-            v-for="item in search.items"
-            :key="item.href"
-            :entity="item"
-          />
+          <section
+            v-for="group in search.groups"
+            :key="group.kind"
+            class="flex flex-col gap-sm"
+            :aria-label="phrase.search_kind_group(group.kind)"
+          >
+            <h2
+              v-if="typed && !filters.type"
+              class="text-base font-bold tracking-wider text-text-3 uppercase"
+            >
+              {{ phrase.search_kind_group(group.kind) }}
+            </h2>
+            <SearchResultCard
+              v-for="hit in group.hits"
+              :key="hit.ref"
+              :hit
+              :query="search.keyboard ?? search.query"
+              :opened="route.query.open === hit.ref"
+            />
+            <button
+              v-if="typed && !filters.type && group.total > group.hits.length"
+              type="button"
+              class="inline-flex cursor-pointer items-center gap-1 self-start
+                rounded-sm px-xs py-1 text-sm font-semibold text-accent
+                transition focus-visible:ring-2 focus-visible:ring-accent
+                focus-visible:outline-none hocus:bg-accent/10"
+              @click="chooseKind(group.kind)"
+            >
+              {{ phrase.search_all_of_kind(group.total) }}
+              <Icon name="chevron-right" aria-hidden="true" />
+            </button>
+          </section>
         </div>
         <PublicEmptyState
-          v-else
+          v-else-if="!pending"
           :title="phrase.search_empty"
           :description="phrase.search_empty_description"
-        />
+        >
+          <!-- What the site is most about, as words to try instead. -->
+          <template v-if="search.suggestions?.length">
+            <TheiLink
+              v-for="word in search.suggestions"
+              :key="word"
+              :to="{ path: '/search/', query: { q: word } }"
+              class="rounded-full border border-border-1 px-sm py-0.5 text-sm
+                font-semibold text-text-2 no-underline transition
+                focus-visible:ring-2 focus-visible:ring-accent
+                focus-visible:outline-none hocus:border-border-2
+                hocus:text-text-1"
+            >
+              {{ publicText(word) }}
+            </TheiLink>
+          </template>
+        </PublicEmptyState>
         <Pagination
+          v-if="!typed || filters.type"
           :page="search.page"
           :page-count="search.pageCount"
           :pending
@@ -234,14 +543,18 @@ onMounted(() => input.value?.focus({ preventScroll: true }));
 
       <PublicStickyAside :aria-label="phrase.search_filters">
         <PublicSearchFilters
-          :filters="filters"
-          :tags="search.tags"
+          :filters
+          :tags="search.facets.tags"
+          :years="typed ? search.facets.years : undefined"
+          :query="typed"
+          :sortable
           @change="applyFilters"
         />
       </PublicStickyAside>
     </div>
 
     <PublicSheet
+      v-if="filtersOffered"
       :title="phrase.search_filters"
       icon="tune"
       @open="sheetOpen = true"
@@ -258,10 +571,23 @@ onMounted(() => input.value?.focus({ preventScroll: true }));
       </template>
       <div class="p-sm">
         <PublicSearchFilters
-          :filters="filters"
-          :tags="search.tags"
+          :filters
+          :tags="search.facets.tags"
+          :years="typed ? search.facets.years : undefined"
+          :query="typed"
+          :sortable
           @change="applyFilters"
         />
+      </div>
+      <!-- What is chosen shows behind the sheet as it is chosen; this takes
+           the reader to it, as closing does, in words. -->
+      <div
+        class="sticky bottom-0 border-t border-border-1 bg-bg-2 p-sm
+          pb-[calc(var(--spacing-sm)+env(safe-area-inset-bottom))]"
+      >
+        <Button variant="primary" class="w-full" @click="closeModal()">
+          {{ phrase.search_show_results(search.total) }}
+        </Button>
       </div>
     </PublicSheet>
   </main>

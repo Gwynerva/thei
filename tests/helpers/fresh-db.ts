@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createFreshDbContext } from '../../server/thei/db/utils';
 import { loadLanguage } from '../../shared/language';
+import { closeSearchStore } from '../../server/thei/search/indexer';
 import { insertRow } from './insert-row';
 
 /**
@@ -15,6 +16,7 @@ export async function freshTestDb() {
   const language = await loadLanguage('en');
   const server = {
     contentPath: (...parts: string[]) => join(directory, ...parts),
+    projectPath: (...parts: string[]) => join(directory, 'project', ...parts),
     language,
     phrase: language.phrase,
   };
@@ -32,6 +34,8 @@ export async function freshTestDb() {
       insertRow(context.rawDb, table, row);
     },
     async close() {
+      // The search index, when a test used it, lives in this folder too.
+      closeSearchStore();
       context.rawDb.close();
       await rm(directory, { recursive: true, force: true });
     },

@@ -4,7 +4,7 @@ import { normalizeUrlSegment } from './language/slugify';
 import type { ImageAccent } from './accent-color';
 import { imageAccentCssColor } from './accent-color';
 import { stringColorHue } from './utils/string-color';
-import { normalizeTermText } from './text-terms';
+import { matchQueryWords, normalizeTermText, wordTokens } from './text-terms';
 import {
   normalizeSynonyms,
   SYNONYM_LIMIT,
@@ -258,12 +258,19 @@ function tagSearchScore(tag: SearchableTag, needle: string) {
   return Number.POSITIVE_INFINITY;
 }
 
-/** 0 for the whole value, 1 for its beginning, 2 for anywhere in it. */
+/**
+ * 0 for the whole value, 1 for its beginning, 2 for anywhere in it, 3 for
+ * its words in other forms or order: «косплей шедоухарт» finds «Косплей на
+ * Шедоухарт», as a picker finds an entity (`matchQueryWords`).
+ */
 function textMatch(value: string, needle: string) {
   const normalized = normalizeTagTitle(value);
   if (normalized === needle) return 0;
   if (normalized.startsWith(needle)) return 1;
   if (normalized.includes(needle)) return 2;
+  const words = wordTokens(needle);
+  if (words.length > 1 && matchQueryWords(words, wordTokens(normalized)))
+    return 3;
   return undefined;
 }
 

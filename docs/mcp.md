@@ -224,7 +224,7 @@ a restart cut off says so.
 | Tool                              | What it does                                                         |
 | --------------------------------- | -------------------------------------------------------------------- |
 | `site_overview`                   | The site, its kinds of entities, and what the owner asks of models.  |
-| `search_archive`                  | Words across every text.                                             |
+| `search_archive`                  | Words across every text, grouped by kind, each place by its ids.     |
 | `list_entities`                   | Entities of a kind, by dates too.                                    |
 | `read_entity`                     | One entity whole, its memory, its files.                             |
 | `changes_since`                   | What changed in a span of time.                                      |

@@ -9,6 +9,7 @@ import {
   containsPhrase,
   normalizeTermText,
   stemTerm,
+  termKey,
   wordTokens,
 } from '#layers/thei/shared/text-terms';
 import { refuse as fail } from '../entity-patch/text';
@@ -29,10 +30,7 @@ const TERM_FORMS_MAX = 12;
 /** Shorter words are found only as written: a stem of three letters is noise. */
 const STEMMED_FROM = 4;
 
-/** How a word is looked up: case, compatibility forms and «ё» set aside. */
-export function termKey(display: string): string {
-  return normalizeTermText(display).replace(/\s+/g, ' ').trim();
-}
+export { termKey };
 
 type TermRow = typeof import('../db/schema/ai').aiTerms.$inferSelect;
 

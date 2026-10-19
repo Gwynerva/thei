@@ -3,6 +3,7 @@ import type { RelationEntityType } from '../relation';
 import type { ProofreadCategory, TidyCommentKind } from '../ai-revise';
 import type { AiActionKind } from '../ai-actions';
 import type { ContentFileSkip } from '../content-file-placement';
+import type { SearchFindWhere, SearchKind } from '../search/api';
 
 export const languagesInfo = {
   en: 'English',
@@ -372,6 +373,7 @@ export type LanguagePhrases = {
   llms_txt_diary: string;
   llms_txt_tags: string;
   llms_txt_pages: string;
+  llms_txt_search: string;
   llms_txt_sitemap: string;
   llms_txt_markdown_title: string;
   llms_txt_markdown: string;
@@ -396,9 +398,57 @@ export type LanguagePhrases = {
   search_tag_exclude: (tag: string) => string;
   search_tag_remove: (tag: string) => string;
   search_reset_filters: string;
+  search_filter_remove: (filter: string) => string;
   search_results_count: (projects: number, events: number) => string;
   search_empty: string;
   search_empty_description: string;
+  /** A kind of result, one of it: «Проект». */
+  search_kind: (kind: SearchKind) => string;
+  /** A kind of result, as a group of them: «Проекты». */
+  search_kind_group: (kind: SearchKind) => string;
+  /** Where in a result a find stands. */
+  search_where: (where: SearchFindWhere) => string;
+  search_where_section: (title: string) => string;
+  search_access_private: string;
+  search_access_link: string;
+  search_access_private_short: string;
+  search_access_link_short: string;
+  search_edit: string;
+  search_more_finds: (count: number) => string;
+  search_fewer_finds: string;
+  search_all_of_kind: (count: number) => string;
+  search_all_results: (count: number) => string;
+  search_show_results: (count: number) => string;
+  search_keyboard: (read: string) => string;
+  search_partial: string;
+  search_building: (percent: number) => string;
+  search_failed: string;
+  search_quick_hint: string;
+  search_quick_empty: string;
+  search_years: string;
+  search_sort: string;
+  search_sort_best: string;
+  search_sort_new: string;
+  search_sort_old: string;
+  search_dated: (
+    by: 'added' | 'shown' | 'last-used' | 'first-used',
+    day: string,
+  ) => string;
+  search_no_filters: string;
+  search_year_count: (year: number, count: number) => string;
+  search_recent: string;
+  search_actions: string;
+  search_action_diary_today: string;
+  search_action_diary_today_new: string;
+  search_action_diary_day: (day: string) => string;
+  search_action_diary_day_new: (day: string) => string;
+  search_action_edit: (title: string) => string;
+  search_action_view: (title: string) => string;
+  search_action_section: string;
+  search_action_new_project: (title: string) => string;
+  search_action_new_event: (title: string) => string;
+  search_action_new_page: (title: string) => string;
+  search_action_ask_ai: (text: string) => string;
   forbidden_title: string;
   forbidden_description: string;
   not_found_title: string;

@@ -12,7 +12,6 @@ import type {
 import type { MediaDescriptor } from '../media';
 import type { ArchivedOriginalFileMeta, AssetRole } from '../asset';
 import type { RelationEntityType, RelationType } from '../relation';
-import type { PublicSearchFilters } from '../public-search';
 import type { StatusHistoryItem } from '../status';
 import type { PaginatedResponse } from '../pagination';
 
@@ -99,19 +98,6 @@ export type PublicEntitySummary = {
   reminder?: string;
 };
 
-export type PublicSearchTagFacet = {
-  tag: PublicTagSummary;
-  /** Results in the current search that carry the tag. */
-  count: number;
-  state?: 'include' | 'exclude';
-};
-
-export type PublicSearchResponse = PaginatedResponse<PublicEntitySummary> & {
-  filters: PublicSearchFilters;
-  tags: PublicSearchTagFacet[];
-  /** Matches by type across every page. */
-  totals: { project: number; event: number };
-};
 
 export type PublicAssetDescriptor = {
   key: string;

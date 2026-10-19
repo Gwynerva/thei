@@ -21,12 +21,21 @@ const shown = computed<PublicContentOutputData>(() => ({
       ? blocks.value
       : blocks.value.slice(0, PREVIEW_BLOCKS),
 }));
+// A find of the search lands on a note past the first ones: all are shown.
+useLandingReveal((target) => {
+  if (
+    target.zone === 'owner-notes' ||
+    holdsLandingBlock(blocks.value.slice(PREVIEW_BLOCKS), target)
+  )
+    expanded.value = true;
+});
 </script>
 
 <template>
   <section
     v-if="blocks.length"
     :id="PUBLIC_OWNER_NOTES_ID"
+    data-landing-zone="owner-notes"
     class="flex scroll-mt-[var(--public-anchor-offset,8rem)] flex-col gap-sm"
   >
     <h2 class="flex items-center gap-2 text-lg font-semibold text-text-2">

@@ -40,6 +40,14 @@ const facts = computed(() => {
   return rows.concat(props.profile.facts);
 });
 
+// A find of the search lands on what the profile shows only in full: the
+// rest of «About me», the rest of the facts, a link's note.
+useLandingReveal((target) => {
+  const blocks = props.profile.aboutContent?.blocks ?? [];
+  if (holdsLandingBlock(blocks.slice(2), target)) allAbout.value = true;
+  if (target.zone === 'facts') allFacts.value = true;
+});
+
 /**
  * A chip carries the owner's short name for a link; the card of the page it
  * opens, with the owner's note under it, comes up over the chip, as over a
@@ -79,6 +87,7 @@ function linkAt(anchor: HTMLElement) {
       <ProfileInfoBlock
         v-if="profile.externalLinks.length"
         :title="phrase.profile_links"
+        data-landing-zone="links"
         ><div ref="linksRoot" class="flex flex-wrap gap-xs">
           <ExternalLinkChip
             v-for="link in profile.externalLinks"
@@ -87,6 +96,8 @@ function linkAt(anchor: HTMLElement) {
             :label="publicText(link.name)"
             :favicon-media="link.faviconMedia"
             size="compact"
+            :data-link="link.url"
+            :data-link-note="link.note || undefined"
           />
         </div>
         <LinkHoverPopup v-slot="{ anchor }" :root="linksRoot" selector="a[href]"
@@ -105,7 +116,10 @@ function linkAt(anchor: HTMLElement) {
         :title="phrase.profile_status"
         compact
       />
-      <ProfileInfoBlock v-if="facts.length" :title="phrase.profile_facts"
+      <ProfileInfoBlock
+        v-if="facts.length"
+        :title="phrase.profile_facts"
+        data-landing-zone="facts"
         ><dl class="divide-y divide-border-1">
           <div
             v-for="fact in allFacts ? facts : facts.slice(0, 6)"

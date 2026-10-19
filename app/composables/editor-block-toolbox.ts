@@ -3,6 +3,7 @@ import type { BlockAPI } from '@editorjs/editorjs';
 import type { VirtualElement } from '@floating-ui/vue';
 import { editorBlockNextTo } from './editor-dom';
 import { hideKeyFromEditor } from './editor-keyboard-boundary';
+import { matchChord } from './shortcut';
 
 /**
  * The blocks the "+" of the editor offers, as a grid of tiles of our own
@@ -149,9 +150,7 @@ export function bindEditorBlockToolbox(
 
   function onKeydown(event: KeyboardEvent) {
     if (
-      event.code !== 'Slash' ||
-      !event.shiftKey ||
-      !(event.ctrlKey || event.metaKey) ||
+      !matchChord(event, { code: 'Slash', shift: true }) ||
       !(event.target instanceof Node) ||
       !root.contains(event.target)
     )

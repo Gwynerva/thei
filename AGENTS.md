@@ -124,6 +124,14 @@ Around them:
 - The owner's rules bind every model, as code where they can be and as instructions where an editor has the power anyway: the graph of relations is the owner's deliberate claims, and a mere mention is an inline link; projects, events, relations, addresses, media and access are settled and change — or go — only when the owner asks for it.
 - Every text a model reads says what it is (`server/thei/mcp/text-about.ts`): whose it is, its place — a diary day, a project's stage — and who reads it. A new text slot or entity kind gets its sentence in the same change.
 
+## Search
+
+- The site has one search, built over its own index in `.thei/search.db` (`server/thei/search/`): derived data, rebuilt in the background at boot and kept up after every write, never backed up and never migrated — a change of what it holds bumps its format, and it builds anew.
+- Every text the owner writes is searched or deliberately not: a new column, content slot, block type or attribute of the inline markup is listed in `server/thei/search/sources.ts`, with where it is found or why it is left out, in the same change. `tests/server/search-sources.test.ts` fails when one is neither.
+- A stranger's index is built with the page's own builders for `STRANGER` and is never wider than the page: what a page withholds — a private part, a private section, a link-only entity, a note, a relation to what a stranger cannot open, a day still to come — is not found by a stranger either.
+- Words are read by the language packs of `shared/language/search/`, by the script of each word; a site's language picks the pack for a shared script, and English reads the Latin otherwise. A Latin word of a text is also found as a pack with `fromLatin` writes it, so «евы» finds «EVA». The light searches of the admin — lists, pickers, the library, AI sessions — match words through `shared/text-terms.ts` (`matchQueryWords`, `queryWordsFilter`): a word as the start of a word or in another of its forms, never inside another word.
+- A find leads to its place on the page by the hash of `shared/search/landing.ts`, and the page brings it out of whatever hides it (`app/composables/search-landing.ts`). A new part of a page that hides text — a slider, a tab, a «show more», a popup — marks its places and takes part in the same change (`docs/design/patterns/search.md`).
+
 ## File Storage
 
 - Check every change or addition to the file storage system for consistency with reuse counting and reuse presentation, including repeated placements of one file and independently stored file variants.

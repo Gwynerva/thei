@@ -339,6 +339,9 @@ describe('the MCP endpoint', () => {
     const text = result.content[0]!.text;
     expect(text).toContain('diary-entry:2026-10-13');
     expect(text).toContain(`project:${PROJECT}`);
+    // Grouped by kind, each place by what it is and the words around it.
+    expect(text).toMatch(/^2 found: projects 1, diary 1\n## Projects\n/);
+    expect(text).toContain('[teleports]');
   });
 
   it('lists a kind a page at a time', async () => {
@@ -359,10 +362,11 @@ describe('the MCP endpoint', () => {
     );
     const found = await tool(handlerFor(['read']), 'search_archive', {
       query: 'teleported',
+      kinds: ['diary-entry'],
       offset: 10,
     });
     expect(found.content[0]!.text).toBe(
-      'The offset 10 is past the end: 2 found.',
+      'The offset 10 is past the end: 1 found.',
     );
   });
 

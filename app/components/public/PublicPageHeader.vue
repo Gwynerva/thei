@@ -75,6 +75,7 @@ usePublicPageGlow({ color: accent });
               text-[var(--page-header-accent,var(--color-accent))] sm:size-14
               sm:text-3xl"
             :class="iconMedia && !iconMedia.generated ? '' : 'bg-bg-accent'"
+            data-landing-zone="icon"
           >
             <Media v-if="iconMedia" v-bind="iconMedia" class="size-full" />
             <Icon v-else :name="icon" />

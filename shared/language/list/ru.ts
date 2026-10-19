@@ -529,6 +529,8 @@ export default defineI18nModule({
     llms_txt_diary: 'короткие датированные записи, только они и ничего больше',
     llms_txt_tags: 'темы, которые объединяют проекты и события',
     llms_txt_pages: 'самостоятельные тексты вне хронологии',
+    llms_txt_search:
+      'поиск по всем публичным текстам, по словам в любой их форме: /search/?q=…',
     llms_txt_sitemap: 'все публичные адреса этого сайта',
     llms_txt_markdown_title: 'Markdown',
     llms_txt_markdown:
@@ -541,11 +543,11 @@ export default defineI18nModule({
       'Сквозная классификация проектов и событий: тег объединяет всё, что связано общей темой или признаком.',
     public_tag_description: (title) => `Проекты и события с тегом «${title}».`,
     search: 'Поиск',
-    public_search_description: 'Поиск по проектам и событиям.',
+    public_search_description:
+      'Поиск по всему сайту: проектам, событиям, дневнику, страницам и файлам.',
     public_search_query_title: (query) => `«${query}»`,
-    public_search_query_description: (query) =>
-      `Все проекты и события, связанные с «${query}».`,
-    search_placeholder: 'Найти проект или событие…',
+    public_search_query_description: (query) => `Всё на сайте о «${query}».`,
+    search_placeholder: 'Искать на сайте…',
     search_clear: 'Очистить поиск',
     search_filters: 'Фильтры',
     search_filter_type: 'Что искать',
@@ -557,6 +559,7 @@ export default defineI18nModule({
     search_tag_include: (tag) => `Искать с тегом «${tag}»`,
     search_tag_exclude: (tag) => `Искать без тега «${tag}»`,
     search_tag_remove: (tag) => `Убрать тег «${tag}» из фильтра`,
+    search_filter_remove: (filter) => `Убрать фильтр «${filter}»`,
     search_reset_filters: 'Сбросить фильтры',
     search_results_count: (projects, events) => {
       const parts = [
@@ -573,6 +576,101 @@ export default defineI18nModule({
     search_empty: 'Ничего не нашлось',
     search_empty_description:
       'Попробуйте изменить запрос или ослабить фильтры.',
+    search_kind: (kind) =>
+      ({
+        project: 'Проект',
+        'project-section': 'Раздел проекта',
+        event: 'Событие',
+        'diary-entry': 'Дневник',
+        page: 'Страница',
+        file: 'Файл',
+        tag: 'Тег',
+        profile: 'Профиль',
+      })[kind],
+    search_kind_group: (kind) =>
+      ({
+        project: 'Проекты',
+        'project-section': 'Разделы проектов',
+        event: 'События',
+        'diary-entry': 'Дневник',
+        page: 'Страницы',
+        file: 'Файлы',
+        tag: 'Теги',
+        profile: 'Профиль',
+      })[kind],
+    search_where: (where) =>
+      ({
+        title: 'Название',
+        name: 'Найдено по другому названию',
+        summary: 'Описание',
+        heading: 'Заголовок',
+        section: 'Раздел проекта',
+        text: 'Текст',
+        caption: 'Подпись',
+        file: 'Описание файла',
+        hint: 'Подсказка',
+        link: 'Заметка к ссылке',
+        relation: 'Связь',
+        period: 'Период',
+        status: 'Статус',
+        fact: 'Профиль',
+        notes: 'Личные заметки',
+        place: 'Где показан',
+        tag: 'Тег',
+        day: 'День',
+      })[where],
+    search_where_section: (title) => `Раздел «${title}»`,
+    search_access_private: 'Видно только вам',
+    search_access_link: 'Видно только тем, у кого есть ссылка',
+    search_access_private_short: 'Только вам',
+    search_access_link_short: 'По ссылке',
+    search_edit: 'Изменить',
+    search_more_finds: (count) =>
+      `Ещё в ${plural(count, 'месте', 'местах', 'местах')}`,
+    search_fewer_finds: 'Свернуть места',
+    search_all_of_kind: (count) => `Все ${count}`,
+    search_all_results: (count) => `Все результаты: ${count}`,
+    search_show_results: (count) =>
+      count
+        ? `Показать ${plural(count, 'результат', 'результата', 'результатов')}`
+        : 'Показать',
+    search_keyboard: (read) =>
+      `Найдено по «${read}» — так запрос читается в другой раскладке.`,
+    search_partial:
+      'Показано найденное по отдельным словам: вместе они нигде не встречаются.',
+    search_building: (percent) =>
+      `Поиск ещё готовится (${percent} %): часть найденного может не показаться.`,
+    search_failed: 'Не удалось выполнить поиск. Попробуйте ещё раз.',
+    search_quick_empty: 'Попробуйте другое слово.',
+    search_quick_hint:
+      'Проекты, события, дневник, страницы, файлы и теги — по любому слову в них.',
+    search_years: 'Годы',
+    search_sort: 'Сортировка',
+    search_sort_best: 'Сначала точные',
+    search_sort_new: 'Сначала новые',
+    search_sort_old: 'Сначала старые',
+    search_dated: (by, day) =>
+      ({
+        added: `Добавлено ${day}`,
+        shown: day,
+        'last-used': `Последний раз ${day}`,
+        'first-used': `Впервые ${day}`,
+      })[by],
+    search_no_filters: 'Для этого контента фильтров нет',
+    search_year_count: (year, count) => `${year}: найдено ${count}`,
+    search_recent: 'Недавние',
+    search_actions: 'Действия',
+    search_action_diary_today: 'Запись дневника за сегодня',
+    search_action_diary_today_new: 'Написать запись за сегодня',
+    search_action_diary_day: (day) => `Запись дневника за ${day}`,
+    search_action_diary_day_new: (day) => `Написать запись за ${day}`,
+    search_action_edit: (title) => `Редактировать «${title}»`,
+    search_action_view: (title) => `Открыть «${title}» на сайте`,
+    search_action_section: 'Раздел админки',
+    search_action_new_project: (title) => `Новый проект «${title}»`,
+    search_action_new_event: (title) => `Новое событие «${title}»`,
+    search_action_new_page: (title) => `Новая страница «${title}»`,
+    search_action_ask_ai: (text) => `Спросить ИИ: «${text}»`,
     forbidden_title: 'Это личное пространство',
     forbidden_description: 'Только администратор может просматривать это.',
     not_found_title: 'Здесь ничего нет',
@@ -1812,7 +1910,7 @@ export default defineI18nModule({
     period_dates_edit: 'Изменить даты',
     entity_notes_section: 'Примечания',
     entity_notes_section_description:
-      'Напоминание и личные заметки. Их видите только вы — ни в поиск, ни в Markdown-копию они не попадают.',
+      'Напоминание и личные заметки. Их видите только вы: на страницу и в Markdown-копию они не попадают, находит их только ваш поиск.',
     entity_reminder: 'Напоминание',
     entity_reminder_hint:
       'Что здесь ещё надо сделать. Пока оно заполнено, во всех списках здесь стоит жёлтая метка.',

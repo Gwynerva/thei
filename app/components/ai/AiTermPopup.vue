@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { AI_TERM_DISPLAY_MAX, AI_TERM_NOTE_MAX } from '#layers/thei/shared/ai';
 import type { AiTermItem } from '#layers/thei/shared/ai-memory';
+import { termKey } from '#layers/thei/shared/text-terms';
 
 /**
  * A word of the dictionary, added or changed in one go: as the owner writes
@@ -45,14 +46,15 @@ const forms = computed(() =>
 
 /** Another word already written so, or with this among its forms. */
 const taken = computed(() => {
+  // Keyed as the server keys them (`termKey`), or a word it refuses passes.
   const words = [draft.value.display, ...forms.value]
-    .map((word) => word.trim().toLocaleLowerCase())
+    .map(termKey)
     .filter(Boolean);
   return props.terms.some(
     (term) =>
       term.word !== props.term?.word &&
       [term.display, ...term.forms].some((word) =>
-        words.includes(word.toLocaleLowerCase()),
+        words.includes(termKey(word)),
       ),
   );
 });
