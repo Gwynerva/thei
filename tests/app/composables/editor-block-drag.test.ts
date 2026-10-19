@@ -96,13 +96,35 @@ describe('edge auto-scroll while dragging', () => {
 describe('private section drag constraints', () => {
   const boundary = (id: string, sectionId: string) => ({ id, sectionId });
 
-  it('allows the two boundaries of one pair to swap roles', () => {
+  it('never turns a settled pair inside out', () => {
     const blocks = [
-      boundary('a-start', 'a'),
+      { id: 'before' },
+      { ...boundary('a-start', 'a'), edge: 'start' as const },
       { id: 'content' },
-      boundary('a-end', 'a'),
+      { ...boundary('a-end', 'a'), edge: 'end' as const },
     ];
-    expect(editorPrivateSectionMoveIsValid(blocks, 2, 0)).toBe(true);
+    // The end above the start would make "before" private and "content"
+    // public; above the content alone it only takes the content out.
+    expect(editorPrivateSectionMoveIsValid(blocks, 3, 0)).toBe(false);
+    expect(editorPrivateSectionMoveIsValid(blocks, 3, 1)).toBe(false);
+    expect(editorPrivateSectionMoveIsValid(blocks, 3, 2)).toBe(true);
+    // A pair not settled yet has no sides to keep.
+    const fresh = blocks.map(({ id, sectionId }) => ({ id, sectionId }));
+    expect(editorPrivateSectionMoveIsValid(fresh, 3, 0)).toBe(true);
+  });
+
+  it('reads a stray edge as a plain block, as the batches do', () => {
+    const blocks = [
+      boundary('stray', 'lost'),
+      { ...boundary('start', 'section'), edge: 'start' as const },
+      { id: 'inside' },
+      { ...boundary('end', 'section'), edge: 'end' as const },
+      { id: 'outside' },
+    ];
+    expect(editorPrivateSectionLayoutIsValid(blocks)).toBe(true);
+    expect(editorPrivateSectionMoveIsValid(blocks, 0, 2)).toBe(true);
+    expect(editorPrivateSectionMoveIsValid(blocks, 4, 2)).toBe(true);
+    expect(editorPrivateSectionMoveIsValid(blocks, 1, 4)).toBe(false);
   });
 
   it('rejects moves that cross or nest stable pairs', () => {

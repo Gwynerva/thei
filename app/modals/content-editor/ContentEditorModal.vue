@@ -486,16 +486,26 @@ async function handleEditorChange(
   _api: API,
   event: BlockMutationEvent | BlockMutationEvent[],
 ) {
-  if (
-    !editorAcceptsChanges ||
-    editorSession.isApplying.value ||
-    transientEntitySelections > 0
-  )
+  if (!editorAcceptsChanges) return;
+  // A whole text coming in is checked already; a move made meanwhile is
+  // judged once it is in.
+  if (editorSession.isApplying.value) {
+    editorPrivateSections?.holdMoves(event);
     return;
+  }
+  // The sections are kept whole even while a block waits for its choice;
+  // only the history waits for the choice (`endTransientEntitySelection`).
   if (editorPrivateSections && !editorPrivateSections.handleChange(event))
     return;
+  if (transientEntitySelections > 0) return;
   editorSession.recordChange();
 }
+
+watch(editorSession.isApplying, (applying) => {
+  if (applying || !editorAcceptsChanges) return;
+  if (editorPrivateSections?.releaseMoves() && !transientEntitySelections)
+    editorSession.recordChange();
+});
 
 function beginTransientEntitySelection() {
   transientEntitySelections += 1;
@@ -1224,7 +1234,9 @@ async function startEditor() {
   // Closed while the editor was starting: it has been destroyed by now, and
   // nothing may be bound to it any more.
   if (disposed) return;
-  editorPrivateSections = createEditorPrivateSections(editor);
+  editorPrivateSections = createEditorPrivateSections(editor, {
+    root: holder.value!,
+  });
   cleanupEditorPrivatePattern = createEditorPrivatePattern(holder.value!);
   await editorSession.initialize();
   if (disposed) return;
@@ -1610,6 +1622,7 @@ function contentToolLabels() {
     privateSection: phrase.value.content_private_section,
     privateSectionStart: phrase.value.content_private_section_start,
     privateSectionEnd: phrase.value.content_private_section_end,
+    removePrivateSection: phrase.value.content_private_section_remove,
     externalLinkError: phrase.value.external_link_error,
     refreshExternalLink: phrase.value.refresh_external_link,
     linkNote: phrase.value.content_link_note_placeholder,
