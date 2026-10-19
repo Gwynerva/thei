@@ -22,7 +22,9 @@ const adminState = fileURLToPath(
 const WORD = `zq${Date.now()
   .toString(36)
   .replace(/\d/g, (digit) => 'abcdefghij'[Number(digit)]!)}`;
-const TITLE = `Lantern fair ${WORD}`;
+// The title holds a word of its own: the word sought stands only under the
+// spoiler, so that is the place found best.
+const TITLE = `Lantern fair ${WORD.slice(2).split('').reverse().join('')}`;
 
 async function open(page: Page, path: string) {
   await page.goto(path);

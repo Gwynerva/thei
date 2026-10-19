@@ -41,7 +41,9 @@ useHead({
     <PublicShareBanner />
     <TheiLoadingIndicator />
     <slot></slot>
-    <SearchPopup />
+    <!-- Opened only by a hand on the page: nothing of it is drawn on the
+         server. -->
+    <ClientOnly><SearchPopup /></ClientOnly>
   </div>
 </template>
 
