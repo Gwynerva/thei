@@ -34,9 +34,14 @@ and behaves.
   each row already.
 - One row per result (`SearchQuickRow.vue`): the kind's icon in the title's
   line, then its time quiet after it; under it, from the left edge, the place
-  found best and its words, the found ones marked, and a faint `+N` for the
-  other places; the picture of the result dissolving in from the right, or a
-  file's own preview, framed.
+  found best and its words, the found ones marked; then, on a line of its
+  own under an arrow from the result, in italics, how many other places hold
+  the words — a bare «+5» on the picture's fading edge was all but unseen.
+  The result's picture dissolves in from the right, or a file's own preview
+  stands there, framed.
+- The row Enter takes is ringed as a picker's row is (`useActiveRow`): the
+  first, until the arrows or the pointer choose another, so what was typed
+  always shows where Enter goes.
 - ↑ ↓ choose, Enter opens, Ctrl+Enter shows everything on the search page,
   Esc closes and gives the focus back. The foot says so, on a desktop only.
 - Enter opens where the owner is: the page on the site, the editor in the

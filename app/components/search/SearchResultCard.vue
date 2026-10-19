@@ -216,7 +216,12 @@ const accent = computed(() =>
           </span>
         </TheiLink>
       </li>
-      <li v-if="hit.more" class="px-sm py-1.5 text-xs text-text-3 sm:px-md">
+      <li
+        v-if="hit.more"
+        class="flex items-center gap-1 px-sm py-1.5 text-xs text-text-3 italic
+          sm:px-md"
+      >
+        <Icon name="subfolder-arrow" class="shrink-0" aria-hidden="true" />
         {{ phrase.search_more_finds(hit.more) }}
       </li>
     </ul>

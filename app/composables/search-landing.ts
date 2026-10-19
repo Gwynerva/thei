@@ -292,7 +292,19 @@ export function useSearchLanding() {
     const opener = place.matches('[data-opens-viewer]')
       ? place
       : place.querySelector<HTMLElement>('[data-opens-viewer]');
-    (opener as HTMLElement | null)?.click();
+    if (!opener) return;
+    (opener as HTMLElement).click();
+    // The words marked where the file's window says them.
+    for (let wait = 0; wait < 10 && mine === run; wait++) {
+      await pause(150);
+      const dialog = document.querySelector('dialog[open]');
+      const inWindow = dialog ? ranges(dialog, target.words) : [];
+      if (inWindow.length) {
+        if ('highlights' in CSS)
+          CSS.highlights.set(HIGHLIGHT, new Highlight(...inWindow));
+        return;
+      }
+    }
   }
 
   // Each address lands once: on the page loaded, then on each page the site

@@ -20,7 +20,7 @@ export interface SearchQuickRowData {
   segments?: SearchSegment[];
   /** A quieter line, when there are no words to show. */
   detail?: string;
-  /** Other places the words were found at. */
+  /** Other places the words were found at, on a line of their own. */
   more?: number;
   media?: MediaDescriptor;
   /** A file's own preview, framed, instead of a picture along the edge. */
@@ -124,13 +124,20 @@ defineEmits<{ pick: [event: MouseEvent]; point: [event: PointerEvent] }>();
               class="text-text-2"
             /><template v-else-if="row.detail">{{ row.detail }}</template></span
           >
-          <span
-            v-if="row.more"
-            class="shrink-0 tabular-nums opacity-70"
-            :aria-label="phrase.search_more_finds(row.more)"
-            >+{{ row.more }}</span
-          >
         </span>
+        <!-- A line of its own, in words, under an arrow from the result: a
+             bare «+5» on the picture's fading edge was all but unseen. -->
+        <span
+          v-if="row.more"
+          class="flex min-w-0 items-center gap-1 text-xs text-text-3 italic"
+          ><Icon
+            name="subfolder-arrow"
+            class="shrink-0 not-italic"
+            aria-hidden="true"
+          /><span class="-m-[0.75em] min-w-0 truncate p-[0.75em]">{{
+            phrase.search_more_finds(row.more)
+          }}</span></span
+        >
       </span>
       <span
         v-if="row.media && row.preview"

@@ -619,7 +619,7 @@ export default defineI18nModule({
     search_access_link: 'Видно только тем, у кого есть ссылка',
     search_edit: 'Редактировать',
     search_more_finds: (count) =>
-      `Ещё ${plural(count, 'место', 'места', 'мест')}`,
+      `И ещё в ${plural(count, 'месте', 'местах', 'местах')}`,
     search_results_total: (count) =>
       count
         ? `${plural(count, 'Нашёлся', 'Нашлось', 'Нашлось', false)} ${plural(count, 'результат', 'результата', 'результатов')}`

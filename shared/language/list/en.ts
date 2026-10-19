@@ -562,7 +562,7 @@ export default defineI18nBase({
     search_access_link: 'Only those with the link see it',
     search_edit: 'Edit',
     search_more_finds: (count) =>
-      `${count} more ${count === 1 ? 'place' : 'places'}`,
+      `Also in ${count} more ${count === 1 ? 'place' : 'places'}`,
     search_results_total: (count) =>
       count
         ? `Found ${count} ${count === 1 ? 'result' : 'results'}`
