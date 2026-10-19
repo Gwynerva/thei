@@ -1,4 +1,7 @@
-import type { Page } from '@playwright/test';
+import { expect, type APIRequestContext, type Page } from '@playwright/test';
+import sharp from 'sharp';
+import { buildUploadHeaders } from '../../../shared/api/asset-upload-headers';
+import { createOriginalAssetSettings } from '../../../shared/asset-upload-settings';
 import { topModal } from './modal';
 
 /**
@@ -35,4 +38,54 @@ export async function describeFile(page: Page, text: string) {
   const controls = uploadControls(page);
   await controls.description.fill(text, { timeout: 30_000 });
   await controls.done.click();
+}
+
+/**
+ * A file put in the library through the API, as the admin's uploads are:
+ * its bytes as the body, what it is in the headers, kept whole.
+ */
+export async function uploadFile<T = { assetUuid: string; slug: string }>(
+  api: APIRequestContext,
+  extension: string,
+  bytes: Uint8Array,
+): Promise<T> {
+  const response = await api.post('/api/admin/assets', {
+    headers: buildUploadHeaders({
+      settings: createOriginalAssetSettings(),
+      extension,
+    }),
+    data: Buffer.from(bytes),
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  return (await response.json()) as T;
+}
+
+/**
+ * A picture of a colour of its own — a random one unless given — so each run
+ * stores new bytes rather than finding the last run's file.
+ */
+export async function uploadPicture<T = { assetUuid: string; slug: string }>(
+  api: APIRequestContext,
+  {
+    color,
+    width = 64,
+    height = 48,
+  }: { color?: string; width?: number; height?: number } = {},
+): Promise<{ asset: T; buffer: Buffer }> {
+  const background = color ?? {
+    r: Math.floor(Math.random() * 256),
+    g: Math.floor(Math.random() * 256),
+    b: Math.floor(Math.random() * 256),
+  };
+  const buffer = await sharp({
+    create: { width, height, channels: 3, background },
+  })
+    .png()
+    .toBuffer();
+  return { asset: await uploadFile<T>(api, 'png', buffer), buffer };
+}
+
+/** A text file of these words. */
+export function uploadText(api: APIRequestContext, words: string) {
+  return uploadFile(api, 'txt', new TextEncoder().encode(words));
 }

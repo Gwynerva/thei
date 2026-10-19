@@ -6,11 +6,9 @@ import {
 } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import sharp from 'sharp';
-import { createOriginalAssetSettings } from '../../shared/asset-upload-settings';
-import { buildUploadHeaders } from '../../shared/api/asset-upload-headers';
 import { E2E_ORIGIN } from './fixture-url';
 import { screenshot } from './screenshots';
+import { uploadPicture } from './helpers/upload';
 
 /**
  * A visitor's window of a file lists the other pages it is shown on, to go
@@ -23,25 +21,6 @@ test.use({
     new URL('./.artifacts/admin.json', import.meta.url),
   ),
 });
-
-/** A picture of its own colour, so every run stores new bytes. */
-async function upload(request: APIRequestContext) {
-  const [r, g, b] = [0, 0, 0].map(() => Math.floor(Math.random() * 256));
-  const buffer = await sharp({
-    create: { width: 64, height: 48, channels: 3, background: { r, g, b } },
-  })
-    .png()
-    .toBuffer();
-  const response = await request.post('/api/admin/assets', {
-    headers: buildUploadHeaders({
-      settings: createOriginalAssetSettings(),
-      extension: 'png',
-    }),
-    data: buffer,
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  return (await response.json()) as { assetUuid: string; slug: string };
-}
 
 /** Opens a page once it answers clicks and keys. */
 async function open(page: Page, path: string) {
@@ -57,7 +36,7 @@ test('the window names the other public pages the file is on, and goes there', a
   request,
 }) => {
   const run = randomUUID().slice(0, 8);
-  const picture = await upload(request);
+  const picture = (await uploadPicture(request)).asset;
   const media = (id: string) => ({
     id,
     type: 'contentMedia',
