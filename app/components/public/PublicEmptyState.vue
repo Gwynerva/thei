@@ -1,5 +1,11 @@
 <script lang="ts" setup>
-defineProps<{ title: string; description?: string }>();
+import type { IconName } from '#thei/icons';
+
+/** What is not there: nothing found by default, `icon` saying what else. */
+withDefaults(
+  defineProps<{ title: string; description?: string; icon?: IconName }>(),
+  { icon: 'face-dead' },
+);
 </script>
 
 <template>
@@ -8,11 +14,7 @@ defineProps<{ title: string; description?: string }>();
       border-border-1 px-md py-lg text-center"
     data-empty-state
   >
-    <Icon
-      name="face-dead"
-      class="mb-xs text-4xl text-text-3"
-      aria-hidden="true"
-    />
+    <Icon :name="icon" class="mb-xs text-4xl text-text-3" aria-hidden="true" />
     <p class="font-semibold tracking-tight text-balance text-text-2">
       {{ title }}
     </p>
