@@ -109,10 +109,11 @@ defineEmits<{
             role="img"
             class="shrink-0 text-xs text-text-3"
           />
+          <!-- On a phone the title keeps the line to itself. -->
           <span
             v-if="row.when"
             class="-m-[0.75em] shrink-0 p-[0.75em] text-xs font-normal
-              text-text-3"
+              text-text-3 max-sm:hidden"
             >{{ row.when }}</span
           >
         </span>
