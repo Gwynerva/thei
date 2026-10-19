@@ -1,4 +1,4 @@
-import { normalizeTermText } from '../text-terms';
+import { normalizeTermText, queryWordsFilter, wordTokens } from '../text-terms';
 import {
   paginate,
   resolvePagination,
@@ -61,8 +61,10 @@ export function canonicalizeAdminEntityListRouteQuery(
 
 /**
  * One page of an admin list, searched and sorted. The search finds the query
- * in an entity's title, summary, slug, public ID or text; `matches` lets a
- * kind find its entities in some other way too — a diary entry by its day.
+ * in an entity's title, summary, slug, public ID or text — whole, or word by
+ * word, each in any of its forms and anywhere among them
+ * (`queryWordsFilter`); `matches` lets a kind find its entities in some
+ * other way too — a diary entry by its day.
  */
 export function paginateAdminEntities<T extends SearchableAdminEntity>(
   items: T[],
@@ -70,21 +72,25 @@ export function paginateAdminEntities<T extends SearchableAdminEntity>(
   matches?: (item: T) => boolean,
 ): PaginatedResponse<T> {
   const q = normalizeAdminSearchText(query.q ?? '');
+  const byWords = queryWordsFilter(wordTokens(q));
   const order = query.order === 'oldest' ? 'oldest' : 'newest';
 
   const filtered = q
-    ? items.filter(
-        (item) =>
-          [
-            item.title,
-            item.summary,
-            item.humanReadableSlug,
-            item.publicId,
-            item.contentText ?? '',
-            ...(item.synonyms ?? []),
-          ].some((value) => normalizeAdminSearchText(value).includes(q)) ||
-          matches?.(item),
-      )
+    ? items.filter((item) => {
+        const texts = [
+          item.title,
+          item.summary,
+          item.humanReadableSlug,
+          item.publicId,
+          item.contentText ?? '',
+          ...(item.synonyms ?? []),
+        ].map(normalizeAdminSearchText);
+        return (
+          texts.some((text) => text.includes(q)) ||
+          byWords(texts) ||
+          matches?.(item)
+        );
+      })
     : [...items];
 
   filtered.sort((a, b) => {

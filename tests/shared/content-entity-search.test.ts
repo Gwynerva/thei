@@ -376,3 +376,80 @@ describe('synonyms in the entity search', () => {
     expect(rankContentEntities(items, 'елка')).toHaveLength(1);
   });
 });
+
+describe('a name typed from memory, word by word', () => {
+  const entity = (
+    entityId: string,
+    title: string,
+    synonyms: string[] = [],
+  ): ContentEntitySearchItem => ({
+    entityType: 'project',
+    entityId,
+    title,
+    summary: '',
+    url: `/projects/${entityId}/`,
+    humanReadableSlug: entityId,
+    publicId: entityId.toUpperCase(),
+    synonyms,
+    updatedAt: 1,
+  });
+  const cosplay = entity('cosplay', 'Косплей на Шедоухарт');
+  const all = [
+    cosplay,
+    entity('shadow', 'Шедоухарт и её история'),
+    entity('fest', 'Фестиваль', ['косплей фест в Москве']),
+    entity('play', 'Плейлист'),
+  ];
+  const ids = (query: string) =>
+    rankContentEntities(all, query, 10).map((item) => item.entityId);
+
+  it('finds a title by its words with one left out', () => {
+    expect(ids('косплей шедоухарт')).toEqual(['cosplay']);
+  });
+
+  it('finds it with the words in another order, or in another form', () => {
+    expect(ids('шедоухарт косплей')).toEqual(['cosplay']);
+    expect(ids('косплея шедоухарта')).toEqual(['cosplay']);
+  });
+
+  it('finds it while the last word is still being typed', () => {
+    expect(ids('косплей шедо')).toEqual(['cosplay']);
+    expect(ids('кос шед')).toEqual(['cosplay']);
+  });
+
+  it('reads «ё» as «е» in every word', () => {
+    expect(ids('шедоухарт ее')).toEqual(['shadow']);
+  });
+
+  it('finds a synonym of several words by its words', () => {
+    expect(ids('косплей москва')).toEqual(['fest']);
+  });
+
+  it('puts a word started before a piece found inside a word', () => {
+    expect(ids('пле')).toEqual(['play', 'cosplay', 'fest']);
+  });
+
+  it('puts words in the order typed before words in another order', () => {
+    const items = [
+      entity('reversed', 'Шедоухарт: косплей'),
+      entity('ordered', 'Косплей и Шедоухарт'),
+    ];
+    expect(
+      rankContentEntities(items, 'косплей шед', 10).map(
+        (item) => item.entityId,
+      ),
+    ).toEqual(['ordered', 'reversed']);
+  });
+
+  it('finds nothing when a word stands nowhere', () => {
+    expect(ids('косплей геншин')).toEqual([]);
+  });
+
+  it('gives each word of the query its own word, whichever way fits', () => {
+    // «ко» could take «косплей», leaving nothing for «косплей»: «кота» fits.
+    const items = [entity('cat', 'Косплей кота')];
+    expect(
+      rankContentEntities(items, 'ко косплей', 10).map((item) => item.entityId),
+    ).toEqual(['cat']);
+  });
+});

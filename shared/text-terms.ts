@@ -65,6 +65,95 @@ function russianStem(word: string) {
   return trimmed.length >= 2 ? trimmed : stem;
 }
 
+/**
+ * How the words of a typed query stand among the words of a name: each word
+ * of the query is the start of a word of the name or has its stem, each word
+ * of the name answering one word of the query — so «косплей шедоухарт»
+ * finds «Косплей на Шедоухарт», and «косплея шедо», typed halfway, too.
+ * `ordered` when they stand in the order typed; undefined when a word of the
+ * query stands nowhere. Both lists are normalized words (`wordTokens`).
+ */
+export function matchQueryWords(
+  query: readonly string[],
+  words: readonly string[],
+): { ordered: boolean } | undefined {
+  if (!query.length) return undefined;
+  // In the order typed first, each word after the one before it: the
+  // earliest word each time leaves the most room for the rest.
+  let from = 0;
+  let ordered = true;
+  for (const queryWord of query) {
+    const index = words.findIndex(
+      (word, at) => at >= from && answersQueryWord(queryWord, word),
+    );
+    if (index === -1) {
+      ordered = false;
+      break;
+    }
+    from = index + 1;
+  }
+  if (ordered) return { ordered };
+  // In any order: each query word its own word of the name, tried every way —
+  // «ко» must not take «косплей» from «косплей» when «кота» would do.
+  const used = words.map(() => false);
+  const place = (at: number): boolean => {
+    if (at === query.length) return true;
+    for (const [index, word] of words.entries()) {
+      if (used[index] || !answersQueryWord(query[at]!, word)) continue;
+      used[index] = true;
+      if (place(at + 1)) return true;
+      used[index] = false;
+    }
+    return false;
+  };
+  return place(0) ? { ordered: false } : undefined;
+}
+
+/** Whether a word answers a word of a query: begins with it, or is a form of it. */
+function answersQueryWord(queryWord: string, word: string) {
+  return word.startsWith(queryWord) || stemTerm(word) === stemTerm(queryWord);
+}
+
+/**
+ * A filter of a list, which only keeps or drops: whether every word of a
+ * typed query stands in the texts as a word — one that begins with it, or
+ * one of its forms (`answersQueryWord`) — never inside another word, as
+ * «кот» stands in «который». The texts are normalized (`normalizeTermText`).
+ *
+ * Long texts are read by a pattern for the words that begin as the query
+ * word or its stem does, and only those are stemmed.
+ */
+export function queryWordsFilter(
+  query: readonly string[],
+): (texts: readonly string[]) => boolean {
+  const patterns = query.map((queryWord) => {
+    const stem = stemTerm(queryWord);
+    let head = 0;
+    while (
+      head < Math.min(stem.length, queryWord.length) &&
+      stem[head] === queryWord[head]
+    )
+      head++;
+    const start = (head ? queryWord.slice(0, head) : queryWord).replace(
+      /[.*+?^${}()|[\]\\]/g,
+      '\\$&',
+    );
+    return {
+      queryWord,
+      words: new RegExp(`(?<![\\p{L}\\p{N}])${start}[\\p{L}\\p{N}]*`, 'gu'),
+    };
+  });
+  return (texts) =>
+    patterns.length > 0 &&
+    patterns.every(({ queryWord, words }) =>
+      texts.some((text) => {
+        for (const [word] of text.matchAll(words))
+          if (answersQueryWord(queryWord, word)) return true;
+        return false;
+      }),
+    );
+}
+
 /** How often each stem occurs. */
 export type TermCounts = Map<string, number>;
 

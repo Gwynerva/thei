@@ -228,6 +228,16 @@ test('a free crop is taken on request, and the picture can be turned', async ({
   await expect(frame).toHaveAccessibleName(/×/);
   await expect(useResult).toBeEnabled({ timeout: 20_000 });
   await useResult.click();
+  // The last screen shows the file taken, not the source under its frame;
+  // Back brings the frame back as it was.
+  await expect(page.locator('[data-upload-screen="describe"]')).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(frame).toHaveCount(0);
+  await page.locator('[data-upload-back]').click();
+  await expect(frame).toBeVisible();
+  await expect(useResult).toBeEnabled({ timeout: 20_000 });
+  await useResult.click();
   await skipDescription(page);
   await expect(page.locator('[data-result]')).toContainText('assetUuid');
 

@@ -1,4 +1,8 @@
-import { editableFieldOf } from '#layers/thei/app/components/content/editor-edit-commands';
+import {
+  editableFieldOf,
+  editCommandRunning,
+} from '#layers/thei/app/components/content/editor-edit-commands';
+import { lettersBefore } from './editor-inline-dom';
 /**
  * Ctrl+Z in the editor undoes what is safe to undo, and nothing else.
  *
@@ -172,14 +176,12 @@ export function bindEditorNativeUndo(
     if (records.some(touchesField)) ledger.fence();
   }
 
+  /** Where the caret is in a field, by the letters before it. */
   function caretIn(field: HTMLElement | undefined) {
     const selection = window.getSelection();
     if (!field || !selection?.focusNode || !field.contains(selection.focusNode))
       return undefined;
-    const range = document.createRange();
-    range.selectNodeContents(field);
-    range.setEnd(selection.focusNode, selection.focusOffset);
-    return range.toString().length;
+    return lettersBefore(field, selection.focusNode, selection.focusOffset);
   }
 
   function inEditor(target: EventTarget | null) {
@@ -230,9 +232,12 @@ export function bindEditorNativeUndo(
     observer.takeRecords();
     unclaimed = [];
     const inputType = (event as InputEvent).inputType ?? '';
-    const wasAnnounced = announced;
+    // A command run in place of a key's edit, which was stopped, is a step
+    // of its own: the key announced an edit that never came.
+    const byCommand = editCommandRunning();
+    const wasAnnounced = announced && !byCommand;
     announced = false;
-    const before = caretBefore;
+    const before = byCommand ? undefined : caretBefore;
     caretBefore = undefined;
     if (!inEditor(event.target)) {
       if (inputType !== 'historyUndo' && inputType !== 'historyRedo')

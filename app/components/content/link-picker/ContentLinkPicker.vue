@@ -595,6 +595,8 @@ const { listId, activeIndex, optionId, move, pointAt, current } = useActiveRow(
   () => rows.value.length,
   search.results,
 );
+/** Enter takes the ringed row only from the field; elsewhere it is ✓'s. */
+const fieldFocused = ref(false);
 
 /**
  * A row is the choice at once, as a whole — Enter on ✓ makes the link — and
@@ -634,6 +636,8 @@ async function chooseRow(
 }
 
 function onFieldKeydown(event: KeyboardEvent) {
+  // The keys that end a composed word only end it.
+  if (event.isComposing) return;
   if (event.key === 'Enter') {
     // Ctrl/Cmd+Enter is the popup's own, wherever it is pressed.
     if (event.ctrlKey || event.metaKey) return;
@@ -786,6 +790,8 @@ const queryLine = computed(() => {
           data-link-field
           @input="onInput"
           @keydown="onFieldKeydown"
+          @focus="fieldFocused = true"
+          @blur="fieldFocused = false"
         />
         <Icon
           v-if="search.loading.value || reading || draft.loading"
@@ -834,7 +840,7 @@ const queryLine = computed(() => {
           :id="optionId(index)"
           :key="contentEntityKey(item)"
           :item
-          :active="index === activeIndex"
+          :active="fieldFocused && index === activeIndex"
           :chosen="
             Boolean(
               picked && contentEntityKey(picked) === contentEntityKey(item),

@@ -1,4 +1,14 @@
-import { AssetType, type AssetRole } from '#layers/thei/shared/asset';
+import {
+  AssetType,
+  type ArchivedOriginalFileMeta,
+  type AssetRole,
+} from '#layers/thei/shared/asset';
+import {
+  getAssetMediaKind,
+  normalizeAssetExtension,
+  type AssetMediaKind,
+} from '#layers/thei/shared/assets/formats';
+import { assetPreview } from '#layers/thei/shared/assets/preview';
 import type {
   AssetSource,
   AssetSourceType,
@@ -75,6 +85,37 @@ export const assetKindIcon = {
   [AssetType.Audio]: 'audio',
   [AssetType.Other]: 'file',
 } as const satisfies Record<AssetType, IconName>;
+
+const ASSET_TYPE_OF_KIND = {
+  image: AssetType.Image,
+  video: AssetType.Video,
+  audio: AssetType.Audio,
+  other: AssetType.Other,
+} as const satisfies Record<AssetMediaKind, AssetType>;
+
+/** The kind of a file, as its extension says. */
+export function assetTypeOfExtension(extension: string): AssetType {
+  return ASSET_TYPE_OF_KIND[getAssetMediaKind(extension)];
+}
+
+/**
+ * What a file is, for a reader who has no title to go by: a picture, a video
+ * or a recording by its kind; any other file by the format a person knows it
+ * as — a PDF document, a ZIP archive — and failing that, by its extension. A
+ * file kept zipped is named by its original, as it is shown.
+ */
+export function assetFormatLabel(
+  extension: string,
+  archivedOriginal?: ArchivedOriginalFileMeta,
+): string {
+  const type = assetTypeOfExtension(extension);
+  if (type !== AssetType.Other) return assetKindLabel(type);
+  const kind = assetPreview(extension, archivedOriginal)?.kind;
+  return phrase.value.asset_format(
+    !kind || kind === 'probe' ? 'other' : kind,
+    normalizeAssetExtension(archivedOriginal?.extension ?? extension),
+  );
+}
 
 export function assetDeletionLabel(deleteAfter: number) {
   return phrase.value.asset_library_pending_deletion(

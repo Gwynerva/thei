@@ -20,7 +20,11 @@ The panel:
 
 - Its header is one slim row: the kind's icon and a name. The library names
   the kind of file (Image, Video, Audio, File); a placement names its place's
-  role; a visitor's window names the file by its title, in the text's colour.
+  role; a visitor's window names the file by its title, in the text's colour,
+  and a file with no title by what it is — «Изображение», «Видео», and for
+  any other file the format a person knows it as: «Документ PDF», «Архив
+  ZIP», «Таблица CSV», failing that «Файл DOCX» (`assetFormatLabel` in
+  `app/composables/asset-library-labels.ts`).
   A panel that goes screen by screen puts its Back at the left of this row,
   never under it. On a phone the row also folds the panel.
 - What it holds goes in sections one under another, each under a caption in
@@ -44,8 +48,8 @@ The file's description:
   window is about one place — a placement, the editor — it is marked
   «Глобально» with a globe in the warning colour, whose hint says the
   description goes wherever the file is shown.
-- A visitor's window always shows it, when it has one, first in its «Файл»
-  group, before the facts.
+- A visitor's window always shows it, when it has one, first in its «О
+  файле» group, before the facts.
 
 A video's still:
 
@@ -112,7 +116,7 @@ A placement's window:
 
 A visitor's window:
 
-- The caption of the place, in the text's colour; the «Файл» group, its
+- The caption of the place, in the text's colour; the «О файле» group, its
   description and then its facts; and «Где ещё используется», the other pages
   the file is shown on, as chips of the library's kind without a private
   count.
@@ -209,6 +213,10 @@ A visitor's window:
   with the frame the player stands at, the way back to the automatic pick,
   and a tick on the bar. The choice used to be remade by a button that picked
   again by itself, which changed nothing once the update had picked well.
+- A visitor's window read «Файл» twice for a file with no title: as its
+  header and as the group under it, neither saying anything. The owner asked
+  for a header that tells what the file is, and named the group «О файле». A
+  placement keeps «Здесь» and «Файл», where «Файл» stands against «Здесь».
 - A visitor's «Где ещё используется» is there to draw a reader further in,
   and the owner asked for it with care not to leak anything private: hence a
   stranger's view built by the pages' own builders rather than a second set

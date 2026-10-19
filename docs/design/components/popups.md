@@ -75,6 +75,15 @@ asked about stays in sight.
   under the pointer; a row that deletes shades with
   `[--popup-item-hover:var(--color-bg-error)]`. The row Enter would choose is
   ringed (`ring-2 ring-accent/60 ring-inset`), as in the select.
+- **A list searched by typing always rings the row Enter takes.** It is the
+  first from the moment the list has rows, and again after each new answer,
+  so it is never a guess whether Enter picks something. The entity pickers
+  (`app/components/content/ContentEntityRow.vue`, through `useActiveRow` in
+  `app/composables/content-entity-search.ts`) draw it as an outline, which
+  stays visible over a row's picture. A choice pinned at the top of the list
+  is the row Enter takes until something is typed; after that, it is the
+  first match. The link picker rings it only while its search field has the
+  focus, since elsewhere Enter belongs to ✓.
 - **The arrow is on by default.** It points at the middle of the anchor, or,
   for an anchor as wide as the popup, near the edge the popup is aligned to,
   and goes when it would point past the anchor. Turn it off (`:arrow="false"`)

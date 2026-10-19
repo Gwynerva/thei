@@ -31,7 +31,16 @@ function remove() {
   open.value = false;
 }
 
+/** Enter applies the hint — but the Enter that ends a composed word only ends it. */
+function onEnter(event: KeyboardEvent) {
+  if (event.isComposing) return;
+  event.preventDefault();
+  submit();
+}
+
 function popupClosed() {
+  // Opened again while it faded: the new opening is kept.
+  if (open.value) return;
   request.value?.restore();
   request.value = undefined;
   text.value = '';
@@ -62,7 +71,7 @@ defineExpose<ContentHintControlsExpose>({ open: openControls });
         :placeholder="phrase.content_hint_placeholder"
         :aria-label="phrase.content_hint"
         @element="field = $event"
-        @keydown.enter.exact.prevent="submit"
+        @keydown.enter.exact="onEnter"
       />
       <div class="flex justify-end gap-1">
         <Button

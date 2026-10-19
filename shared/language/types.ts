@@ -141,6 +141,16 @@ export type LanguagePhrases = {
   asset_library_described_none: string;
   asset_library_described_some: string;
   asset_used_elsewhere: string;
+  /** The visitor's window: the group of what the file is. */
+  asset_about: string;
+  /**
+   * A file named by what it is, when it has no title: a PDF document, a ZIP
+   * archive; `other` by its extension.
+   */
+  asset_format: (
+    kind: 'pdf' | 'zip' | 'table' | 'text' | 'markdown' | 'html' | 'other',
+    extension: string,
+  ) => string;
   asset_library_properties: string;
   asset_library_settings: string;
   asset_recipe_original: string;

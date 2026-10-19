@@ -102,13 +102,23 @@ import {
 import ContentBlockToolbox from '#layers/thei/app/components/content/ContentBlockToolbox.vue';
 import {
   editableFieldOf,
+  replaceRangeText,
   selectRange,
 } from '#layers/thei/app/components/content/editor-edit-commands';
+import {
+  caretAfterLetters,
+  lettersBefore,
+} from '#layers/thei/app/composables/editor-inline-dom';
 import { bindEditorGutterClick } from '#layers/thei/app/composables/editor-gutter-click';
 import { bindEditorCurrentBlock } from '#layers/thei/app/composables/editor-current-block';
 import { bindEditorLinkPaste } from '#layers/thei/app/composables/editor-link-paste';
 import { bindEditorAtLink } from '#layers/thei/app/composables/editor-at-link';
 import { bindEditorInlineBoundary } from '#layers/thei/app/composables/editor-inline-boundary';
+import { bindEditorInlineCaret } from '#layers/thei/app/composables/editor-inline-caret';
+import {
+  bindEditorInlineKeep,
+  type EditorInlineKeep,
+} from '#layers/thei/app/composables/editor-inline-keep';
 import { bindEditorTextDrop } from '#layers/thei/app/composables/editor-text-drop';
 import { bindEditorTextPaste } from '#layers/thei/app/composables/editor-text-paste';
 import { bindEditorNativeUndo } from '#layers/thei/app/composables/editor-native-undo';
@@ -220,7 +230,9 @@ let cleanupGutterClick: (() => void) | undefined;
 let cleanupCurrentBlock: (() => void) | undefined;
 let cleanupLinkPaste: (() => void) | undefined;
 let cleanupAtLink: (() => void) | undefined;
+let inlineKeep: EditorInlineKeep | undefined;
 let cleanupInlineBoundary: (() => void) | undefined;
+let cleanupInlineCaret: (() => void) | undefined;
 let cleanupKeyboardBoundary: (() => void) | undefined;
 let cleanupTextDrop: (() => void) | undefined;
 let cleanupTextPaste: (() => void) | undefined;
@@ -294,6 +306,12 @@ let savedValue = props.modalData.value;
 const currentKey = shallowRef(openedKey);
 const savedKey = shallowRef(openedKey);
 const isDirty = computed(() => currentKey.value !== savedKey.value);
+/**
+ * The texts this editor knows as saved by itself: the one it opened with and
+ * each one it saved since. The server's text being one of them is no news,
+ * whatever its clock and this browser's say of when it was saved.
+ */
+const ownSavedKeys = new Set([openedKey]);
 /** Set once the owner confirmed closing with unsaved changes. */
 let discardConfirmed = false;
 const computedInitialSummary = summarizeContentData(
@@ -609,10 +627,15 @@ const seenStoredAt = ref(
 );
 const storedElsewhere = computed(() => {
   const stored = editorSession.stored.value;
-  if (!stored || stored.updatedAt <= seenStoredAt.value) return undefined;
-  if ((props.modalData.current?.()?.updatedAt ?? 0) >= stored.updatedAt)
+  if (!stored) return undefined;
+  if (
+    stored.key === currentKey.value ||
+    stored.key === savedKey.value ||
+    ownSavedKeys.has(stored.key)
+  )
     return undefined;
-  if (stored.key === currentKey.value || stored.key === savedKey.value)
+  if (stored.updatedAt <= seenStoredAt.value) return undefined;
+  if ((props.modalData.current?.()?.updatedAt ?? 0) >= stored.updatedAt)
     return undefined;
   return stored;
 });
@@ -901,9 +924,17 @@ function normalizeHeaderInput(event: Event) {
   normalizeHeaderElement(event);
 }
 
+/**
+ * A heading holds plain words: markup that got into it — pasted, dropped —
+ * is taken off by an editing command, so Ctrl+Z still reaches past it. The
+ * lone `<br>` the browser leaves in an emptied heading is no markup.
+ */
 function normalizeHeaderElement(event: Event) {
   const element = event.currentTarget;
-  if (!(element instanceof HTMLHeadingElement) || !element.querySelector('*')) {
+  if (
+    !(element instanceof HTMLHeadingElement) ||
+    !element.querySelector(':not(br)')
+  ) {
     return;
   }
 
@@ -915,30 +946,28 @@ function normalizeHeaderElement(event: Event) {
     element.contains(selection.focusNode),
   );
   const anchorOffset = selectionIsInside
-    ? headerTextOffset(element, selection!.anchorNode!, selection!.anchorOffset)
+    ? lettersBefore(element, selection!.anchorNode!, selection!.anchorOffset)
     : 0;
   const focusOffset = selectionIsInside
-    ? headerTextOffset(element, selection!.focusNode!, selection!.focusOffset)
+    ? lettersBefore(element, selection!.focusNode!, selection!.focusOffset)
     : 0;
   const text = element.textContent ?? '';
-  element.textContent = text;
+  const whole = document.createRange();
+  whole.selectNodeContents(element);
+  replaceRangeText(whole, text);
 
   if (!selectionIsInside || !selection) return;
-  const textNode =
-    element.firstChild ?? element.appendChild(document.createTextNode(''));
-  selection.setBaseAndExtent(
-    textNode,
+  const anchor = caretAfterLetters(
+    element,
     Math.min(anchorOffset, text.length),
-    textNode,
-    Math.min(focusOffset, text.length),
   );
-}
-
-function headerTextOffset(root: HTMLElement, node: Node, offset: number) {
-  const range = document.createRange();
-  range.selectNodeContents(root);
-  range.setEnd(node, offset);
-  return range.toString().length;
+  const focus = caretAfterLetters(element, Math.min(focusOffset, text.length));
+  selection.setBaseAndExtent(
+    anchor.startContainer,
+    anchor.startOffset,
+    focus.startContainer,
+    focus.startOffset,
+  );
 }
 
 /** The AI's edits of this text, once read. */
@@ -1239,13 +1268,19 @@ async function startEditor() {
     linkBlocks,
     findEntity: (url) => findEntityByInternalUrl(url, internalSite),
   });
+  // The caret steps in and out of markup; a tap is settled before words go
+  // where it left the caret.
+  cleanupInlineBoundary = bindEditorInlineBoundary(holder.value!);
+  // Where words go against markup, which outlives them.
+  inlineKeep = bindEditorInlineKeep(holder.value!);
   cleanupAtLink = bindEditorAtLink(holder.value!, editor, {
     linkBlocks,
     open: (request) => inlineLinkControls.value?.open(request),
+    inline: inlineKeep,
   });
-  cleanupInlineBoundary = bindEditorInlineBoundary(holder.value!);
+  cleanupInlineCaret = bindEditorInlineCaret(holder.value!);
   // After the media and link pastes, which claim theirs first.
-  cleanupTextPaste = bindEditorTextPaste(holder.value!);
+  cleanupTextPaste = bindEditorTextPaste(holder.value!, inlineKeep);
   cleanupNativeUndo = bindEditorNativeUndo(
     holder.value!,
     holder.value!.closest('dialog') ?? document.body,
@@ -1275,8 +1310,12 @@ onBeforeUnmount(() => {
   cleanupLinkPaste = undefined;
   cleanupAtLink?.();
   cleanupAtLink = undefined;
+  inlineKeep?.dispose();
+  inlineKeep = undefined;
   cleanupInlineBoundary?.();
   cleanupInlineBoundary = undefined;
+  cleanupInlineCaret?.();
+  cleanupInlineCaret = undefined;
   cleanupTextDrop?.();
   cleanupTextDrop = undefined;
   cleanupTextPaste?.();
@@ -1324,6 +1363,7 @@ async function save() {
     const data = await editorSession.synchronize();
     if (contentDataIsSemanticallyEqual(data, savedValue?.data)) {
       savedKey.value = editorSession.currentKey();
+      ownSavedKeys.add(savedKey.value);
       return;
     }
     const summary = summarizeContentData(
@@ -1331,6 +1371,10 @@ async function save() {
       collectContentAssetSizeMap(data),
     );
     savedKey.value = editorSession.currentKey();
+    ownSavedKeys.add(savedKey.value);
+    // The tab's draft goes out with the save: a field behind the editor,
+    // told of the save, finds no draft older than the text it now holds.
+    const drafted = editorSession.flush();
     const field = editorSession.field();
     savedValue = {
       contentUuid: savedValue?.contentUuid,
@@ -1347,6 +1391,7 @@ async function save() {
     props.modalData.onSave(savedValue);
     handTaken();
     await props.modalData.onSaved?.();
+    await drafted;
     // Saving the form lets drafts of the field go; the fields and the other
     // tabs look again.
     if (field) announceContentHistoryChange(field);

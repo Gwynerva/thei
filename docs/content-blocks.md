@@ -55,7 +55,8 @@ Text fields hold a deliberately small HTML subset, enforced by
 
 - `<b>` / `<strong>`, `<i>` / `<em>`, `<s>`, `<br>`
 - `<a href="…" data-content-link="external">` for an external address; a
-  relative `href` (`/…`) is kept as a plain `<a href="…">`
+  relative `href` (`/…`) is kept as a plain `<a href="…">`; a link to none of
+  these — no address, or one it may not go to — is dropped and its text kept
 - `<a data-content-link="entity" data-entity-type="…" data-entity-id="…">`
   for a link to something on this site — see the entity types below
 - `<abbr data-content-hint="…">` — a note attached to a span of text, shown on
