@@ -36,7 +36,9 @@ export interface SearchQuickRowData {
 /**
  * The row: the kind's glyph in the title's line, the found words under it
  * from the left edge, the picture dissolving in from the right where there
- * is one. `active` is the row Enter takes, ringed in the accent.
+ * is one. `active` is the row Enter takes, ringed as a picker's row is
+ * (`ContentEntityRow.vue`): the first, until the keys or the pointer choose
+ * another, so what typing found is always one key away.
  */
 defineProps<{ row: SearchQuickRowData; id: string; active: boolean }>();
 defineEmits<{ pick: [event: MouseEvent]; point: [event: PointerEvent] }>();
@@ -58,9 +60,9 @@ defineEmits<{ pick: [event: MouseEvent]; point: [event: PointerEvent] }>();
         transition-colors [--row-ground:var(--color-bg-2)] hocus:bg-bg-3
         hocus:[--row-ground:var(--color-bg-3)]"
       :class="{
-        [`bg-bg-3 ring-2 ring-accent/60 [--row-ground:var(--color-bg-3)]
-        ring-inset`]: active,
+        'search-row-active bg-bg-3 [--row-ground:var(--color-bg-3)]': active,
       }"
+      :data-active="active || undefined"
       @pointermove="$emit('point', $event)"
       @click="$emit('pick', $event)"
     >
@@ -146,3 +148,14 @@ defineEmits<{ pick: [event: MouseEvent]; point: [event: PointerEvent] }>();
     </component>
   </MediaInteraction>
 </template>
+
+<style scoped>
+/*
+ * An outline rather than an inset ring: it is drawn over the picture along
+ * the edge, where an inset shadow would not be.
+ */
+.search-row-active {
+  outline: 2px solid color-mix(in oklab, var(--color-accent) 60%, transparent);
+  outline-offset: -2px;
+}
+</style>

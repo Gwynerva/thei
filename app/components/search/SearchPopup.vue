@@ -283,15 +283,6 @@ const { listId, activeIndex, optionId, move, pointAt, current } = useActiveRow(
 const rowIndex = computed(
   () => new Map(rows.value.map((row, index) => [row.key, index])),
 );
-/**
- * The row Enter takes, drawn with a ring: the first until the keys or the
- * pointer choose another, so what typing found is always one key away.
- */
-const enterIndex = computed(() =>
-  rows.value.length
-    ? Math.min(Math.max(0, activeIndex.value), rows.value.length - 1)
-    : -1,
-);
 
 function close() {
   open.value = false;
@@ -392,7 +383,7 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
           :aria-expanded="rows.length > 0"
           :aria-controls="listId"
           :aria-activedescendant="
-            enterIndex >= 0 ? optionId(enterIndex) : undefined
+            activeIndex >= 0 ? optionId(activeIndex) : undefined
           "
           :maxlength="SEARCH_QUERY_MAX_LENGTH"
           :placeholder="phrase.search_placeholder"
@@ -457,7 +448,7 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
               :id="optionId(rowIndex.get(row.key)!)"
               :key="row.key"
               :row
-              :active="enterIndex === rowIndex.get(row.key)"
+              :active="activeIndex === rowIndex.get(row.key)"
               @point="pointAt($event, rowIndex.get(row.key)!)"
               @pick="onPick(row, $event)"
             />
