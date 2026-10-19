@@ -671,7 +671,7 @@ body.content-editor-block-dragging * {
  */
 .content-editor :is(.content-inline-ring, .content-inline-kept) {
   position: absolute;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background-color: color-mix(in oklab, var(--color-accent) 6%, transparent);
   box-shadow: 0 0 0 1.5px
     color-mix(in oklab, var(--color-accent) 55%, transparent);

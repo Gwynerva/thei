@@ -53,12 +53,14 @@ async function choose(at: number | null) {
   busy.value = at === null ? 'auto' : 'take';
   failure.value = '';
   try {
-    const { variants } = await $fetch<AssetPreviewFrameResponse>(
+    const { variants, failed } = await $fetch<AssetPreviewFrameResponse>(
       `/api/admin/assets/${props.assetUuid}/preview`,
       { method: 'POST', body: { at } satisfies AssetPreviewFrameRequest },
     );
     for (const variant of variants) rememberVideoStill(variant.media);
     emit('chosen', variants);
+    if (failed.length)
+      failure.value = phrase.value.asset_preview_frame_partial(failed.length);
   } catch (error) {
     failure.value = errorMessage(error, phrase.value.asset_preview_frame_error);
   } finally {

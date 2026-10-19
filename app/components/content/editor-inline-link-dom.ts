@@ -92,16 +92,6 @@ export function applyLinkAttributes(
 }
 
 /**
- * A link never holds a link. Text taken over from another link — a selection
- * that began inside one — keeps its words and loses the other link's markup.
- * Only ever on a link not in the text yet.
- */
-function unwrapNestedLinks(link: HTMLAnchorElement) {
-  for (const inner of Array.from(link.querySelectorAll('a')))
-    inner.replaceWith(...Array.from(inner.childNodes));
-}
-
-/**
  * Makes a range a link, as one editing command Ctrl+Z takes back whole: the
  * link it lies in already is put back with the new target, otherwise its
  * words — or `label`, for a range of none — go into a new one. Returns the
@@ -121,7 +111,6 @@ export function linkRange(
     around,
     () => document.createElement('a'),
     (link) => {
-      unwrapNestedLinks(link);
       applyLinkAttributes(link, attributes);
       if (label && !link.textContent?.trim()) link.textContent = label;
     },

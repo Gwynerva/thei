@@ -198,6 +198,7 @@ export type LanguagePhrases = {
   asset_preview_frame_auto_take: string;
   asset_preview_frame_seek: string;
   asset_preview_frame_error: string;
+  asset_preview_frame_partial: (count: number) => string;
   asset_description_save: string;
   asset_description_saved: string;
   asset_description_conflict: string;

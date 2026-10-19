@@ -318,6 +318,8 @@ export default defineI18nModule({
     asset_preview_frame_auto_take: 'Подобрать самому',
     asset_preview_frame_seek: 'Перейти к этому кадру',
     asset_preview_frame_error: 'Не удалось взять кадр.',
+    asset_preview_frame_partial: (count) =>
+      `Не все варианты взяли кадр: ${count} с прежним.`,
     asset_description_save: 'Сохранить описание файла',
     asset_description_saved: 'Описание файла сохранено',
     asset_description_conflict:

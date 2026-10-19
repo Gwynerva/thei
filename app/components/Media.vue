@@ -47,9 +47,11 @@ const style = computed(() => ({
     : {}),
 }));
 /** A still the owner took for this video since its place read it. */
-const still = computed(() =>
-  props.kind === 'video' ? chosenVideoStill(props.src) : undefined,
-);
+const still = computed(() => {
+  if (props.kind !== 'video') return undefined;
+  noteVideoStill(props.src, props.previewSrc);
+  return chosenVideoStill(props.src, props.previewSrc);
+});
 defineExpose({
   play: () => surface.value?.play(),
   pause: () => surface.value?.pause(),

@@ -5,6 +5,7 @@ import svgUsePreviews from './0.0.4-svg-use-previews';
 import audioWaveforms from './0.0.4-audio-waveforms';
 import terminalPunctuation from './0.0.4-terminal-punctuation';
 import fileCaptionFingerprints from './0.0.6-file-caption-fingerprints';
+import inlineMarkupFingerprints from './0.0.7-inline-markup-fingerprints';
 import type { TheiUpdateTask } from './types';
 
 /**
@@ -23,4 +24,5 @@ export const updateTaskRegistry: TheiUpdateTask[] = [
   audioWaveforms,
   terminalPunctuation,
   fileCaptionFingerprints,
+  inlineMarkupFingerprints,
 ];

@@ -11,6 +11,7 @@ import {
   selectRange,
   TYPED_BY_COMMAND,
 } from '#layers/thei/app/components/content/editor-edit-commands';
+import { caretIn } from './editor-inline-dom';
 
 /**
  * Typing shorthands that turn into real typography as they are typed.
@@ -192,7 +193,7 @@ function applyReplacement(
     return edit;
   }
 
-  const point = caretTextNode();
+  const point = caretTextNode(element);
   if (!point) return undefined;
   const { node, offset } = point;
   const edit = smartTypographyEdit((node.data ?? '').slice(0, offset), rules);
@@ -216,7 +217,7 @@ function undoReplacement(
     return true;
   }
 
-  const point = caretTextNode();
+  const point = caretTextNode(element);
   if (!point) return false;
   const { node, offset } = point;
   const end = pending.start + pending.replacement.length;
@@ -303,14 +304,14 @@ function notifyInput(element: TypographyTarget) {
   }
 }
 
-function caretTextNode(): { node: Text; offset: number } | undefined {
-  const selection = document.getSelection();
-  if (!selection || !selection.isCollapsed || selection.rangeCount === 0)
-    return undefined;
-  const range = selection.getRangeAt(0);
-  const node = range.startContainer;
-  if (node.nodeType !== Node.TEXT_NODE) return undefined;
-  return { node: node as Text, offset: range.startOffset };
+/** The text node a collapsed caret in the element stands in, and where. */
+function caretTextNode(
+  element: HTMLElement,
+): { node: Text; offset: number } | undefined {
+  const range = caretIn(element, { collapsed: true });
+  const node = range?.startContainer;
+  if (!range || !(node instanceof Text)) return undefined;
+  return { node, offset: range.startOffset };
 }
 
 function placeCaret(node: Text, offset: number) {

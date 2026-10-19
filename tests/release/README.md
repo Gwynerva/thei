@@ -60,7 +60,9 @@ its description, every address it had still answers, and nothing private is
 listed.
 
 The seed speaks the last release's API. When a release changes one of the
-requests it makes, `seed.ts` follows once that release is out.
+requests it makes, `seed.ts` follows once that release is out, and so does
+what a release adds: once 0.0.7 is out, the seed chooses a video's poster
+frame by hand, so the upgrade carries one.
 
 ## Scenarios
 

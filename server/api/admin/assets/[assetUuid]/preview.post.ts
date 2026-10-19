@@ -4,7 +4,6 @@ import type {
 } from '#layers/thei/shared/api/asset';
 import { AssetType, type VideoAssetMeta } from '#layers/thei/shared/asset';
 import { chooseVideoPreviewFrame } from '../../../../thei/assets/storage';
-import { forgetModelFile } from '../../../../thei/ai/sessions/files';
 
 /**
  * A player's own reading of a video's length may run a little past the one
@@ -17,7 +16,8 @@ const DURATION_SLACK = 0.5;
  * be picked by itself again, for every video of its family.
  *
  * A write like any other: the pages and cards that show the still are built
- * again, and a model is shown the new frame from its next turn.
+ * again. A model is shown the new frame from its next turn, as a new look of
+ * the file (`server/thei/ai/sessions/files.ts`).
  */
 export default defineEventHandler(
   async (event): Promise<AssetPreviewFrameResponse> => {
@@ -40,8 +40,6 @@ export default defineEventHandler(
         statusCode: 400,
         message: 'at must be a moment of the video, in seconds, or null',
       });
-    const variants = await chooseVideoPreviewFrame(asset, at);
-    for (const variant of variants) forgetModelFile(variant.assetUuid);
-    return { variants };
+    return await chooseVideoPreviewFrame(asset, at);
   },
 );

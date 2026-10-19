@@ -169,6 +169,12 @@ describe('the slash', () => {
     expect(matchSlash(key({ code: 'Slash', key: '.' }))).toBe(true);
   });
 
+  it('is not what that key types on other layouts', () => {
+    // German "-", French "!".
+    expect(matchSlash(key({ code: 'Slash', key: '-' }))).toBe(false);
+    expect(matchSlash(key({ code: 'Slash', key: '!' }))).toBe(false);
+  });
+
   it('is not "?", nor pressed with a modifier, nor being composed', () => {
     expect(matchSlash(key({ code: 'Slash', key: '?', shiftKey: true }))).toBe(
       false,

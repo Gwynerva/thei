@@ -1,8 +1,10 @@
 import type { PhrasingContent } from 'mdast';
 import type { TextDirective } from 'mdast-util-directive';
 import {
+  CONTENT_INLINE_TOKEN,
   isContentEntityType,
   normalizeContentInlineHtml,
+  parseHtmlAttributes,
 } from '../content-link';
 import { canonicalMarkup } from './block-key';
 import { isTheiLinkUrl, parseTheiLinkUrl, theiLinkUrl } from './links';
@@ -30,16 +32,6 @@ export { decodeHtmlEntities, escapeHtmlAttribute, escapeHtmlText };
  * writes it, which knows every way a character can start syntax, with what
  * it misses added in `syntax.ts`.
  */
-
-const INLINE_TOKEN = /<br\s*\/?>|<\/?(?:a|b|strong|i|em|s|abbr)(?:\s[^>]*)?>/gi;
-const ATTRIBUTE = /([\w-]+)="([^"]*)"/g;
-
-function parseAttributes(source: string): Record<string, string> {
-  const attributes: Record<string, string> = {};
-  for (const match of source.matchAll(ATTRIBUTE))
-    attributes[match[1]!.toLowerCase()] = decodeHtmlEntities(match[2]!);
-  return attributes;
-}
 
 type Container = { children: PhrasingContent[] };
 type Frame = { tag: string; node: Container };
@@ -104,13 +96,13 @@ function openNode(tag: string, source: string): Container | null {
         name: 'hint',
         attributes: {
           note: directiveAttributeValue(
-            parseAttributes(source)['data-content-hint'] ?? '',
+            parseHtmlAttributes(source)['data-content-hint'] ?? '',
           ),
         },
         children: [],
       } as unknown as Container;
     case 'a':
-      return anchorNode(parseAttributes(source));
+      return anchorNode(parseHtmlAttributes(source));
     default:
       return null;
   }
@@ -184,7 +176,7 @@ function inlineHtmlTree(html: unknown): PhrasingContent[] {
   };
 
   let cursor = 0;
-  for (const match of html.matchAll(INLINE_TOKEN)) {
+  for (const match of html.matchAll(CONTENT_INLINE_TOKEN)) {
     pushText(decodeHtmlEntities(html.slice(cursor, match.index)));
     cursor = (match.index ?? 0) + match[0].length;
     const token = match[0];

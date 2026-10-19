@@ -9,7 +9,7 @@ import { CONTENT_INLINE_MARKUP_SELECTOR as INLINE_MARKUP } from '#layers/thei/sh
  */
 
 export type InlineSide = 'before' | 'after';
-export type InlineEdge = 'start' | 'end';
+type InlineEdge = 'start' | 'end';
 
 /** The editable field a node is in. */
 export function editableFieldOf(node: Node | null | undefined) {
@@ -44,22 +44,13 @@ export function typedText(event: InputEvent) {
 }
 
 /**
- * Whether an input replaces words it aims at — a spelling suggestion for a
- * word — rather than typing at the caret: that one is the browser's.
+ * Whether an input types words: a key, or a word a spelling suggestion puts
+ * in place of the words its target range names.
  */
-export function replacesWords(event: InputEvent) {
-  return (
-    event.inputType === 'insertReplacementText' &&
-    !event.getTargetRanges()[0]?.collapsed
-  );
-}
-
-/** Whether an input types text at the caret, the one kind these rules take. */
 export function typesText(event: InputEvent) {
   return (
-    (event.inputType === 'insertText' ||
-      event.inputType === 'insertReplacementText') &&
-    !replacesWords(event)
+    event.inputType === 'insertText' ||
+    event.inputType === 'insertReplacementText'
   );
 }
 
@@ -75,6 +66,23 @@ export function oneGrapheme(text: string) {
 
 export function isMarkup(node: Node | null | undefined): node is HTMLElement {
   return node instanceof HTMLElement && node.matches(INLINE_MARKUP);
+}
+
+/**
+ * A link never holds a link, and the browser's parser would close the outer
+ * one at the inner one's start, cutting it in two. Words taken into a link —
+ * a selection begun in another, a paste or a drop landing in one — keep their
+ * words and lose the inner links' markup. `intoLink` says the words go into
+ * a link already, so every link in them goes.
+ */
+export function unwrapNestedLinks(
+  root: Element | DocumentFragment,
+  intoLink = false,
+) {
+  for (const inner of Array.from(
+    root.querySelectorAll<HTMLAnchorElement>(intoLink ? 'a' : 'a a'),
+  ))
+    inner.replaceWith(...Array.from(inner.childNodes));
 }
 
 /** The markup a node stands in within its text, innermost first. */
@@ -120,7 +128,7 @@ export function textsOf(element: Node): Text[] {
 }
 
 /** The texts a range takes letters of, in order. */
-export function textsIn(range: Range): Text[] {
+function textsIn(range: Range): Text[] {
   const common = range.commonAncestorContainer;
   if (common.nodeType === Node.TEXT_NODE) return [common as Text];
   return textsOf(common).filter((text) => {

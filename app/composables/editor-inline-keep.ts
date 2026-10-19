@@ -79,6 +79,11 @@ export interface EditorInlineKeep {
    * False when no rule took it, and it is the browser's to put in.
    */
   write(text: string, html?: string): boolean;
+  /**
+   * An emptied element waits at the caret: the next Backspace or Delete is
+   * its own, and no other handler may take it first.
+   */
+  holdsCaret(): boolean;
   dispose(): void;
 }
 
@@ -459,7 +464,7 @@ export function bindEditorInlineKeep(root: HTMLElement): EditorInlineKeep {
     }
 
     const text = typedText(event);
-    if (typesText(event) || type === 'insertReplacementText') {
+    if (typesText(event)) {
       // A caret is read as the selection holds it — where the ring says it
       // is — not as the browser's target, which it has already moved to
       // where it would type; words replaced are what the target names.
@@ -663,6 +668,7 @@ export function bindEditorInlineKeep(root: HTMLElement): EditorInlineKeep {
   return {
     offer,
     write,
+    holdsCaret: () => atKept(caretIn(root)),
     dispose() {
       root.removeEventListener('keydown', onKeyDown, true);
       root.removeEventListener('beforeinput', onBeforeInput, true);

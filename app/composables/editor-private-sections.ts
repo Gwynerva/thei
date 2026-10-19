@@ -1,6 +1,7 @@
 import type EditorJS from '@editorjs/editorjs';
 import type { BlockMutationEvent } from '@editorjs/editorjs';
 import { EDITOR_SELECTED_BLOCK_SELECTOR, editorBlockOf } from './editor-dom';
+import { wordsBeside } from './editor-inline-dom';
 
 /**
  * The private sections of a text in the editor.
@@ -230,6 +231,12 @@ export interface EditorPrivateSectionsOptions {
    * sections; without it the edges are kept only as blocks change.
    */
   root?: HTMLElement;
+  /**
+   * Whether a key is someone else's before an edge is thought of: the last
+   * Backspace or Delete of emptied markup (`editor-inline-keep.ts`), which
+   * lets the markup go and moves nothing. This hears every key first.
+   */
+  keyTaken?: () => boolean;
 }
 
 export function createEditorPrivateSections(
@@ -748,6 +755,7 @@ export function createEditorPrivateSections(
         void (caretPast(last, 1) || caretPast(first, -1));
       return;
     }
+    if (options.keyTaken?.()) return;
     if (event.key === 'Backspace') stepOverEdge(event, -1);
     else if (event.key === 'Delete') stepOverEdge(event, 1);
   }
@@ -809,13 +817,15 @@ export function createEditorPrivateSections(
       block,
       node: range.startContainer,
       // As Editor.js tells it: only collapsible white space on that side.
-      atEdge: (field: HTMLElement, step: 1 | -1) => {
-        const side = document.createRange();
-        side.selectNodeContents(field);
-        if (step === -1) side.setEnd(range.startContainer, range.startOffset);
-        else side.setStart(range.startContainer, range.startOffset);
-        return !/[^\t\n\r ]/.test(side.toString());
-      },
+      atEdge: (field: HTMLElement, step: 1 | -1) =>
+        !/[^\t\n\r ]/.test(
+          wordsBeside(
+            field,
+            range.startContainer,
+            range.startOffset,
+            step === -1 ? 'before' : 'after',
+          ),
+        ),
     };
   }
 

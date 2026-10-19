@@ -13,6 +13,7 @@ import {
   markupAround,
   nodeAt,
   pathTo,
+  unwrapNestedLinks,
 } from './editor-inline-dom';
 
 /**
@@ -287,6 +288,7 @@ function withInlineAncestors(
 ) {
   const there = markupAround(landing);
   const inLink = there.some((element) => element.matches('a'));
+  if (inLink) unwrapNestedLinks(fragment, true);
   let wrapped: Node = fragment;
   for (
     let at: Node | null = from instanceof Element ? from : from.parentNode;

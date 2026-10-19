@@ -127,6 +127,8 @@ export interface AssetPreviewFrameRequest {
 /** Every video of the family as it shows now, the one asked about first. */
 export interface AssetPreviewFrameResponse {
   variants: AssetVariantInfo[];
+  /** Videos of the family that could not be read, and keep their frame. */
+  failed: string[];
 }
 
 export interface AssetWizardResult {

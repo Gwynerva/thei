@@ -50,14 +50,27 @@ export function matchChord(event: KeyboardEvent, chord: Chord): boolean {
 }
 
 /**
+ * Undo and redo: the primary modifier with Z, and Shift for redo, which
+ * Windows also takes as Ctrl+Y.
+ */
+export function historyKey(event: KeyboardEvent): 'undo' | 'redo' | undefined {
+  if (matchChord(event, { code: 'KeyZ' })) return 'undo';
+  if (matchChord(event, { code: 'KeyZ', shift: true })) return 'redo';
+  if (!isMacPlatform() && matchChord(event, { code: 'KeyY' })) return 'redo';
+  return undefined;
+}
+
+/**
  * "/" typed on its own. Layouts put it on different keys — Shift+7 on a
  * German one, Shift+\ on a Russian one — so it is read by the character; the
  * Russian layout of Windows types "." on the key of "/", which counts too.
+ * That key types other characters elsewhere — "-" on a German layout, "!" on
+ * a French one — and those are not "/".
  */
 export function matchSlash(event: KeyboardEvent): boolean {
   if (composing(event) || alternate(event)) return false;
   if (event.ctrlKey || event.metaKey) return false;
-  return event.key === '/' || (event.code === 'Slash' && !event.shiftKey);
+  return event.key === '/' || (event.code === 'Slash' && event.key === '.');
 }
 
 /** What the keyboard types into: its keys are the text's. */

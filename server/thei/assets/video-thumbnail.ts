@@ -123,16 +123,22 @@ export async function extractVideoThumbnail(
   }
 }
 
-/** The frame ffmpeg finds most typical of the second that starts at `seconds`. */
-async function grabFrame(
+/**
+ * One frame ffmpeg writes from the video, read back. The output of a run
+ * before is removed first: a seek past the last frame ends without writing
+ * one, and that must fail rather than read the frame left behind.
+ */
+async function writeFrame(
   inputPath: string,
   outputPath: string,
-  seconds: number,
+  inputOptions: string[],
+  outputOptions: string[],
 ): Promise<Buffer> {
+  await rm(outputPath, { force: true });
   await new Promise<void>((resolve, reject) => {
     ffmpeg(inputPath)
-      .inputOptions(['-ss', seconds.toFixed(3)])
-      .outputOptions(['-vf', `thumbnail=${THUMBNAIL_BATCH}`, '-frames:v', '1'])
+      .inputOptions(inputOptions)
+      .outputOptions(outputOptions)
       .output(outputPath)
       .on('end', () => resolve())
       .on('error', (err: Error) => reject(err))
@@ -141,47 +147,36 @@ async function grabFrame(
   return await readFile(outputPath);
 }
 
-/**
- * The frame shown at `seconds`, exactly: the seek decodes up to it. Past the
- * last frame ffmpeg ends without writing one, and reading it fails.
- */
-async function grabExactFrame(
+/** The frame ffmpeg finds most typical of the second that starts at `seconds`. */
+function grabFrame(inputPath: string, outputPath: string, seconds: number) {
+  return writeFrame(
+    inputPath,
+    outputPath,
+    ['-ss', seconds.toFixed(3)],
+    ['-vf', `thumbnail=${THUMBNAIL_BATCH}`, '-frames:v', '1'],
+  );
+}
+
+/** The frame shown at `seconds`, exactly: the seek decodes up to it. */
+function grabExactFrame(
   inputPath: string,
   outputPath: string,
   seconds: number,
-): Promise<Buffer> {
-  await rm(outputPath, { force: true });
-  await new Promise<void>((resolve, reject) => {
-    ffmpeg(inputPath)
-      .inputOptions(['-ss', seconds.toFixed(6)])
-      .outputOptions(['-frames:v', '1'])
-      .output(outputPath)
-      .on('end', () => resolve())
-      .on('error', (err: Error) => reject(err))
-      .run();
-  });
-  return await readFile(outputPath);
+) {
+  return writeFrame(
+    inputPath,
+    outputPath,
+    ['-ss', seconds.toFixed(6)],
+    ['-frames:v', '1'],
+  );
 }
 
 /**
  * The video's last frame: every frame of its final second is written over
  * the one before it.
  */
-async function grabLastFrame(
-  inputPath: string,
-  outputPath: string,
-): Promise<Buffer> {
-  await rm(outputPath, { force: true });
-  await new Promise<void>((resolve, reject) => {
-    ffmpeg(inputPath)
-      .inputOptions(['-sseof', '-1'])
-      .outputOptions(['-update', '1'])
-      .output(outputPath)
-      .on('end', () => resolve())
-      .on('error', (err: Error) => reject(err))
-      .run();
-  });
-  return await readFile(outputPath);
+function grabLastFrame(inputPath: string, outputPath: string) {
+  return writeFrame(inputPath, outputPath, ['-sseof', '-1'], ['-update', '1']);
 }
 
 /** `frameScore` of a frame, read from a small copy of it. */

@@ -456,7 +456,8 @@ export async function runSessionTurn(
 
     // What earlier turns showed is shown again as it was, however long it
     // takes to make ready: told in words this time, it would change what
-    // came before. The turn's own clock bounds it.
+    // came before. The turn's own clock bounds it. A video whose frame was
+    // chosen again since is shown by its new frame (`sessions/files.ts`).
     const files = await modelFiles(history, fileNames, signal);
     going();
     /**
@@ -783,26 +784,27 @@ export async function runSessionTurn(
         going();
         if (!OWN_TOOLS.has(call.name))
           steps.push(stepOf(call, result.error, result.refused));
+        // What a tool showed is made ready for the model's next call; one
+        // shown before keeps the blocks it was shown as. The turn records
+        // only what was shown: a file that took too long is told of in
+        // words alone, now and as later turns read this one again.
+        let shown = result.files;
+        if (shown) {
+          for (const [id, blocks] of await readyNew([
+            { role: 'tool', files: shown.filter((id) => !files.has(id)) },
+          ]))
+            files.set(id, blocks);
+          shown = shown.filter((id) => files.has(id));
+          going();
+        }
         transcript.push({
           role: 'tool',
           id: call.id,
           name: call.name,
           output: result.text,
           ...(result.error ? { error: true } : {}),
-          ...(result.files ? { files: result.files } : {}),
+          ...(shown?.length ? { files: shown } : {}),
         });
-        // What a tool showed is made ready for the model's next call.
-        if (result.files) {
-          // One shown before keeps the blocks it was shown as.
-          for (const [id, blocks] of await readyNew([
-            {
-              role: 'tool',
-              files: result.files.filter((id) => !files.has(id)),
-            },
-          ]))
-            files.set(id, blocks);
-          going();
-        }
         save();
       }
       if (asked) break;

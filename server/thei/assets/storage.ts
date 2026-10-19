@@ -174,6 +174,16 @@ export async function refreshMediaPreview(
   asset: StoredAssetRecord,
   options: RefreshMediaPreviewOptions = {},
 ): Promise<AssetVariantInfo> {
+  return await withProcessingSlot(asset.type, () =>
+    remakeMediaPreview(asset, options),
+  );
+}
+
+/** `refreshMediaPreview`, for a caller that holds the file's lane already. */
+async function remakeMediaPreview(
+  asset: StoredAssetRecord,
+  options: RefreshMediaPreviewOptions,
+): Promise<AssetVariantInfo> {
   const isVideo = asset.type === AssetType.Video;
   const meta = asset.meta as (VideoAssetMeta & ImageAssetMeta) | null;
   const wanted =
@@ -194,14 +204,10 @@ export async function refreshMediaPreview(
     owned: false,
   };
   const { previewAssetUuid, accent, frameAt, frameScore } =
-    await withProcessingSlot(asset.type, () =>
-      createMediaPreviewAsset(
-        bytes,
-        isVideo ? AssetType.Video : AssetType.Image,
-        isVideo
-          ? { duration: meta?.duration, fps: meta?.fps, at: chosenAt }
-          : {},
-      ),
+    await createMediaPreviewAsset(
+      bytes,
+      isVideo ? AssetType.Video : AssetType.Image,
+      isVideo ? { duration: meta?.duration, fps: meta?.fps, at: chosenAt } : {},
     );
 
   const {
@@ -283,39 +289,51 @@ export async function familyChosenPreviewAt(
  * Chooses the preview frame of a video by hand — the frame at `at` seconds
  * — or, given `null`, lets it be picked here again, for every video of its
  * family: they show one moment, each from its own bytes, so a crop or a turn
- * keeps its own picture. The video asked about comes first in the answer.
+ * keeps its own picture. The video asked about comes first in the answer;
+ * `failed` names the videos that could not be read and keep their frame.
+ *
+ * It is one job in the video lane, which runs one job at a time
+ * (`queue.ts`): every variant committed before it is among the family it
+ * reads, and one committed after it reads the new mark
+ * (`familyChosenPreviewAt`).
  */
 export async function chooseVideoPreviewFrame(
   asset: StoredAssetRecord,
   at: number | null,
-): Promise<AssetVariantInfo[]> {
-  const { db, schema } = THEI_SERVER.useDb();
-  const siblings = await db
-    .select()
-    .from(schema.assets)
-    .where(
-      and(
-        eq(schema.assets.familyUuid, asset.familyUuid),
-        eq(schema.assets.type, AssetType.Video),
-        ne(schema.assets.assetUuid, asset.assetUuid),
-      ),
-    );
-  const answer = [await refreshMediaPreview(asset, { at })];
-  for (const video of siblings) {
-    try {
-      answer.push(await refreshMediaPreview(video, { at }));
-    } catch (error) {
-      // One variant that cannot be read keeps its frame; the rest move on.
-      THEI_SERVER.console
-        .tag('Assets')
-        .warn(
-          `Could not take the preview frame of ${video.assetUuid}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
+): Promise<{ variants: AssetVariantInfo[]; failed: string[] }> {
+  return await withProcessingSlot(AssetType.Video, async () => {
+    const { db, schema } = THEI_SERVER.useDb();
+    const family = await db
+      .select()
+      .from(schema.assets)
+      .where(
+        and(
+          eq(schema.assets.familyUuid, asset.familyUuid),
+          eq(schema.assets.type, AssetType.Video),
+        ),
+      );
+    const self =
+      family.find((video) => video.assetUuid === asset.assetUuid) ?? asset;
+    const variants = [await remakeMediaPreview(self, { at })];
+    const failed: string[] = [];
+    for (const video of family) {
+      if (video.assetUuid === asset.assetUuid) continue;
+      try {
+        variants.push(await remakeMediaPreview(video, { at }));
+      } catch (error) {
+        // One variant that cannot be read keeps its frame; the rest move on.
+        failed.push(video.assetUuid);
+        THEI_SERVER.console
+          .tag('Assets')
+          .warn(
+            `Could not take the preview frame of ${video.assetUuid}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+      }
     }
-  }
-  return answer;
+    return { variants, failed };
+  });
 }
 
 /** Preview asset of each media asset, for several assets in one query. */

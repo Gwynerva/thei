@@ -3,6 +3,7 @@ import {
   editCommandRunning,
 } from '#layers/thei/app/components/content/editor-edit-commands';
 import { lettersBefore } from './editor-inline-dom';
+import { historyKey } from './shortcut';
 /**
  * Ctrl+Z in the editor undoes what is safe to undo, and nothing else.
  *
@@ -122,15 +123,7 @@ export class NativeUndoLedger {
   }
 }
 
-type HistoryKey = 'undo' | 'redo';
-
-/** Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z and Ctrl+Y, by the key's place, any layout. */
-export function historyKey(event: KeyboardEvent): HistoryKey | undefined {
-  if (!(event.ctrlKey || event.metaKey) || event.altKey) return undefined;
-  if (event.code === 'KeyZ') return event.shiftKey ? 'redo' : 'undo';
-  if (event.code === 'KeyY' && event.ctrlKey && !event.shiftKey) return 'redo';
-  return undefined;
-}
+type HistoryKey = NonNullable<ReturnType<typeof historyKey>>;
 
 /**
  * Watches the editor in `root` and guards Ctrl+Z in all of `scope` — the
@@ -177,7 +170,7 @@ export function bindEditorNativeUndo(
   }
 
   /** Where the caret is in a field, by the letters before it. */
-  function caretIn(field: HTMLElement | undefined) {
+  function lettersToCaret(field: HTMLElement | undefined) {
     const selection = window.getSelection();
     if (!field || !selection?.focusNode || !field.contains(selection.focusNode))
       return undefined;
@@ -220,7 +213,7 @@ export function bindEditorNativeUndo(
     }
     announced = true;
     caretBefore = inEditor(event.target)
-      ? caretIn(fieldOf(event.target as Node))
+      ? lettersToCaret(fieldOf(event.target as Node))
       : undefined;
   }
 
@@ -252,7 +245,7 @@ export function bindEditorNativeUndo(
       const field = fieldOf(event.target as Node);
       ledger.edit(nativeEditKind(inputType, wasAnnounced), field, {
         before,
-        after: caretIn(field),
+        after: lettersToCaret(field),
       });
     }
     expected = undefined;

@@ -15,9 +15,11 @@
 import {
   caretAfterLetters,
   editableFieldOf,
+  lettersBefore,
   markupAround,
   nodeAt,
   pathTo,
+  unwrapNestedLinks,
   wordsBeside,
 } from '../../composables/editor-inline-dom';
 
@@ -106,6 +108,7 @@ function wholeAround(range: Range, html: string) {
     wordsBeside(outer, range.startContainer, range.startOffset, 'before')
       .length + (parsed.content.textContent ?? '').length;
   inside.insertNode(parsed.content);
+  unwrapNestedLinks(copy);
   const whole = document.createRange();
   whole.selectNode(outer);
   const marked = markedHtml(copy);
@@ -176,6 +179,7 @@ export function insertInlineElement(
   range: Range,
   element: HTMLElement,
 ): HTMLElement | undefined {
+  unwrapNestedLinks(element);
   const { mark, html } = markedHtml(element);
   const inserted = insertMarkedHtml(range, html, mark);
   if (inserted !== undefined) {
@@ -307,6 +311,41 @@ export function replaceRangeText(range: Range, text: string) {
     placeCaretAfter(node);
   }
   return false;
+}
+
+/**
+ * A field of plain words made plain again when markup got in — a paste, the
+ * browser's own formatting — as one undoable step, the selection kept at the
+ * same letters. Returns the words.
+ */
+export function flattenToPlainText(field: HTMLElement) {
+  const selection = window.getSelection();
+  const inside = Boolean(
+    selection?.anchorNode &&
+    selection.focusNode &&
+    field.contains(selection.anchorNode) &&
+    field.contains(selection.focusNode),
+  );
+  const anchor = inside
+    ? lettersBefore(field, selection!.anchorNode!, selection!.anchorOffset)
+    : 0;
+  const focus = inside
+    ? lettersBefore(field, selection!.focusNode!, selection!.focusOffset)
+    : 0;
+  const text = field.textContent ?? '';
+  const whole = document.createRange();
+  whole.selectNodeContents(field);
+  replaceRangeText(whole, text);
+  if (!inside || !selection) return text;
+  const from = caretAfterLetters(field, Math.min(anchor, text.length));
+  const to = caretAfterLetters(field, Math.min(focus, text.length));
+  selection.setBaseAndExtent(
+    from.startContainer,
+    from.startOffset,
+    to.startContainer,
+    to.startOffset,
+  );
+  return text;
 }
 
 /** Takes a link off its words, as one undoable step. */

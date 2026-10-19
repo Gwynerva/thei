@@ -9,6 +9,8 @@ interface AdminSummary {
   eventCount: number;
   diaryCount: number;
   aiEnabled: boolean;
+  /** Whether the site's own model is set up to answer. */
+  aiModelReady: boolean;
   /** What waits for the owner in AI sessions: actions and questions. */
   aiWaiting: number;
 }
@@ -24,6 +26,12 @@ export function useAdminSummary() {
 export function useAiEnabled() {
   const { data } = useNuxtData<AdminSummary>('admin-bar');
   return computed(() => data.value?.aiEnabled === true);
+}
+
+/** Whether the site's own model answers a ✦ asked of it; never with AI off. */
+export function useAiModelReady() {
+  const { data } = useNuxtData<AdminSummary>('admin-bar');
+  return computed(() => data.value?.aiModelReady === true);
 }
 
 /** What waits for the owner in AI sessions; nothing with AI off. */

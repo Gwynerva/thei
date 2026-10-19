@@ -318,37 +318,45 @@ const SOUND_SECONDS = 10 * 60;
 const SOUND_MAX = 6 * 1024 * 1024;
 
 /**
- * Files made ready for a model lately, by id: a session rereads them every
- * turn. Kept within a budget of bytes, the oldest given up first.
+ * Files made ready for a model lately, by id and the preview a file is shown
+ * through: a session rereads them every turn. Kept within a budget of
+ * bytes, the one used longest ago given up first.
+ *
+ * A video whose frame was chosen again is a new look of the file: every
+ * turn that shows it, the earlier ones too, shows the new frame, so a
+ * session that saw the old one drops its model's earlier thinking once
+ * (`runner/loop.ts`) and goes on.
  */
 const ready = new Map<string, { blocks: StreamFile[]; bytes: number }>();
 const READY_BYTES = 48 * 1024 * 1024;
 let readyBytes = 0;
 
-/**
- * Gives up what a model was made ready to be shown of a file: a video whose
- * frame was chosen again is shown by its new frame from the next turn on.
- */
-export function forgetModelFile(assetUuid: string) {
-  const kept = ready.get(assetUuid);
-  if (!kept) return;
-  readyBytes -= kept.bytes;
-  ready.delete(assetUuid);
+function readyKey(id: string, preview: string | undefined) {
+  return preview ? `${id}@${preview}` : id;
 }
 
-function keepReady(id: string, blocks: StreamFile[]) {
+/** A file kept ready, as the one used last. */
+function takeReady(key: string) {
+  const kept = ready.get(key);
+  if (!kept) return undefined;
+  ready.delete(key);
+  ready.set(key, kept);
+  return kept;
+}
+
+function keepReady(key: string, blocks: StreamFile[]) {
   const bytes = blocks.reduce(
     (sum, block) =>
       sum + ('data' in block ? block.data.length : block.text.length),
     0,
   );
   // Made twice at once — two turns showing the same file — it is kept once.
-  const before = ready.get(id);
+  const before = ready.get(key);
   if (before) {
     readyBytes -= before.bytes;
-    ready.delete(id);
+    ready.delete(key);
   }
-  ready.set(id, { blocks, bytes });
+  ready.set(key, { blocks, bytes });
   readyBytes += bytes;
   while (readyBytes > READY_BYTES && ready.size > 1) {
     const oldest = ready.keys().next().value!;
@@ -533,7 +541,8 @@ export async function modelFiles(
   );
   for (const id of ids) {
     const name = names.get(id) ?? id;
-    const kept = ready.get(id);
+    const key = readyKey(id, previewIds.get(id));
+    const kept = takeReady(key);
     if (kept) {
       // Kept under the name it was first shown by: told by this one.
       result.set(
@@ -553,7 +562,7 @@ export async function modelFiles(
       );
       // One not whole yet — a video's preview still on its way — is shown
       // as it is, and made again next turn.
-      if (made.whole && made.blocks.length) keepReady(id, made.blocks);
+      if (made.whole && made.blocks.length) keepReady(key, made.blocks);
       if (made.blocks.length) result.set(id, made.blocks);
     } catch (error) {
       if (signal?.aborted) throw error;

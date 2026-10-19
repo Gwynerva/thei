@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
@@ -29,6 +29,7 @@ import {
   type StoredAssetRecord,
 } from '../../../server/thei/assets/storage';
 import { commitProcessedAsset } from '../../../server/thei/assets/create-variant';
+import { withProcessingSlot } from '../../../server/thei/assets/queue';
 import { extractVideoThumbnail } from '../../../server/thei/assets/video-thumbnail';
 import { publicPreviewToken } from '../../../server/thei/assets/urls';
 import { createAsset } from '../../../server/thei/assets/repository/create';
@@ -48,16 +49,10 @@ import { findAssetsByContainer } from '../../../server/thei/assets/repository/us
  * the cleanup then takes, and given back to the automatic pick.
  */
 
-const forgotten = vi.hoisted(() => [] as string[]);
-vi.mock('../../../server/thei/ai/sessions/files', () => ({
-  forgetModelFile: (assetUuid: string) => forgotten.push(assetUuid),
-}));
-
 let context: Awaited<ReturnType<typeof freshTestDb>>;
 
 beforeEach(async () => {
   context = await freshTestDb();
-  forgotten.length = 0;
   const quiet = { log() {}, warn() {}, error() {} };
   Object.assign(context.server, {
     console: { tag: () => quiet },
@@ -211,7 +206,9 @@ describe('a preview frame chosen by hand', () => {
     const before = video.meta as VideoAssetMeta;
     expect(before.previewChosen).toBeUndefined();
 
-    const [info] = await chooseVideoPreviewFrame(video, 0.9004);
+    const {
+      variants: [info],
+    } = await chooseVideoPreviewFrame(video, 0.9004);
     const chosen = await reread(video.assetUuid);
     const meta = chosen.meta as VideoAssetMeta;
     expect(meta).toMatchObject({
@@ -270,7 +267,11 @@ describe('a preview frame chosen by hand', () => {
     const small = await storeClip('small.mp4', 'af-family', 32);
     const other = await storeClip('other.mp4', 'af-other', 48);
 
-    const answer = await chooseVideoPreviewFrame(small, 0.9);
+    const { variants: answer, failed } = await chooseVideoPreviewFrame(
+      small,
+      0.9,
+    );
+    expect(failed).toEqual([]);
     expect(answer.map((variant) => variant.assetUuid)).toEqual([
       small.assetUuid,
       big.assetUuid,
@@ -305,6 +306,43 @@ describe('a preview frame chosen by hand', () => {
     const stored = await reread(variant.assetUuid);
     expect(stored.meta).toMatchObject({ previewAt: 0.9, previewChosen: true });
     expect((await previewColor(stored))[2]).toBeGreaterThan(200);
+  }, 180_000);
+
+  it('is one job in the video lane: a variant committed meanwhile takes the moment', async () => {
+    const video = await storeClip('video.mp4', 'af-race');
+    const bytes = await makeClip('variant.mp4', 40);
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    // A variant being encoded holds the lane; the choice waits behind it.
+    const committing = withProcessingSlot(AssetType.Video, async () => {
+      await gate;
+      return await commitProcessedAsset({
+        processed: {
+          bytes,
+          extension: 'mp4',
+          type: AssetType.Video,
+          dimensions: { width: 40, height: 40 },
+          video: { duration: 3 },
+        },
+        settings: createOriginalAssetSettings(),
+        familyUuid: 'af-race',
+        source: { path: bytes.path, extension: 'mp4', size: bytes.size },
+      });
+    });
+    const choosing = chooseVideoPreviewFrame(video, 0.9);
+    open();
+    const variant = await committing;
+    const { variants, failed } = await choosing;
+    expect(failed).toEqual([]);
+    expect(variants.map((info) => info.assetUuid)).toEqual([
+      video.assetUuid,
+      variant.assetUuid,
+    ]);
+    for (const uuid of [video.assetUuid, variant.assetUuid])
+      expect((await reread(uuid)).meta).toMatchObject({
+        previewAt: 0.9,
+        previewChosen: true,
+      });
   }, 180_000);
 
   it('leaves the old preview to the cleanup', async () => {
@@ -361,7 +399,7 @@ describe('the preview route', () => {
       }),
     );
 
-  it('takes a moment of the video or null, for the family, and forgets what a model was shown', async () => {
+  it('takes a moment of the video or null, for the family', async () => {
     const video = await storeClip('video.mp4', 'af-route');
     const sibling = await storeClip('sibling.mp4', 'af-route', 32);
 
@@ -386,7 +424,9 @@ describe('the preview route', () => {
     // A player's reading of the length may run a little past the probe's.
     const response = await post(video.assetUuid, { at: 3.2 });
     expect(response.status).toBe(200);
-    const { variants } = (await response.json()) as AssetPreviewFrameResponse;
+    const { variants, failed } =
+      (await response.json()) as AssetPreviewFrameResponse;
+    expect(failed).toEqual([]);
     expect(variants.map((variant) => variant.assetUuid)).toEqual([
       video.assetUuid,
       sibling.assetUuid,
@@ -395,7 +435,6 @@ describe('the preview route', () => {
       previewAt: 3,
       previewChosen: true,
     });
-    expect(forgotten).toEqual([video.assetUuid, sibling.assetUuid]);
 
     const back = await post(video.assetUuid, { at: null });
     expect(back.status).toBe(200);

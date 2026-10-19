@@ -1043,6 +1043,74 @@ test('the last Delete of an emptied mark at the edge of a block joins no blocks'
   await expect(blocks.nth(1)).toHaveText('Next line');
 });
 
+test('the last Backspace of an emptied mark beside a private edge is the mark’s', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openEditor(page, 'Before', [
+    {
+      type: 'privateSectionBoundary',
+      data: { sectionId: 'one', edge: 'start' },
+    },
+    { type: 'paragraph', data: { text: '<i>Hi</i>' } },
+    { type: 'privateSectionBoundary', data: { sectionId: 'one', edge: 'end' } },
+    { type: 'paragraph', data: { text: 'After' } },
+  ]);
+  const blocks = page.locator('dialog .content-editor .ce-paragraph');
+  const kept = page.locator('dialog .content-inline-kept');
+  await blocks.nth(1).click();
+  await page.keyboard.press('End');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Backspace');
+  await expect(kept).toBeVisible();
+  // The edge would take it to step the caret out of the section.
+  await page.keyboard.press('Backspace');
+  await expect(kept).toHaveCount(0);
+  await page.keyboard.type('x');
+  await expect(blocks.nth(1)).toHaveText('x');
+  await expect(blocks.first()).toHaveText('Before');
+  await expect(
+    page.locator('dialog .content-editor [data-private-section-id]'),
+  ).toHaveCount(2);
+});
+
+test('a line with a link pasted into a link keeps that link whole', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openEditor(
+    page,
+    'See <a href="https://outer.example/">Alpha Beta</a> end',
+  );
+  await paragraph(page).click();
+  await page.evaluate(() => {
+    const text = document.querySelector('dialog .ce-paragraph a')!.firstChild!;
+    const range = document.createRange();
+    range.setStart(text, 'Alpha'.length);
+    range.collapse(true);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    const data = new DataTransfer();
+    data.setData('text/plain', 'Gamma more');
+    data.setData(
+      'text/html',
+      '<a href="https://inner.example/">Gamma</a> more',
+    );
+    text.parentElement!.dispatchEvent(
+      new ClipboardEvent('paste', {
+        clipboardData: data,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+  const links = paragraph(page).locator('a');
+  await expect(links).toHaveCount(1);
+  await expect(links).toHaveText('AlphaGamma more Beta');
+  await expect(links).toHaveAttribute('href', 'https://outer.example/');
+});
+
 test('markup made or written into inside bold stays inside the bold', async ({
   page,
 }) => {

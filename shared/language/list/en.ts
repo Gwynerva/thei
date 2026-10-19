@@ -275,6 +275,8 @@ export default defineI18nBase({
     asset_preview_frame_auto_take: 'Pick automatically',
     asset_preview_frame_seek: 'Go to this frame',
     asset_preview_frame_error: 'Failed to take the frame.',
+    asset_preview_frame_partial: (count) =>
+      `Not every variant took the frame: ${count} kept the old one.`,
     asset_description_save: 'Save the file description',
     asset_description_saved: 'File description saved',
     asset_description_conflict:

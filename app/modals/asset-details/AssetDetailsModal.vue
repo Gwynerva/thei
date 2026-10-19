@@ -83,6 +83,8 @@ const fetched = shallowRef<AssetReplaceResult>();
 /** The file as a frame taken in this window left it. */
 const taken = shallowRef<AssetReplaceResult>();
 const loadFailure = ref('');
+/** The background read of a video's meta came back with none. */
+const metaUnread = ref(false);
 /** The file, once known; the window and its fields are there before it. */
 const asset = computed(
   () =>
@@ -105,8 +107,12 @@ async function load(quiet = false) {
     );
     if (stored) fetched.value = mapAssetVariantToReplaceResult(stored);
     else if (!quiet) loadFailure.value = phrase.value.asset_library_missing;
+    else metaUnread.value = true;
   } catch (error) {
-    if (quiet) return;
+    if (quiet) {
+      metaUnread.value = true;
+      return;
+    }
     loadFailure.value = errorMessage(
       error,
       phrase.value.upload_error_load_variants,
@@ -394,7 +400,7 @@ useSaveShortcut(confirm, {
           :poster="videoPosterOf(asset.media)"
           :preview-at="videoMeta?.previewAt"
           :chosen="videoMeta?.previewChosen"
-          :pending="videoMeta === undefined"
+          :pending="videoMeta === undefined && !metaUnread"
           :current-time="mediaPreview?.playbackTime"
           @chosen="takeVariants"
           @seek="mediaPreview?.seek($event)"

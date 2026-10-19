@@ -102,13 +102,9 @@ import {
 import ContentBlockToolbox from '#layers/thei/app/components/content/ContentBlockToolbox.vue';
 import {
   editableFieldOf,
-  replaceRangeText,
+  flattenToPlainText,
   selectRange,
 } from '#layers/thei/app/components/content/editor-edit-commands';
-import {
-  caretAfterLetters,
-  lettersBefore,
-} from '#layers/thei/app/composables/editor-inline-dom';
 import { bindEditorGutterClick } from '#layers/thei/app/composables/editor-gutter-click';
 import { bindEditorCurrentBlock } from '#layers/thei/app/composables/editor-current-block';
 import { bindEditorLinkPaste } from '#layers/thei/app/composables/editor-link-paste';
@@ -736,11 +732,13 @@ async function loadAiReviews() {
 
 /**
  * The entity whose text this is, by ref, for its ✦ to ask about the text:
- * none for a text of an entity not made yet, nor with AI off.
+ * none for a text of an entity not made yet, nor with AI off or no model to
+ * answer, as a field's ✦ is not offered then either.
  */
+const aiModelReady = useAiModelReady();
 const askTarget = computed(() => {
   const field = props.modalData.history?.field;
-  if (!aiEnabled.value || !field || isNewContentOwnerRef(field.ownerRef))
+  if (!aiModelReady.value || !field || isNewContentOwnerRef(field.ownerRef))
     return undefined;
   return { ref: `${field.ownerType}:${field.ownerRef}`, slot: field.slot };
 });
@@ -947,37 +945,7 @@ function normalizeHeaderElement(event: Event) {
   ) {
     return;
   }
-
-  const selection = window.getSelection();
-  const selectionIsInside = Boolean(
-    selection?.anchorNode &&
-    selection.focusNode &&
-    element.contains(selection.anchorNode) &&
-    element.contains(selection.focusNode),
-  );
-  const anchorOffset = selectionIsInside
-    ? lettersBefore(element, selection!.anchorNode!, selection!.anchorOffset)
-    : 0;
-  const focusOffset = selectionIsInside
-    ? lettersBefore(element, selection!.focusNode!, selection!.focusOffset)
-    : 0;
-  const text = element.textContent ?? '';
-  const whole = document.createRange();
-  whole.selectNodeContents(element);
-  replaceRangeText(whole, text);
-
-  if (!selectionIsInside || !selection) return;
-  const anchor = caretAfterLetters(
-    element,
-    Math.min(anchorOffset, text.length),
-  );
-  const focus = caretAfterLetters(element, Math.min(focusOffset, text.length));
-  selection.setBaseAndExtent(
-    anchor.startContainer,
-    anchor.startOffset,
-    focus.startContainer,
-    focus.startOffset,
-  );
+  flattenToPlainText(element);
 }
 
 /** The AI's edits of this text, once read. */
@@ -1236,6 +1204,7 @@ async function startEditor() {
   if (disposed) return;
   editorPrivateSections = createEditorPrivateSections(editor, {
     root: holder.value!,
+    keyTaken: () => inlineKeep?.holdsCaret() ?? false,
   });
   cleanupEditorPrivatePattern = createEditorPrivatePattern(holder.value!);
   await editorSession.initialize();

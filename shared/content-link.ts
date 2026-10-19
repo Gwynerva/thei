@@ -156,17 +156,21 @@ export type ContentLinkResolver = (
   reference: ContentLinkReference,
 ) => Promise<ResolvedContentLink>;
 
-const INLINE_TAGS = new Set([
-  'a',
-  'b',
-  'strong',
-  'i',
-  'em',
-  's',
-  'strike',
-  'abbr',
-  'br',
-]);
+/** The tags of inline markup a stored text holds, besides a line break. */
+const STORED_INLINE_TAGS = ['a', 'b', 'strong', 'i', 'em', 's', 'abbr'];
+
+/** What the normalizer takes in: the stored tags, the browser's `strike`, a break. */
+const INLINE_TAGS = new Set([...STORED_INLINE_TAGS, 'strike', 'br']);
+
+/**
+ * A tag of stored inline markup or a line break, as a normalized text
+ * writes them: the one tokenizer of the normalizer and of the editing
+ * Markdown (`content-edit-markdown/inline.ts`).
+ */
+export const CONTENT_INLINE_TOKEN = new RegExp(
+  String.raw`<br\s*\/?>|<\/?(?:${STORED_INLINE_TAGS.join('|')})(?:\s[^>]*)?>`,
+  'gi',
+);
 
 /** The markup of words a caret can stand inside of: all of it but a break. */
 export const CONTENT_INLINE_MARKUP_SELECTOR = [...INLINE_TAGS]
@@ -268,7 +272,6 @@ function linkOpening(rawAttrs: string): string {
 export const HORIZONTAL_SPACE_CHARACTERS = String.raw`\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000`;
 const HORIZONTAL_SPACE_SOURCE = `(?:[${HORIZONTAL_SPACE_CHARACTERS}]|&(?:nbsp|#0*160|#x0*a0);)`;
 const HORIZONTAL_SPACE_RUN = new RegExp(`${HORIZONTAL_SPACE_SOURCE}+`, 'gi');
-const INLINE_TOKEN = /<br>|<\/?(?:a|b|strong|i|em|s|abbr)(?:\s[^>]*)?>/gi;
 
 export function normalizeContentText(value: unknown): string {
   if (typeof value !== 'string') return '';
@@ -285,11 +288,11 @@ function normalizeInlineWhitespace(html: string): string {
   const stack: InlineFrame[] = [];
   let cursor = 0;
 
-  for (const match of html.matchAll(INLINE_TOKEN)) {
+  for (const match of html.matchAll(CONTENT_INLINE_TOKEN)) {
     const index = match.index ?? 0;
     appendTextAtoms(atoms, html.slice(cursor, index), stack);
     const token = match[0];
-    if (/^<br>$/i.test(token)) {
+    if (/^<br/i.test(token)) {
       atoms.push({ kind: 'break', stack: [...stack] });
     } else if (/^<\//.test(token)) {
       const tag = token.slice(2, -1).toLowerCase();
