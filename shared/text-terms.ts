@@ -12,9 +12,9 @@ import { stemRussian } from './language/stemmers/russian';
  */
 
 /**
- * Case, compatibility forms and «ё» set aside. Lower case by Unicode's own
- * rules, never the server's locale: a Turkish one would turn «I» into «ı» in
- * keys the database keeps (`tags.normalizedTitle`).
+ * Case, compatibility forms and «ё» set aside, for comparing: never stored —
+ * the keys the database keeps are `shared/identity-key.ts`'s. Lower case by
+ * Unicode's own rules, never the server's locale.
  */
 export function normalizeTermText(value: string): string {
   return value.normalize('NFKC').toLowerCase().replaceAll('ё', 'е');
@@ -23,14 +23,6 @@ export function normalizeTermText(value: string): string {
 let segmenter: Intl.Segmenter | undefined;
 
 /** The words of a text, normalized, in order. */
-/**
- * How a word of the dictionary is looked up: case, compatibility forms, «ё»
- * and doubled spaces set aside — the same in its window and on the server.
- */
-export function termKey(display: string): string {
-  return normalizeTermText(display).replace(/\s+/g, ' ').trim();
-}
-
 export function wordTokens(text: string): string[] {
   segmenter ??= new Intl.Segmenter(undefined, { granularity: 'word' });
   const tokens: string[] = [];

@@ -9,9 +9,9 @@ import {
   containsPhrase,
   normalizeTermText,
   stemTerm,
-  termKey,
   wordTokens,
 } from '#layers/thei/shared/text-terms';
+import { termKey } from '#layers/thei/shared/identity-key';
 import { refuse as fail } from '../entity-patch/text';
 import { loadDocuments, type McpDocument } from '../mcp/documents';
 
@@ -29,8 +29,6 @@ import { loadDocuments, type McpDocument } from '../mcp/documents';
 const TERM_FORMS_MAX = 12;
 /** Shorter words are found only as written: a stem of three letters is noise. */
 const STEMMED_FROM = 4;
-
-export { termKey };
 
 type TermRow = typeof import('../db/schema/ai').aiTerms.$inferSelect;
 

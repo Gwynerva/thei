@@ -1,4 +1,4 @@
-import { normalizeTermText } from './text-terms';
+import { identityKey } from './identity-key';
 
 /**
  * Synonyms: the other names the owner knows something by — «bg3» for
@@ -25,7 +25,7 @@ export function cleanSynonym(value: string): string {
  * difference between «ё» and «е».
  */
 export function synonymIdentity(value: string): string {
-  return normalizeTermText(value.trim());
+  return identityKey(value.trim());
 }
 
 /**

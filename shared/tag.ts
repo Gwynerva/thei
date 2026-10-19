@@ -4,7 +4,8 @@ import { normalizeUrlSegment } from './language/slugify';
 import type { ImageAccent } from './accent-color';
 import { imageAccentCssColor } from './accent-color';
 import { stringColorHue } from './utils/string-color';
-import { matchQueryWords, normalizeTermText, wordTokens } from './text-terms';
+import { identityKey } from './identity-key';
+import { matchQueryWords, wordTokens } from './text-terms';
 import {
   normalizeSynonyms,
   SYNONYM_LIMIT,
@@ -96,10 +97,11 @@ export const TAG_SYNONYM_SEPARATOR = SYNONYM_SEPARATOR;
 
 /**
  * A tag's identity: its title without case, compatibility forms or the
- * difference between «ё» and «е». Two titles that normalize alike name one tag.
+ * difference between «ё» and «е». Two titles that normalize alike name one
+ * tag. Stored as `tags.normalizedTitle`, so it is an identity key.
  */
 export function normalizeTagTitle(value: string): string {
-  return normalizeTermText(value.trim());
+  return identityKey(value.trim());
 }
 
 /**

@@ -16,7 +16,8 @@ import {
   type MemoryAnchor,
   type MemoryRow,
 } from '../../memory/store';
-import { checkedTerm, findTerm, putTerm, termKey } from '../../terms';
+import { termKey } from '#layers/thei/shared/identity-key';
+import { checkedTerm, findTerm, putTerm } from '../../terms';
 import type { ActionEvaluation, AiActionKindDef } from '../types';
 import { clipped } from './common';
 

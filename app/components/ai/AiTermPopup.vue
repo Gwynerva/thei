@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { AI_TERM_DISPLAY_MAX, AI_TERM_NOTE_MAX } from '#layers/thei/shared/ai';
 import type { AiTermItem } from '#layers/thei/shared/ai-memory';
-import { termKey } from '#layers/thei/shared/text-terms';
+import { termKey } from '#layers/thei/shared/identity-key';
 
 /**
  * A word of the dictionary, added or changed in one go: as the owner writes
