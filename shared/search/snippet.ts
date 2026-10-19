@@ -20,9 +20,8 @@ interface Span {
 
 /**
  * The part of a text around what was found, as segments with the found words
- * marked. The window opens a little before the first find and is cut at
- * spaces; an ellipsis says where the text goes on. A text short enough is
- * given whole.
+ * marked. The window opens a few words before the first find and is cut at
+ * spaces; an ellipsis says where the text goes on.
  */
 export function snippetSegments(
   text: string,
@@ -33,23 +32,29 @@ export function snippetSegments(
   // A line break reads as a space; one for one, so the places stay true.
   const flat = text.replace(/\s/gu, ' ');
   if (!hits.length) return cut(flat, 0, Math.min(flat.length, length), []);
+  // The window opens a few words before the first find, however short the
+  // text: a find far into a short paragraph is past a line cut short too.
   const first = hits[0]!;
-  let start = 0;
-  let end = flat.length;
-  if (flat.length > length) {
-    start = Math.max(0, first.start - Math.min(lead, Math.floor(length / 3)));
-    end = Math.min(flat.length, start + length);
-    if (end - start < length) start = Math.max(0, end - length);
-    if (start > 0) {
-      const space = flat.indexOf(' ', start);
-      if (space !== -1 && space < first.start) start = space + 1;
-    }
-    if (end < flat.length) {
-      const space = flat.lastIndexOf(' ', end);
-      if (space > first.end) end = space;
-    }
+  let start = Math.max(0, first.start - Math.min(lead, Math.floor(length / 3)));
+  if (start > 0) {
+    const space = flat.indexOf(' ', start);
+    if (space !== -1 && space < first.start) start = space + 1;
+  }
+  let end = Math.min(flat.length, start + length);
+  if (end < flat.length) {
+    const space = flat.lastIndexOf(' ', end);
+    if (space > first.end) end = space;
   }
   return cut(flat, start, end, hits);
+}
+
+/** A short text whole, its finds marked: a title. */
+export function markedSegments(
+  text: string,
+  hits: readonly Span[],
+): SearchSegment[] {
+  const flat = text.replace(/\s/gu, ' ');
+  return cut(flat, 0, flat.length, hits);
 }
 
 function cut(

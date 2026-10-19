@@ -421,9 +421,13 @@ export type LanguagePhrases = {
   search_building: (percent: number) => string;
   search_failed: string;
   search_quick_hint: string;
+  search_try: string;
   search_quick_empty: string;
   search_key_hint: (key: string) => string;
   search_years: string;
+  search_sort: string;
+  search_sort_best: string;
+  search_sort_new: string;
   search_no_filters: string;
   search_year_count: (year: number, count: number) => string;
   search_recent: string;
@@ -443,7 +447,6 @@ export type LanguagePhrases = {
   search_keys_open: string;
   search_keys_site: string;
   search_keys_edit: string;
-  search_keys_all: string;
   forbidden_title: string;
   forbidden_description: string;
   not_found_title: string;

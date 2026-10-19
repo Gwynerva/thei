@@ -258,6 +258,17 @@ describe('the global search', () => {
     expect((await search('событие')).total).toBe(0);
   });
 
+  it('reads one kind by its days when asked', async () => {
+    insert('diary-entries', { diaryUuid: 'd-later', date: '2025-10-01', access: 'public', createdAt: 1, updatedAt: 1 });
+    text('diary-entry', 'd-later', 'diary-body', [paragraph('d9', 'Шила снова, и париком довольна.')]);
+    await rebuildSearchIndex();
+    const days = (sort?: 'date') =>
+      search('париком', { kind: 'diary-entry', ...(sort ? { sort } : {}) }).then((response) =>
+        hits(response).map((hit) => hit.date),
+      );
+    expect(await days('date')).toEqual(['2025-10-01', '2025-09-14']);
+  });
+
   it('puts first what is named exactly as typed', async () => {
     const groups = (await search('косплей')).groups;
     expect(groups[0]!.kind).toBe('tag');

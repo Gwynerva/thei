@@ -55,7 +55,16 @@ export function searchHitTitle(hit: SearchHit): string {
     return formatAbsolutePublicDate(hit.date, language.value.code);
   if (hit.title) return publicText(hit.title);
   if (hit.kind === 'file' && hit.summary) return publicText(hit.summary);
-  return hit.file?.extension.toUpperCase() ?? '';
+  return hit.file ? fileKindName(hit.file.type) : '';
+}
+
+/** What kind of file it is, in a word: a picture, a video, a recording. */
+function fileKindName(type: string): string {
+  const value = phrase.value;
+  if (type === 'image') return value.image;
+  if (type === 'video') return value.video;
+  if (type === 'audio') return value.audio;
+  return value.search_kind('file');
 }
 
 /** Whether a result's title is its description, said once then. */
@@ -79,16 +88,11 @@ export function searchFileFacts(
   file: NonNullable<SearchHit['file']>,
   size: (bytes: number) => string,
 ): string {
-  const value = phrase.value;
-  const kind =
-    file.type === 'image'
-      ? value.image
-      : file.type === 'video'
-        ? value.video
-        : file.type === 'audio'
-          ? value.audio
-          : value.search_kind('file');
-  return [kind, file.extension.toUpperCase(), size(file.size)]
+  return [
+    fileKindName(file.type),
+    file.extension.toUpperCase(),
+    size(file.size),
+  ]
     .filter(Boolean)
     .join(' · ');
 }

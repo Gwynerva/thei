@@ -170,6 +170,26 @@ export function hitOfSummary(summary: PublicEntitySummary, ref: string): SearchH
   };
 }
 
+/**
+ * The tags most carried by what this reader may open, busiest first: words a
+ * quick search with nothing typed offers to try.
+ */
+export function popularTagTitles(isAdmin: boolean, limit = 6): string[] {
+  const { rawDb } = THEI_SERVER.useDb();
+  return (
+    rawDb
+      .prepare(
+        `SELECT t.title, count(*) AS n FROM "tag-usages" u
+         JOIN tags t ON t.tagUuid = u.tagUuid
+         LEFT JOIN projects p ON u.containerType = 'project' AND p.projectUuid = u.containerId
+         LEFT JOIN events e ON u.containerType = 'event' AND e.eventUuid = u.containerId
+         WHERE ? OR p.access = 'public' OR e.access = 'public'
+         GROUP BY t.tagUuid ORDER BY n DESC, t.title LIMIT ?`,
+      )
+      .all(isAdmin ? 1 : 0, limit) as { title: string }[]
+  ).map((row) => row.title);
+}
+
 /** A page of the catalogue, as the search page and its presets show it. */
 export async function runCatalogue(
   filters: PublicSearchFilters,

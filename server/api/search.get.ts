@@ -6,6 +6,7 @@ import {
   spendSearchTime,
   takeSearch,
 } from '../thei/search/limits';
+import { popularTagTitles } from '../thei/search/catalogue';
 import { cachedSearch } from '../thei/search/query';
 import { getRequestIp } from '../thei/request';
 
@@ -30,8 +31,8 @@ export default defineEventHandler(async (event): Promise<SearchResponse> => {
     }
   }
   const started = performance.now();
-  // The quick search with nothing typed finds nothing: only the owner is
-  // offered something there, what to do.
+  // The quick search with nothing typed finds nothing: it offers words to
+  // try, and the owner what to do.
   const response: SearchResponse =
     quick && !filters.q.trim()
       ? {
@@ -41,6 +42,7 @@ export default defineEventHandler(async (event): Promise<SearchResponse> => {
           facets: { kinds: {}, years: [], tags: [] },
           page: 1,
           pageCount: 1,
+          suggestions: popularTagTitles(isAdmin),
         }
       : await cachedSearch({
           q: filters.q,
@@ -51,6 +53,7 @@ export default defineEventHandler(async (event): Promise<SearchResponse> => {
           showcase: filters.showcase,
           cv: filters.cv,
           ...(filters.year ? { year: filters.year } : {}),
+          ...(filters.sort && filters.type ? { sort: filters.sort } : {}),
           page,
           quick,
           typing: query.typing === '1',

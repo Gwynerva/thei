@@ -12,6 +12,7 @@ import {
   type SearchResponse,
 } from '#layers/thei/shared/search/api';
 import {
+  markedSegments,
   SEARCH_SNIPPET_LEAD,
   SEARCH_SNIPPET_LENGTH,
   snippetSegments,
@@ -54,6 +55,8 @@ export interface SearchRequest {
   showcase?: boolean;
   cv?: boolean;
   year?: number;
+  /** With one kind: by its days, newest first, rather than best first. */
+  sort?: 'date';
   /** Only what falls on these days or between them. */
   from?: string;
   to?: string;
@@ -309,7 +312,7 @@ function markedTitle(title: string, query: SearchQuery): SearchSegment[] | undef
   const spans = searchTokens(title, searchAnalyzer(), 'index')
     .filter((token) => words.some((word) => answersQueryWord(token, word)))
     .map((token) => ({ start: token.start, end: token.end }));
-  return spans.length ? snippetSegments(title, spans, title.length + 1) : undefined;
+  return spans.length ? markedSegments(title, spans) : undefined;
 }
 
 function hitOf(row: DocRow, finds: SearchFind[], more: number): SearchHit {
@@ -525,6 +528,8 @@ async function searchOnce(
   const typedTerms = termsOf(query.text);
   const exact = (title: string) =>
     Boolean(typed) && (searchKey(title) === typed || termsOf(title) === typedTerms);
+  // Read by days only within one kind: a page of it, as the reader asked.
+  const byDate = request.sort === 'date' && Boolean(request.kind);
   const hydrate = (rows: DocRow[], keep = rows.length): SearchHit[] =>
     rows
       .map((row, order) => {
@@ -550,7 +555,7 @@ async function searchOnce(
           closeness: day || named ? 100 : closeness,
         };
       })
-      .sort((a, b) => b.closeness - a.closeness || a.order - b.order)
+      .sort((a, b) => (byDate ? 0 : b.closeness - a.closeness) || a.order - b.order)
       .slice(0, keep)
       .map((item) => item.hit);
   const ranked = (kind: SearchKind, limit: number, offset: number): DocRow[] => {
@@ -562,7 +567,7 @@ async function searchOnce(
           .prepare(
             `SELECT d.id, d.kind, d.ref, d.title, d.date, d.card FROM ${from}
              WHERE ${table} MATCH ? AND ${filters.sql}
-             ORDER BY bm25(${table}, ${WEIGHTS}) LIMIT ? OFFSET ?`,
+             ORDER BY ${byDate ? 'd.date IS NULL, d.date DESC' : `bm25(${table}, ${WEIGHTS})`} LIMIT ? OFFSET ?`,
           )
           .all(
             match,

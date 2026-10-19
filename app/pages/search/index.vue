@@ -216,8 +216,10 @@ const kindChips = computed(() => {
 function chooseKind(kind: SearchKind | undefined) {
   void applyFilters({
     type: kind,
-    // The showcase and the résumé hold projects only.
+    // The showcase and the résumé hold projects only; an order by days is
+    // for one kind.
     ...(kind === 'project' ? {} : { showcase: false, cv: false }),
+    ...(kind ? {} : { sort: undefined }),
   });
 }
 
@@ -293,9 +295,7 @@ const countLine = computed(() => {
 
     <nav
       v-if="typed && search.total"
-      class="-mx-window flex scrollbar-hover gap-xs overflow-x-auto px-window
-        max-sm:[mask-image:linear-gradient(to_right,black_85%,transparent)]
-        sm:mx-0 sm:flex-wrap sm:px-0"
+      class="flex flex-wrap gap-xs"
       :aria-label="phrase.search_filter_type"
     >
       <button
@@ -354,6 +354,39 @@ const countLine = computed(() => {
           <span v-if="failed" class="text-text-error">{{
             phrase.search_failed
           }}</span>
+        </div>
+        <!-- One kind may be read by its days: the diary of a year in order. -->
+        <div
+          v-if="typed && filters.type && search.total > 1"
+          class="flex justify-end"
+        >
+          <div
+            class="flex gap-0.5 rounded-sm bg-bg-3/60 p-0.5 text-xs"
+            role="radiogroup"
+            :aria-label="phrase.search_sort"
+          >
+            <button
+              v-for="option in [
+                { sort: undefined, label: phrase.search_sort_best },
+                { sort: 'date' as const, label: phrase.search_sort_new },
+              ]"
+              :key="option.sort ?? 'best'"
+              type="button"
+              role="radio"
+              :aria-checked="filters.sort === option.sort"
+              class="cursor-pointer rounded-xs px-sm py-1 font-semibold
+                transition focus-visible:ring-2 focus-visible:ring-accent
+                focus-visible:outline-none"
+              :class="
+                filters.sort === option.sort
+                  ? 'bg-bg-1 text-text-1 shadow-sm shadow-shadow-2'
+                  : 'text-text-2 hocus:text-text-1'
+              "
+              @click="applyFilters({ sort: option.sort })"
+            >
+              {{ option.label }}
+            </button>
+          </div>
         </div>
         <p v-if="search.keyboard" class="text-sm text-text-2">
           {{ phrase.search_keyboard(search.keyboard) }}

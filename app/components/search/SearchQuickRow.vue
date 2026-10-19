@@ -131,9 +131,9 @@ defineEmits<{
             role="link"
             :aria-label="phrase.search_edit"
             :data-title-popup="phrase.search_edit"
-            class="ml-auto flex size-6 shrink-0 items-center justify-center
-              rounded-xs font-normal text-text-3 transition-colors hover:bg-bg-4
-              hover:text-text-1"
+            class="ml-auto flex size-7 shrink-0 items-center justify-center
+              rounded-sm text-base font-normal text-text-3 transition-colors
+              hover:bg-bg-4 hover:text-text-1 max-sm:size-9"
             data-row-other
             @click.prevent="$emit('other')"
           >
@@ -144,7 +144,9 @@ defineEmits<{
           v-if="row.segments?.length || row.detail || row.place"
           class="flex min-w-0 items-baseline gap-1.5 text-xs text-text-3"
         >
-          <span class="-m-[0.75em] min-w-0 truncate p-[0.75em]"
+          <span
+            class="-m-[0.75em] min-w-0 p-[0.75em] max-sm:line-clamp-2
+              sm:truncate"
             ><span v-if="row.place" class="text-text-3/80"
               >{{ row.place }}{{ row.segments?.length ? ': ' : '' }}</span
             ><SearchSnippet

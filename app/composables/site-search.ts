@@ -107,11 +107,6 @@ export function useQuickSearch(
   async function send(q: string) {
     controller?.abort();
     const mine = ++version;
-    if (!q && !options.owner.value) {
-      response.value = null;
-      loading.value = false;
-      return;
-    }
     controller = new AbortController();
     loading.value = true;
     failed.value = false;
@@ -148,7 +143,7 @@ export function useQuickSearch(
     const q = text.value.trim();
     const pause = now ? 0 : q.length < 3 ? PAUSE_SHORT_MS : PAUSE_MS;
     // Waiting shows from the key that started it, not from the request.
-    if (q || options.owner.value) loading.value = true;
+    loading.value = true;
     timer = setTimeout(() => void send(q), pause);
   }
 

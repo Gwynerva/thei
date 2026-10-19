@@ -262,18 +262,6 @@ const sections = computed<Section[]>(() => {
       heading: phrase.value.search_kind_group(group.kind),
       rows: group.hits.map(hitRow),
     });
-  if (answer?.total)
-    list.push({
-      key: 'all',
-      rows: [
-        {
-          key: 'all',
-          icon: 'search',
-          title: phrase.value.search_all_results(answer.total),
-          href: allResultsHref.value,
-        },
-      ],
-    });
   if (trailing.length)
     list.push({
       key: 'trailing',
@@ -283,6 +271,16 @@ const sections = computed<Section[]>(() => {
   return list;
 });
 const rows = computed(() => sections.value.flatMap((section) => section.rows));
+/** Found beyond the rows shown: then the foot leads to all of it. */
+const moreFound = computed(() => {
+  const answer = shown.value;
+  if (!answer?.total || !query.value) return false;
+  const listed = answer.groups.reduce(
+    (sum, group) => sum + group.hits.length,
+    0,
+  );
+  return answer.total > listed;
+});
 
 const allResultsHref = computed(
   () => `/search/?q=${encodeURIComponent(query.value)}`,
@@ -420,7 +418,7 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
           @keydown="onKeyDown"
         />
         <Icon
-          v-if="loading"
+          v-if="loading && text"
           name="loading"
           class="pointer-events-none absolute right-3 text-base text-text-3"
           aria-hidden="true"
@@ -523,29 +521,69 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
           }}</span>
           <span class="text-text-3">{{ phrase.search_quick_empty }}</span>
         </p>
-        <p v-else-if="!query" class="px-xs py-sm text-sm text-text-3">
-          {{ phrase.search_quick_hint }}
-        </p>
+        <div v-else-if="!query" class="flex flex-col gap-sm px-xs py-sm">
+          <p class="text-sm text-text-3">{{ phrase.search_quick_hint }}</p>
+          <!-- What the site is most about, as words to try. -->
+          <div
+            v-if="shown?.suggestions?.length"
+            class="flex flex-wrap items-center gap-xs text-sm"
+          >
+            <span class="text-text-3">{{ phrase.search_try }}</span>
+            <button
+              v-for="word in shown.suggestions"
+              :key="word"
+              type="button"
+              class="cursor-pointer rounded-full border border-border-1 px-sm
+                py-0.5 font-semibold text-text-2 transition focus-visible:ring-2
+                focus-visible:ring-accent focus-visible:outline-none
+                hocus:border-border-2 hocus:text-text-1"
+              @click="
+                text = word;
+                field?.focus();
+              "
+            >
+              {{ publicText(word) }}
+            </button>
+          </div>
+        </div>
       </div>
 
+      <!-- The keys, on a desktop; and the way to everything found, a link a
+           hand finds too, whenever more was found than the rows show. -->
       <footer
-        v-if="!phone && rows.length"
+        v-if="rows.length && (!phone || moreFound)"
         class="flex shrink-0 flex-wrap items-center gap-x-sm gap-y-0.5 border-t
           border-border-1 px-sm py-1.5 text-xs text-text-3"
-        aria-hidden="true"
+        :class="{ 'pb-[calc(0.375rem+env(safe-area-inset-bottom))]': phone }"
       >
-        <span
-          ><kbd :class="KEY">↑</kbd><kbd :class="KEY">↓</kbd>
-          {{ phrase.search_keys_choose }}</span
+        <template v-if="!phone">
+          <span aria-hidden="true"
+            ><kbd :class="KEY">↑</kbd><kbd :class="KEY">↓</kbd>
+            {{ phrase.search_keys_choose }}</span
+          >
+          <span aria-hidden="true"
+            ><kbd :class="KEY">Enter</kbd> {{ phrase.search_keys_open }}</span
+          >
+          <span v-if="isAdmin" aria-hidden="true"
+            ><kbd :class="KEY">Shift Enter</kbd> {{ otherLabel }}</span
+          >
+        </template>
+        <TheiLink
+          v-if="moreFound"
+          :to="allResultsHref"
+          class="ml-auto flex items-center gap-1.5 rounded-sm px-1.5 py-1
+            text-sm font-semibold text-accent transition focus-visible:ring-2
+            focus-visible:ring-accent focus-visible:outline-none
+            hocus:bg-accent/10"
+          :class="{ 'w-full justify-center': phone }"
+          @click="close"
         >
-        <span><kbd :class="KEY">Enter</kbd> {{ phrase.search_keys_open }}</span>
-        <span v-if="isAdmin"
-          ><kbd :class="KEY">Shift Enter</kbd> {{ otherLabel }}</span
-        >
-        <span
-          ><kbd :class="KEY">{{ modifier }} Enter</kbd>
-          {{ phrase.search_keys_all }}</span
-        >
+          {{ phrase.search_all_results(shown?.total ?? 0) }}
+          <kbd v-if="!phone" :class="KEY" aria-hidden="true"
+            >{{ modifier }} Enter</kbd
+          >
+          <Icon v-else name="chevron-right" aria-hidden="true" />
+        </TheiLink>
       </footer>
     </div>
   </FloatingPopup>
