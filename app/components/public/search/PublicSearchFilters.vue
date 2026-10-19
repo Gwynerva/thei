@@ -21,6 +21,8 @@ const props = defineProps<{
   years?: SearchFacets['years'];
   /** A query is typed: the kind is chosen by the chips. */
   query?: boolean;
+  /** What was found may be read by its days. */
+  sortable?: boolean;
 }>();
 const emit = defineEmits<{
   change: [patch: Partial<PublicSearchFilters>];
@@ -52,6 +54,7 @@ const showsYears = computed(() =>
 const hasFilters = computed(
   () =>
     !props.query ||
+    props.sortable ||
     props.filters.type === 'project' ||
     showsYears.value ||
     props.tags.length > 0,
@@ -101,10 +104,23 @@ function removeTag(slug: string) {
   });
 }
 
+/** Best first is no choice at all: the order a search reads in. */
+const sortOptions = computed(() => ({
+  best: phrase.value.search_sort_best,
+  new: phrase.value.search_sort_new,
+  old: phrase.value.search_sort_old,
+}));
+const sort = computed({
+  get: () => props.filters.sort ?? 'best',
+  set: (value: 'best' | 'new' | 'old') =>
+    emit('change', { sort: value === 'best' ? undefined : value }),
+});
+
 function reset() {
   tagQuery.value = '';
   emit('change', {
     ...(props.query ? {} : { type: undefined }),
+    sort: undefined,
     showcase: false,
     cv: false,
     tags: [],
@@ -122,6 +138,15 @@ function reset() {
       icon="tune"
       :title="phrase.search_no_filters"
     />
+    <PublicCollapsibleSection v-if="sortable" :title="phrase.search_sort">
+      <FieldSelect
+        v-model="sort"
+        :options="sortOptions"
+        :aria-label="phrase.search_sort"
+        wide
+      />
+    </PublicCollapsibleSection>
+
     <PublicCollapsibleSection v-if="!query" :title="phrase.search_filter_type">
       <div
         class="grid grid-cols-3 gap-1 rounded-normal bg-bg-3/60 p-1"

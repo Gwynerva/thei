@@ -55,7 +55,7 @@ export interface SearchRequest {
   showcase?: boolean;
   cv?: boolean;
   year?: number;
-  /** With one kind: by its days, newest or oldest first, rather than best first. */
+  /** By days, newest or oldest first, rather than best first. */
   sort?: 'new' | 'old';
   /** Only what falls on these days or between them. */
   from?: string;
@@ -694,8 +694,8 @@ async function searchOnce(
   const exact = (title: string) =>
     Boolean(typed) &&
     (searchKey(title) === typed || termsOf(title) === typedTerms);
-  // Read by days only within one kind: a page of it, as the reader asked.
-  const byDate = Boolean(request.sort && request.kind);
+  // Read by days, as the reader asked: each kind's few, or a page of one.
+  const byDate = Boolean(request.sort);
   // The results whose names hold every word, by ref: their kind comes up.
   const fullyNamed = new Set<string>();
   const hydrate = (rows: DocRow[], keep = rows.length): SearchHit[] =>
@@ -766,7 +766,7 @@ async function searchOnce(
           .prepare(
             `SELECT d.id, d.kind, d.ref, d.title, d.date, d.card FROM ${from}
              WHERE ${table} MATCH ? AND ${filters.sql}
-             ORDER BY ${byDate ? `d.date IS NULL, d.date ${request.sort === 'old' ? 'ASC' : 'DESC'}` : `bm25(${table}, ${WEIGHTS})`} LIMIT ? OFFSET ?`,
+             ORDER BY ${byDate ? `d.date IS NULL, d.date ${request.sort === 'old' ? 'ASC' : 'DESC'}, ` : ''}bm25(${table}, ${WEIGHTS}) LIMIT ? OFFSET ?`,
           )
           .all(
             match,

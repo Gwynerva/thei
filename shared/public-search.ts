@@ -17,7 +17,7 @@ export interface PublicSearchFilters {
   exclude: string[];
   /** Only what falls in this year. */
   year?: number;
-  /** One kind read by its days, newest or oldest first, rather than best first. */
+  /** Found things read by their days, newest or oldest first, rather than best first. */
   sort?: 'new' | 'old';
 }
 
@@ -92,7 +92,8 @@ export function countPublicSearchFilters(filters: PublicSearchFilters) {
     (filters.cv ? 1 : 0) +
     filters.tags.length +
     filters.exclude.length +
-    (filters.year ? 1 : 0)
+    (filters.year ? 1 : 0) +
+    (filters.sort ? 1 : 0)
   );
 }
 

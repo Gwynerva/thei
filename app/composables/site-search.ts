@@ -1,7 +1,7 @@
 import type { ReferenceElement } from '@floating-ui/vue';
 import type { SearchResponse } from '#layers/thei/shared/search/api';
 import { toDateString } from '#layers/thei/shared/date-range';
-import { isMacPlatform, matchChord, matchSlash, useShortcut } from './shortcut';
+import { matchChord, matchSlash, useShortcut } from './shortcut';
 
 /**
  * The one quick search of the site, the same for a visitor and the owner:
@@ -10,15 +10,6 @@ import { isMacPlatform, matchChord, matchSlash, useShortcut } from './shortcut';
  * in front. On the search page itself, those take the page's own field.
  */
 const anchor = shallowRef<ReferenceElement | null>(null);
-
-/** The keys that open the search, as a hint names them: ⌘K on a Mac. */
-export function useSearchKeyName() {
-  const name = ref('Ctrl K');
-  onMounted(() => {
-    if (isMacPlatform()) name.value = '⌘K';
-  });
-  return name;
-}
 
 /** What opens the search, marked so a key can open it at the same place. */
 export const SITE_SEARCH_ANCHOR = 'data-site-search';

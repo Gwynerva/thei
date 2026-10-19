@@ -30,8 +30,8 @@ and behaves.
 `complex`: by its anchor on a desktop, a sheet on a phone.
 
 - Results come as the query is typed (`useQuickSearch`), the best three of
-  each kind, under grey group names with no icons: the icon of the kind is in
-  each row already.
+  each kind, under grey group names in capitals with no icons, as on the
+  search page: the icon of the kind is in each row already.
 - One row per result (`SearchQuickRow.vue`): the kind's icon in the title's
   line, then its time quiet after it — on a phone its years only, where the
   days have no room; a section's project, quieter still, gives way before
@@ -49,9 +49,13 @@ and behaves.
   always shows where Enter goes.
 - ↑ ↓ choose, Tab and Shift+Tab go from group to group, Enter opens,
   Ctrl+Enter shows everything on the search page, Esc closes and gives the
-  focus back. The foot says so, but for Esc, on a desktop only, in one line.
-- On a phone the owner's pencil to the editor is a framed square of a
-  finger's size, apart from the row's own link.
+  focus back. None of it is told on screen: the foot holds how many were
+  found, always a link to all of them.
+- The owner's way to the editor is «✎ Изменить» on the row's last line,
+  after «↳ Ещё в N местах», a target of its own apart from the row's link.
+- What to do with the query that leads — the day's diary, a part of the
+  admin, ✦ for a question — stands first, over what the search says of its
+  answer («Все слова вместе…»), a line away from what was found.
 - Enter opens where the owner is: the page on the site, the editor in the
   admin; Shift+Enter the other one.
 - The owner, with nothing typed, is offered the day's diary entry, the other
@@ -78,8 +82,10 @@ and behaves.
   the showcase — each undone with a touch; the sheet of filters is not
   offered when there is nothing to filter by. The kinds' chips are smaller
   there, so they take two rows rather than four.
-- One kind can be read by its days, newest or oldest first, beside the best
-  first.
+- What was found can be read by its days, newest or oldest first, beside
+  the best first: «Сортировка», a `FieldSelect` at the head of the filters,
+  offered when more than one result has a day. Chosen, it counts as a filter
+  and shows among the chips on a phone.
 - The years are a chart and a choice at once: one row a year, newest first,
   its count as a horizontal bar against the busiest year and as a number;
   the year chosen in the accent, the others dimmed, chosen again to show
@@ -120,7 +126,7 @@ and behaves.
 - The owner sees its lock with two words beside it («Только вам»), its
   badges, and a pencil to its editor in the head's corner, on a ground of
   its own: in the line of badges it wrapped onto a line alone on a phone and
-  sank into the picture.
+  sank into the picture. It stays faint until the card is pointed at.
 - Under the head, the full width of the card, the places the words were
   found at — a section, a caption, a file's description, a hint, a note —
   each with the icon of what it is, its words, and a small preview for a find

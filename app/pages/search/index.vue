@@ -216,10 +216,8 @@ const kindChips = computed(() => {
 function chooseKind(kind: SearchKind | undefined) {
   void applyFilters({
     type: kind,
-    // The showcase and the résumé hold projects only; an order by days is
-    // for one kind.
+    // The showcase and the résumé hold projects only.
     ...(kind === 'project' ? {} : { showcase: false, cv: false }),
-    ...(kind ? {} : { sort: undefined }),
   });
 }
 
@@ -235,6 +233,15 @@ const activeChips = computed(() => {
     icon?: 'plus' | 'minus';
     patch: Partial<PublicSearchFilters>;
   }[] = [];
+  if (value.sort)
+    chips.push({
+      key: 'sort',
+      label:
+        value.sort === 'old'
+          ? phrase.value.search_sort_old
+          : phrase.value.search_sort_new,
+      patch: { sort: undefined },
+    });
   if (value.year)
     chips.push({
       key: 'year',
@@ -275,13 +282,23 @@ const activeChips = computed(() => {
   return chips;
 });
 
+/** Found things with days may be read by them, when there is more than one. */
+const sortable = computed(
+  () =>
+    typed.value &&
+    (Boolean(filters.value.sort) ||
+      (search.value.total > 1 && search.value.facets.years.length > 0)),
+);
+
 /**
  * Whether the filters have anything to offer: with a query, what was found
- * may have neither years nor tags, and then the sheet has nothing to open.
+ * may have neither years nor tags nor days, and then the sheet has nothing
+ * to open.
  */
 const filtersOffered = computed(
   () =>
     !typed.value ||
+    sortable.value ||
     filters.value.type === 'project' ||
     search.value.facets.years.length > 1 ||
     Boolean(filters.value.year) ||
@@ -443,40 +460,6 @@ const countLine = computed(() => {
             </button>
           </li>
         </ul>
-        <!-- One kind may be read by its days: the diary of a year in order. -->
-        <div
-          v-if="typed && filters.type && search.total > 1"
-          class="flex justify-end"
-        >
-          <div
-            class="flex gap-0.5 rounded-sm bg-bg-3/60 p-0.5 text-xs"
-            role="radiogroup"
-            :aria-label="phrase.search_sort"
-          >
-            <button
-              v-for="option in [
-                { sort: undefined, label: phrase.search_sort_best },
-                { sort: 'new' as const, label: phrase.search_sort_new },
-                { sort: 'old' as const, label: phrase.search_sort_old },
-              ]"
-              :key="option.sort ?? 'best'"
-              type="button"
-              role="radio"
-              :aria-checked="filters.sort === option.sort"
-              class="cursor-pointer rounded-xs px-sm py-1 font-semibold
-                transition focus-visible:ring-2 focus-visible:ring-accent
-                focus-visible:outline-none"
-              :class="
-                filters.sort === option.sort
-                  ? 'bg-bg-1 text-text-1 shadow-sm shadow-shadow-2'
-                  : 'text-text-2 hocus:text-text-1'
-              "
-              @click="applyFilters({ sort: option.sort })"
-            >
-              {{ option.label }}
-            </button>
-          </div>
-        </div>
         <p v-if="search.keyboard" class="text-sm text-text-2">
           {{ phrase.search_keyboard(search.keyboard) }}
         </p>
@@ -565,6 +548,7 @@ const countLine = computed(() => {
           :tags="search.facets.tags"
           :years="typed ? search.facets.years : undefined"
           :query="typed"
+          :sortable
           @change="applyFilters"
         />
       </PublicStickyAside>
@@ -592,6 +576,7 @@ const countLine = computed(() => {
           :tags="search.facets.tags"
           :years="typed ? search.facets.years : undefined"
           :query="typed"
+          :sortable
           @change="applyFilters"
         />
       </div>

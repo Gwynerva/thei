@@ -30,8 +30,6 @@ const phone = usePhoneWidth();
 const field = useTemplateRef<HTMLInputElement>('field');
 const text = ref('');
 const inAdmin = computed(() => route.path.startsWith('/admin/'));
-const mac = ref(false);
-onMounted(() => (mac.value = isMacPlatform()));
 
 const { response, loading, failed } = useQuickSearch(text, {
   enabled: open,
@@ -278,17 +276,6 @@ const sections = computed<Section[]>(() => {
   return list;
 });
 const rows = computed(() => sections.value.flatMap((section) => section.rows));
-/** Found beyond the rows shown: then the foot leads to all of it. */
-const moreFound = computed(() => {
-  const answer = shown.value;
-  if (!answer?.total || !query.value) return false;
-  const listed = answer.groups.reduce(
-    (sum, group) => sum + group.hits.length,
-    0,
-  );
-  return answer.total > listed;
-});
-
 const allResultsHref = computed(
   () => `/search/?q=${encodeURIComponent(query.value)}`,
 );
@@ -388,12 +375,19 @@ function onKeyDown(event: KeyboardEvent) {
   }
 }
 
-const otherLabel = computed(() =>
-  inAdmin.value ? phrase.value.search_keys_site : phrase.value.search_keys_edit,
-);
-const modifier = computed(() => (mac.value ? '⌘' : 'Ctrl'));
-const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
-  border border-border-2 bg-bg-1 px-1 font-sans text-2xs text-text-2`;
+/**
+ * What the search says of its answer: read on the other keyboard, or found
+ * for some of the words only. Under what to do, over what was found.
+ */
+const notes = computed(() => {
+  const answer = shown.value;
+  if (!answer || !rows.value.length) return [];
+  return [
+    ...(answer.keyboard ? [phrase.value.search_keyboard(answer.keyboard)] : []),
+    ...(answer.partial ? [phrase.value.search_partial] : []),
+  ];
+});
+const leads = computed(() => sections.value[0]?.key === 'leading');
 </script>
 
 <template>
@@ -492,18 +486,15 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
           p-1.5"
         aria-live="polite"
       >
-        <p
-          v-if="shown?.keyboard && rows.length"
-          class="px-xs pb-1 text-xs text-text-3"
-        >
-          {{ phrase.search_keyboard(shown.keyboard) }}
-        </p>
-        <p
-          v-if="shown?.partial && rows.length"
-          class="px-xs pb-1 text-xs text-text-3"
-        >
-          {{ phrase.search_partial }}
-        </p>
+        <template v-if="!leads">
+          <p
+            v-for="note in notes"
+            :key="note"
+            class="px-xs pb-1 text-xs text-text-3"
+          >
+            {{ note }}
+          </p>
+        </template>
         <div
           v-if="rows.length"
           :id="listId"
@@ -512,31 +503,43 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
           class="flex flex-col gap-1.5 transition-opacity"
           :class="{ 'opacity-60': loading && shown?.query !== query }"
         >
-          <div
-            v-for="section in sections"
-            :key="section.key"
-            role="group"
-            :aria-label="section.heading"
-            class="flex flex-col"
-          >
-            <span
-              v-if="section.heading"
-              class="px-xs pt-1 pb-0.5 text-xs font-semibold text-text-3"
-              aria-hidden="true"
-              >{{ section.heading }}</span
+          <template v-for="(section, at) in sections" :key="section.key">
+            <!-- What to do with the query leads, over what the search says
+                 of its answer, a line away from what was found. -->
+            <div
+              v-if="at === 1 && leads"
+              role="presentation"
+              class="flex flex-col gap-1 border-t border-border-1 px-xs pt-1.5"
             >
-            <SearchQuickRow
-              v-for="row in section.rows"
-              :id="optionId(rowIndex.get(row.key)!)"
-              :key="row.key"
-              :row
-              :active="activeIndex === rowIndex.get(row.key)"
-              @point="pointAt($event, rowIndex.get(row.key)!)"
-              @pick="onPick(row, $event)"
-              @more="openPlaces(row)"
-              @other="activate(row, true)"
-            />
-          </div>
+              <p v-for="note in notes" :key="note" class="text-xs text-text-3">
+                {{ note }}
+              </p>
+            </div>
+            <div
+              role="group"
+              :aria-label="section.heading"
+              class="flex flex-col"
+            >
+              <span
+                v-if="section.heading"
+                class="px-xs pt-1.5 pb-1 text-xs font-bold tracking-wider
+                  text-text-3 uppercase"
+                aria-hidden="true"
+                >{{ section.heading }}</span
+              >
+              <SearchQuickRow
+                v-for="row in section.rows"
+                :id="optionId(rowIndex.get(row.key)!)"
+                :key="row.key"
+                :row
+                :active="activeIndex === rowIndex.get(row.key)"
+                @point="pointAt($event, rowIndex.get(row.key)!)"
+                @pick="onPick(row, $event)"
+                @more="openPlaces(row)"
+                @other="activate(row, true)"
+              />
+            </div>
+          </template>
         </div>
         <p
           v-else-if="failed"
@@ -581,44 +584,25 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
         </div>
       </div>
 
-      <!-- The keys, on a desktop; and the way to everything found, a link a
-           hand finds too, whenever more was found than the rows show. -->
+      <!-- How many were found, always the way to all of them: the keys are
+           not told — the foot is for what was found. -->
       <footer
-        v-if="rows.length && (!phone || moreFound)"
-        class="flex shrink-0 flex-wrap items-center gap-x-sm gap-y-0.5 border-t
-          border-border-1 px-sm py-1.5 text-xs text-text-3"
+        v-if="query && shown?.total"
+        class="flex shrink-0 items-center justify-end border-t border-border-1
+          px-sm py-1.5"
         :class="{ 'pb-[calc(0.375rem+env(safe-area-inset-bottom))]': phone }"
       >
-        <template v-if="!phone">
-          <span aria-hidden="true"
-            ><kbd :class="KEY">↑</kbd><kbd :class="KEY">↓</kbd>
-            {{ phrase.search_keys_choose }}</span
-          >
-          <span aria-hidden="true"
-            ><kbd :class="KEY">Enter</kbd> {{ phrase.search_keys_open }}</span
-          >
-          <span v-if="groupStarts.length > 1" aria-hidden="true"
-            ><kbd :class="KEY">Tab</kbd> {{ phrase.search_keys_group }}</span
-          >
-          <span v-if="isAdmin" aria-hidden="true"
-            ><kbd :class="KEY">Shift Enter</kbd> {{ otherLabel }}</span
-          >
-        </template>
         <TheiLink
-          v-if="moreFound"
           :to="allResultsHref"
-          class="ml-auto flex items-center gap-1.5 rounded-sm px-1.5 py-1
-            text-sm font-semibold text-accent transition focus-visible:ring-2
+          class="flex items-center gap-1 rounded-sm px-1.5 py-1 text-sm
+            font-semibold text-accent transition focus-visible:ring-2
             focus-visible:ring-accent focus-visible:outline-none
             hocus:bg-accent/10"
           :class="{ 'w-full justify-center': phone }"
           @click="close"
         >
-          {{ phrase.search_all_results(shown?.total ?? 0) }}
-          <kbd v-if="!phone" :class="KEY" aria-hidden="true"
-            >{{ modifier }} Enter</kbd
-          >
-          <Icon v-else name="chevron-right" aria-hidden="true" />
+          {{ phrase.search_all_results(shown.total) }}
+          <Icon name="chevron-right" aria-hidden="true" />
         </TheiLink>
       </footer>
     </div>

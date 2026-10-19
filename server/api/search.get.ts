@@ -53,7 +53,7 @@ export default defineEventHandler(async (event): Promise<SearchResponse> => {
           showcase: filters.showcase,
           cv: filters.cv,
           ...(filters.year ? { year: filters.year } : {}),
-          ...(filters.sort && filters.type ? { sort: filters.sort } : {}),
+          ...(filters.sort ? { sort: filters.sort } : {}),
           page,
           quick,
           typing: query.typing === '1',

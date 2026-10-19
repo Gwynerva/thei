@@ -489,6 +489,13 @@ describe('the global search', () => {
       }).then((response) => hits(response).map((hit) => hit.date));
     expect(await days('new')).toEqual(['2025-10-01', '2025-09-14']);
     expect(await days('old')).toEqual(['2025-09-14', '2025-10-01']);
+    // Every kind's few too, with no kind chosen.
+    const grouped = await search('париком', { sort: 'old' });
+    expect(
+      grouped.groups
+        .find((group) => group.kind === 'diary-entry')!
+        .hits.map((hit) => hit.date),
+    ).toEqual(['2025-09-14', '2025-10-01']);
   });
 
   it('puts first what is named exactly as typed', async () => {

@@ -426,7 +426,6 @@ export type LanguagePhrases = {
   search_quick_hint: string;
   search_try: string;
   search_quick_empty: string;
-  search_key_hint: (key: string) => string;
   search_years: string;
   search_sort: string;
   search_sort_best: string;
@@ -447,11 +446,6 @@ export type LanguagePhrases = {
   search_action_new_event: (title: string) => string;
   search_action_new_page: (title: string) => string;
   search_action_ask_ai: (text: string) => string;
-  search_keys_choose: string;
-  search_keys_group: string;
-  search_keys_open: string;
-  search_keys_site: string;
-  search_keys_edit: string;
   forbidden_title: string;
   forbidden_description: string;
   not_found_title: string;

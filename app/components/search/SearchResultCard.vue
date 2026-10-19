@@ -231,7 +231,7 @@ const accent = computed(() =>
         </div>
         <!-- Its own corner, on a ground of its own: in the line of badges
              it wrapped onto a line alone on a phone, and sank into the
-             picture. -->
+             picture. Faint until the card or itself is pointed at. -->
         <TheiLink
           v-if="hit.editHref"
           :to="hit.editHref"
@@ -239,10 +239,11 @@ const accent = computed(() =>
           :data-title-popup="phrase.search_edit"
           class="absolute top-xs right-xs z-3 flex size-9 items-center
             justify-center rounded-sm border border-border-1 bg-bg-2/85
-            text-base text-text-2 backdrop-blur-sm transition
+            text-base text-text-2 opacity-60 backdrop-blur-sm transition
+            group-hocus:opacity-100 focus-visible:opacity-100
             focus-visible:ring-2 focus-visible:ring-accent
             focus-visible:outline-none hocus:border-border-2 hocus:bg-bg-3
-            hocus:text-text-1"
+            hocus:text-text-1 hocus:opacity-100"
         >
           <Icon name="edit" />
         </TheiLink>

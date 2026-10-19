@@ -37,7 +37,7 @@ export interface SearchQuickRowData {
   href?: string;
   /** Where Shift+Enter takes it: the other side, page or editor. */
   other?: string;
-  /** A small button of its own to `other`, for a hand without Shift. */
+  /** Its own way to `other`, on the last line, for a hand without Shift. */
   otherIcon?: IconName;
   /** Drawn in the accent: the ✦ of AI. */
   accent?: boolean;
@@ -132,35 +132,22 @@ defineEmits<{
             role="img"
             class="shrink-0 text-sm text-text-2"
           />
-          <!-- On a phone, where the days have no room, its years. -->
+          <!-- On a phone, where the days have no room, its years. Each
+               quiet part after the title follows a dot, and keeps its halo
+               off what stands before it. -->
           <span
             v-if="row.when"
-            class="-m-[0.75em] shrink-0 p-[0.75em] text-xs font-normal
-              text-text-3 max-sm:hidden"
-            >{{ row.when }}</span
+            class="-my-[0.75em] -mr-[0.75em] shrink-0 overflow-hidden
+              py-[0.75em] pr-[0.75em] text-xs font-normal text-text-3
+              max-sm:hidden"
+            >· {{ row.when }}</span
           >
           <span
             v-if="row.years"
-            class="-m-[0.75em] shrink-0 p-[0.75em] text-xs font-normal
-              text-text-3 sm:hidden"
-            >{{ row.years }}</span
+            class="-my-[0.75em] -mr-[0.75em] shrink-0 overflow-hidden
+              py-[0.75em] pr-[0.75em] text-xs font-normal text-text-3 sm:hidden"
+            >· {{ row.years }}</span
           >
-          <!-- Its own target inside the row, kept from the row's link. -->
-          <span
-            v-if="row.otherIcon"
-            role="link"
-            :aria-label="phrase.search_edit"
-            :data-title-popup="phrase.search_edit"
-            class="ml-auto flex size-7 shrink-0 items-center justify-center
-              rounded-sm text-base font-normal text-text-3 transition-colors
-              hover:bg-bg-4 hover:text-text-1 max-sm:-my-1.5 max-sm:size-10
-              max-sm:border max-sm:border-border-2 max-sm:bg-bg-2/80
-              max-sm:text-lg max-sm:text-text-2"
-            data-row-other
-            @click.prevent="$emit('other')"
-          >
-            <Icon :name="row.otherIcon" aria-hidden="true" />
-          </span>
         </span>
         <!-- Two lines on a phone, clamped: a clamped box shows whatever its
              padding holds, so it has no room for the halo there, and stops
@@ -185,27 +172,46 @@ defineEmits<{
             /><template v-else-if="row.detail">{{ row.detail }}</template></span
           >
         </span>
-        <!-- A line of its own, in words, under an arrow from the result: a
-             bare «+5» on the picture's fading edge was all but unseen. The
-             arrow's arm stands two thirds down its glyph: raised by the rest,
-             it points at the middle of the words. -->
-        <!-- Its own target inside the row: kept from the row's link, it
-             leads to the search page with this result's places open. -->
+        <!-- The last line: the other places, and the way to the editor. -->
         <span
-          v-if="row.more"
-          class="flex min-w-0 items-center gap-1.5 self-start text-xs
-            text-text-3 italic transition-colors hover:text-accent
-            hover:underline"
-          data-row-more
-          @click.prevent="$emit('more')"
-          ><Icon
-            name="subfolder-arrow"
-            class="shrink-0 -translate-y-[17%] text-sm not-italic"
-            aria-hidden="true"
-          /><span class="-m-[0.75em] min-w-0 truncate p-[0.75em]">{{
-            phrase.search_more_finds(row.more)
-          }}</span></span
+          v-if="row.more || row.otherIcon"
+          class="flex min-w-0 items-center gap-sm text-xs text-text-3"
         >
+          <!-- In words, under an arrow from the result: a bare «+5» on the
+               picture's fading edge was all but unseen. The arrow's arm
+               stands two thirds down its glyph: raised by the rest, it
+               points at the middle of the words. Its own target inside the
+               row: kept from the row's link, it leads to the search page
+               with this result's places open. -->
+          <span
+            v-if="row.more"
+            class="flex min-w-0 items-center gap-1.5 italic transition-colors
+              hover:text-accent hover:underline"
+            data-row-more
+            @click.prevent="$emit('more')"
+            ><Icon
+              name="subfolder-arrow"
+              class="shrink-0 -translate-y-[17%] text-sm not-italic"
+              aria-hidden="true"
+            /><span class="-m-[0.75em] min-w-0 truncate p-[0.75em]">{{
+              phrase.search_more_finds(row.more)
+            }}</span></span
+          >
+          <!-- The owner's way to its editor, a target of its own kept from
+               the row's link: a hand has no Shift+Enter. -->
+          <span
+            v-if="row.otherIcon"
+            role="link"
+            class="-my-1 flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-1
+              font-semibold text-text-2 transition-colors hover:bg-bg-4
+              hover:text-text-1 max-sm:-my-1.5 max-sm:py-1.5"
+            data-row-other
+            @click.prevent="$emit('other')"
+          >
+            <Icon :name="row.otherIcon" class="shrink-0" aria-hidden="true" />
+            {{ phrase.search_edit }}
+          </span>
+        </span>
       </span>
       <span
         v-if="row.media && row.preview"
