@@ -419,6 +419,7 @@ export type LanguagePhrases = {
   search_failed: string;
   search_quick_hint: string;
   search_years: string;
+  search_no_filters: string;
   search_year_count: (year: number, count: number) => string;
   search_recent: string;
   search_actions: string;

@@ -25,6 +25,7 @@ import {
 import { normalizeAssetExtension } from '../../../shared/assets/formats';
 import { dayQueryRank, parseDayQuery } from '../../../shared/day-query';
 import { richTextToPlainText } from '../../../shared/rich-text';
+import { queryWordsFilter, wordTokens } from '../../../shared/text-terms';
 import {
   buildProjectSectionUrl,
   buildProjectUrl,
@@ -92,7 +93,8 @@ members AS (
  * was called is never kept, so it is never searchable. The file's own
  * description, kept for its family, finds it wherever it is placed.
  * `scoped` restricts the match by placements to the member row's own
- * source. Takes the query five times.
+ * source. Takes the query five times. Words are found as words
+ * (`asset_search_words`).
  */
 function siteTextMatchSql(scoped: boolean) {
   const scope = scoped
@@ -100,22 +102,22 @@ function siteTextMatchSql(scoped: boolean) {
     : '';
   return `(EXISTS (
       SELECT 1 FROM placements p WHERE p.assetUuid=a.assetUuid${scope}
-      AND (instr(asset_search_text(CASE WHEN p.sourceType='diary-entry' THEN '' ELSE coalesce(p.title,'') END || ' ' || coalesce(p.summary,'') || ' ' || p.description || ' ' || coalesce(json_extract(p.meta,'$.caption'),'') || ' ' || coalesce(json_extract(p.meta,'$.title'),'')),?)>0
+      AND (asset_search_words(asset_search_text(CASE WHEN p.sourceType='diary-entry' THEN '' ELSE coalesce(p.title,'') END || ' ' || coalesce(p.summary,'') || ' ' || p.description || ' ' || coalesce(json_extract(p.meta,'$.caption'),'') || ' ' || coalesce(json_extract(p.meta,'$.title'),'')),?)
         OR (p.sourceType='diary-entry' AND asset_day_match(p.slug,?))))
     OR EXISTS (
       SELECT 1 FROM placements p JOIN content c ON p.containerType='content' AND c.contentUuid=p.containerId,
         json_each(c.data,'$.blocks') b
       WHERE p.assetUuid=a.assetUuid${scope} AND (
         (json_extract(b.value,'$.data.asset.assetUuid')=a.assetUuid AND
-          instr(asset_search_text(coalesce(json_extract(b.value,'$.data.caption'),'') || ' ' || coalesce(json_extract(b.value,'$.data.title'),'')),?)>0)
+          asset_search_words(asset_search_text(coalesce(json_extract(b.value,'$.data.caption'),'') || ' ' || coalesce(json_extract(b.value,'$.data.title'),'')),?))
         OR EXISTS (SELECT 1 FROM json_each(b.value,'$.data.items') i
           WHERE json_extract(i.value,'$.asset.assetUuid')=a.assetUuid
-            AND instr(asset_search_text(coalesce(json_extract(i.value,'$.caption'),'') || ' ' || coalesce(json_extract(i.value,'$.title'),'') || ' ' || coalesce(json_extract(b.value,'$.data.title'),'')),?)>0)
+            AND asset_search_words(asset_search_text(coalesce(json_extract(i.value,'$.caption'),'') || ' ' || coalesce(json_extract(i.value,'$.title'),'') || ' ' || coalesce(json_extract(b.value,'$.data.title'),'')),?))
       )
     )
     OR EXISTS (
       SELECT 1 FROM "asset-descriptions" d WHERE d.familyUuid=a.familyUuid
-      AND instr(asset_search_plain(d.text),?)>0
+      AND asset_search_words(asset_search_plain(d.text),?)
     ))`;
 }
 const registered = new WeakSet<Database.Database>();
@@ -138,6 +140,24 @@ function connection() {
       { deterministic: true },
       (value: unknown) =>
         normalizeAdminSearchText(typeof value === 'string' ? value : ''),
+    );
+    // Words found as words, each at the start of a word or in another of its
+    // forms (`queryWordsFilter`): «кошка диван» finds «Кошка спит на
+    // диване»; never inside another word: «кот» never finds «скот». Asked
+    // row after row with one query, so the query is read once.
+    let wordsQuery: string | undefined;
+    let wordsFilter: ReturnType<typeof queryWordsFilter> = () => false;
+    context.rawDb.function(
+      'asset_search_words',
+      { deterministic: true },
+      (text: unknown, query: unknown) => {
+        if (typeof text !== 'string' || typeof query !== 'string') return 0;
+        if (query !== wordsQuery) {
+          wordsQuery = query;
+          wordsFilter = queryWordsFilter(wordTokens(query));
+        }
+        return wordsFilter([text]) ? 1 : 0;
+      },
     );
     // Asked once per diary placement with the same query each time, so the
     // query is read once.

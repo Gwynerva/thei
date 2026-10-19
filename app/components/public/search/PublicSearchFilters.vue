@@ -42,6 +42,21 @@ const availableTags = computed(() => {
       !facet.state && (!query || searchKey(facet.tag.title).includes(query)),
   );
 });
+/**
+ * Whether there is anything to narrow by: with a query, the kind is chosen
+ * above, and what was found may have neither years nor tags.
+ */
+const showsYears = computed(() =>
+  Boolean(props.years && (props.years.length > 1 || props.filters.year)),
+);
+const hasFilters = computed(
+  () =>
+    !props.query ||
+    props.filters.type === 'project' ||
+    showsYears.value ||
+    props.tags.length > 0,
+);
+
 /** The years found, newest first, each with its bar's share of the busiest. */
 const yearBars = computed(() => {
   const years = props.years ?? [];
@@ -101,6 +116,15 @@ function reset() {
 
 <template>
   <div class="flex min-w-0 flex-col gap-md">
+    <!-- Nothing to narrow by: said, rather than an empty column. -->
+    <p
+      v-if="!hasFilters"
+      class="flex items-start gap-xs rounded-normal border border-border-1
+        bg-bg-2/60 p-sm text-sm text-text-3"
+    >
+      <Icon name="filter" class="mt-0.5 shrink-0" aria-hidden="true" />
+      <span>{{ phrase.search_no_filters }}</span>
+    </p>
     <PublicCollapsibleSection v-if="!query" :title="phrase.search_filter_type">
       <div
         class="grid grid-cols-3 gap-1 rounded-normal bg-bg-3/60 p-1"
@@ -173,10 +197,7 @@ function reset() {
       </div>
     </PublicCollapsibleSection>
 
-    <PublicCollapsibleSection
-      v-if="years && (years.length > 1 || filters.year)"
-      :title="phrase.search_years"
-    >
+    <PublicCollapsibleSection v-if="showsYears" :title="phrase.search_years">
       <!-- How many were found each year, newest first, as bars against the
            busiest year: a choice and a chart at once. The year chosen is
            drawn in the accent; choosing it again shows every year. -->

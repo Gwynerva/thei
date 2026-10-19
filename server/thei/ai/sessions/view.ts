@@ -23,7 +23,11 @@ import {
   type AiSessionOverview,
 } from '#layers/thei/shared/ai';
 import type { Database } from 'better-sqlite3';
-import { normalizeTermText } from '#layers/thei/shared/text-terms';
+import {
+  normalizeTermText,
+  queryWordsFilter,
+  wordTokens,
+} from '#layers/thei/shared/text-terms';
 import {
   entityFace,
   findEntity,
@@ -267,7 +271,7 @@ function searchable(value: string): string {
 }
 
 /** The SQL function a search compares words with, as `searchable` reads them. */
-const SEARCHABLE_SQL = 'thei_searchable';
+const SEARCHABLE_SQL = 'thei_search_words';
 const searchableIn = new WeakSet<object>();
 
 /**
@@ -276,9 +280,20 @@ const searchableIn = new WeakSet<object>();
  */
 function searchableSql(rawDb: Database) {
   if (searchableIn.has(rawDb)) return;
-  rawDb.function(SEARCHABLE_SQL, { deterministic: true }, (value) =>
-    typeof value === 'string' ? searchable(value) : '',
-  );
+  // Words found as words, each at the start of a word or in another of its
+  // forms (`queryWordsFilter`): «кошка диван» finds «кошка спит на диване»;
+  // never inside another word: «кот» never finds «скот». Asked row after row
+  // with one query, so the query is read once.
+  let asked: string | undefined;
+  let matches: ReturnType<typeof queryWordsFilter> = () => false;
+  rawDb.function(SEARCHABLE_SQL, { deterministic: true }, (value, query) => {
+    if (typeof value !== 'string' || typeof query !== 'string') return 0;
+    if (query !== asked) {
+      asked = query;
+      matches = queryWordsFilter(wordTokens(query));
+    }
+    return matches([searchable(value)]) ? 1 : 0;
+  });
   searchableIn.add(rawDb);
 }
 
@@ -321,7 +336,7 @@ export function listSessions(
     };
   if (words) searchableSql(rawDb);
   const found = (value: SQL) =>
-    sql`instr(${sql.raw(SEARCHABLE_SQL)}(${value}), ${words}) > 0`;
+    sql`${sql.raw(SEARCHABLE_SQL)}(${value}, ${words}) = 1`;
   const where = (moment?: SQL) =>
     and(
       filter.origin ? eq(table.origin, filter.origin) : undefined,

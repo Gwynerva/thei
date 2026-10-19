@@ -631,6 +631,8 @@ export default defineI18nModule({
     search_quick_hint:
       'Проекты, события, дневник, страницы, файлы и теги — по любому слову в них.',
     search_years: 'Годы',
+    search_no_filters:
+      'Эти результаты не сузить: у них нет ни годов, ни тегов.',
     search_year_count: (year, count) => `${year}: найдено ${count}`,
     search_recent: 'Недавние',
     search_actions: 'Действия',
