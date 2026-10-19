@@ -625,6 +625,10 @@ export default defineI18nModule({
     search_fewer_finds: 'Свернуть места',
     search_all_of_kind: (count) => `Все ${count}`,
     search_all_results: (count) => `Все результаты: ${count}`,
+    search_show_results: (count) =>
+      count
+        ? `Показать ${plural(count, 'результат', 'результата', 'результатов')}`
+        : 'Показать',
     search_keyboard: (read) =>
       `Найдено по «${read}» — так запрос читается в другой раскладке.`,
     search_partial:

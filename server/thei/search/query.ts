@@ -15,6 +15,7 @@ import {
   SEARCH_SNIPPET_LEAD,
   SEARCH_SNIPPET_LENGTH,
   snippetSegments,
+  type SearchSegment,
 } from '#layers/thei/shared/search/snippet';
 import {
   answersQueryWord,
@@ -297,6 +298,20 @@ export function findsOf(
   };
 }
 
+/**
+ * A title with the words of the query that stand in it marked, as a find's
+ * words are; none where it holds none.
+ */
+function markedTitle(title: string, query: SearchQuery): SearchSegment[] | undefined {
+  if (!title) return undefined;
+  const allStop = query.words.every((word) => word.stop);
+  const words = query.words.filter((word) => !word.stop || allStop);
+  const spans = searchTokens(title, searchAnalyzer(), 'index')
+    .filter((token) => words.some((word) => answersQueryWord(token, word)))
+    .map((token) => ({ start: token.start, end: token.end }));
+  return spans.length ? snippetSegments(title, spans, title.length + 1) : undefined;
+}
+
 function hitOf(row: DocRow, finds: SearchFind[], more: number): SearchHit {
   const card = JSON.parse(row.card) as StoredCard;
   return {
@@ -527,8 +542,10 @@ async function searchOnce(
         if (day) finds.unshift({ where: 'day', label: row.date ?? '', href: card.href, segments: [] });
         // The very name typed is the one sought, whatever else says the words.
         const named = exact(row.title);
+        const hit = hitOf(row, finds.slice(0, findsLimit), more);
+        const titleSegments = row.kind === 'diary-entry' ? undefined : markedTitle(row.title, query);
         return {
-          hit: hitOf(row, finds.slice(0, findsLimit), more),
+          hit: titleSegments ? { ...hit, titleSegments } : hit,
           order,
           closeness: day || named ? 100 : closeness,
         };

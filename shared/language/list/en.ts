@@ -568,6 +568,8 @@ export default defineI18nBase({
     search_fewer_finds: 'Show fewer places',
     search_all_of_kind: (count) => `All ${count}`,
     search_all_results: (count) => `All results: ${count}`,
+    search_show_results: (count) =>
+      count ? `Show ${count} ${count === 1 ? 'result' : 'results'}` : 'Show',
     search_keyboard: (read) =>
       `Found for “${read}”, the query as typed in the other keyboard layout.`,
     search_partial:

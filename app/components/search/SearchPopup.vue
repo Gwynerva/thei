@@ -124,6 +124,7 @@ function hitRow(hit: SearchHit): Row {
     icon: SEARCH_KIND_ICONS[hit.kind],
     iconLabel: phrase.value.search_kind(hit.kind),
     title: searchHitTitle(hit),
+    ...(hit.titleSegments ? { titleSegments: hit.titleSegments } : {}),
     when: searchHitWhen(hit) || undefined,
     access: searchAccessBadge(hit.access),
     ...(find && find.where !== 'title'
@@ -247,8 +248,11 @@ const sections = computed<Section[]>(() => {
       });
     return list;
   }
-  const leading = actions.filter((row) =>
-    /^action:(diary|section):/u.test(row.key),
+  // A question asked of the model leads, as the server puts it first.
+  const leading = actions.filter(
+    (row, at) =>
+      /^action:(diary|section):/u.test(row.key) ||
+      (at === 0 && row.key.startsWith('action:ask-ai')),
   );
   const trailing = actions.filter((row) => !leading.includes(row));
   if (leading.length) list.push({ key: 'leading', rows: leading });

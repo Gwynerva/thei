@@ -11,6 +11,8 @@ export interface SearchQuickRowData {
   /** What the icon says, for those who do not see it: the kind. */
   iconLabel?: string;
   title: string;
+  /** The title with the words found marked. */
+  titleSegments?: SearchSegment[];
   /** Its day or period, quiet after the title. */
   when?: string;
   /** Who else may see it, for the owner. */
@@ -103,9 +105,12 @@ defineEmits<{
             class="shrink-0"
             :class="row.accent ? 'text-accent' : 'text-text-2'"
           />
-          <span class="-m-[0.75em] min-w-0 truncate p-[0.75em]">{{
-            row.title
-          }}</span>
+          <span class="-m-[0.75em] min-w-0 truncate p-[0.75em]"
+            ><SearchSnippet
+              v-if="row.titleSegments"
+              :segments="row.titleSegments"
+            /><template v-else>{{ row.title }}</template></span
+          >
           <Icon
             v-if="row.access"
             :name="row.access.icon"

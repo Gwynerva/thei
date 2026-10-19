@@ -104,7 +104,8 @@ const accent = computed(() =>
     <MediaInteraction v-slot="{ engaged, events }">
       <div
         v-on="events"
-        class="group relative isolate flex min-h-24 min-w-0 items-center"
+        class="group relative isolate flex min-w-0 items-center"
+        :class="hit.kind === 'diary-entry' ? 'min-h-16' : 'min-h-24'"
       >
         <MediaEdge
           v-if="!isFile"
@@ -208,7 +209,10 @@ const accent = computed(() =>
               transition group-has-focus-visible:text-(--card-accent)
               group-hocus:text-(--card-accent)"
           >
-            {{ title }}
+            <SearchSnippet
+              v-if="hit.titleSegments"
+              :segments="hit.titleSegments"
+            /><template v-else>{{ title }}</template>
           </h3>
           <!-- Room for the halo on either side: clamping clips it otherwise,
                and a clipped halo draws a hard seam across the media. -->

@@ -455,6 +455,16 @@ const countLine = computed(() => {
           @change="applyFilters"
         />
       </div>
+      <!-- What is chosen shows behind the sheet as it is chosen; this takes
+           the reader to it, as closing does, in words. -->
+      <div
+        class="sticky bottom-0 border-t border-border-1 bg-bg-2 p-sm
+          pb-[calc(var(--spacing-sm)+env(safe-area-inset-bottom))]"
+      >
+        <Button variant="primary" class="w-full" @click="closeModal()">
+          {{ phrase.search_show_results(search.total) }}
+        </Button>
+      </div>
     </PublicSheet>
   </main>
 </template>

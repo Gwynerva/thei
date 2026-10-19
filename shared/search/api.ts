@@ -60,6 +60,8 @@ export interface SearchHit {
   /** `project:<uuid>`, `diary-entry:<uuid>`, `file:<family>`… */
   ref: string;
   title: string;
+  /** The title with the words found in it marked, when there are any. */
+  titleSegments?: SearchSegment[];
   href: string;
   /** For the owner: where it is edited. */
   editHref?: string;

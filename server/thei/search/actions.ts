@@ -189,6 +189,19 @@ function recentActions(): SearchAction[] {
   }));
 }
 
+/** Words a question opens with, in the languages the site speaks. */
+const QUESTION_WORDS = new Set([
+  'что', 'как', 'когда', 'где', 'куда', 'откуда', 'почему', 'зачем', 'кто',
+  'какой', 'какая', 'какие', 'какое', 'сколько', 'чем', 'чей', 'ли',
+  'what', 'how', 'when', 'where', 'why', 'who', 'which', 'whose',
+]);
+
+/** A query asked as a question: a title nobody would give a new entity. */
+export function isQuestion(q: string): boolean {
+  const words = normalizeTermText(q).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  return /\?\s*$/u.test(q) || (words.length > 1 && QUESTION_WORDS.has(words[0]!));
+}
+
 export function searchActions(context: SearchActionContext): SearchAction[] {
   const q = context.q.trim();
   const sides = sidesOf(context.path);
@@ -202,6 +215,12 @@ export function searchActions(context: SearchActionContext): SearchAction[] {
     if (section === 'ai' && !aiOn) continue;
     if (matchName(q, sectionName(section), searchAnalyzer()))
       actions.push({ type: 'section', section, href: SECTION_HREFS[section] });
+  }
+  // A question is asked of the model, first; nothing is made with it for a
+  // title.
+  if (isQuestion(q)) {
+    if (aiOn) actions.unshift({ type: 'ask-ai', text: q });
+    return actions;
   }
   const title = encodeURIComponent(q);
   actions.push(
