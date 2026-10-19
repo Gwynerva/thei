@@ -74,6 +74,15 @@ and behaves.
 - Typing keeps what was found on screen until the new answer comes; a
   failure says so in the line of the count and keeps the old results.
 
+## What is found first
+
+- A result named exactly as typed comes first, and its kind first among the
+  groups: «где я была» is the page of that name before the projects that
+  say the words.
+- When the words are not all found together, the results that hold some of
+  them come, those holding more first, under a line that says so above them;
+  a query typed on the other keyboard is said the same way.
+
 ## The result card
 
 `app/components/search/SearchResultCard.vue`, one for every kind.
