@@ -129,6 +129,8 @@ and behaves.
   One no page shows yet, found by the owner alone, leads to the library.
 - A phrase holds its words in their order: what holds them apart is neither
   shown nor counted.
+- A name a text spells in Latin letters is found in Cyrillic ones too:
+  «евы» finds «EVA», «блендер» finds «Blender».
 - A section of a project is a result of its own, under «Project sections»
   right after the projects: its title, description, periods and text are
   found in it, and it names its project. The project keeps only its

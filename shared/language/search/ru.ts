@@ -32,6 +32,69 @@ const ROOTS: Record<string, string> = {
  * together and almost nothing else; «р» is left out, where it joined «двор»
  * and «дверь».
  */
+/** Latin letters as Russian writes them, the longest first. */
+const FROM_LATIN: [string, string][] = [
+  ['shch', 'щ'],
+  ['sch', 'щ'],
+  ['sh', 'ш'],
+  ['ch', 'ч'],
+  ['zh', 'ж'],
+  ['kh', 'х'],
+  ['ts', 'ц'],
+  ['ya', 'я'],
+  ['yu', 'ю'],
+  ['yo', 'ё'],
+  ['ye', 'е'],
+  ['ph', 'ф'],
+  ['th', 'т'],
+  ['ck', 'к'],
+  ['oo', 'у'],
+  ['ee', 'и'],
+  ['a', 'а'],
+  ['b', 'б'],
+  ['c', 'к'],
+  ['d', 'д'],
+  ['e', 'е'],
+  ['f', 'ф'],
+  ['g', 'г'],
+  ['h', 'х'],
+  ['i', 'и'],
+  ['j', 'дж'],
+  ['k', 'к'],
+  ['l', 'л'],
+  ['m', 'м'],
+  ['n', 'н'],
+  ['o', 'о'],
+  ['p', 'п'],
+  ['q', 'к'],
+  ['r', 'р'],
+  ['s', 'с'],
+  ['t', 'т'],
+  ['u', 'у'],
+  ['v', 'в'],
+  ['w', 'в'],
+  ['x', 'кс'],
+  ['y', 'и'],
+  ['z', 'з'],
+];
+
+/** A normalized Latin word in Russian letters, as it is said. */
+function fromLatin(word: string): string {
+  let out = '';
+  let at = 0;
+  while (at < word.length) {
+    const pair = FROM_LATIN.find(([latin]) => word.startsWith(latin, at));
+    if (pair) {
+      out += pair[1];
+      at += pair[0].length;
+    } else {
+      out += word[at];
+      at += 1;
+    }
+  }
+  return out;
+}
+
 function stemRussianWord(word: string): string {
   const snowball = stemRussian(word);
   const trimmed = snowball.replace(/[аеиоуыэюяйь]+$/u, '');
@@ -48,6 +111,7 @@ function stemRussianWord(word: string): string {
 export const russianSearch: SearchLanguagePack = {
   script: 'cyrillic',
   stem: (word) => (word.length < 3 ? word : stemRussianWord(word)),
+  fromLatin,
   stopWords: new Set(
     (
       'и в во не что он на я с со как а то все она так его но да ты к у же ' +

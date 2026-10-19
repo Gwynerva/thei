@@ -13,7 +13,7 @@ export type { SearchLanguagePack, SearchScript } from './types';
  * Bump when a pack reads words differently: an index made with another
  * reading is built again (`server/thei/search/store.ts`).
  */
-const PACKS_VERSION = 1;
+const PACKS_VERSION = 2;
 
 /** Each language Thei speaks, with what search knows of it. */
 const PACKS: Record<LanguageCode, SearchLanguagePack> = {
@@ -53,6 +53,12 @@ export interface SearchAnalyzer {
    * of its packs has one and the text is all on one side of it.
    */
   otherKeyboard(text: string): string | undefined;
+  /**
+   * A Latin word of a text as the other script's language writes it,
+   * stemmed: the term a query in those letters finds it by — «евы» finds
+   * «EVA» on any site. None for a word that is not a Latin one.
+   */
+  fromLatin(word: string): string | undefined;
 }
 
 /**
@@ -81,7 +87,10 @@ export function createSearchAnalyzer(language: LanguageCode): SearchAnalyzer {
     id: `${PACKS_VERSION}:${language}`,
     read(word) {
       if (CYRILLIC_WORD.test(word))
-        return { term: cyrillic.stem(word), stop: cyrillic.stopWords.has(word) };
+        return {
+          term: cyrillic.stem(word),
+          stop: cyrillic.stopWords.has(word),
+        };
       if (LATIN_LETTER.test(word)) {
         const bare = word.normalize('NFD').replace(MARKS, '').normalize('NFC');
         if (LATIN_WORD.test(bare))
@@ -89,6 +98,12 @@ export function createSearchAnalyzer(language: LanguageCode): SearchAnalyzer {
         return { term: bare, stop: false };
       }
       return { term: word, stop: false };
+    },
+    fromLatin(word) {
+      if (!cyrillic.fromLatin) return undefined;
+      const bare = word.normalize('NFD').replace(MARKS, '').normalize('NFC');
+      if (!LATIN_WORD.test(bare)) return undefined;
+      return cyrillic.stem(cyrillic.fromLatin(bare));
     },
     otherKeyboard(text) {
       if (!toLocal.size) return undefined;

@@ -51,7 +51,14 @@ describe('search words', () => {
   });
 
   it('keeps short names as written', () => {
-    expect(terms('2B, 9S и A2 из NieR')).toEqual(['2b', '9s', 'и', 'a2', 'из', 'nier']);
+    expect(terms('2B, 9S и A2 из NieR')).toEqual([
+      '2b',
+      '9s',
+      'и',
+      'a2',
+      'из',
+      'nier',
+    ]);
     expect(terms('JS, TS, BG3, ps5, x86, 4K, МГУ, ВК')).toEqual([
       'js',
       'ts',
@@ -88,7 +95,10 @@ describe('search words', () => {
       'nier',
       'automata',
     ]);
-    expect(query('Vue.js').words.map((word) => word.term)).toEqual(['vue', 'js']);
+    expect(query('Vue.js').words.map((word) => word.term)).toEqual([
+      'vue',
+      'js',
+    ]);
   });
 
   it('gives hyphened words apart and together, and asks for them together', () => {
@@ -96,9 +106,9 @@ describe('search words', () => {
     expect(
       parseSearchQuery('e-mail', en).words.map((word) => word.term),
     ).toEqual(['email']);
-    expect(parseSearchQuery('email', en).words.map((word) => word.term)).toEqual([
-      'email',
-    ]);
+    expect(
+      parseSearchQuery('email', en).words.map((word) => word.term),
+    ).toEqual(['email']);
   });
 
   it('places every word in the text as given', () => {
@@ -112,10 +122,9 @@ describe('search words', () => {
 
 describe('search queries', () => {
   it('does not insist on words that only hold a sentence together', () => {
-    expect(requiredQueryWords(query('фото с фестиваля')).map((w) => w.word)).toEqual([
-      'фото',
-      'фестиваля',
-    ]);
+    expect(
+      requiredQueryWords(query('фото с фестиваля')).map((w) => w.word),
+    ).toEqual(['фото', 'фестиваля']);
     expect(requiredQueryWords(query('и')).map((w) => w.word)).toEqual(['и']);
   });
 
@@ -136,6 +145,11 @@ describe('search queries', () => {
 
   it('reads a query typed on the other keyboard', () => {
     expect(ru.otherKeyboard(',e,kbr')).toBe('бублик');
+    // A Latin word of a text is found by the site's letters too.
+    expect(ru.fromLatin('eva')).toBe(ru.read('евы').term);
+    expect(ru.fromLatin('blender')).toBe(ru.read('блендере').term);
+    expect(ru.fromLatin('ева')).toBeUndefined();
+    expect(en.fromLatin('eva')).toBe(ru.fromLatin('eva'));
     expect(ru.otherKeyboard('rjcgktq')).toBe('косплей');
     expect(ru.otherKeyboard('бублик')).toBe(',e,kbr');
     expect(ru.otherKeyboard('vue 3')).toBe('мгу 3');
@@ -158,7 +172,9 @@ describe('search snippets', () => {
 
   it('cuts a long text around the find', () => {
     const text = `${'слово '.repeat(60)}маяк ${'слово '.repeat(60)}`;
-    const hits = searchTokens(text, ru).filter((token) => token.word === 'маяк');
+    const hits = searchTokens(text, ru).filter(
+      (token) => token.word === 'маяк',
+    );
     const segments = snippetSegments(text, hits, 80);
     expect(segments[0]).toEqual({ text: '…' });
     expect(segments.at(-1)).toEqual({ text: '…' });

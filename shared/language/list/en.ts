@@ -578,8 +578,7 @@ export default defineI18nBase({
       count ? `Show ${count} ${count === 1 ? 'result' : 'results'}` : 'Show',
     search_keyboard: (read) =>
       `Found for “${read}”, the query as typed in the other keyboard layout.`,
-    search_partial:
-      'The words never stand all together: first what holds most of them.',
+    search_partial: 'Shown by the words apart: they never stand all together.',
     search_building: (percent) =>
       `Search is still being prepared (${percent}%): some results may be missing.`,
     search_failed: 'Could not search. Try again.',

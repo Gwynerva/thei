@@ -26,6 +26,12 @@ export interface SearchLanguagePack {
    * typed on the wrong layout was meant to be. None for a Latin language.
    */
   keyboard?: string;
+  /**
+   * A Latin word as this language writes it: «EVA» is «ева», «Blender» is
+   * «блендер». A word of a text is also found by it, so a query in this
+   * language's letters meets a name the text spells in Latin ones.
+   */
+  fromLatin?(word: string): string;
 }
 
 /**

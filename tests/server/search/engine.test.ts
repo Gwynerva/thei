@@ -479,6 +479,29 @@ describe('the global search', () => {
     expect(titles(asked)).toContain('Парик и рога');
   });
 
+  it('finds a Latin name by the letters of the site', async () => {
+    insert('events', {
+      eventUuid: 'e-eva',
+      title: 'Броня из EVA',
+      summary: 'Собрала в Blender',
+      access: 'public',
+      humanReadableSlug: 'eva',
+      publicId: 'Eva',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    await rebuildSearchIndex();
+    for (const q of ['броня из евы', 'ева', 'в блендере']) {
+      const response = await search(q);
+      expect(titles(response), q).toContain('Броня из EVA');
+      expect(response.partial, q).toBeUndefined();
+    }
+    const hit = hits(await search('броня из евы'))[0]!;
+    expect(
+      hit.titleSegments?.filter((segment) => segment.mark).map((s) => s.text),
+    ).toEqual(['Броня', 'EVA']);
+  });
+
   it('reads a word that names a kind as asking for that kind', async () => {
     expect((await search('проект рога')).groups[0]!.kind).toBe('project');
     expect((await search('раздел рога')).groups[0]!.kind).toBe(

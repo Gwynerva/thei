@@ -14,6 +14,8 @@ export interface SearchToken {
   word: string;
   term: string;
   stop: boolean;
+  /** Of a Latin word in a text, its term in the site's own letters. */
+  alt?: string;
   /** Where it stands in the text as given, so a snippet can mark it. */
   start: number;
   end: number;
@@ -58,12 +60,19 @@ export function searchTokens(
   segmenter ??= new Intl.Segmenter(undefined, { granularity: 'word' });
   const segments = [...segmenter.segment(text)];
   const tokens: SearchToken[] = [];
-  const make = (start: number, end: number, written = text.slice(start, end)) => {
+  const make = (
+    start: number,
+    end: number,
+    written = text.slice(start, end),
+  ) => {
     const word = normalizeTermText(written);
+    // A text's Latin word is also found as the site's letters write it.
+    const alt = mode === 'index' ? analyzer.fromLatin(word) : undefined;
+    const also = alt ? { alt } : {};
     // Written in capitals, it is a name and has no ending: «МГУ», «IT», «2B».
     if (ABBREVIATION.test(written) && /\p{Lu}/u.test(written))
-      return { word, term: word, stop: false, start, end };
-    return { word, ...analyzer.read(word), start, end };
+      return { word, term: word, stop: false, ...also, start, end };
+    return { word, ...analyzer.read(word), ...also, start, end };
   };
   for (let at = 0; at < segments.length; at++) {
     const { segment, index, isWordLike } = segments[at]!;
@@ -83,10 +92,7 @@ export function searchTokens(
 
     // Words joined by hyphens, with nothing else between them.
     const group = [{ start, end }];
-    while (
-      segments[at + 1]?.segment === '-' &&
-      segments[at + 2]?.isWordLike
-    ) {
+    while (segments[at + 1]?.segment === '-' && segments[at + 2]?.isWordLike) {
       const next = segments[at + 2]!;
       group.push({ start: next.index, end: next.index + next.segment.length });
       at += 2;
@@ -98,7 +104,8 @@ export function searchTokens(
         group.map((part) => text.slice(part.start, part.end)).join(''),
       );
       if (mode === 'query') tokens.push(joined);
-      else tokens.push(...group.map((part) => make(part.start, part.end)), joined);
+      else
+        tokens.push(...group.map((part) => make(part.start, part.end)), joined);
       continue;
     }
 
@@ -163,19 +170,19 @@ export function parseSearchQuery(
     SEARCH_QUERY_MAX_WORDS,
   );
   const open = typing && !/[\s"]$/u.test(text);
-  const words = tokens.map(
-    (token, at): SearchQueryWord => ({
-      word: token.word,
-      term: token.term,
-      terms: [...new Set([token.term, analyzer.read(token.word).term, token.word])],
-      stop: token.stop,
-      prefix:
-        open &&
-        at === tokens.length - 1 &&
-        token.end === loose.trimEnd().length &&
-        token.word.length >= SEARCH_PREFIX_MIN_LENGTH,
-    }),
-  );
+  const words = tokens.map((token, at): SearchQueryWord => ({
+    word: token.word,
+    term: token.term,
+    terms: [
+      ...new Set([token.term, analyzer.read(token.word).term, token.word]),
+    ],
+    stop: token.stop,
+    prefix:
+      open &&
+      at === tokens.length - 1 &&
+      token.end === loose.trimEnd().length &&
+      token.word.length >= SEARCH_PREFIX_MIN_LENGTH,
+  }));
   return { text: text.trim(), words, phrases };
 }
 
@@ -187,11 +194,12 @@ export function requiredQueryWords(query: SearchQuery): SearchQueryWord[] {
 
 /** Whether a word of a text answers a word of a query. */
 export function answersQueryWord(
-  token: Pick<SearchToken, 'word' | 'term'>,
+  token: Pick<SearchToken, 'word' | 'term' | 'alt'>,
   queryWord: SearchQueryWord,
 ): boolean {
   return (
     queryWord.terms.includes(token.term) ||
+    (token.alt !== undefined && queryWord.terms.includes(token.alt)) ||
     (queryWord.prefix && token.word.startsWith(queryWord.word))
   );
 }
@@ -204,7 +212,11 @@ export function answersQueryWord(
  */
 export function searchIndexTerms(text: string, token: SearchToken): string[] {
   const first = text.charAt(token.start);
-  return token.word !== token.term && first !== first.toLowerCase()
-    ? [token.term, token.word]
-    : [token.term];
+  const terms =
+    token.word !== token.term && first !== first.toLowerCase()
+      ? [token.term, token.word]
+      : [token.term];
+  return token.alt && !terms.includes(token.alt)
+    ? [...terms, token.alt]
+    : terms;
 }
