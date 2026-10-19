@@ -59,6 +59,11 @@ export interface SearchDocument {
   kind: SearchKind;
   /** `project:<uuid>`, `file:<family>`…: one per entity and reader. */
   ref: string;
+  /**
+   * What a stranger's answer names it by: its public id or address — a
+   * stranger never learns the ids things are stored by.
+   */
+  publicRef?: string;
   title: string;
   /** Of a section: the project it is a part of, with its icon. */
   parent?: { title: string; href: string; media?: MediaDescriptor };
@@ -433,6 +438,7 @@ export async function projectDocument(
     audience,
     kind: 'project',
     ref: `project:${project.projectUuid}`,
+    publicRef: `project:${project.publicId}`,
     title: project.title,
     href,
     ...(audience === 'owner'
@@ -513,6 +519,7 @@ export async function sectionDocument(
     audience,
     kind: 'project-section',
     ref: `project-section:${section.sectionUuid}`,
+    publicRef: `project-section:${section.publicId}`,
     title: section.title,
     parent: {
       title: project.title,
@@ -532,7 +539,9 @@ export async function sectionDocument(
         }
       : {}),
     sort: sortOf(period, section.createdAt),
-    visibleFrom: 0,
+    // A dated section waits for its day, as an event does.
+    visibleFrom:
+      audience === 'public' && period ? dayArrives(period.startDate) : 0,
     ...accessOf(audience, section.isPrivate ? 'private' : project.access),
     summary: section.summary,
     media: built.media,
@@ -572,6 +581,7 @@ export async function eventDocument(
     audience,
     kind: 'event',
     ref: `event:${event.eventUuid}`,
+    publicRef: `event:${event.publicId}`,
     title: event.title,
     href: buildEventUrl(event.humanReadableSlug, event.publicId),
     ...(audience === 'owner'
@@ -626,6 +636,7 @@ export async function diaryDocument(
     audience,
     kind: 'diary-entry',
     ref: `diary-entry:${entry.diaryUuid}`,
+    publicRef: `diary-entry:${entry.date}`,
     title: entry.date,
     href: buildDiaryUrl(entry.date),
     ...(audience === 'owner'
@@ -658,6 +669,7 @@ export async function pageDocument(
     audience,
     kind: 'page',
     ref: `page:${stored.pageUuid}`,
+    publicRef: `page:${stored.slug}`,
     title: stored.title,
     href: buildPageUrl(stored.slug),
     ...(audience === 'owner'
@@ -726,6 +738,7 @@ export async function tagDocuments(
     audience,
     kind: 'tag' as const,
     ref: `tag:${tag.tagUuid}`,
+    publicRef: `tag:${tag.publicId}`,
     title: tag.title,
     href: buildTagUrl(tag.slug, tag.publicId),
     ...(audience === 'owner'
@@ -847,10 +860,15 @@ export function fileDocuments(
       // the library.
       shownAt: first ? first.placeName : THEI_SERVER.phrase.asset_library,
       ...(first?.sort ? { sort: first.sort } : {}),
+      ...(first ? { publicRef: `file:${first.assetUuid}` } : {}),
       href:
         first?.href ??
         `/admin/assets/?q=${encodeURIComponent(title || description)}`,
-      visibleFrom: 0,
+      // Found once the earliest of its places is: a picture of a day still
+      // to come waits with it.
+      visibleFrom: shown.length
+        ? Math.min(...shown.map((place) => place.visibleFrom))
+        : 0,
       ...(description ? { summary: description } : {}),
       ...(media ? { media } : {}),
       file: {

@@ -204,8 +204,8 @@ export interface SearchResponse {
   facets: SearchFacets;
   page: number;
   pageCount: number;
-  /** The index is still being built: how far. */
-  building?: { done: number; total: number };
+  /** The index is still being built: how far, in percent. */
+  building?: number;
   /** For the owner, in the quick search. */
   actions?: SearchAction[];
   /**

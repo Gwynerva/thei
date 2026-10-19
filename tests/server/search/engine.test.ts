@@ -279,7 +279,8 @@ describe('the global search', () => {
     ]);
     const section = hits(response)[0]!;
     expect(section).toMatchObject({
-      ref: `project-section:${SECTION}`,
+      // A stranger learns it by its public id, never its stored one.
+      ref: 'project-section:Parik',
       title: 'Парик и рога',
       parent: { title: 'Косплей на Шедоухарт' },
     });
@@ -666,5 +667,164 @@ describe('the global search', () => {
     expect(titles(response).sort()).toEqual(
       ['Starcon', 'Косплей на Шедоухарт'].sort(),
     );
+  });
+
+  it('names results to the owner by their own ids, to a stranger by public ones', async () => {
+    const owner = hits(await search('шкурила', { audience: 'owner' }))[0]!;
+    expect(owner.ref).toBe(`project-section:${SECTION}`);
+    const all = findsOfResult({
+      q: 'шкурила',
+      audience: 'public',
+      ref: 'project-section:Parik',
+    });
+    expect(all?.finds.length).toBeGreaterThan(0);
+    // A stranger's lookup by a stored id finds nothing.
+    expect(
+      findsOfResult({
+        q: 'шкурила',
+        audience: 'public',
+        ref: `project-section:${SECTION}`,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('keeps a dated section and its pictures for their day, as an event', async () => {
+    insert('periods', {
+      ownerType: 'project-section',
+      ownerId: SECTION,
+      sortOrder: 0,
+      startDate: tomorrow,
+      endDate: tomorrow,
+      precision: 'exact',
+      precisionNote: '',
+      label: '',
+    });
+    await rebuildSearchIndex();
+    expect((await search('шкурила')).total).toBe(0);
+    expect((await search('шкурила', { audience: 'owner' })).total).toBe(1);
+    expect(
+      (await search('шкурила', { now: Date.now() + 3 * 24 * 60 * 60 * 1000 }))
+        .total,
+    ).toBe(1);
+  });
+
+  it('reads the signs FTS5 keeps for itself as words', async () => {
+    for (const q of [
+      '"',
+      '*',
+      'NEAR(',
+      'AND OR NOT',
+      '^рога',
+      'рога:',
+      '(рога)',
+      'рога"шкурила',
+    ])
+      await expect(search(q), q).resolves.toBeDefined();
+    expect(titles(await search('(рога)'))).toContain('Парик и рога');
+  });
+
+  it('forgets a file’s description once it is cleared', async () => {
+    insert('assets', {
+      assetUuid: 'a-11111111-1111-4111-8111-111111111111',
+      slug: 'lens',
+      familyUuid: 'f-lens',
+      contentHash: 'h',
+      settingsKey: 'k',
+      type: 'image',
+      extension: 'jpg',
+      size: 1,
+      touchedAt: 1,
+    });
+    insert('asset-descriptions', {
+      familyUuid: 'f-lens',
+      text: 'Линза Френеля',
+      updatedAt: Date.now(),
+    });
+    await rebuildSearchIndex();
+    expect((await search('френеля', { audience: 'owner' })).total).toBe(1);
+    context.rawDb
+      .prepare('DELETE FROM "asset-descriptions" WHERE familyUuid = ?')
+      .run('f-lens');
+    await refreshSearchIndex();
+    expect((await search('френеля', { audience: 'owner' })).total).toBe(0);
+  });
+
+  it('forgets a deleted tag on what carried it', async () => {
+    const { deleteTag } = await import('../../../server/thei/tags-edit/edit');
+    const tag = context.rawDb
+      .prepare('SELECT * FROM tags WHERE tagUuid = ?')
+      .get(TAG) as never;
+    expect(titles(await search('cosplay'))).toContain('Косплей на Шедоухарт');
+    const before = (
+      context.rawDb
+        .prepare('SELECT updatedAt FROM projects WHERE projectUuid = ?')
+        .get(PROJECT) as { updatedAt: number }
+    ).updatedAt;
+    await deleteTag(tag);
+    // The carrier's version moved: its form is outdated, and the index reads it.
+    expect(
+      (
+        context.rawDb
+          .prepare('SELECT updatedAt FROM projects WHERE projectUuid = ?')
+          .get(PROJECT) as { updatedAt: number }
+      ).updatedAt,
+    ).toBeGreaterThan(before);
+    await refreshSearchIndex();
+    expect(titles(await search('cosplay'))).not.toContain(
+      'Косплей на Шедоухарт',
+    );
+  });
+
+  it('takes in an access changed while a pass runs', async () => {
+    const pass = rebuildSearchIndex();
+    context.rawDb
+      .prepare('UPDATE projects SET access = ? WHERE projectUuid = ?')
+      .run('private', PROJECT);
+    await pass;
+    await refreshSearchIndex();
+    expect(titles(await search('шедоухарт'))).not.toContain(
+      'Косплей на Шедоухарт',
+    );
+  });
+
+  it('filters by days on what of a life overlaps them, a year by each it covers', async () => {
+    insert('periods', {
+      ownerType: 'project-section',
+      ownerId: SECTION,
+      sortOrder: 0,
+      startDate: '2023-12-20',
+      endDate: '2024-01-05',
+      precision: 'exact',
+      precisionNote: '',
+      label: '',
+    });
+    await rebuildSearchIndex();
+    const owner = { audience: 'owner' as const };
+    expect(
+      titles(
+        await search('шкурила', {
+          ...owner,
+          from: '2024-01-01',
+          to: '2024-01-31',
+        }),
+      ),
+    ).toContain('Парик и рога');
+    expect(titles(await search('шкурила', { ...owner, year: 2023 }))).toContain(
+      'Парик и рога',
+    );
+    expect(titles(await search('шкурила', { ...owner, year: 2024 }))).toContain(
+      'Парик и рога',
+    );
+    const years = (await search('шкурила', owner)).facets.years.map(
+      (item) => item.year,
+    );
+    expect(years).toEqual(expect.arrayContaining([2023, 2024]));
+  });
+
+  it('tells a stranger only how far the index is, in percent', async () => {
+    const response = await search('шкурила');
+    expect(
+      response.building === undefined || typeof response.building === 'number',
+    ).toBe(true);
   });
 });

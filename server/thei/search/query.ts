@@ -146,12 +146,14 @@ function baseFilters(request: SearchRequest, store: SearchStore): Filters {
   if (request.showcase) sql.push("(d.kind <> 'project' OR d.showcase = 1)");
   if (request.cv) sql.push("(d.kind <> 'project' OR d.cv = 1)");
   if (request.showcase || request.cv) sql.push("d.kind = 'project'");
+  // Between two days: what of a life overlaps them — a stretch begun before
+  // them or ending after them too.
   if (request.from) {
-    sql.push('d.date >= ?');
+    sql.push('d.sortLife = 1 AND d.sortTo >= ?');
     params.push(request.from);
   }
   if (request.to) {
-    sql.push('d.date <= ?');
+    sql.push('d.sortLife = 1 AND d.sortFrom <= ?');
     params.push(request.to);
   }
   return { sql: sql.join(' AND '), params };
@@ -159,7 +161,7 @@ function baseFilters(request: SearchRequest, store: SearchStore): Filters {
 
 function narrowed(
   base: Filters,
-  request: SearchRequest,
+  request: Pick<SearchRequest, 'kind' | 'year'>,
   kind = request.kind,
 ): Filters {
   const sql = [base.sql];
@@ -169,11 +171,15 @@ function narrowed(
     params.push(kind);
   }
   if (request.year) {
-    sql.push('d.year = ?');
+    sql.push(IN_YEAR);
     params.push(request.year);
   }
   return { sql: sql.join(' AND '), params };
 }
+
+/** Whether a document's life touches a year: any of the years it covers. */
+const IN_YEAR =
+  'EXISTS (SELECT 1 FROM doc_years y WHERE y.doc = d.id AND y.year = ?)';
 
 /** The day a query names, when it names one or a stretch of them. */
 function dayMatcher(
@@ -248,9 +254,27 @@ export function findsOf(
   // a query made of nothing else: «где я была».
   const allStop = words.every((word) => word.stop);
   const counts = (word: (typeof words)[number]) => !word.stop || allStop;
-  const probes = words.map((word) =>
-    word.word.slice(0, Math.max(2, Math.min(word.word.length, 3))),
-  );
+  // What a unit must hold to be read at all: the start a word and its term
+  // share, a letter short of where they part — a vowel that drops out,
+  // «день», «дня», stands just there — and for a Cyrillic word any Latin
+  // letter too, which a name may be written in («ева», «EVA»).
+  const probes = words.map((word) => {
+    let head = 0;
+    while (
+      head < Math.min(word.term.length, word.word.length) &&
+      word.term[head] === word.word[head]
+    )
+      head++;
+    return {
+      start: word.word.slice(0, Math.max(1, head - 1)),
+      latin: /\p{Script=Cyrillic}/u.test(word.word),
+    };
+  });
+  const probed = (text: string) =>
+    probes.some(
+      (probe) =>
+        text.includes(probe.start) || (probe.latin && /[a-z]/u.test(text)),
+    );
   const found: {
     unit: SearchUnit;
     order: number;
@@ -261,8 +285,7 @@ export function findsOf(
   units.forEach((unit, order) => {
     if (unit.placeOnly) return;
     const lower = normalizeTermText(unit.text);
-    if (!probes.some((probe) => lower.includes(probe)) && !query.phrases.length)
-      return;
+    if (!probed(lower) && !query.phrases.length) return;
     const tokens = searchTokens(unit.text, analyzer, 'index');
     const spans: { start: number; end: number }[] = [];
     const answered = new Set<number>();
@@ -396,16 +419,23 @@ function titleWords(
   };
 }
 
-function hitOf(row: DocRow, finds: SearchFind[], more: number): SearchHit {
+function hitOf(
+  row: DocRow,
+  finds: SearchFind[],
+  more: number,
+  audience: SearchAudience,
+): SearchHit {
   const card = JSON.parse(row.card) as StoredCard;
   return {
     kind: row.kind,
-    // A file is named by the asset its places show: a stranger's slug, never
-    // the family's storage id.
+    // A stranger learns things by their public ids, never the ids they are
+    // stored by; a file by the asset its places show, never its family.
     ref:
-      row.kind === 'file' && card.file
-        ? `file:${card.file.assetUuid}`
-        : row.ref,
+      audience === 'public' && card.publicRef
+        ? card.publicRef
+        : row.kind === 'file' && card.file
+          ? `file:${card.file.assetUuid}`
+          : row.ref,
     title: row.title,
     ...(card.parent ? { parent: card.parent } : {}),
     ...(card.shownAt ? { shownAt: card.shownAt } : {}),
@@ -432,8 +462,14 @@ async function tagFacets(
   const included = new Set(tagUuidsBySlug(request.tags));
   const excluded = new Set(tagUuidsBySlug(request.exclude));
   const counts = new Map(rows.map((row) => [row.tag, row.n]));
+  // A tag asked for is told back only to whoever may open its page: a
+  // stranger never learns of a tag nothing public carries.
+  const findable = store.db.prepare(
+    'SELECT 1 FROM docs WHERE audience = ? AND ref = ?',
+  );
   for (const tag of [...included, ...excluded])
-    if (!counts.has(tag)) counts.set(tag, 0);
+    if (!counts.has(tag) && findable.get(request.audience, `tag:${tag}`))
+      counts.set(tag, 0);
   if (!counts.size) return [];
   const { db, schema } = THEI_SERVER.useDb();
   const tags = db
@@ -465,31 +501,6 @@ async function tagFacets(
         right.count - left.count ||
         left.tag.title.localeCompare(right.tag.title),
     );
-}
-
-/**
- * Each facet counts across its own choice and within the other: the kinds in
- * the year chosen, the years in the kind chosen — so a chip and a bar say how
- * many choosing it shows.
- */
-function countFacets(
-  rows: { kind: SearchKind; year: number | null; n: number }[],
-  request: Pick<SearchRequest, 'kind' | 'year'>,
-) {
-  const kinds: SearchFacets['kinds'] = {};
-  const years = new Map<number, number>();
-  for (const row of rows) {
-    if (!request.year || row.year === request.year)
-      kinds[row.kind] = (kinds[row.kind] ?? 0) + row.n;
-    if (row.year && (!request.kind || row.kind === request.kind))
-      years.set(row.year, (years.get(row.year) ?? 0) + row.n);
-  }
-  return {
-    kinds,
-    years: [...years]
-      .map(([year, count]) => ({ year, count }))
-      .sort((a, b) => a.year - b.year),
-  };
 }
 
 /**
@@ -584,17 +595,27 @@ async function searchOnce(
     if (apart.length) base.sql += ` AND d.id NOT IN (${apart.join(', ')})`;
   }
   const facetFilter = { sql: base.sql, params: base.params };
-  const textRows = match
-    ? (store.db
+  // Each facet counts across its own choice and within the other: the kinds
+  // in the year chosen, the years in the kind chosen — so a chip and a bar
+  // say how many choosing it shows. A stretch over several years is in each.
+  const facets: Omit<SearchFacets, 'tags'> = { kinds: {}, years: [] };
+  if (match) {
+    const inYear = narrowed(base, { year: request.year }, undefined);
+    for (const row of store.db
+      .prepare(
+        `SELECT d.kind, count(*) AS n FROM ${from} WHERE ${table} MATCH ? AND ${inYear.sql} GROUP BY d.kind`,
+      )
+      .all(match, ...inYear.params) as { kind: SearchKind; n: number }[])
+      facets.kinds[row.kind] = row.n;
+    const ofKind = narrowed(base, {}, request.kind);
+    facets.years = (
+      store.db
         .prepare(
-          `SELECT d.kind, d.year, count(*) AS n FROM ${from} WHERE ${table} MATCH ? AND ${facetFilter.sql} GROUP BY d.kind, d.year`,
+          `SELECT y.year, count(*) AS n FROM ${from} JOIN doc_years y ON y.doc = d.id WHERE ${table} MATCH ? AND ${ofKind.sql} GROUP BY y.year ORDER BY y.year`,
         )
-        .all(match, ...facetFilter.params) as {
-        kind: SearchKind;
-        year: number | null;
-        n: number;
-      }[])
-    : [];
+        .all(match, ...ofKind.params) as { year: number; n: number }[]
+    ).map((row) => ({ year: row.year, count: row.n }));
+  }
   // A query that names a day finds the diary of that day, whatever it says.
   const dayRows = days
     ? (
@@ -617,9 +638,8 @@ async function searchOnce(
         .map((item) => item.row)
     : [];
   const dayIds = new Set(dayRows.map((row) => row.id));
-  const facets = countFacets(textRows, request);
   if (dayRows.length) {
-    const year = request.year ? ' AND d.year = ?' : '';
+    const year = request.year ? ` AND ${IN_YEAR}` : '';
     const textDiary = match
       ? (store.db
           .prepare(
@@ -697,7 +717,12 @@ async function searchOnce(
         // The very name typed is the one sought, whatever else says the words;
         // then a name that holds them all, then one that holds some.
         const named = exact(row.title);
-        const hit = hitOf(row, finds.slice(0, findsLimit), more);
+        const hit = hitOf(
+          row,
+          finds.slice(0, findsLimit),
+          more,
+          request.audience,
+        );
         // A file with no title is called by its description.
         const shownTitle =
           row.kind === 'diary-entry'
@@ -893,7 +918,13 @@ export async function runSearch(
   request: SearchRequest,
 ): Promise<SearchResponse> {
   const store = useSearchStore();
-  const building = searchIndexProgress();
+  const progress = searchIndexProgress();
+  // How far, and nothing more: a stranger never counts what there is.
+  const building = progress
+    ? progress.total
+      ? Math.min(99, Math.floor((progress.done / progress.total) * 100))
+      : 0
+    : undefined;
   const words = (text: string) => {
     const query = parseSearchQuery(text, searchAnalyzer(), {
       typing: request.typing,
@@ -909,17 +940,25 @@ export async function runSearch(
     if (other && other !== normalizeTermText(request.q)) {
       const again = await searchOnce(request, store, other);
       if (again.total)
-        return { ...again, keyboard: other, ...(building ? { building } : {}) };
+        return {
+          ...again,
+          keyboard: other,
+          ...(building !== undefined ? { building } : {}),
+        };
     }
     // Not all the words together: what holds some of them, said so — the
     // one word of several a text lacks need not leave a reader with nothing.
     if (!asked && words(request.q) > 1) {
       const some = await searchOnce(request, store, request.q, true);
       if (some.total)
-        return { ...some, partial: true, ...(building ? { building } : {}) };
+        return {
+          ...some,
+          partial: true,
+          ...(building !== undefined ? { building } : {}),
+        };
     }
   }
-  return building ? { ...response, building } : response;
+  return building !== undefined ? { ...response, building } : response;
 }
 
 const CACHE_LIMIT = 500;
@@ -942,13 +981,16 @@ export function findsOfResult(request: {
 }): { finds: SearchFind[]; more: number } | undefined {
   const store = useSearchStore();
   type Row = { id: number; card: string; visibleFrom: number };
-  // A file is named by the asset its places show, not by its family.
+  // A stranger names it by its public id; the owner by its own, a file by
+  // the asset its places show.
   const row = (store.db
     .prepare(
-      'SELECT id, card, visibleFrom FROM docs WHERE audience = ? AND ref = ?',
+      request.audience === 'public'
+        ? "SELECT id, card, visibleFrom FROM docs WHERE audience = ? AND json_extract(card, '$.publicRef') = ?"
+        : 'SELECT id, card, visibleFrom FROM docs WHERE audience = ? AND ref = ?',
     )
     .get(request.audience, request.ref) ??
-    (request.ref.startsWith('file:')
+    (request.audience === 'owner' && request.ref.startsWith('file:')
       ? store.db
           .prepare(
             "SELECT id, card, visibleFrom FROM docs WHERE audience = ? AND kind = 'file' AND json_extract(card, '$.file.assetUuid') = ?",
@@ -988,7 +1030,7 @@ export function peekCachedSearch(
 ): SearchResponse | undefined {
   const key = cacheKey(request, useSearchStore().generation);
   const known = cache.get(key);
-  if (!known || known.building) return undefined;
+  if (!known || known.building !== undefined) return undefined;
   cache.delete(key);
   cache.set(key, known);
   return known;

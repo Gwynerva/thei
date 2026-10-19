@@ -37,7 +37,8 @@ export interface CatalogueEntry {
 
 function latestDates(rows: { owner: string; date: string }[]) {
   const dates = new Map<string, string>();
-  for (const { owner, date } of rows) if ((dates.get(owner) ?? '') < date) dates.set(owner, date);
+  for (const { owner, date } of rows)
+    if ((dates.get(owner) ?? '') < date) dates.set(owner, date);
   return dates;
 }
 
@@ -52,12 +53,18 @@ export function catalogueEntries(isAdmin: boolean): CatalogueEntry[] {
     .orderBy(schema.tagUsages.sortOrder)
     .all()) {
     const key = `${usage.containerType}:${usage.containerId}`;
-    tagUuidsByOwner.set(key, [...(tagUuidsByOwner.get(key) ?? []), usage.tagUuid]);
+    tagUuidsByOwner.set(key, [
+      ...(tagUuidsByOwner.get(key) ?? []),
+      usage.tagUuid,
+    ]);
   }
   // Private sections stay out of the order, as they stay out of the page.
   const sectionDates = latestDates(
     db
-      .select({ owner: schema.projectContentSections.projectUuid, date: schema.periods.endDate })
+      .select({
+        owner: schema.projectContentSections.projectUuid,
+        date: schema.periods.endDate,
+      })
       .from(schema.periods)
       .innerJoin(
         schema.projectContentSections,
@@ -130,10 +137,16 @@ function tagUuidsBySlug(slugs: string[]): string[] {
 }
 
 /** The entries a set of filters keeps, and how often each tag is among them. */
-export function filterCatalogue(entries: CatalogueEntry[], filters: PublicSearchFilters) {
+export function filterCatalogue(
+  entries: CatalogueEntry[],
+  filters: PublicSearchFilters,
+) {
   const included = tagUuidsBySlug(filters.tags);
   const excluded = tagUuidsBySlug(filters.exclude);
-  const type = filters.type === 'project' || filters.type === 'event' ? filters.type : undefined;
+  const type =
+    filters.type === 'project' || filters.type === 'event'
+      ? filters.type
+      : undefined;
   const projectsOnly = type !== 'event' && (filters.showcase || filters.cv);
   const kept = entries.filter((entry) => {
     if (type && entry.type !== type) return false;
@@ -147,23 +160,36 @@ export function filterCatalogue(entries: CatalogueEntry[], filters: PublicSearch
   });
   const tagCounts = new Map<string, number>();
   for (const entry of kept)
-    for (const tagUuid of entry.tagUuids) tagCounts.set(tagUuid, (tagCounts.get(tagUuid) ?? 0) + 1);
+    for (const tagUuid of entry.tagUuids)
+      tagCounts.set(tagUuid, (tagCounts.get(tagUuid) ?? 0) + 1);
   return { entries: kept, tagCounts, included, excluded };
 }
 
-export function hitOfSummary(summary: PublicEntitySummary, ref: string): SearchHit {
+export function hitOfSummary(
+  summary: PublicEntitySummary,
+  ref: string,
+): SearchHit {
   return {
     kind: summary.type,
     ref,
     title: summary.title,
     href: summary.href,
     ...(summary.date ? { date: summary.date } : {}),
-    ...(summary.period ? { period: { startDate: summary.period.startDate, endDate: summary.period.endDate } } : {}),
+    ...(summary.period
+      ? {
+          period: {
+            startDate: summary.period.startDate,
+            endDate: summary.period.endDate,
+          },
+        }
+      : {}),
     ...(summary.summary ? { summary: summary.summary } : {}),
     ...(summary.media ? { media: summary.media } : {}),
     ...(summary.showcase ? { showcase: true } : {}),
     ...(summary.cv ? { cv: true } : {}),
-    ...(summary.access === 'link-only' || summary.access === 'private' ? { access: summary.access } : {}),
+    ...(summary.access === 'link-only' || summary.access === 'private'
+      ? { access: summary.access }
+      : {}),
     ...(summary.reminder ? { reminder: summary.reminder } : {}),
     finds: [],
     more: 0,
@@ -197,30 +223,63 @@ export async function runCatalogue(
   isAdmin: boolean,
 ): Promise<SearchResponse> {
   const all = catalogueEntries(isAdmin);
-  const { entries, tagCounts, included, excluded } = filterCatalogue(all, filters);
+  const { entries, tagCounts, included, excluded } = filterCatalogue(
+    all,
+    filters,
+  );
   const pagination = resolvePagination(entries.length, page, SEARCH_PAGE_SIZE);
-  const slice = entries.slice((pagination.page - 1) * SEARCH_PAGE_SIZE, pagination.page * SEARCH_PAGE_SIZE);
+  const slice = entries.slice(
+    (pagination.page - 1) * SEARCH_PAGE_SIZE,
+    pagination.page * SEARCH_PAGE_SIZE,
+  );
   const { db, schema } = THEI_SERVER.useDb();
   const hits = (
     await Promise.all(
       slice.map(async (entry) => {
         if (entry.type === 'project') {
-          const row = db.select().from(schema.projects).where(eq(schema.projects.projectUuid, entry.uuid)).get();
-          return row ? hitOfSummary(await buildPublicProjectSummary(row, isAdmin), `project:${entry.uuid}`) : undefined;
+          const row = db
+            .select()
+            .from(schema.projects)
+            .where(eq(schema.projects.projectUuid, entry.uuid))
+            .get();
+          return row
+            ? hitOfSummary(
+                await buildPublicProjectSummary(row, isAdmin),
+                `project:${entry.uuid}`,
+              )
+            : undefined;
         }
-        const row = db.select().from(schema.events).where(eq(schema.events.eventUuid, entry.uuid)).get();
+        const row = db
+          .select()
+          .from(schema.events)
+          .where(eq(schema.events.eventUuid, entry.uuid))
+          .get();
         return row
-          ? hitOfSummary(await buildPublicEventSummary(row, siteViewer(isAdmin)), `event:${entry.uuid}`)
+          ? hitOfSummary(
+              await buildPublicEventSummary(row, siteViewer(isAdmin)),
+              `event:${entry.uuid}`,
+            )
           : undefined;
       }),
     )
   ).filter((hit): hit is SearchHit => Boolean(hit));
   const kinds: SearchFacets['kinds'] = {};
-  for (const entry of filterCatalogue(all, { ...filters, type: undefined, showcase: false, cv: false }).entries)
+  for (const entry of filterCatalogue(all, {
+    ...filters,
+    type: undefined,
+    showcase: false,
+    cv: false,
+  }).entries)
     kinds[entry.type] = (kinds[entry.type] ?? 0) + 1;
-  const facetUuids = [...new Set([...tagCounts.keys(), ...included, ...excluded])];
+  const facetUuids = [
+    ...new Set([...tagCounts.keys(), ...included, ...excluded]),
+  ];
   const tagRows = facetUuids.length
-    ? db.select().from(schema.tags).where(inArray(schema.tags.tagUuid, facetUuids)).all()
+    ? db
+        .select()
+        .from(schema.tags)
+        .where(inArray(schema.tags.tagUuid, facetUuids))
+        .all()
     : [];
   const summaries = await buildPublicTags(
     tagRows.map((tag) => ({
@@ -235,7 +294,13 @@ export async function runCatalogue(
     query: '',
     total: entries.length,
     groups: hits.length
-      ? [{ kind: filters.type === 'event' ? 'event' : 'project', total: entries.length, hits }]
+      ? [
+          {
+            kind: filters.type === 'event' ? 'event' : 'project',
+            total: entries.length,
+            hits,
+          },
+        ]
       : [],
     facets: {
       kinds,
@@ -250,7 +315,11 @@ export async function runCatalogue(
               ? { state: 'exclude' as const }
               : {}),
         }))
-        .sort((left, right) => right.count - left.count || left.tag.title.localeCompare(right.tag.title)),
+        .sort(
+          (left, right) =>
+            right.count - left.count ||
+            left.tag.title.localeCompare(right.tag.title),
+        ),
     },
     page: pagination.page,
     pageCount: pagination.pageCount,

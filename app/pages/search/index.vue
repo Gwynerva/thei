@@ -331,12 +331,7 @@ const filtersOffered = computed(
     search.value.facets.tags.length > 0,
 );
 
-const building = computed(() => {
-  const state = search.value.building;
-  return state && state.total
-    ? Math.min(99, Math.floor((state.done / state.total) * 100))
-    : undefined;
-});
+const building = computed(() => search.value.building);
 
 /**
  * How many the catalogue holds. A search says it on its chips, which count
