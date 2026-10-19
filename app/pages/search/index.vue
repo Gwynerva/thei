@@ -249,9 +249,9 @@ const countLine = computed(() => {
     <form role="search" class="group relative" @submit.prevent="commitText">
       <Icon
         name="search"
-        class="pointer-events-none absolute top-1/2 left-sm z-1 -translate-y-1/2
-          text-xl text-text-3 transition group-focus-within:text-accent
-          sm:text-2xl"
+        class="pointer-events-none absolute top-1/2 left-3 z-1 -translate-y-1/2
+          text-base text-text-3 transition group-focus-within:text-accent
+          sm:left-4 sm:text-2xl"
       />
       <input
         ref="input"
@@ -264,19 +264,18 @@ const countLine = computed(() => {
         :placeholder="phrase.search_placeholder"
         :aria-label="phrase.search_placeholder"
         class="search-input h-12 w-full rounded-normal border-2 border-border-1
-          bg-bg-1/80 pr-12 pl-11 text-base font-semibold shadow-lg
+          bg-bg-1/80 pr-10.5 pl-10.5 text-base font-semibold shadow-lg
           shadow-shadow-1 backdrop-blur-sm transition outline-none
-          placeholder:font-normal placeholder:text-text-3
-          focus:border-accent/60 sm:h-16 sm:pr-14 sm:pl-14 sm:text-xl
-          hocus:border-border-2"
+          placeholder:font-normal placeholder:text-text-3 focus:border-accent/60
+          sm:h-16 sm:pr-14 sm:pl-15 sm:text-xl hocus:border-border-2"
       />
       <button
         v-if="text"
         type="button"
-        class="absolute top-1/2 right-1 flex size-10 -translate-y-1/2
+        class="absolute top-1/2 right-0.5 flex size-10 -translate-y-1/2
           cursor-pointer items-center justify-center rounded-sm text-xl
           text-text-3 transition focus-visible:ring-2 focus-visible:ring-accent
-          focus-visible:outline-none sm:right-xs hocus:bg-bg-3
+          focus-visible:outline-none sm:right-2.5 hocus:bg-bg-3
           hocus:text-text-1"
         :aria-label="phrase.search_clear"
         :data-title-popup="phrase.search_clear"
@@ -370,11 +369,7 @@ const countLine = computed(() => {
             >
               {{ phrase.search_kind_group(group.kind) }}
             </h2>
-            <SearchResultCard
-              v-for="hit in group.hits"
-              :key="hit.ref"
-              :hit
-            />
+            <SearchResultCard v-for="hit in group.hits" :key="hit.ref" :hit />
             <button
               v-if="typed && !filters.type && group.total > group.hits.length"
               type="button"

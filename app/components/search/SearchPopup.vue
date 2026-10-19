@@ -367,7 +367,7 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
       >
         <Icon
           name="search"
-          class="pointer-events-none absolute left-sm text-xl text-text-3
+          class="pointer-events-none absolute left-3 text-base text-text-3
             transition group-focus-within:text-accent"
           aria-hidden="true"
         />
@@ -396,13 +396,13 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
         <Icon
           v-if="loading"
           name="loading"
-          class="pointer-events-none absolute right-sm text-lg text-text-3"
+          class="pointer-events-none absolute right-3 text-base text-text-3"
           aria-hidden="true"
         />
         <button
           v-else-if="text"
           type="button"
-          class="absolute right-1.5 flex size-9 cursor-pointer items-center
+          class="absolute right-1 flex size-9 cursor-pointer items-center
             justify-center rounded-sm text-lg text-text-3 transition
             focus-visible:ring-2 focus-visible:ring-accent
             focus-visible:outline-none hocus:bg-bg-3 hocus:text-text-1"
