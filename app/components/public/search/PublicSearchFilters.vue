@@ -1,17 +1,26 @@
 <script lang="ts" setup>
-import type { PublicSearchTagFacet } from '#layers/thei/shared/api/public';
+import type { SearchFacets } from '#layers/thei/shared/search/api';
 import type { IconName } from '#thei/icons';
 import {
   countPublicSearchFilters,
-  normalizePublicSearchText,
   type PublicSearchFilters,
   type PublicSearchType,
 } from '#layers/thei/shared/public-search';
+import { searchKey } from '#layers/thei/shared/search/match';
 import { tagAccentCssColor } from '#layers/thei/shared/tag';
 
+/**
+ * The filters beside the search. Without a query they narrow the catalogue
+ * to projects or events, the showcase and the résumé; with one, the kinds are
+ * the chips above the results, and here are the years the results fall in.
+ * Tags narrow both.
+ */
 const props = defineProps<{
   filters: PublicSearchFilters;
-  tags: PublicSearchTagFacet[];
+  tags: SearchFacets['tags'];
+  years?: SearchFacets['years'];
+  /** A query is typed: the kind is chosen by the chips. */
+  query?: boolean;
 }>();
 const emit = defineEmits<{
   change: [patch: Partial<PublicSearchFilters>];
@@ -27,14 +36,18 @@ const types = computed<
 ]);
 const activeTags = computed(() => props.tags.filter((facet) => facet.state));
 const availableTags = computed(() => {
-  const query = normalizePublicSearchText(tagQuery.value.trim());
+  const query = searchKey(tagQuery.value);
   return props.tags.filter(
     (facet) =>
-      !facet.state &&
-      (!query || normalizePublicSearchText(facet.tag.title).includes(query)),
+      !facet.state && (!query || searchKey(facet.tag.title).includes(query)),
   );
 });
-const activeCount = computed(() => countPublicSearchFilters(props.filters));
+// With a query, the kind belongs to the chips and is not reset from here.
+const activeCount = computed(
+  () =>
+    countPublicSearchFilters(props.filters) -
+    (props.query && props.filters.type ? 1 : 0),
+);
 
 function without(slugs: string[], slug: string) {
   return slugs.filter((item) => item !== slug);
@@ -64,18 +77,19 @@ function removeTag(slug: string) {
 function reset() {
   tagQuery.value = '';
   emit('change', {
-    type: undefined,
+    ...(props.query ? {} : { type: undefined }),
     showcase: false,
     cv: false,
     tags: [],
     exclude: [],
+    year: undefined,
   });
 }
 </script>
 
 <template>
   <div class="flex min-w-0 flex-col gap-md">
-    <PublicCollapsibleSection :title="phrase.search_filter_type">
+    <PublicCollapsibleSection v-if="!query" :title="phrase.search_filter_type">
       <div
         class="grid grid-cols-3 gap-1 rounded-normal bg-bg-3/60 p-1"
         role="radiogroup"
@@ -109,7 +123,7 @@ function reset() {
     </PublicCollapsibleSection>
 
     <PublicCollapsibleSection
-      v-if="filters.type !== 'event'"
+      v-if="query ? filters.type === 'project' : filters.type !== 'event'"
       :title="phrase.search_filter_projects"
     >
       <div class="flex flex-wrap gap-xs">
@@ -143,6 +157,44 @@ function reset() {
         >
           <Icon :name="flag.icon" class="shrink-0" />
           {{ flag.label }}
+        </button>
+      </div>
+    </PublicCollapsibleSection>
+
+    <PublicCollapsibleSection
+      v-if="years && (years.length > 1 || filters.year)"
+      :title="phrase.search_years"
+    >
+      <div
+        class="flex flex-wrap gap-xs"
+        role="radiogroup"
+        :aria-label="phrase.search_years"
+      >
+        <button
+          v-for="option in [
+            { year: undefined, label: phrase.search_year_any, count: 0 },
+            ...years.map((item) => ({ ...item, label: String(item.year) })),
+          ]"
+          :key="option.year ?? 'any'"
+          type="button"
+          role="radio"
+          :aria-checked="filters.year === option.year"
+          class="inline-flex cursor-pointer items-center gap-1.5 rounded-full
+            border px-sm py-1 text-sm font-semibold tabular-nums transition
+            focus-visible:ring-2 focus-visible:ring-accent
+            focus-visible:outline-none"
+          :class="
+            filters.year === option.year
+              ? 'border-accent/50 bg-bg-accent text-accent'
+              : `border-border-1 text-text-2 hocus:border-border-2
+                hocus:text-text-1`
+          "
+          @click="emit('change', { year: option.year })"
+        >
+          {{ option.label }}
+          <span v-if="option.count" class="text-xs font-normal text-text-3">{{
+            option.count
+          }}</span>
         </button>
       </div>
     </PublicCollapsibleSection>

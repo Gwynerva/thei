@@ -3,6 +3,7 @@ import type { RelationEntityType } from '../relation';
 import type { ProofreadCategory, TidyCommentKind } from '../ai-revise';
 import type { AiActionKind } from '../ai-actions';
 import type { ContentFileSkip } from '../content-file-placement';
+import type { SearchFindWhere, SearchKind } from '../search/api';
 
 export const languagesInfo = {
   en: 'English',
@@ -389,6 +390,45 @@ export type LanguagePhrases = {
   search_results_count: (projects: number, events: number) => string;
   search_empty: string;
   search_empty_description: string;
+  /** A kind of result, one of it: «Проект». */
+  search_kind: (kind: SearchKind) => string;
+  /** A kind of result, as a group of them: «Проекты». */
+  search_kind_group: (kind: SearchKind) => string;
+  /** Where in a result a find stands. */
+  search_where: (where: SearchFindWhere) => string;
+  search_where_section: (title: string) => string;
+  search_access_private: string;
+  search_access_link: string;
+  search_edit: string;
+  search_more_finds: (count: number) => string;
+  search_results_total: (count: number) => string;
+  search_all_of_kind: (count: number) => string;
+  search_all_results: (count: number) => string;
+  search_keyboard: (read: string) => string;
+  search_building: (percent: number) => string;
+  search_failed: string;
+  search_quick_hint: string;
+  search_years: string;
+  search_year_any: string;
+  search_recent: string;
+  search_actions: string;
+  search_action_diary_today: string;
+  search_action_diary_today_new: string;
+  search_action_diary_day: (day: string) => string;
+  search_action_diary_day_new: (day: string) => string;
+  search_action_edit: (title: string) => string;
+  search_action_view: (title: string) => string;
+  search_action_section: string;
+  search_action_new_project: (title: string) => string;
+  search_action_new_event: (title: string) => string;
+  search_action_new_page: (title: string) => string;
+  search_action_ask_ai: (text: string) => string;
+  search_keys_choose: string;
+  search_keys_open: string;
+  search_keys_site: string;
+  search_keys_edit: string;
+  search_keys_all: string;
+  search_keys_close: string;
   forbidden_title: string;
   forbidden_description: string;
   not_found_title: string;

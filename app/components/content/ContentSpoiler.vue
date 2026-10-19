@@ -49,6 +49,7 @@ onBeforeUnmount(() => {
     ref="root"
     class="content-spoiler"
     :data-revealed="hidden ? 'false' : 'true'"
+    @theilanding="reveal"
   >
     <div
       class="content-spoiler__content"

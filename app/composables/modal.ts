@@ -83,6 +83,28 @@ export const modalWait = computed<ModalWait | null>(() => {
   return null;
 });
 
+export function isElementDisplayed(element: HTMLElement) {
+  if (!element.isConnected) return false;
+  for (
+    let current: HTMLElement | null = element;
+    current;
+    current = current.parentElement
+  ) {
+    if (current.hidden || current.style.display === 'none') return false;
+  }
+  return true;
+}
+
+/** The `<dialog>` open on top, which the keyboard belongs to while it is. */
+export function activeOpenDialog() {
+  const dialogs = document.querySelectorAll<HTMLElement>('dialog[open]');
+  for (let index = dialogs.length - 1; index >= 0; index--) {
+    const dialog = dialogs.item(index);
+    if (dialog && isElementDisplayed(dialog)) return dialog;
+  }
+  return undefined;
+}
+
 /** Components whose code has loaded: they open without a shell. */
 const loadedComponents = new WeakMap<object, Component>();
 const loadingComponents = new WeakMap<object, Promise<Component>>();

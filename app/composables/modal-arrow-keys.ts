@@ -1,8 +1,13 @@
+/** Controls whose own value the arrows move, and places that use them. */
+const OWN_ARROWS_SELECTOR =
+  'input[type="range"], input[type="radio"], [data-own-arrows]';
+
 /**
  * ← and → step through whatever a modal is showing.
  *
- * Ignored while typing, and with any modifier held, so the keys keep their
- * meaning in a field and in the browser's own shortcuts.
+ * Ignored while typing, on a control the arrows move, and with any modifier
+ * held, so the keys keep their meaning in a field and in the browser's own
+ * shortcuts.
  */
 export function useArrowKeys(handlers: {
   previous: () => void;
@@ -12,13 +17,8 @@ export function useArrowKeys(handlers: {
     if (event.defaultPrevented || event.altKey || event.ctrlKey) return;
     if (event.metaKey || event.shiftKey) return;
     const target = event.target;
-    if (
-      target instanceof HTMLElement &&
-      (target.isContentEditable ||
-        target.closest(
-          'input, textarea, select, [contenteditable], [data-own-arrows]',
-        ))
-    )
+    if (isEditableTarget(target)) return;
+    if (target instanceof Element && target.closest(OWN_ARROWS_SELECTOR))
       return;
     if (event.key === 'ArrowLeft') handlers.previous();
     else if (event.key === 'ArrowRight') handlers.next();

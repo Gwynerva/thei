@@ -32,6 +32,8 @@ const registeredSlugs = ref<string[]>([]);
 const initialSlug = ref('');
 const slugSynchronized = ref(true);
 const savedSnapshot = ref(JSON.stringify(payload()));
+// Begun from the quick search: the query is the title, as if typed.
+if (!isEdit.value && titleFromQuery()) data.value.title = titleFromQuery();
 /**
  * When the entity last changed, as the form read it. A save names it, and
  * one over a change made elsewhere since — another tab, an AI client — is

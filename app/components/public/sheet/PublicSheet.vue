@@ -25,6 +25,8 @@ async function open() {
   await modalHistorySettled();
   emit('close');
 }
+
+defineExpose({ open });
 </script>
 
 <template>

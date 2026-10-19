@@ -67,6 +67,14 @@ function blockKey(block: PublicContentOutputBlock, path: string) {
   return 'id' in block && block.id ? block.id : `${block.type}-${path}`;
 }
 
+/**
+ * Where a link may land in the text: the search leads to a block by its
+ * `#b-<id>` (`app/composables/search-landing.ts`).
+ */
+function blockAnchor(block: PublicContentOutputBlock) {
+  return 'id' in block && block.id ? { 'data-block': block.id } : {};
+}
+
 function headerTag(level: unknown) {
   return level === 3 ? 'h3' : 'h2';
 }
@@ -200,23 +208,27 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
       <ContentSpoiler :spoiler="!spoilersOpen && blockIsSpoiler(block)">
         <p
           v-if="block.type === 'paragraph'"
+          v-bind="blockAnchor(block)"
           v-html="publicRichText(block.data.text as string)"
         ></p>
         <component
           :is="headerTag(block.data.level)"
           v-else-if="block.type === 'header'"
+          v-bind="blockAnchor(block)"
           :id="headingIdByPath.get(path)"
           class="scroll-mt-[var(--public-anchor-offset,8rem)]"
           v-html="publicRichText(block.data.text as string)"
         ></component>
         <ContentRendererList
           v-else-if="block.type === 'list'"
+          v-bind="blockAnchor(block)"
           :items="block.data.items as any[]"
           :style="block.data.style as any"
           :meta="block.data.meta as any"
         />
         <blockquote
           v-else-if="block.type === 'quote'"
+          v-bind="blockAnchor(block)"
           class="content-quote"
           :class="{ 'text-center': block.data.alignment === 'center' }"
         >
@@ -232,6 +244,7 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
         </blockquote>
         <div
           v-else-if="block.type === 'delimiter'"
+          v-bind="blockAnchor(block)"
           class="content-divider"
           role="separator"
         >
@@ -246,6 +259,7 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
           v-else-if="
             block.type === 'contentMedia' && assetMedia(block.data.asset)
           "
+          v-bind="blockAnchor(block)"
           :asset="asset(block.data.asset)"
           :layout="block.data.layout as ContentMediaLayout"
           :caption="block.data.caption as string | undefined"
@@ -260,6 +274,7 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
         />
         <ContentGallery
           v-else-if="block.type === 'contentGallery'"
+          v-bind="blockAnchor(block)"
           :title="block.data.title as string | undefined"
           :items="block.data.items as any[]"
           :choose-label="phrase.content_gallery_tile"
@@ -273,6 +288,7 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
           v-else-if="
             block.type === 'contentAudio' && asset(block.data.asset).assetUrl
           "
+          v-bind="blockAnchor(block)"
           :asset="asset(block.data.asset)"
           :title="block.data.title as string | undefined"
           :caption="block.data.caption as string | undefined"
@@ -282,6 +298,7 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
             block.type === 'contentAttachment' &&
             asset(block.data.asset).assetUuid
           "
+          v-bind="blockAnchor(block)"
           :asset="asset(block.data.asset)"
           :title="block.data.title as string | undefined"
           :caption="block.data.caption as string | undefined"
@@ -302,6 +319,7 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
         />
         <ContentFileGroup
           v-else-if="block.type === 'contentFileGroup'"
+          v-bind="blockAnchor(block)"
           :title="block.data.title as string | undefined"
           :entries="fileGroupEntries(block.data.items)"
           :openable="assetViewer"
@@ -316,6 +334,7 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
         />
         <ExternalLinkPreviewCard
           v-else-if="block.type === 'externalLink'"
+          v-bind="blockAnchor(block)"
           :link="externalLink(block.data)"
           :url="block.data.url as string"
           :note="linkNote(block.data)"
@@ -323,10 +342,12 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
         />
         <ContentIntegration
           v-else-if="block.type === 'integration'"
+          v-bind="blockAnchor(block)"
           :data="block.data"
         />
         <ContentEntityLinkBlock
           v-else-if="block.type === 'entityLink'"
+          v-bind="blockAnchor(block)"
           :entity-type="block.data.entityType as ContentEntityType"
           :entity-id="block.data.entityId as string | undefined"
           :restricted="block.data.restricted as boolean | undefined"
@@ -336,10 +357,12 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
         />
         <ContentPrivatePlaceholder
           v-else-if="block.type === 'privateSectionPlaceholder'"
+          v-bind="blockAnchor(block)"
           :summary="block.data"
         />
         <section
           v-else-if="block.type === 'privateSectionExpanded'"
+          v-bind="blockAnchor(block)"
           class="content-private-pattern content-private-section relative
             isolate flex flex-col gap-sm"
         >

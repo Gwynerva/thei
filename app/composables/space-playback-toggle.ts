@@ -1,7 +1,5 @@
-const TEXT_ENTRY_SELECTOR =
-  'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
 const ACTIVATABLE_SELECTOR =
-  'button, a[href], summary, [role="button"], [role="link"], [role="checkbox"], [role="switch"], [role="tab"]';
+  'button, input, a[href], summary, [role="button"], [role="link"], [role="checkbox"], [role="switch"], [role="tab"]';
 
 /**
  * Toggles playback with Space while the player is on screen.
@@ -26,8 +24,8 @@ export function useSpacePlaybackToggle(
     const dialog = activeOpenDialog();
     if (dialog && !dialog.contains(element)) return;
 
+    if (isEditableTarget(event.target)) return;
     const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest(TEXT_ENTRY_SELECTOR)) return;
     if (target?.closest(ACTIVATABLE_SELECTOR) && !element.contains(target))
       return;
 

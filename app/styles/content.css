@@ -523,6 +523,57 @@
 }
 
 /*
+ * The place a find of the search led to (`app/composables/search-landing.ts`):
+ * lit in the accent for a moment, fading back into the page, with the words
+ * found marked in it. While the reader is there, what it cuts short is read
+ * in full: a note clamped to two lines, a title cut with an ellipsis.
+ */
+[data-search-landing] {
+  animation: search-landing 2.4s ease-out;
+}
+
+::highlight(search-found) {
+  background-color: color-mix(in oklab, var(--color-accent) 28%, transparent);
+  color: var(--color-text-1);
+}
+
+:is([data-search-found], [data-search-found] *):is(
+    .line-clamp-1,
+    .line-clamp-2,
+    .line-clamp-3
+  ) {
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+  overflow: visible;
+}
+
+:is([data-search-found], [data-search-found] *).truncate {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+@keyframes search-landing {
+  from {
+    background-color: color-mix(in oklab, var(--color-accent) 16%, transparent);
+    box-shadow: 0 0 0 0.4em
+      color-mix(in oklab, var(--color-accent) 16%, transparent);
+  }
+  to {
+    background-color: transparent;
+    box-shadow: 0 0 0 0.4em transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-search-landing] {
+    animation-duration: 0.01s;
+    outline: 2px solid color-mix(in oklab, var(--color-accent) 40%, transparent);
+    outline-offset: 0.3em;
+  }
+}
+
+/*
  * The lock pattern of a private section, drawn by a `::before` over whatever
  * box it is applied to: the section on a page, the box laid under a section
  * in the editor. Where it sits (`inset`, `z-index`) is the caller's; how faint

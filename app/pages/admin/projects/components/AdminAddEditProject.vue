@@ -136,6 +136,9 @@ const statusUsageDelta = computed(() =>
 const isEdit = computed(() => Boolean(projectUuid));
 const saving = ref(false);
 const savedSnapshot = ref(JSON.stringify(projectData.value));
+// Begun from the quick search: the query is the title, as if typed.
+if (!isEdit.value && titleFromQuery())
+  projectData.value.title = titleFromQuery();
 /**
  * When the entity last changed, as the form read it. A save names it, and
  * one over a change made elsewhere since — another tab, an AI client — is

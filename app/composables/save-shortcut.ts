@@ -4,17 +4,8 @@ import {
   toValue,
   type MaybeRefOrGetter,
 } from 'vue';
-
-type SaveShortcutEvent = Pick<
-  KeyboardEvent,
-  | 'altKey'
-  | 'code'
-  | 'ctrlKey'
-  | 'isComposing'
-  | 'metaKey'
-  | 'shiftKey'
-  | 'getModifierState'
->;
+import { activeOpenDialog, isElementDisplayed } from './modal';
+import { matchChord } from './shortcut';
 
 export interface SaveShortcutOptions {
   canSave?: MaybeRefOrGetter<boolean>;
@@ -35,15 +26,8 @@ interface SaveShortcutRegistryOptions {
   getActiveBoundary?: () => HTMLElement | undefined;
 }
 
-export function isSaveShortcut(event: SaveShortcutEvent) {
-  return (
-    !event.isComposing &&
-    !event.altKey &&
-    !event.shiftKey &&
-    !event.getModifierState('AltGraph') &&
-    event.ctrlKey !== event.metaKey &&
-    event.code === 'KeyS'
-  );
+export function isSaveShortcut(event: KeyboardEvent) {
+  return matchChord(event, { code: 'KeyS' });
 }
 
 export function createSaveShortcutRegistry(
@@ -171,27 +155,6 @@ function containsEventTarget(root: HTMLElement, target: EventTarget | null) {
   } catch {
     return false;
   }
-}
-
-export function isElementDisplayed(element: HTMLElement) {
-  if (!element.isConnected) return false;
-  for (
-    let current: HTMLElement | null = element;
-    current;
-    current = current.parentElement
-  ) {
-    if (current.hidden || current.style.display === 'none') return false;
-  }
-  return true;
-}
-
-export function activeOpenDialog() {
-  const dialogs = document.querySelectorAll<HTMLElement>('dialog[open]');
-  for (let index = dialogs.length - 1; index >= 0; index--) {
-    const dialog = dialogs.item(index);
-    if (dialog && isElementDisplayed(dialog)) return dialog;
-  }
-  return undefined;
 }
 
 const globalSaveShortcutRegistry = createSaveShortcutRegistry({

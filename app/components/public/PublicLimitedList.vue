@@ -20,6 +20,11 @@ const collapsed = computed(
 const shown = computed(() =>
   collapsed.value ? props.items.slice(0, props.limit) : props.items,
 );
+// A find of the search lands on a file or a link the list may hold past its
+// beginning: it is shown in full.
+useLandingReveal((target) => {
+  if (target.file || target.link) expanded.value = true;
+});
 </script>
 
 <template>

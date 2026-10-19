@@ -1,8 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createSaveShortcutRegistry,
   isSaveShortcut,
 } from '../../../app/composables/save-shortcut';
+
+// Ctrl saves, as on Windows, unless a test moves to a Mac.
+beforeEach(() => vi.stubGlobal('navigator', { platform: 'Win32' }));
+afterEach(() => vi.unstubAllGlobals());
 
 function key(overrides: Partial<KeyboardEvent> = {}): KeyboardEvent {
   return {
@@ -54,11 +58,18 @@ function element(parentElement: TestElement | null = null) {
 }
 
 describe('save shortcut recognition', () => {
-  it('uses the physical S key for Ctrl and Cmd regardless of layout', () => {
+  it('uses the physical S key regardless of layout', () => {
     expect(isSaveShortcut(key({ key: 'ы' }))).toBe(true);
+    vi.stubGlobal('navigator', { platform: 'MacIntel' });
     expect(
       isSaveShortcut(key({ ctrlKey: false, key: 'ß', metaKey: true })),
     ).toBe(true);
+  });
+
+  it('takes Ctrl elsewhere and Cmd on a Mac, never the other one', () => {
+    expect(isSaveShortcut(key({ ctrlKey: false, metaKey: true }))).toBe(false);
+    vi.stubGlobal('navigator', { platform: 'MacIntel' });
+    expect(isSaveShortcut(key())).toBe(false);
   });
 
   it('rejects conflicting modifiers, composition, and other physical keys', () => {
@@ -66,6 +77,7 @@ describe('save shortcut recognition', () => {
     expect(isSaveShortcut(key({ altKey: true }))).toBe(false);
     expect(isSaveShortcut(key({ ctrlKey: true, metaKey: true }))).toBe(false);
     expect(isSaveShortcut(key({ isComposing: true }))).toBe(false);
+    expect(isSaveShortcut(key({ keyCode: 229 }))).toBe(false);
     expect(isSaveShortcut(key({ code: 'KeyP' }))).toBe(false);
     expect(
       isSaveShortcut(key({ getModifierState: (name) => name === 'AltGraph' })),

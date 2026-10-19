@@ -20,6 +20,8 @@ const { engaged, events } = useMediaInteraction();
       hocus:shadow-xl"
     :aria-label="publicText(item.title) || publicText(item.alt) || phrase.asset"
     :data-title-popup="publicText(item.title) || phrase.asset"
+    :data-file="item.key"
+    data-opens-viewer
     v-on="events"
     @click="emit('open')"
   >

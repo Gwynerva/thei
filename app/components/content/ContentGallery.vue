@@ -74,6 +74,13 @@ function select(id: string) {
   emit('update:selectedId', id);
 }
 
+/** A link landed on a file of the gallery: it turns to that file. */
+function onLanding(event: Event) {
+  const file = (event as CustomEvent<{ file?: string }>).detail?.file;
+  const item = file && props.items.find((each) => each.asset.assetUuid === file);
+  if (item) select(item.id);
+}
+
 watch(
   () => props.selectedId,
   (id) => {
@@ -112,6 +119,7 @@ const dragSort = useDragSort(
     class="min-w-0 overflow-hidden rounded-normal border border-border-1
       bg-bg-2"
     data-content-gallery
+    @theilanding="onLanding"
   >
     <!-- The title heads the gallery as a group of files has its own. -->
     <ContentFilesHead
@@ -206,6 +214,7 @@ const dragSort = useDragSort(
       bare
       class="border-t border-border-1"
       data-gallery-view
+      :data-file="activeItem.asset.assetUuid"
       @edit="emit('edit', activeItem.id)"
       @caption="emit('caption', activeItem.id, $event)"
       @open="emit('open', activeItem)"

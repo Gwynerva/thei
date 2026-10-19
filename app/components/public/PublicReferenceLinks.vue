@@ -65,6 +65,7 @@ function linkTitle(link: PublicReferenceLink) {
         :corner-icon="link.iconMedia ? entityIcon(link.kind) : undefined"
         :corner-title="entityTitle(link.kind)"
         :href="link.href"
+        :data-link="link.href"
         :icon="entityTypeIcon(link.kind)"
         :continuous-media="contentEntityHasIcon(link.kind)"
         plain-icon
@@ -80,6 +81,7 @@ function linkTitle(link: PublicReferenceLink) {
         :corner-icon="link.iconMedia ? entityIcon(link.kind) : undefined"
         :corner-title="entityTitle(link.kind)"
         :href="link.href"
+        :data-link="link.href"
         icon="external-link"
         external
         plain-icon

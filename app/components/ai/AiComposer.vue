@@ -335,6 +335,8 @@ function insertBreak() {
 
 function keydown(event: KeyboardEvent) {
   if (event.isComposing) return;
+  // Enter with Alt, Ctrl or Cmd held sends nothing: the browser keeps it.
+  if (event.altKey || event.ctrlKey || event.metaKey) return;
   if (event.key === 'Enter') {
     event.preventDefault();
     // A phone's keyboard has no Shift to hold: its Enter starts a line, and

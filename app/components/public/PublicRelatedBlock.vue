@@ -81,6 +81,27 @@ async function loadMore() {
 
 const items = computed(() => [...(page.value?.items ?? []), ...extra.value]);
 
+/**
+ * A link landed on a related entity: its kind's tab, and the pages of the
+ * list up to the one it is on.
+ */
+useLandingReveal(async (target) => {
+  const wanted = target.relation;
+  if (!wanted || !tabs.value.some((tab) => tab.key === wanted.kind)) return;
+  kind.value = wanted.kind as RelationEntityType;
+  const listed = () =>
+    items.value.some(
+      (item) => !isPublicSecret(item) && item.href === wanted.href,
+    );
+  for (let wait = 0; wait < 60 && (loading.value || !page.value); wait++)
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  for (let more = 0; more < 40 && !listed() && moreAvailable(); more++)
+    await loadMore();
+});
+function moreAvailable() {
+  return more.value && !moreError.value;
+}
+
 function itemKey(item: PublicEntityLink) {
   return isPublicSecret(item) ? item.key : `${item.entityType}:${item.href}`;
 }

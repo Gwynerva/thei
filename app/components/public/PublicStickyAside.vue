@@ -23,6 +23,7 @@ const stickyContentStyle = computed(() => ({
 <template>
   <aside
     class="sticky hidden min-w-0 self-start sm:block"
+    data-public-aside
     :style="stickyAsideStyle"
   >
     <div
