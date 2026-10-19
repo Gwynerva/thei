@@ -575,6 +575,8 @@ export default defineI18nBase({
     search_building: (percent) =>
       `Search is still being prepared (${percent}%): some results may be missing.`,
     search_failed: 'Could not search. Try again.',
+    search_quick_empty: 'Try another word, or another form of it.',
+    search_key_hint: (key) => `Search · ${key}`,
     search_quick_hint:
       'Projects, events, the diary, pages, files and tags — by any word in them.',
     search_years: 'Years',

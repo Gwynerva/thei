@@ -251,6 +251,13 @@ describe('the global search', () => {
     expect((await search('бегемота')).total).toBe(0);
   });
 
+  it('reads a word that names a kind as asking for that kind', async () => {
+    const groups = (await search('проект шкурила')).groups;
+    expect(groups[0]!.kind).toBe('project');
+    // Alone, the word is a word like any other.
+    expect((await search('событие')).total).toBe(0);
+  });
+
   it('puts first what is named exactly as typed', async () => {
     const groups = (await search('косплей')).groups;
     expect(groups[0]!.kind).toBe('tag');

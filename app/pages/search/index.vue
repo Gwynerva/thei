@@ -79,8 +79,12 @@ onBeforeUnmount(() => clearTimeout(retry));
 
 const pending = computed(() => resource.status.value === 'pending');
 const typed = computed(() => Boolean(search.value.query));
-const activeFilterCount = computed(() =>
-  countPublicSearchFilters(filters.value),
+// With a query, the kind is the chips' choice, shown on them, not a filter
+// the sheet counts.
+const activeFilterCount = computed(
+  () =>
+    countPublicSearchFilters(filters.value) -
+    (filters.value.q.trim() && filters.value.type ? 1 : 0),
 );
 const hasCriteria = computed(
   () => Boolean(filters.value.q.trim()) || activeFilterCount.value > 0,
@@ -290,6 +294,7 @@ const countLine = computed(() => {
     <nav
       v-if="typed && search.total"
       class="-mx-window flex scrollbar-hover gap-xs overflow-x-auto px-window
+        max-sm:[mask-image:linear-gradient(to_right,black_85%,transparent)]
         sm:mx-0 sm:flex-wrap sm:px-0"
       :aria-label="phrase.search_filter_type"
     >

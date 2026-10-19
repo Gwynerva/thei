@@ -1,7 +1,7 @@
 import type { ReferenceElement } from '@floating-ui/vue';
 import type { SearchResponse } from '#layers/thei/shared/search/api';
 import { toDateString } from '#layers/thei/shared/date-range';
-import { matchChord, matchSlash, useShortcut } from './shortcut';
+import { isMacPlatform, matchChord, matchSlash, useShortcut } from './shortcut';
 
 /**
  * The one quick search of the site, the same for a visitor and the owner:
@@ -10,6 +10,15 @@ import { matchChord, matchSlash, useShortcut } from './shortcut';
  * in front. On the search page itself, those take the page's own field.
  */
 const anchor = shallowRef<ReferenceElement | null>(null);
+
+/** The keys that open the search, as a hint names them: ⌘K on a Mac. */
+export function useSearchKeyName() {
+  const name = ref('Ctrl K');
+  onMounted(() => {
+    if (isMacPlatform()) name.value = '⌘K';
+  });
+  return name;
+}
 
 /** What opens the search, marked so a key can open it at the same place. */
 export const SITE_SEARCH_ANCHOR = 'data-site-search';
@@ -74,8 +83,8 @@ export function useSiteSearchKeys(onAgain: () => void) {
 }
 
 /** How long typing waits for a pause before the search goes out. */
-const PAUSE_SHORT_MS = 450;
-const PAUSE_MS = 250;
+const PAUSE_SHORT_MS = 300;
+const PAUSE_MS = 150;
 
 /**
  * The quick search's answers as the query is typed: each after a pause,
@@ -138,6 +147,8 @@ export function useQuickSearch(
     clearTimeout(timer);
     const q = text.value.trim();
     const pause = now ? 0 : q.length < 3 ? PAUSE_SHORT_MS : PAUSE_MS;
+    // Waiting shows from the key that started it, not from the request.
+    if (q || options.owner.value) loading.value = true;
     timer = setTimeout(() => void send(q), pause);
   }
 

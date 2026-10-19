@@ -30,6 +30,7 @@ const historyBuffer = useContentHistoryBuffer();
 // The admin has no header of the site: the quick search opens from here.
 // A public page has its own search icon, and the bar no second one.
 const { show: showSearch } = useSiteSearch();
+const searchKeys = useSearchKeyName();
 const inAdmin = computed(() => route.path.startsWith('/admin/'));
 
 /**
@@ -263,7 +264,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
           <button
             v-if="inAdmin"
             type="button"
-            :data-title-popup="phrase.search"
+            :data-title-popup="phrase.search_key_hint(searchKeys)"
             :aria-label="phrase.search"
             v-bind="{ [SITE_SEARCH_ANCHOR]: '' }"
             class="flex h-full shrink-0 cursor-pointer items-center

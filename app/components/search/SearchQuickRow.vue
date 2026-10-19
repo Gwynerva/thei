@@ -29,6 +29,8 @@ export interface SearchQuickRowData {
   href?: string;
   /** Where Shift+Enter takes it: the other side, page or editor. */
   other?: string;
+  /** A small button of its own to `other`, for a hand without Shift. */
+  otherIcon?: IconName;
   /** Drawn in the accent: the ✦ of AI. */
   accent?: boolean;
 }
@@ -46,6 +48,8 @@ defineEmits<{
   point: [event: PointerEvent];
   /** The other places asked for: the search page, with them open. */
   more: [];
+  /** The other side asked for: the editor, from the site. */
+  other: [];
 }>();
 </script>
 
@@ -107,7 +111,7 @@ defineEmits<{
             :name="row.access.icon"
             :aria-label="row.access.text"
             role="img"
-            class="shrink-0 text-xs text-text-3"
+            class="shrink-0 text-sm text-text-2"
           />
           <!-- On a phone the title keeps the line to itself. -->
           <span
@@ -116,6 +120,20 @@ defineEmits<{
               text-text-3 max-sm:hidden"
             >{{ row.when }}</span
           >
+          <!-- Its own target inside the row, kept from the row's link. -->
+          <span
+            v-if="row.otherIcon"
+            role="link"
+            :aria-label="phrase.search_edit"
+            :data-title-popup="phrase.search_edit"
+            class="ml-auto flex size-6 shrink-0 items-center justify-center
+              rounded-xs font-normal text-text-3 transition-colors hover:bg-bg-4
+              hover:text-text-1"
+            data-row-other
+            @click.prevent="$emit('other')"
+          >
+            <Icon :name="row.otherIcon" aria-hidden="true" />
+          </span>
         </span>
         <span
           v-if="row.segments?.length || row.detail || row.place"

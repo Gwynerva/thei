@@ -25,13 +25,13 @@ function active(to: string) {
  * before the link would go.
  */
 const { show: showSearch } = useSiteSearch();
+const searchKeys = useSearchKeyName();
 function openSearch(event: MouseEvent) {
   const link = (event.target as Element | null)?.closest(
     `[${SITE_SEARCH_ANCHOR}]`,
   );
   if (!link) return;
-  if (event.button || event.ctrlKey || event.metaKey || event.shiftKey)
-    return;
+  if (event.button || event.ctrlKey || event.metaKey || event.shiftKey) return;
   event.preventDefault();
   showSearch(link);
 }
@@ -76,7 +76,11 @@ function openSearch(event: MouseEvent) {
           exact-active-class=""
           :aria-current="active(item.to) ? 'page' : undefined"
           :aria-label="item.label"
-          :data-title-popup="item.label"
+          :data-title-popup="
+            item.to === '/search/'
+              ? phrase.search_key_hint(searchKeys)
+              : item.label
+          "
           v-bind="item.to === '/search/' ? { [SITE_SEARCH_ANCHOR]: '' } : {}"
           class="relative flex min-w-11 items-center justify-center gap-2 px-2
             text-text-2 transition focus-visible:ring-2

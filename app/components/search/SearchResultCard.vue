@@ -213,7 +213,7 @@ const accent = computed(() =>
           <!-- Room for the halo on either side: clamping clips it otherwise,
                and a clipped halo draws a hard seam across the media. -->
           <p
-            v-if="hit.summary"
+            v-if="hit.summary && !searchTitleIsSummary(hit)"
             class="-mx-[0.75em] line-clamp-2 px-[0.75em] text-sm leading-relaxed
               font-semibold text-text-2"
           >

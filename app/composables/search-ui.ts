@@ -45,12 +45,22 @@ const FIND_ICONS: Record<SearchFind['where'], IconName> = {
   day: 'calendar',
 };
 
-/** What a result is called: a diary entry by its day, a file by its title. */
+/**
+ * What a result is called: a diary entry by its day; a file by its title, or
+ * by what it shows, its description — «JPG» three times over tells files
+ * apart by nothing — and by its format only where it has neither.
+ */
 export function searchHitTitle(hit: SearchHit): string {
   if (hit.kind === 'diary-entry' && hit.date)
     return formatAbsolutePublicDate(hit.date, language.value.code);
   if (hit.title) return publicText(hit.title);
+  if (hit.kind === 'file' && hit.summary) return publicText(hit.summary);
   return hit.file?.extension.toUpperCase() ?? '';
+}
+
+/** Whether a result's title is its description, said once then. */
+export function searchTitleIsSummary(hit: SearchHit): boolean {
+  return hit.kind === 'file' && !hit.title && Boolean(hit.summary);
 }
 
 /** When it was: its period, or its day — none for a diary entry, named by it. */
@@ -93,9 +103,12 @@ export function searchFindPlace(find: SearchFind): {
   if (find.place?.section && label)
     return { icon: 'project-section', text: value.search_where_section(label) };
   const where = value.search_where(find.where);
+  // A tag found by its name shows the name in its words: once is enough.
+  const named =
+    find.where === 'title' || (find.where === 'tag' && find.segments.length);
   return {
     icon: FIND_ICONS[find.where],
-    text: label && find.where !== 'title' ? `${where} · ${label}` : where,
+    text: label && !named ? `${where} · ${label}` : where,
   };
 }
 

@@ -420,6 +420,8 @@ export type LanguagePhrases = {
   search_building: (percent: number) => string;
   search_failed: string;
   search_quick_hint: string;
+  search_quick_empty: string;
+  search_key_hint: (key: string) => string;
   search_years: string;
   search_no_filters: string;
   search_year_count: (year: number, count: number) => string;

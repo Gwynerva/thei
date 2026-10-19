@@ -111,7 +111,11 @@ function titleOf(kind: SearchKind, title: string) {
 }
 
 function hitRow(hit: SearchHit): Row {
-  const find = hit.finds[0];
+  const titled = searchTitleIsSummary(hit);
+  // A file called by its description finds nothing more to say by it.
+  const find = hit.finds.find(
+    (each) => !(titled && each.where === 'file' && !each.label),
+  );
   const place = find ? searchFindPlace(find) : undefined;
   const page = find?.href ?? hit.href;
   const edit = hit.editHref;
@@ -124,7 +128,8 @@ function hitRow(hit: SearchHit): Row {
     access: searchAccessBadge(hit.access),
     ...(find && find.where !== 'title'
       ? {
-          place: place?.text,
+          // Plain text needs no word for where it stands: the line is short.
+          place: find.where === 'text' && !find.label ? undefined : place?.text,
           segments: find.segments,
         }
       : hit.file
@@ -137,6 +142,9 @@ function hitRow(hit: SearchHit): Row {
     preview: hit.kind === 'file',
     href: inAdmin.value && edit ? edit : page,
     other: inAdmin.value ? (edit ? page : undefined) : edit,
+    // On the site, the owner's way to its editor without a key: a phone has
+    // no Shift+Enter.
+    otherIcon: !inAdmin.value && edit ? 'edit' : undefined,
   };
 }
 
@@ -300,11 +308,15 @@ async function activate(row: Row | undefined, other = false) {
 
 /** A click goes where the link goes; the search only closes behind it. */
 function onPick(row: Row, event: MouseEvent) {
+  const target = event.target as Element | null;
+  // Its own targets inside the row act on their own.
+  if (target?.closest('[data-row-more], [data-row-other]')) return;
   if (row.href) {
-    if (!event.defaultPrevented) {
-      close();
-      opener = null;
-    }
+    // A click for a new tab or window leaves the search where it is.
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.button)
+      return;
+    close();
+    opener = null;
     return;
   }
   void activate(row);
@@ -425,6 +437,19 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
         >
           <Icon name="close" />
         </button>
+        <!-- A sheet closes by its handle too; this says so to a hand. -->
+        <button
+          v-else-if="phone"
+          type="button"
+          class="absolute right-1 flex size-9 cursor-pointer items-center
+            justify-center rounded-sm text-lg text-text-3 transition
+            focus-visible:ring-2 focus-visible:ring-accent
+            focus-visible:outline-none hocus:bg-bg-3 hocus:text-text-1"
+          :aria-label="phrase.close_modal"
+          @click="close"
+        >
+          <Icon name="close" />
+        </button>
       </form>
 
       <div
@@ -474,6 +499,7 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
               @point="pointAt($event, rowIndex.get(row.key)!)"
               @pick="onPick(row, $event)"
               @more="openPlaces(row)"
+              @other="activate(row, true)"
             />
           </div>
         </div>
@@ -491,7 +517,7 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
           <span class="font-semibold text-text-1">{{
             phrase.search_empty
           }}</span>
-          <span class="text-text-3">{{ phrase.search_empty_description }}</span>
+          <span class="text-text-3">{{ phrase.search_quick_empty }}</span>
         </p>
         <p v-else-if="!query" class="px-xs py-sm text-sm text-text-3">
           {{ phrase.search_quick_hint }}
@@ -499,7 +525,7 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
       </div>
 
       <footer
-        v-if="!phone"
+        v-if="!phone && rows.length"
         class="flex shrink-0 flex-wrap items-center gap-x-sm gap-y-0.5 border-t
           border-border-1 px-sm py-1.5 text-xs text-text-3"
         aria-hidden="true"

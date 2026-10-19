@@ -11,7 +11,11 @@ import {
   type SearchKind,
   type SearchResponse,
 } from '#layers/thei/shared/search/api';
-import { snippetSegments } from '#layers/thei/shared/search/snippet';
+import {
+  SEARCH_SNIPPET_LEAD,
+  SEARCH_SNIPPET_LENGTH,
+  snippetSegments,
+} from '#layers/thei/shared/search/snippet';
 import {
   answersQueryWord,
   parseSearchQuery,
@@ -35,6 +39,8 @@ const SEARCH_GROUP_CANDIDATES = 12;
 export { SEARCH_PAGE_SIZE };
 /** Finds told of each entity on the search page. */
 const PAGE_FINDS = 3;
+/** A quick search's find is one short line: it opens a word or two before. */
+const QUICK_SNIPPET_LEAD = 10;
 
 export interface SearchRequest {
   q: string;
@@ -188,6 +194,8 @@ export function findsOf(
   document: { href: string },
   limit: number,
   withPlace = false,
+  /** How far before the words a snippet opens: less in a single line. */
+  lead = SEARCH_SNIPPET_LEAD,
 ): { finds: SearchFind[]; more: number; closeness: number } {
   const analyzer = searchAnalyzer();
   // How close the text comes to what was typed: words as typed, not only
@@ -195,6 +203,10 @@ export function findsOf(
   const asTyped = new Set<number>();
   let together = false;
   const words = query.words;
+  // Words that only hold a sentence together count, and are marked, only in
+  // a query made of nothing else: «где я была».
+  const allStop = words.every((word) => word.stop);
+  const counts = (word: (typeof words)[number]) => !word.stop || allStop;
   const probes = words.map((word) => word.word.slice(0, Math.max(2, Math.min(word.word.length, 3))));
   const found: { unit: SearchUnit; order: number; score: number; spans: { start: number; end: number }[]; words: string[] }[] = [];
   units.forEach((unit, order) => {
@@ -212,9 +224,10 @@ export function findsOf(
         answered.add(at);
         answeredHere = at;
         if (token.word === word.word) asTyped.add(at);
+        if (!counts(word)) return;
         spans.push({ start: token.start, end: token.end });
         const written = unit.text.slice(token.start, token.end);
-        if (!word.stop && marked.length < 3 && !marked.includes(written)) marked.push(written);
+        if (marked.length < 3 && !marked.includes(written)) marked.push(written);
       });
       if (answeredHere > 0 && answeredHere === previous + 1) together = true;
       previous = answeredHere;
@@ -225,7 +238,7 @@ export function findsOf(
       spans.push(...at);
       if (at[0] && !marked.length) marked.push(unit.text.slice(at[0].start, at[0].end));
     }
-    const meaningful = [...answered].filter((at) => at >= words.length || !words[at]!.stop).length;
+    const meaningful = [...answered].filter((at) => at >= words.length || counts(words[at]!)).length;
     if (!meaningful) return;
     found.push({
       unit,
@@ -264,7 +277,7 @@ export function findsOf(
               ? { label: unit.place.file.title }
               : {}),
       href: plain || unit.hidden ? document.href : textFragment(at, item.words),
-      segments: unit.hidden ? [] : snippetSegments(unit.text, item.spans),
+      segments: unit.hidden ? [] : snippetSegments(unit.text, item.spans, SEARCH_SNIPPET_LENGTH, lead),
       ...(unit.media && (unit.where === 'file' || unit.where === 'caption') ? { media: unit.media } : {}),
       ...(withPlace && unit.place && (unit.place.section || unit.place.block || unit.place.file)
         ? {
@@ -364,6 +377,53 @@ function countFacets(
   };
 }
 
+/**
+ * Words that name a kind of result rather than say what it is about: «фото
+ * маяка» asks for the files of a lighthouse. Beside other words, such a word
+ * need not stand in a text, and its kind comes first.
+ */
+const KIND_WORDS: Partial<Record<SearchKind, string[]>> = {
+  file: [
+    'фото', 'фотка', 'фотография', 'снимок', 'картинка', 'изображение',
+    'видео', 'ролик', 'файл', 'скан', 'photo', 'picture', 'image', 'video',
+    'file', 'scan',
+  ],
+  'diary-entry': ['дневник', 'diary'],
+  project: ['проект', 'project'],
+  event: ['событие', 'event'],
+  page: ['страница', 'page'],
+  tag: ['тег', 'tag'],
+};
+const kindTerms = new Map<string, Map<string, SearchKind>>();
+
+function kindOfWord(word: SearchQuery['words'][number]): SearchKind | undefined {
+  const analyzer = searchAnalyzer();
+  let terms = kindTerms.get(analyzer.id);
+  if (!terms) {
+    terms = new Map();
+    for (const [kind, words] of Object.entries(KIND_WORDS) as [SearchKind, string[]][])
+      for (const each of words) terms.set(analyzer.read(each).term, kind);
+    kindTerms.set(analyzer.id, terms);
+  }
+  return terms.get(word.term);
+}
+
+/**
+ * The kind a query names beside its other words, and the query without
+ * insisting on that word. None when the word stands alone: «фото» is then
+ * a word like any other.
+ */
+function kindHint(query: SearchQuery): { kind?: SearchKind; query: SearchQuery } {
+  const named = query.words.map((word) => (word.stop ? undefined : kindOfWord(word)));
+  const others = query.words.filter((word, at) => !word.stop && !named[at]);
+  const kind = named.find(Boolean);
+  if (!kind || !others.length) return { query };
+  return {
+    kind,
+    query: { ...query, words: query.words.map((word, at) => (named[at] ? { ...word, stop: true } : word)) },
+  };
+}
+
 /** One search, as the index answers it now; with `any`, for some of the words. */
 async function searchOnce(
   request: SearchRequest,
@@ -371,7 +431,8 @@ async function searchOnce(
   text: string,
   any = false,
 ): Promise<SearchResponse> {
-  const query = parseSearchQuery(text, searchAnalyzer(), { typing: request.typing });
+  const hint = kindHint(parseSearchQuery(text, searchAnalyzer(), { typing: request.typing }));
+  const query = hint.query;
   const match = ftsMatch(query, any);
   const now = request.now ?? Date.now();
   const days = dayMatcher(text, now);
@@ -439,8 +500,16 @@ async function searchOnce(
    * stems only, so a word as typed and words standing together reorder the
    * candidates it brought.
    */
+  // Named as typed: the very words, or the same words in other forms —
+  // «бублика» names the tag «Бублик».
   const typed = searchKey(query.text);
-  const exact = (title: string) => Boolean(typed) && searchKey(title) === typed;
+  const termsOf = (text: string) =>
+    searchTokens(text, searchAnalyzer(), 'query')
+      .map((token) => token.term)
+      .join(' ');
+  const typedTerms = termsOf(query.text);
+  const exact = (title: string) =>
+    Boolean(typed) && (searchKey(title) === typed || termsOf(title) === typedTerms);
   const hydrate = (rows: DocRow[], keep = rows.length): SearchHit[] =>
     rows
       .map((row, order) => {
@@ -452,6 +521,7 @@ async function searchOnce(
           { href: card.href },
           findsLimit,
           request.audience === 'owner',
+          request.quick ? QUICK_SNIPPET_LEAD : SEARCH_SNIPPET_LEAD,
         );
         const day = dayIds.has(row.id);
         if (day) finds.unshift({ where: 'day', label: row.date ?? '', href: card.href, segments: [] });
@@ -514,6 +584,9 @@ async function searchOnce(
     }));
     // A result named exactly as typed brings its kind to the top: «где я
     // была» is the page of that name before the projects that say the words.
+    // A kind the query names comes first but for that.
+    const named = groups.findIndex((group) => group.kind === hint.kind && group.hits.length);
+    if (named > 0) groups.unshift(...groups.splice(named, 1));
     const first = groups.findIndex((group) => group.hits[0] && exact(group.hits[0].title));
     if (first > 0) groups.unshift(...groups.splice(first, 1));
   }

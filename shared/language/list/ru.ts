@@ -632,6 +632,8 @@ export default defineI18nModule({
     search_building: (percent) =>
       `Поиск ещё готовится (${percent} %): часть найденного может не показаться.`,
     search_failed: 'Не удалось выполнить поиск. Попробуйте ещё раз.',
+    search_quick_empty: 'Попробуйте другое слово или другую его форму.',
+    search_key_hint: (key) => `Поиск · ${key}`,
     search_quick_hint:
       'Проекты, события, дневник, страницы, файлы и теги — по любому слову в них.',
     search_years: 'Годы',

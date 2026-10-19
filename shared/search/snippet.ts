@@ -6,6 +6,12 @@ export interface SearchSegment {
 
 /** How long a snippet runs, in characters, around what was found. */
 export const SEARCH_SNIPPET_LENGTH = 160;
+/**
+ * How far before the first find a snippet opens: a few words, so the find
+ * stands near the start of a line cut short — a card's two lines on a phone,
+ * a quick search's one.
+ */
+export const SEARCH_SNIPPET_LEAD = 24;
 
 interface Span {
   start: number;
@@ -22,6 +28,7 @@ export function snippetSegments(
   text: string,
   hits: readonly Span[],
   length = SEARCH_SNIPPET_LENGTH,
+  lead = SEARCH_SNIPPET_LEAD,
 ): SearchSegment[] {
   // A line break reads as a space; one for one, so the places stay true.
   const flat = text.replace(/\s/gu, ' ');
@@ -30,7 +37,7 @@ export function snippetSegments(
   let start = 0;
   let end = flat.length;
   if (flat.length > length) {
-    start = Math.max(0, first.start - Math.floor(length / 3));
+    start = Math.max(0, first.start - Math.min(lead, Math.floor(length / 3)));
     end = Math.min(flat.length, start + length);
     if (end - start < length) start = Math.max(0, end - length);
     if (start > 0) {
