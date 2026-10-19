@@ -82,7 +82,11 @@ const RELATIVE_DAYS: Record<string, number> = {
 };
 
 /** The FTS5 query of the words a search insists on, and its phrases. */
-function ftsMatch(query: SearchQuery): string | undefined {
+/**
+ * The query as FTS5 reads it: every word in one of its forms, and each
+ * phrase in a row — or, with `any`, as few as one of them.
+ */
+function ftsMatch(query: SearchQuery, any = false): string | undefined {
   const parts = requiredQueryWords(query).map((word) => {
     const options = word.terms.map((term) => `"${ftsTerm(term)}"`);
     if (word.prefix) options.push(`"${ftsTerm(word.word)}"*`);
@@ -90,7 +94,7 @@ function ftsMatch(query: SearchQuery): string | undefined {
   });
   for (const phrase of query.phrases)
     parts.push(`"${phrase.map(ftsTerm).join(' ')}"`);
-  return parts.length ? parts.join(' AND ') : undefined;
+  return parts.length ? parts.join(any ? ' OR ' : ' AND ') : undefined;
 }
 
 interface Filters {
@@ -360,14 +364,15 @@ function countFacets(
   };
 }
 
-/** One search, as the index answers it now. */
+/** One search, as the index answers it now; with `any`, for some of the words. */
 async function searchOnce(
   request: SearchRequest,
   store: SearchStore,
   text: string,
+  any = false,
 ): Promise<SearchResponse> {
   const query = parseSearchQuery(text, searchAnalyzer(), { typing: request.typing });
-  const match = ftsMatch(query);
+  const match = ftsMatch(query, any);
   const now = request.now ?? Date.now();
   const days = dayMatcher(text, now);
   if (!match && !days)
@@ -534,11 +539,21 @@ export async function runSearch(request: SearchRequest): Promise<SearchResponse>
   const store = useSearchStore();
   const building = searchIndexProgress();
   const response = await searchOnce(request, store, request.q);
+  const words = (text: string) => {
+    const query = parseSearchQuery(text, searchAnalyzer(), { typing: request.typing });
+    return requiredQueryWords(query).length + query.phrases.length;
+  };
   if (!response.total && response.query) {
     const other = searchAnalyzer().otherKeyboard(normalizeTermText(request.q));
     if (other && other !== normalizeTermText(request.q)) {
       const again = await searchOnce(request, store, other);
       if (again.total) return { ...again, keyboard: other, ...(building ? { building } : {}) };
+    }
+    // Not all the words together: what holds some of them, said so — the
+    // one word of several a text lacks need not leave a reader with nothing.
+    if (words(request.q) > 1) {
+      const some = await searchOnce(request, store, request.q, true);
+      if (some.total) return { ...some, partial: true, ...(building ? { building } : {}) };
     }
   }
   return building ? { ...response, building } : response;
@@ -548,10 +563,6 @@ export async function runSearch(request: SearchRequest): Promise<SearchResponse>
 const CACHE_LIMIT = 500;
 const cache = new Map<string, SearchResponse>();
 
-/**
- * `runSearch`, remembered: the last answers, each for the index's generation
- * it was made at, so an answer never outlives a change of what it shows.
- */
 /** The most places one result shows when asked for all of them. */
 const ALL_FINDS = 50;
 
@@ -593,6 +604,10 @@ export function findsOfResult(request: {
   return { finds: finds.slice(0, ALL_FINDS), more };
 }
 
+/**
+ * `runSearch`, remembered: the last answers, each for the index's generation
+ * it was made at, so an answer never outlives a change of what it shows.
+ */
 export async function cachedSearch(request: SearchRequest): Promise<SearchResponse> {
   const store = useSearchStore();
   const { now: _now, ...asked } = request;

@@ -570,6 +570,8 @@ export default defineI18nBase({
     search_all_results: (count) => `All results: ${count}`,
     search_keyboard: (read) =>
       `Found for “${read}”, the query as typed in the other keyboard layout.`,
+    search_partial:
+      'Not all the words were found together: here is what holds some of them.',
     search_building: (percent) =>
       `Search is still being prepared (${percent}%): some results may be missing.`,
     search_failed: 'Could not search. Try again.',

@@ -627,6 +627,8 @@ export default defineI18nModule({
     search_all_results: (count) => `Все результаты: ${count}`,
     search_keyboard: (read) =>
       `Найдено по «${read}» — так запрос читается в другой раскладке.`,
+    search_partial:
+      'Все слова вместе не нашлись — вот найденное хотя бы по одному из них.',
     search_building: (percent) =>
       `Поиск ещё готовится (${percent} %): часть найденного может не показаться.`,
     search_failed: 'Не удалось выполнить поиск. Попробуйте ещё раз.',

@@ -353,6 +353,9 @@ const countLine = computed(() => {
         <p v-if="search.keyboard" class="text-sm text-text-2">
           {{ phrase.search_keyboard(search.keyboard) }}
         </p>
+        <p v-if="search.partial" class="text-sm text-text-2">
+          {{ phrase.search_partial }}
+        </p>
         <p
           v-if="building !== undefined"
           class="flex items-center gap-xs text-sm text-text-2"

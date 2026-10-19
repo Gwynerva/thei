@@ -145,6 +145,11 @@ export interface SearchResponse {
    * is what the hits are for.
    */
   keyboard?: string;
+  /**
+   * Not every word was found together: the hits hold at least one of them,
+   * those holding more first.
+   */
+  partial?: boolean;
   total: number;
   groups: SearchGroup[];
   facets: SearchFacets;

@@ -432,6 +432,18 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
           p-1.5"
         aria-live="polite"
       >
+        <p
+          v-if="shown?.keyboard && rows.length"
+          class="px-xs pb-1 text-xs text-text-3"
+        >
+          {{ phrase.search_keyboard(shown.keyboard) }}
+        </p>
+        <p
+          v-if="shown?.partial && rows.length"
+          class="px-xs pb-1 text-xs text-text-3"
+        >
+          {{ phrase.search_partial }}
+        </p>
         <div
           v-if="rows.length"
           :id="listId"
@@ -483,12 +495,6 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
         </p>
         <p v-else-if="!query" class="px-xs py-sm text-sm text-text-3">
           {{ phrase.search_quick_hint }}
-        </p>
-        <p
-          v-if="shown?.keyboard && rows.length"
-          class="px-xs pt-1 text-xs text-text-3"
-        >
-          {{ phrase.search_keyboard(shown.keyboard) }}
         </p>
       </div>
 

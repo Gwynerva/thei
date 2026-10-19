@@ -416,6 +416,7 @@ export type LanguagePhrases = {
   search_all_of_kind: (count: number) => string;
   search_all_results: (count: number) => string;
   search_keyboard: (read: string) => string;
+  search_partial: string;
   search_building: (percent: number) => string;
   search_failed: string;
   search_quick_hint: string;

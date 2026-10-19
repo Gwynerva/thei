@@ -243,6 +243,14 @@ describe('the global search', () => {
     expect(findsOfResult({ q: 'облепиха', audience: 'public', ref: `diary-entry:${PRIVATE_DIARY}` })).toBeUndefined();
   });
 
+  it('falls back on some of the words, and says so', async () => {
+    const some = await search('шкурила бегемота');
+    expect(some.partial).toBe(true);
+    expect(titles(some)).toContain('Косплей на Шедоухарт');
+    expect((await search('шкурила рога')).partial).toBeUndefined();
+    expect((await search('бегемота')).total).toBe(0);
+  });
+
   it('puts first what is named exactly as typed', async () => {
     const groups = (await search('косплей')).groups;
     expect(groups[0]!.kind).toBe('tag');
