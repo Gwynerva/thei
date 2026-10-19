@@ -117,14 +117,14 @@ function reset() {
 <template>
   <div class="flex min-w-0 flex-col gap-md">
     <!-- Nothing to narrow by: said, rather than an empty column. -->
-    <p
+    <div
       v-if="!hasFilters"
-      class="flex items-start gap-xs rounded-normal border border-border-1
-        bg-bg-2/60 p-sm text-sm text-text-3"
+      class="flex flex-col items-center gap-xs rounded-normal border
+        border-border-1 bg-bg-2/60 px-sm py-md text-center text-sm text-text-3"
     >
-      <Icon name="filter" class="mt-0.5 shrink-0" aria-hidden="true" />
+      <Icon name="filter" class="text-3xl text-text-3/60" aria-hidden="true" />
       <span>{{ phrase.search_no_filters }}</span>
-    </p>
+    </div>
     <PublicCollapsibleSection v-if="!query" :title="phrase.search_filter_type">
       <div
         class="grid grid-cols-3 gap-1 rounded-normal bg-bg-3/60 p-1"
