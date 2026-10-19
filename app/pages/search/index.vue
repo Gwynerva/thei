@@ -66,13 +66,12 @@ if (resource.error.value && !refused)
   throw createResourceError(resource.error.value);
 if (refused && import.meta.server) {
   const event = useRequestEvent();
-  if (event) {
+  if (event)
     setResponseStatus(
       event,
       (resource.error.value as { statusCode: number }).statusCode,
     );
-    setResponseHeader(event, 'Retry-After', 1);
-  }
+  useResponseHeader('Retry-After').value = 1;
 }
 if (!refused && !resource.data.value)
   throw createResourceError({
