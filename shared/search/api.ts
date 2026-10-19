@@ -9,6 +9,7 @@ import type { SearchSegment } from './snippet';
  */
 export const SEARCH_KINDS = [
   'project',
+  'project-section',
   'event',
   'diary-entry',
   'page',
@@ -27,6 +28,7 @@ export type SearchFindWhere =
   | 'name'
   | 'summary'
   | 'heading'
+  | 'section'
   | 'text'
   | 'caption'
   | 'file'
@@ -60,6 +62,10 @@ export interface SearchHit {
   /** `project:<uuid>`, `diary-entry:<uuid>`, `file:<family>`… */
   ref: string;
   title: string;
+  /** Of a section: the project it is a part of. */
+  parent?: { title: string; href: string };
+  /** Of a file: what shows it first, which names one with no title. */
+  shownAt?: string;
   /** The title with the words found in it marked, when there are any. */
   titleSegments?: SearchSegment[];
   href: string;
@@ -70,6 +76,8 @@ export interface SearchHit {
   /** A period it covers, when it has one. */
   period?: { startDate: string; endDate: string };
   summary?: string;
+  /** The description with the words found in it marked, when there are any. */
+  summarySegments?: SearchSegment[];
   /** What stands for it on its cards, or a file's own preview. */
   media?: MediaDescriptor;
   /** Of a file: which one, of what kind and size. */
@@ -114,7 +122,13 @@ export type SearchAdminSection = (typeof SEARCH_ADMIN_SECTIONS)[number];
  */
 export type SearchAction =
   /** The diary of a day: open its entry, or begin it. */
-  | { type: 'diary'; date: string; today: boolean; exists: boolean; href: string }
+  | {
+      type: 'diary';
+      date: string;
+      today: boolean;
+      exists: boolean;
+      href: string;
+    }
   /** The entity the owner is looking at, in its editor or on the site. */
   | { type: 'edit' | 'view'; kind: SearchKind; title: string; href: string }
   /** What the owner saved last. */
@@ -129,14 +143,23 @@ export type SearchAction =
     }
   | { type: 'section'; section: SearchAdminSection; href: string }
   /** A new entity, named by the query. */
-  | { type: 'create'; kind: 'project' | 'event' | 'page'; title: string; href: string }
+  | {
+      type: 'create';
+      kind: 'project' | 'event' | 'page';
+      title: string;
+      href: string;
+    }
   /** The query, asked of the site's model. */
   | { type: 'ask-ai'; text: string };
 
 export interface SearchFacets {
   kinds: Partial<Record<SearchKind, number>>;
   years: { year: number; count: number }[];
-  tags: { tag: PublicTagSummary; count: number; state?: 'include' | 'exclude' }[];
+  tags: {
+    tag: PublicTagSummary;
+    count: number;
+    state?: 'include' | 'exclude';
+  }[];
 }
 
 export interface SearchResponse {

@@ -150,6 +150,18 @@ const accent = computed(() =>
               <Icon :name="SEARCH_KIND_ICONS[hit.kind]" class="shrink-0" />
               <span>{{ phrase.search_kind(hit.kind) }}</span>
             </span>
+            <!-- What it is a part of, a way to it of its own. -->
+            <TheiLink
+              v-if="hit.parent"
+              :to="hit.parent.href"
+              class="pointer-events-auto relative z-3 flex min-w-0 items-center
+                gap-1.5 rounded-xs text-text-2 transition focus-visible:ring-2
+                focus-visible:ring-accent focus-visible:outline-none
+                hocus:text-accent"
+            >
+              <Icon name="project" class="shrink-0" />
+              <span class="truncate">{{ publicText(hit.parent.title) }}</span>
+            </TheiLink>
             <span v-if="when" class="text-text-3">{{ when }}</span>
             <span v-if="facts" class="text-text-3">{{ facts }}</span>
             <Icon
@@ -182,27 +194,17 @@ const accent = computed(() =>
                 )
               "
             />
-            <Icon
+            <!-- The lock says it in words too: a stranger's eye has not
+                 learned it. -->
+            <span
               v-if="access"
-              :name="access.icon"
-              :aria-label="access.text"
-              role="img"
-              class="pointer-events-auto relative z-3 shrink-0 cursor-help
-                text-text-2"
+              class="pointer-events-auto relative z-3 flex cursor-help
+                items-center gap-1 text-text-2"
               :data-title-popup="access.text"
-            />
-            <TheiLink
-              v-if="hit.editHref"
-              :to="hit.editHref"
-              :aria-label="phrase.search_edit"
-              :data-title-popup="phrase.search_edit"
-              class="pointer-events-auto relative z-3 -my-1 flex size-6
-                items-center justify-center rounded-sm text-text-3 transition
-                focus-visible:ring-2 focus-visible:ring-accent
-                focus-visible:outline-none hocus:bg-bg-3 hocus:text-text-1"
             >
-              <Icon name="edit" />
-            </TheiLink>
+              <Icon :name="access.icon" class="shrink-0" aria-hidden="true" />
+              <span>{{ access.short }}</span>
+            </span>
           </span>
           <h3
             class="text-lg leading-snug font-bold tracking-tight wrap-break-word
@@ -221,9 +223,29 @@ const accent = computed(() =>
             class="-mx-[0.75em] line-clamp-2 px-[0.75em] text-sm leading-relaxed
               font-semibold text-text-2"
           >
-            {{ publicText(hit.summary) }}
+            <SearchSnippet
+              v-if="hit.summarySegments"
+              :segments="hit.summarySegments"
+            /><template v-else>{{ publicText(hit.summary) }}</template>
           </p>
         </div>
+        <!-- Its own corner, on a ground of its own: in the line of badges
+             it wrapped onto a line alone on a phone, and sank into the
+             picture. -->
+        <TheiLink
+          v-if="hit.editHref"
+          :to="hit.editHref"
+          :aria-label="phrase.search_edit"
+          :data-title-popup="phrase.search_edit"
+          class="absolute top-xs right-xs z-3 flex size-9 items-center
+            justify-center rounded-sm border border-border-1 bg-bg-2/85
+            text-base text-text-2 backdrop-blur-sm transition
+            focus-visible:ring-2 focus-visible:ring-accent
+            focus-visible:outline-none hocus:border-border-2 hocus:bg-bg-3
+            hocus:text-text-1"
+        >
+          <Icon name="edit" />
+        </TheiLink>
         <span
           v-if="isFile"
           class="pointer-events-none relative z-2 mr-sm flex size-18 shrink-0

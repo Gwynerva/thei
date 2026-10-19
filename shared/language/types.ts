@@ -398,6 +398,7 @@ export type LanguagePhrases = {
   search_tag_exclude: (tag: string) => string;
   search_tag_remove: (tag: string) => string;
   search_reset_filters: string;
+  search_filter_remove: (filter: string) => string;
   search_results_count: (projects: number, events: number) => string;
   search_empty: string;
   search_empty_description: string;
@@ -410,6 +411,8 @@ export type LanguagePhrases = {
   search_where_section: (title: string) => string;
   search_access_private: string;
   search_access_link: string;
+  search_access_private_short: string;
+  search_access_link_short: string;
   search_edit: string;
   search_more_finds: (count: number) => string;
   search_fewer_finds: string;
@@ -428,6 +431,7 @@ export type LanguagePhrases = {
   search_sort: string;
   search_sort_best: string;
   search_sort_new: string;
+  search_sort_old: string;
   search_no_filters: string;
   search_year_count: (year: number, count: number) => string;
   search_recent: string;
@@ -444,6 +448,7 @@ export type LanguagePhrases = {
   search_action_new_page: (title: string) => string;
   search_action_ask_ai: (text: string) => string;
   search_keys_choose: string;
+  search_keys_group: string;
   search_keys_open: string;
   search_keys_site: string;
   search_keys_edit: string;

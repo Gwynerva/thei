@@ -13,8 +13,12 @@ export interface SearchQuickRowData {
   title: string;
   /** The title with the words found marked. */
   titleSegments?: SearchSegment[];
+  /** What it is a part of, quiet after the title: a section's project. */
+  parent?: string;
   /** Its day or period, quiet after the title. */
   when?: string;
+  /** Its years, for a phone's line that has no room for its days. */
+  years?: string;
   /** Who else may see it, for the owner. */
   access?: { icon: IconName; text: string };
   /** Where the words were found, before the words. */
@@ -22,6 +26,8 @@ export interface SearchQuickRowData {
   segments?: SearchSegment[];
   /** A quieter line, when there are no words to show. */
   detail?: string;
+  /** That line with the words found in it marked. */
+  detailSegments?: SearchSegment[];
   /** Other places the words were found at, on a line of their own. */
   more?: number;
   media?: MediaDescriptor;
@@ -111,6 +117,14 @@ defineEmits<{
               :segments="row.titleSegments"
             /><template v-else>{{ row.title }}</template></span
           >
+          <!-- Gives way before the title does. No room for the halo on the
+               left: there it would cloud the title's last letters. -->
+          <span
+            v-if="row.parent"
+            class="-my-[0.75em] -mr-[0.75em] min-w-0 shrink-[1000] truncate
+              py-[0.75em] pr-[0.75em] text-xs font-normal text-text-3"
+            >· {{ row.parent }}</span
+          >
           <Icon
             v-if="row.access"
             :name="row.access.icon"
@@ -118,12 +132,18 @@ defineEmits<{
             role="img"
             class="shrink-0 text-sm text-text-2"
           />
-          <!-- On a phone the title keeps the line to itself. -->
+          <!-- On a phone, where the days have no room, its years. -->
           <span
             v-if="row.when"
             class="-m-[0.75em] shrink-0 p-[0.75em] text-xs font-normal
               text-text-3 max-sm:hidden"
             >{{ row.when }}</span
+          >
+          <span
+            v-if="row.years"
+            class="-m-[0.75em] shrink-0 p-[0.75em] text-xs font-normal
+              text-text-3 sm:hidden"
+            >{{ row.years }}</span
           >
           <!-- Its own target inside the row, kept from the row's link. -->
           <span
@@ -133,26 +153,35 @@ defineEmits<{
             :data-title-popup="phrase.search_edit"
             class="ml-auto flex size-7 shrink-0 items-center justify-center
               rounded-sm text-base font-normal text-text-3 transition-colors
-              hover:bg-bg-4 hover:text-text-1 max-sm:size-9"
+              hover:bg-bg-4 hover:text-text-1 max-sm:-my-1.5 max-sm:size-10
+              max-sm:border max-sm:border-border-2 max-sm:bg-bg-2/80
+              max-sm:text-lg max-sm:text-text-2"
             data-row-other
             @click.prevent="$emit('other')"
           >
             <Icon :name="row.otherIcon" aria-hidden="true" />
           </span>
         </span>
+        <!-- Two lines on a phone, clamped: a clamped box shows whatever its
+             padding holds, so it has no room for the halo there, and stops
+             short of the picture instead. -->
         <span
           v-if="row.segments?.length || row.detail || row.place"
           class="flex min-w-0 items-baseline gap-1.5 text-xs text-text-3"
+          :class="{ 'max-sm:pr-8': row.media && !row.preview }"
         >
           <span
-            class="-m-[0.75em] min-w-0 p-[0.75em] max-sm:line-clamp-2
-              sm:truncate"
-            ><span v-if="row.place" class="text-text-3/80"
+            class="min-w-0 max-sm:line-clamp-2 sm:-m-[0.75em] sm:truncate
+              sm:p-[0.75em]"
+            ><span v-if="row.place" class="text-text-3"
               >{{ row.place }}{{ row.segments?.length ? ': ' : '' }}</span
             ><SearchSnippet
               v-if="row.segments?.length"
               :segments="row.segments"
               class="text-text-2"
+            /><SearchSnippet
+              v-else-if="row.detailSegments"
+              :segments="row.detailSegments"
             /><template v-else-if="row.detail">{{ row.detail }}</template></span
           >
         </span>
@@ -180,7 +209,7 @@ defineEmits<{
       </span>
       <span
         v-if="row.media && row.preview"
-        class="relative mr-xs size-10 shrink-0 overflow-hidden rounded-xs border
+        class="relative mr-xs size-12 shrink-0 overflow-hidden rounded-xs border
           border-border-1 bg-bg-3"
       >
         <Media

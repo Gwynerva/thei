@@ -17,8 +17,8 @@ export interface PublicSearchFilters {
   exclude: string[];
   /** Only what falls in this year. */
   year?: number;
-  /** One kind read by its days, newest first, rather than best first. */
-  sort?: 'date';
+  /** One kind read by its days, newest or oldest first, rather than best first. */
+  sort?: 'new' | 'old';
 }
 
 export const PUBLIC_SEARCH_QUERY_MAX_LENGTH = SEARCH_QUERY_MAX_LENGTH;
@@ -57,7 +57,9 @@ export function parsePublicSearchFilters(
     tags,
     exclude: slugList(query.exclude).filter((slug) => !tags.includes(slug)),
     ...(Number.isInteger(year) && year > 999 && year < 10000 ? { year } : {}),
-    ...(queryString(query.sort) === 'date' ? { sort: 'date' as const } : {}),
+    ...(queryString(query.sort) === 'new' || queryString(query.sort) === 'old'
+      ? { sort: queryString(query.sort) as 'new' | 'old' }
+      : {}),
     page: Number.isInteger(page) && page > 1 ? page : 1,
   };
 }

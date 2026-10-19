@@ -80,8 +80,8 @@ rather than from a switch.
   button that creates it (`app/components/admin/AdminEmptyList.vue`).
 - A search that finds nothing shows `face-dead`, says that nothing matched and
   offers to clear the search. The public site's `PublicEmptyState` uses the
-  same face; its `icon` says what else is missing — `filter` where the search
-  has nothing to narrow its results by.
+  same face; its `icon` says what else is missing — `tune`, the icon of the
+  filters themselves, where the search has nothing to narrow its results by.
 
 ## Suggest in place
 

@@ -55,8 +55,8 @@ export interface SearchRequest {
   showcase?: boolean;
   cv?: boolean;
   year?: number;
-  /** With one kind: by its days, newest first, rather than best first. */
-  sort?: 'date';
+  /** With one kind: by its days, newest or oldest first, rather than best first. */
+  sort?: 'new' | 'old';
   /** Only what falls on these days or between them. */
   from?: string;
   to?: string;
@@ -82,7 +82,9 @@ interface DocRow {
   card: string;
 }
 
-const WEIGHTS = SEARCH_FIELDS.map((field) => SEARCH_FIELD_WEIGHTS[field]).join(', ');
+const WEIGHTS = SEARCH_FIELDS.map((field) => SEARCH_FIELD_WEIGHTS[field]).join(
+  ', ',
+);
 const RELATIVE_DAYS: Record<string, number> = {
   сегодня: 0,
   вчера: -1,
@@ -102,8 +104,16 @@ function ftsMatch(query: SearchQuery, any = false): string | undefined {
     if (word.prefix) options.push(`"${ftsTerm(word.word)}"*`);
     return options.length > 1 ? `(${options.join(' OR ')})` : options[0]!;
   });
+  // A word written with a capital stands in the index twice, as its stem and
+  // as written (`searchIndexTerms`), so the words of a phrase are asked for
+  // near one another rather than strictly in a row; the order is checked
+  // where the words are marked.
   for (const phrase of query.phrases)
-    parts.push(`"${phrase.map(ftsTerm).join(' ')}"`);
+    parts.push(
+      phrase.length > 1
+        ? `NEAR(${phrase.map((term) => `"${ftsTerm(term)}"`).join(' ')}, ${phrase.length})`
+        : `"${ftsTerm(phrase[0]!)}"`,
+    );
   return parts.length ? parts.join(any ? ' OR ' : ' AND ') : undefined;
 }
 
@@ -116,7 +126,9 @@ function tagUuidsBySlug(slugs: string[] | undefined): string[] {
   if (!slugs?.length) return [];
   const { rawDb } = THEI_SERVER.useDb();
   return slugs.flatMap((slug) => {
-    const row = rawDb.prepare('SELECT tagUuid FROM tags WHERE slug = ?').get(slug) as { tagUuid: string } | undefined;
+    const row = rawDb
+      .prepare('SELECT tagUuid FROM tags WHERE slug = ?')
+      .get(slug) as { tagUuid: string } | undefined;
     return row ? [row.tagUuid] : [];
   });
 }
@@ -126,11 +138,15 @@ function baseFilters(request: SearchRequest, store: SearchStore): Filters {
   const sql: string[] = ['d.visibleFrom <= ?'];
   const params: unknown[] = [request.now ?? Date.now()];
   for (const tag of tagUuidsBySlug(request.tags)) {
-    sql.push('EXISTS (SELECT 1 FROM doc_tags t WHERE t.doc = d.id AND t.tag = ?)');
+    sql.push(
+      'EXISTS (SELECT 1 FROM doc_tags t WHERE t.doc = d.id AND t.tag = ?)',
+    );
     params.push(tag);
   }
   for (const tag of tagUuidsBySlug(request.exclude)) {
-    sql.push('NOT EXISTS (SELECT 1 FROM doc_tags t WHERE t.doc = d.id AND t.tag = ?)');
+    sql.push(
+      'NOT EXISTS (SELECT 1 FROM doc_tags t WHERE t.doc = d.id AND t.tag = ?)',
+    );
     params.push(tag);
   }
   if (request.showcase) sql.push("(d.kind <> 'project' OR d.showcase = 1)");
@@ -147,7 +163,11 @@ function baseFilters(request: SearchRequest, store: SearchStore): Filters {
   return { sql: sql.join(' AND '), params };
 }
 
-function narrowed(base: Filters, request: SearchRequest, kind = request.kind): Filters {
+function narrowed(
+  base: Filters,
+  request: SearchRequest,
+  kind = request.kind,
+): Filters {
   const sql = [base.sql];
   const params = [...base.params];
   if (kind) {
@@ -162,7 +182,10 @@ function narrowed(base: Filters, request: SearchRequest, kind = request.kind): F
 }
 
 /** The day a query names, when it names one or a stretch of them. */
-function dayMatcher(q: string, now: number): ((date: string) => number | undefined) | undefined {
+function dayMatcher(
+  q: string,
+  now: number,
+): ((date: string) => number | undefined) | undefined {
   const word = normalizeTermText(q.trim());
   if (word in RELATIVE_DAYS) {
     const day = utcDayOf(now + RELATIVE_DAYS[word]! * 24 * 60 * 60 * 1000);
@@ -173,11 +196,17 @@ function dayMatcher(q: string, now: number): ((date: string) => number | undefin
 }
 
 /** Whether a unit holds a phrase: its terms in a row. */
-function phraseSpans(tokens: ReturnType<typeof searchTokens>, phrase: string[]) {
+function phraseSpans(
+  tokens: ReturnType<typeof searchTokens>,
+  phrase: string[],
+) {
   const spans: { start: number; end: number }[] = [];
   for (let at = 0; at + phrase.length <= tokens.length; at++)
     if (phrase.every((term, offset) => tokens[at + offset]!.term === term))
-      spans.push({ start: tokens[at]!.start, end: tokens[at + phrase.length - 1]!.end });
+      spans.push({
+        start: tokens[at]!.start,
+        end: tokens[at + phrase.length - 1]!.end,
+      });
   return spans;
 }
 
@@ -211,11 +240,20 @@ export function findsOf(
   // a query made of nothing else: «где я была».
   const allStop = words.every((word) => word.stop);
   const counts = (word: (typeof words)[number]) => !word.stop || allStop;
-  const probes = words.map((word) => word.word.slice(0, Math.max(2, Math.min(word.word.length, 3))));
-  const found: { unit: SearchUnit; order: number; score: number; spans: { start: number; end: number }[]; words: string[] }[] = [];
+  const probes = words.map((word) =>
+    word.word.slice(0, Math.max(2, Math.min(word.word.length, 3))),
+  );
+  const found: {
+    unit: SearchUnit;
+    order: number;
+    score: number;
+    spans: { start: number; end: number }[];
+    words: string[];
+  }[] = [];
   units.forEach((unit, order) => {
     const lower = normalizeTermText(unit.text);
-    if (!probes.some((probe) => lower.includes(probe)) && !query.phrases.length) return;
+    if (!probes.some((probe) => lower.includes(probe)) && !query.phrases.length)
+      return;
     const tokens = searchTokens(unit.text, analyzer, 'index');
     const spans: { start: number; end: number }[] = [];
     const answered = new Set<number>();
@@ -231,7 +269,8 @@ export function findsOf(
         if (!counts(word)) return;
         spans.push({ start: token.start, end: token.end });
         const written = unit.text.slice(token.start, token.end);
-        if (marked.length < 3 && !marked.includes(written)) marked.push(written);
+        if (marked.length < 3 && !marked.includes(written))
+          marked.push(written);
       });
       if (answeredHere > 0 && answeredHere === previous + 1) together = true;
       previous = answeredHere;
@@ -240,9 +279,12 @@ export function findsOf(
       const at = phraseSpans(tokens, phrase);
       if (at.length) answered.add(words.length + query.phrases.indexOf(phrase));
       spans.push(...at);
-      if (at[0] && !marked.length) marked.push(unit.text.slice(at[0].start, at[0].end));
+      if (at[0] && !marked.length)
+        marked.push(unit.text.slice(at[0].start, at[0].end));
     }
-    const meaningful = [...answered].filter((at) => at >= words.length || counts(words[at]!)).length;
+    const meaningful = [...answered].filter(
+      (at) => at >= words.length || counts(words[at]!),
+    ).length;
     if (!meaningful) return;
     found.push({
       unit,
@@ -268,10 +310,13 @@ export function findsOf(
   for (const item of distinct.slice(0, limit)) {
     const { unit } = item;
     const at = placeHref(document, unit.place ?? {});
-    const plain = unit.where === 'title' || unit.where === 'summary' || unit.where === 'name';
+    const plain =
+      unit.where === 'title' ||
+      unit.where === 'summary' ||
+      unit.where === 'name';
     shown.push({
       where: unit.where,
-      ...(unit.place?.section && unit.where !== 'heading'
+      ...(unit.place?.section && unit.where !== 'section'
         ? { label: unit.place.section.title }
         : unit.place?.relation
           ? { label: unit.place.relation.title }
@@ -281,9 +326,15 @@ export function findsOf(
               ? { label: unit.place.file.title }
               : {}),
       href: plain || unit.hidden ? document.href : textFragment(at, item.words),
-      segments: unit.hidden ? [] : snippetSegments(unit.text, item.spans, SEARCH_SNIPPET_LENGTH, lead),
-      ...(unit.media && (unit.where === 'file' || unit.where === 'caption') ? { media: unit.media } : {}),
-      ...(withPlace && unit.place && (unit.place.section || unit.place.block || unit.place.file)
+      segments: unit.hidden
+        ? []
+        : snippetSegments(unit.text, item.spans, SEARCH_SNIPPET_LENGTH, lead),
+      ...(unit.media && (unit.where === 'file' || unit.where === 'caption')
+        ? { media: unit.media }
+        : {}),
+      ...(withPlace &&
+      unit.place &&
+      (unit.place.section || unit.place.block || unit.place.file)
         ? {
             place: {
               ...(unit.place.section ? { section: unit.place.section.id } : {}),
@@ -302,17 +353,38 @@ export function findsOf(
 }
 
 /**
- * A title with the words of the query that stand in it marked, as a find's
- * words are; none where it holds none.
+ * The words of the query a title or a description holds, marked as a find's
+ * words are, and how many of those that count it holds: a result named by
+ * what was typed is the one sought before one that only says it somewhere.
  */
-function markedTitle(title: string, query: SearchQuery): SearchSegment[] | undefined {
-  if (!title) return undefined;
+function titleWords(
+  title: string | undefined,
+  query: SearchQuery,
+): { segments?: SearchSegment[]; held: number; of: number } {
   const allStop = query.words.every((word) => word.stop);
   const words = query.words.filter((word) => !word.stop || allStop);
-  const spans = searchTokens(title, searchAnalyzer(), 'index')
-    .filter((token) => words.some((word) => answersQueryWord(token, word)))
+  const of = words.length + query.phrases.length;
+  if (!title) return { held: 0, of };
+  const tokens = searchTokens(title, searchAnalyzer(), 'index');
+  const held = new Set<number>();
+  const spans = tokens
+    .filter((token) => {
+      const at = words.findIndex((word) => answersQueryWord(token, word));
+      if (at >= 0) held.add(at);
+      return at >= 0;
+    })
     .map((token) => ({ start: token.start, end: token.end }));
-  return spans.length ? markedSegments(title, spans) : undefined;
+  query.phrases.forEach((phrase, at) => {
+    const found = phraseSpans(tokens, phrase);
+    if (found.length) held.add(words.length + at);
+    spans.push(...found);
+  });
+  spans.sort((a, b) => a.start - b.start);
+  return {
+    ...(spans.length ? { segments: markedSegments(title, spans) } : {}),
+    held: held.size,
+    of,
+  };
 }
 
 function hitOf(row: DocRow, finds: SearchFind[], more: number): SearchHit {
@@ -321,8 +393,13 @@ function hitOf(row: DocRow, finds: SearchFind[], more: number): SearchHit {
     kind: row.kind,
     // A file is named by the asset its places show: a stranger's slug, never
     // the family's storage id.
-    ref: row.kind === 'file' && card.file ? `file:${card.file.assetUuid}` : row.ref,
+    ref:
+      row.kind === 'file' && card.file
+        ? `file:${card.file.assetUuid}`
+        : row.ref,
     title: row.title,
+    ...(card.parent ? { parent: card.parent } : {}),
+    ...(card.shownAt ? { shownAt: card.shownAt } : {}),
     href: card.href,
     ...(card.editHref ? { editHref: card.editHref } : {}),
     ...(row.date ? { date: row.date } : {}),
@@ -346,10 +423,15 @@ async function tagFacets(
   const included = new Set(tagUuidsBySlug(request.tags));
   const excluded = new Set(tagUuidsBySlug(request.exclude));
   const counts = new Map(rows.map((row) => [row.tag, row.n]));
-  for (const tag of [...included, ...excluded]) if (!counts.has(tag)) counts.set(tag, 0);
+  for (const tag of [...included, ...excluded])
+    if (!counts.has(tag)) counts.set(tag, 0);
   if (!counts.size) return [];
   const { db, schema } = THEI_SERVER.useDb();
-  const tags = db.select().from(schema.tags).all().filter((tag) => counts.has(tag.tagUuid));
+  const tags = db
+    .select()
+    .from(schema.tags)
+    .all()
+    .filter((tag) => counts.has(tag.tagUuid));
   const summaries = await buildPublicTags(
     tags.map((tag) => ({
       tagUuid: tag.tagUuid,
@@ -369,7 +451,11 @@ async function tagFacets(
           ? { state: 'exclude' as const }
           : {}),
     }))
-    .sort((left, right) => right.count - left.count || left.tag.title.localeCompare(right.tag.title));
+    .sort(
+      (left, right) =>
+        right.count - left.count ||
+        left.tag.title.localeCompare(right.tag.title),
+    );
 }
 
 /**
@@ -391,7 +477,24 @@ function countFacets(
   }
   return {
     kinds,
-    years: [...years].map(([year, count]) => ({ year, count })).sort((a, b) => a.year - b.year),
+    years: [...years]
+      .map(([year, count]) => ({ year, count }))
+      .sort((a, b) => a.year - b.year),
+  };
+}
+
+/**
+ * A query made only of words that hold a sentence together — «где я была» —
+ * says nothing but in their order: it is read as a phrase, or every text with
+ * an «я» in it would answer.
+ */
+function asPhrase(query: SearchQuery): SearchQuery {
+  if (query.words.length < 2 || query.words.some((word) => !word.stop))
+    return query;
+  return {
+    ...query,
+    words: [],
+    phrases: [...query.phrases, query.words.map((word) => word.term)],
   };
 }
 
@@ -402,24 +505,43 @@ function countFacets(
  */
 const KIND_WORDS: Partial<Record<SearchKind, string[]>> = {
   file: [
-    'фото', 'фотка', 'фотография', 'снимок', 'картинка', 'изображение',
-    'видео', 'ролик', 'файл', 'скан', 'photo', 'picture', 'image', 'video',
-    'file', 'scan',
+    'фото',
+    'фотка',
+    'фотография',
+    'снимок',
+    'картинка',
+    'изображение',
+    'видео',
+    'ролик',
+    'файл',
+    'скан',
+    'photo',
+    'picture',
+    'image',
+    'video',
+    'file',
+    'scan',
   ],
   'diary-entry': ['дневник', 'diary'],
   project: ['проект', 'project'],
+  'project-section': ['раздел', 'этап', 'section', 'stage'],
   event: ['событие', 'event'],
   page: ['страница', 'page'],
   tag: ['тег', 'tag'],
 };
 const kindTerms = new Map<string, Map<string, SearchKind>>();
 
-function kindOfWord(word: SearchQuery['words'][number]): SearchKind | undefined {
+function kindOfWord(
+  word: SearchQuery['words'][number],
+): SearchKind | undefined {
   const analyzer = searchAnalyzer();
   let terms = kindTerms.get(analyzer.id);
   if (!terms) {
     terms = new Map();
-    for (const [kind, words] of Object.entries(KIND_WORDS) as [SearchKind, string[]][])
+    for (const [kind, words] of Object.entries(KIND_WORDS) as [
+      SearchKind,
+      string[],
+    ][])
       for (const each of words) terms.set(analyzer.read(each).term, kind);
     kindTerms.set(analyzer.id, terms);
   }
@@ -431,14 +553,24 @@ function kindOfWord(word: SearchQuery['words'][number]): SearchKind | undefined 
  * insisting on that word. None when the word stands alone: «фото» is then
  * a word like any other.
  */
-function kindHint(query: SearchQuery): { kind?: SearchKind; query: SearchQuery } {
-  const named = query.words.map((word) => (word.stop ? undefined : kindOfWord(word)));
+function kindHint(query: SearchQuery): {
+  kind?: SearchKind;
+  query: SearchQuery;
+} {
+  const named = query.words.map((word) =>
+    word.stop ? undefined : kindOfWord(word),
+  );
   const others = query.words.filter((word, at) => !word.stop && !named[at]);
   const kind = named.find(Boolean);
   if (!kind || !others.length) return { query };
   return {
     kind,
-    query: { ...query, words: query.words.map((word, at) => (named[at] ? { ...word, stop: true } : word)) },
+    query: {
+      ...query,
+      words: query.words.map((word, at) =>
+        named[at] ? { ...word, stop: true } : word,
+      ),
+    },
   };
 }
 
@@ -449,7 +581,11 @@ async function searchOnce(
   text: string,
   any = false,
 ): Promise<SearchResponse> {
-  const hint = kindHint(parseSearchQuery(text, searchAnalyzer(), { typing: request.typing }));
+  const hint = kindHint(
+    asPhrase(
+      parseSearchQuery(text, searchAnalyzer(), { typing: request.typing }),
+    ),
+  );
   const query = hint.query;
   const match = ftsMatch(query, any);
   const now = request.now ?? Date.now();
@@ -458,7 +594,9 @@ async function searchOnce(
     return runCatalogue(
       {
         q: '',
-        ...(request.kind === 'project' || request.kind === 'event' ? { type: request.kind } : {}),
+        ...(request.kind === 'project' || request.kind === 'event'
+          ? { type: request.kind }
+          : {}),
         showcase: Boolean(request.showcase),
         cv: Boolean(request.cv),
         tags: request.tags ?? [],
@@ -473,19 +611,34 @@ async function searchOnce(
   const from = `${table} JOIN docs d ON d.id = ${table}.rowid`;
   const textRows = match
     ? (store.db
-        .prepare(`SELECT d.kind, d.year, count(*) AS n FROM ${from} WHERE ${table} MATCH ? AND ${facetFilter.sql} GROUP BY d.kind, d.year`)
-        .all(match, ...facetFilter.params) as { kind: SearchKind; year: number | null; n: number }[])
+        .prepare(
+          `SELECT d.kind, d.year, count(*) AS n FROM ${from} WHERE ${table} MATCH ? AND ${facetFilter.sql} GROUP BY d.kind, d.year`,
+        )
+        .all(match, ...facetFilter.params) as {
+        kind: SearchKind;
+        year: number | null;
+        n: number;
+      }[])
     : [];
   // A query that names a day finds the diary of that day, whatever it says.
   const dayRows = days
     ? (
         store.db
-          .prepare(`SELECT d.id, d.kind, d.ref, d.title, d.date, d.card FROM docs d WHERE d.audience = ? AND d.kind = 'diary-entry' AND ${base.sql}`)
+          .prepare(
+            `SELECT d.id, d.kind, d.ref, d.title, d.date, d.card FROM docs d WHERE d.audience = ? AND d.kind = 'diary-entry' AND ${base.sql}`,
+          )
           .all(request.audience, ...base.params) as DocRow[]
       )
         .map((row) => ({ row, rank: days(row.date ?? '') }))
-        .filter((item): item is { row: DocRow; rank: number } => item.rank !== undefined)
-        .sort((a, b) => a.rank - b.rank || (b.row.date ?? '').localeCompare(a.row.date ?? ''))
+        .filter(
+          (item): item is { row: DocRow; rank: number } =>
+            item.rank !== undefined,
+        )
+        .sort(
+          (a, b) =>
+            a.rank - b.rank ||
+            (b.row.date ?? '').localeCompare(a.row.date ?? ''),
+        )
         .map((item) => item.row)
     : [];
   const dayIds = new Set(dayRows.map((row) => row.id));
@@ -498,18 +651,30 @@ async function searchOnce(
             `SELECT d.id FROM ${from} WHERE ${table} MATCH ? AND d.kind = 'diary-entry' AND ${facetFilter.sql}${year}`,
           )
           .pluck()
-          .all(match, ...facetFilter.params, ...(request.year ? [request.year] : [])) as number[])
+          .all(
+            match,
+            ...facetFilter.params,
+            ...(request.year ? [request.year] : []),
+          ) as number[])
       : [];
     const daysInYear = dayRows
-      .filter((row) => !request.year || Number(row.date?.slice(0, 4)) === request.year)
+      .filter(
+        (row) =>
+          !request.year || Number(row.date?.slice(0, 4)) === request.year,
+      )
       .map((row) => row.id);
     const union = new Set([...textDiary, ...daysInYear]);
     facets.kinds['diary-entry'] = union.size;
   }
   const tagRows = match
     ? (store.db
-        .prepare(`SELECT t.tag, count(*) AS n FROM ${from} JOIN doc_tags t ON t.doc = d.id WHERE ${table} MATCH ? AND ${narrowed(base, request).sql} GROUP BY t.tag`)
-        .all(match, ...narrowed(base, request).params) as { tag: string; n: number }[])
+        .prepare(
+          `SELECT t.tag, count(*) AS n FROM ${from} JOIN doc_tags t ON t.doc = d.id WHERE ${table} MATCH ? AND ${narrowed(base, request).sql} GROUP BY t.tag`,
+        )
+        .all(match, ...narrowed(base, request).params) as {
+        tag: string;
+        n: number;
+      }[])
     : [];
 
   const findsLimit = request.quick ? 1 : PAGE_FINDS;
@@ -527,9 +692,12 @@ async function searchOnce(
       .join(' ');
   const typedTerms = termsOf(query.text);
   const exact = (title: string) =>
-    Boolean(typed) && (searchKey(title) === typed || termsOf(title) === typedTerms);
+    Boolean(typed) &&
+    (searchKey(title) === typed || termsOf(title) === typedTerms);
   // Read by days only within one kind: a page of it, as the reader asked.
-  const byDate = request.sort === 'date' && Boolean(request.kind);
+  const byDate = Boolean(request.sort && request.kind);
+  // The results whose names hold every word, by ref: their kind comes up.
+  const fullyNamed = new Set<string>();
   const hydrate = (rows: DocRow[], keep = rows.length): SearchHit[] =>
     rows
       .map((row, order) => {
@@ -544,21 +712,52 @@ async function searchOnce(
           request.quick ? QUICK_SNIPPET_LEAD : SEARCH_SNIPPET_LEAD,
         );
         const day = dayIds.has(row.id);
-        if (day) finds.unshift({ where: 'day', label: row.date ?? '', href: card.href, segments: [] });
-        // The very name typed is the one sought, whatever else says the words.
+        if (day)
+          finds.unshift({
+            where: 'day',
+            label: row.date ?? '',
+            href: card.href,
+            segments: [],
+          });
+        // The very name typed is the one sought, whatever else says the words;
+        // then a name that holds them all, then one that holds some.
         const named = exact(row.title);
         const hit = hitOf(row, finds.slice(0, findsLimit), more);
-        const titleSegments = row.kind === 'diary-entry' ? undefined : markedTitle(row.title, query);
+        // A file with no title is called by its description.
+        const shownTitle =
+          row.kind === 'diary-entry'
+            ? ''
+            : row.title || (row.kind === 'file' ? card.summary : '');
+        const inTitle = titleWords(shownTitle, query);
+        const inSummary =
+          row.title && card.summary
+            ? titleWords(card.summary, query)
+            : undefined;
+        const whole = inTitle.held > 0 && inTitle.held === inTitle.of;
+        if (whole) fullyNamed.add(hit.ref);
+        const naming = whole ? 12 : inTitle.held * 4;
         return {
-          hit: titleSegments ? { ...hit, titleSegments } : hit,
+          hit: {
+            ...hit,
+            ...(inTitle.segments ? { titleSegments: inTitle.segments } : {}),
+            ...(inSummary?.segments
+              ? { summarySegments: inSummary.segments }
+              : {}),
+          },
           order,
-          closeness: day || named ? 100 : closeness,
+          closeness: day || named ? 100 : closeness + naming,
         };
       })
-      .sort((a, b) => (byDate ? 0 : b.closeness - a.closeness) || a.order - b.order)
+      .sort(
+        (a, b) => (byDate ? 0 : b.closeness - a.closeness) || a.order - b.order,
+      )
       .slice(0, keep)
       .map((item) => item.hit);
-  const ranked = (kind: SearchKind, limit: number, offset: number): DocRow[] => {
+  const ranked = (
+    kind: SearchKind,
+    limit: number,
+    offset: number,
+  ): DocRow[] => {
     const filters = narrowed(base, request, kind);
     // The diary of a day the query names comes first, then the text's hits.
     const mergesDays = kind === 'diary-entry' && dayRows.length > 0;
@@ -567,7 +766,7 @@ async function searchOnce(
           .prepare(
             `SELECT d.id, d.kind, d.ref, d.title, d.date, d.card FROM ${from}
              WHERE ${table} MATCH ? AND ${filters.sql}
-             ORDER BY ${byDate ? 'd.date IS NULL, d.date DESC' : `bm25(${table}, ${WEIGHTS})`} LIMIT ? OFFSET ?`,
+             ORDER BY ${byDate ? `d.date IS NULL, d.date ${request.sort === 'old' ? 'ASC' : 'DESC'}` : `bm25(${table}, ${WEIGHTS})`} LIMIT ? OFFSET ?`,
           )
           .all(
             match,
@@ -577,7 +776,12 @@ async function searchOnce(
           ) as DocRow[])
       : [];
     if (!mergesDays) return textHits;
-    const merged = [...dayRows.filter((row) => !request.year || Number(row.date?.slice(0, 4)) === request.year)];
+    const merged = [
+      ...dayRows.filter(
+        (row) =>
+          !request.year || Number(row.date?.slice(0, 4)) === request.year,
+      ),
+    ];
     for (const row of textHits) if (!dayIds.has(row.id)) merged.push(row);
     return merged.slice(offset, offset + limit);
   };
@@ -593,24 +797,40 @@ async function searchOnce(
     page = pagination.page;
     pageCount = pagination.pageCount;
     const offset = request.offset ?? (page - 1) * size;
-    const rows = total && offset < total ? ranked(request.kind, size, offset) : [];
-    groups = rows.length ? [{ kind: request.kind, total, hits: hydrate(rows) }] : [];
+    const rows =
+      total && offset < total ? ranked(request.kind, size, offset) : [];
+    groups = rows.length
+      ? [{ kind: request.kind, total, hits: hydrate(rows) }]
+      : [];
   } else {
     groups = kinds.map((kind) => ({
       kind,
       total: facets.kinds[kind] ?? 0,
       hits: hydrate(
-        ranked(kind, Math.max(SEARCH_GROUP_CANDIDATES, (request.groupSize ?? 0) * 2), 0),
+        ranked(
+          kind,
+          Math.max(SEARCH_GROUP_CANDIDATES, (request.groupSize ?? 0) * 2),
+          0,
+        ),
         request.groupSize ?? SEARCH_GROUP_SIZE,
       ),
     }));
     // A result named exactly as typed brings its kind to the top: «где я
     // была» is the page of that name before the projects that say the words.
-    // A kind the query names comes first but for that.
-    const named = groups.findIndex((group) => group.kind === hint.kind && group.hits.length);
-    if (named > 0) groups.unshift(...groups.splice(named, 1));
-    const first = groups.findIndex((group) => group.hits[0] && exact(group.hits[0].title));
-    if (first > 0) groups.unshift(...groups.splice(first, 1));
+    // A kind the query names comes next, then kinds whose best result holds
+    // every word in its name: «пластика» finds the section «Рога из
+    // пластика» before the project that only lists it.
+    const rank = (group: SearchGroup) => {
+      const top = group.hits[0];
+      if (!top) return 0;
+      if (exact(top.title)) return 3;
+      if (group.kind === hint.kind) return 2;
+      return fullyNamed.has(top.ref) ? 1 : 0;
+    };
+    groups = groups
+      .map((group, order) => ({ group, order, rank: rank(group) }))
+      .sort((a, b) => b.rank - a.rank || a.order - b.order)
+      .map((item) => item.group);
   }
   const total = request.kind
     ? (facets.kinds[request.kind] ?? 0)
@@ -630,30 +850,35 @@ async function searchOnce(
  * query reads as typed on the other keyboard, that is searched instead and
  * said in `keyboard`.
  */
-export async function runSearch(request: SearchRequest): Promise<SearchResponse> {
+export async function runSearch(
+  request: SearchRequest,
+): Promise<SearchResponse> {
   const store = useSearchStore();
   const building = searchIndexProgress();
   const response = await searchOnce(request, store, request.q);
   const words = (text: string) => {
-    const query = parseSearchQuery(text, searchAnalyzer(), { typing: request.typing });
+    const query = parseSearchQuery(text, searchAnalyzer(), {
+      typing: request.typing,
+    });
     return requiredQueryWords(query).length + query.phrases.length;
   };
   if (!response.total && response.query) {
     const other = searchAnalyzer().otherKeyboard(normalizeTermText(request.q));
     if (other && other !== normalizeTermText(request.q)) {
       const again = await searchOnce(request, store, other);
-      if (again.total) return { ...again, keyboard: other, ...(building ? { building } : {}) };
+      if (again.total)
+        return { ...again, keyboard: other, ...(building ? { building } : {}) };
     }
     // Not all the words together: what holds some of them, said so — the
     // one word of several a text lacks need not leave a reader with nothing.
     if (words(request.q) > 1) {
       const some = await searchOnce(request, store, request.q, true);
-      if (some.total) return { ...some, partial: true, ...(building ? { building } : {}) };
+      if (some.total)
+        return { ...some, partial: true, ...(building ? { building } : {}) };
     }
   }
   return building ? { ...response, building } : response;
 }
-
 
 const CACHE_LIMIT = 500;
 const cache = new Map<string, SearchResponse>();
@@ -677,7 +902,9 @@ export function findsOfResult(request: {
   type Row = { id: number; card: string; visibleFrom: number };
   // A file is named by the asset its places show, not by its family.
   const row = (store.db
-    .prepare('SELECT id, card, visibleFrom FROM docs WHERE audience = ? AND ref = ?')
+    .prepare(
+      'SELECT id, card, visibleFrom FROM docs WHERE audience = ? AND ref = ?',
+    )
     .get(request.audience, request.ref) ??
     (request.ref.startsWith('file:')
       ? store.db
@@ -687,7 +914,9 @@ export function findsOfResult(request: {
           .get(request.audience, request.ref.slice('file:'.length))
       : undefined)) as Row | undefined;
   if (!row || row.visibleFrom > (request.now ?? Date.now())) return undefined;
-  const query = parseSearchQuery(request.q, searchAnalyzer(), { typing: request.typing });
+  const query = parseSearchQuery(request.q, searchAnalyzer(), {
+    typing: request.typing,
+  });
   const card = JSON.parse(row.card) as StoredCard;
   const { finds, more } = findsOf(
     store.units(row.id),
@@ -703,7 +932,9 @@ export function findsOfResult(request: {
  * `runSearch`, remembered: the last answers, each for the index's generation
  * it was made at, so an answer never outlives a change of what it shows.
  */
-export async function cachedSearch(request: SearchRequest): Promise<SearchResponse> {
+export async function cachedSearch(
+  request: SearchRequest,
+): Promise<SearchResponse> {
   const store = useSearchStore();
   const { now: _now, ...asked } = request;
   const key = `${store.generation}\u0000${JSON.stringify(asked)}`;

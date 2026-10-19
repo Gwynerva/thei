@@ -17,6 +17,7 @@ import {
  */
 export const SEARCH_KIND_ICONS: Record<SearchKind, IconName> = {
   project: 'project',
+  'project-section': 'project-section',
   event: 'event',
   'diary-entry': 'thought',
   page: 'page',
@@ -30,6 +31,7 @@ const FIND_ICONS: Record<SearchFind['where'], IconName> = {
   name: 'asterisk',
   summary: 'text',
   heading: 'subheading',
+  section: 'project-section',
   text: 'paragraph',
   caption: 'media',
   file: 'file',
@@ -48,14 +50,17 @@ const FIND_ICONS: Record<SearchFind['where'], IconName> = {
 /**
  * What a result is called: a diary entry by its day; a file by its title, or
  * by what it shows, its description — «JPG» three times over tells files
- * apart by nothing — and by its format only where it has neither.
+ * apart by nothing — and where it has neither, by its kind and where it is
+ * shown: «Изображение · Смотритель маяка».
  */
 export function searchHitTitle(hit: SearchHit): string {
   if (hit.kind === 'diary-entry' && hit.date)
     return formatAbsolutePublicDate(hit.date, language.value.code);
   if (hit.title) return publicText(hit.title);
   if (hit.kind === 'file' && hit.summary) return publicText(hit.summary);
-  return hit.file ? fileKindName(hit.file.type) : '';
+  if (!hit.file) return '';
+  const kind = fileKindName(hit.file.type);
+  return hit.shownAt ? `${kind} · ${publicText(hit.shownAt)}` : kind;
 }
 
 /** What kind of file it is, in a word: a picture, a video, a recording. */
@@ -81,6 +86,19 @@ export function searchHitWhen(hit: SearchHit): string {
   if (hit.date && hit.kind !== 'diary-entry')
     return formatAbsolutePublicDate(hit.date, language.value.code);
   return '';
+}
+
+/**
+ * Its years alone, where a line has no room for its days: «2024»,
+ * «2017–2019».
+ */
+export function searchHitYears(hit: SearchHit): string {
+  const start =
+    hit.period?.startDate ?? (hit.kind === 'diary-entry' ? '' : hit.date);
+  const end = hit.period?.endDate ?? start;
+  if (!start || !end) return '';
+  const [from, to] = [start.slice(0, 4), end.slice(0, 4)];
+  return from === to ? from : `${from}–${to}`;
 }
 
 /** A file's kind, format and size: «Видео · MP4 · 12 МБ». */
@@ -116,13 +134,25 @@ export function searchFindPlace(find: SearchFind): {
   };
 }
 
-/** Who else may see it, for the owner: its lock and its words. */
+/**
+ * Who else may see it, for the owner: its lock, its words, and the same in
+ * two words for a line beside the lock.
+ */
 export function searchAccessBadge(
   access: SearchHit['access'],
-): { icon: IconName; text: string } | undefined {
+): { icon: IconName; text: string; short: string } | undefined {
+  const value = phrase.value;
   if (access === 'private')
-    return { icon: 'lock-close', text: phrase.value.search_access_private };
+    return {
+      icon: 'lock-close',
+      text: value.search_access_private,
+      short: value.search_access_private_short,
+    };
   if (access === 'link-only')
-    return { icon: 'lock-partial', text: phrase.value.search_access_link };
+    return {
+      icon: 'lock-partial',
+      text: value.search_access_link,
+      short: value.search_access_link_short,
+    };
   return undefined;
 }

@@ -24,6 +24,7 @@ import { guardTool, McpToolError, toolResult } from '../result';
  */
 const KIND_HEADINGS: Record<SearchKind, string> = {
   project: 'Projects',
+  'project-section': 'Project sections',
   event: 'Events',
   'diary-entry': 'Diary',
   page: 'Pages',
@@ -31,7 +32,6 @@ const KIND_HEADINGS: Record<SearchKind, string> = {
   tag: 'Tags',
   profile: 'Profile',
 };
-const MCP_KINDS = [...SEARCH_KINDS, 'project-section'] as const;
 
 function marked(segments: SearchSegment[]): string {
   return segments
@@ -44,7 +44,8 @@ function marked(segments: SearchSegment[]): string {
 /** A ref as the other tools take it: a diary entry by its day, a file by its id. */
 function refOfHit(hit: SearchHit): string {
   if (hit.kind === 'diary-entry') return `diary-entry:${hit.date ?? hit.title}`;
-  if (hit.kind === 'file' && hit.file) return `file:${assetIdOf(hit.file.assetUuid)}`;
+  if (hit.kind === 'file' && hit.file)
+    return `file:${assetIdOf(hit.file.assetUuid)}`;
   return hit.ref;
 }
 
@@ -79,9 +80,13 @@ function hitLines(hit: SearchHit): string[] {
     : hit.kind !== 'diary-entry' && hit.date
       ? hit.date
       : '';
-  const title = hit.kind === 'diary-entry' ? '' : ` — ${hit.title || hit.file?.extension.toUpperCase() || ''}`;
+  const title =
+    hit.kind === 'diary-entry'
+      ? ''
+      : ` — ${hit.title || hit.file?.extension.toUpperCase() || ''}`;
+  const parent = hit.parent ? `, of «${hit.parent.title}»` : '';
   return [
-    `- ${refOfHit(hit)}${title}${when ? ` (${when})` : ''}${hit.access ? ` [${hit.access}]` : ''}`,
+    `- ${refOfHit(hit)}${title}${parent}${when ? ` (${when})` : ''}${hit.access ? ` [${hit.access}]` : ''}`,
     ...hit.finds.map(findLine),
     ...(hit.more ? [`  … ${hit.more} more places`] : []),
   ];
@@ -89,7 +94,10 @@ function hitLines(hit: SearchHit): string[] {
 
 function counts(response: SearchResponse): string {
   return SEARCH_KINDS.filter((kind) => response.facets.kinds[kind])
-    .map((kind) => `${KIND_HEADINGS[kind].toLowerCase()} ${response.facets.kinds[kind]}`)
+    .map(
+      (kind) =>
+        `${KIND_HEADINGS[kind].toLowerCase()} ${response.facets.kinds[kind]}`,
+    )
     .join(', ');
 }
 
@@ -112,19 +120,30 @@ export function registerSearchTool(server: McpServer, context: McpCallContext) {
       inputSchema: z.object({
         query: z.string().min(1).describe('Words to find'),
         kinds: z
-          .array(z.enum(MCP_KINDS))
+          .array(z.enum(SEARCH_KINDS))
           .optional()
-          .describe('Only these kinds (a section is found in its project); all of them when left out'),
-        from: dayInput.optional().describe('Only what falls on or after this day'),
-        to: dayInput.optional().describe('Only what falls on or before this day'),
-        offset: z.number().int().min(0).optional().describe('With one kind: where the page starts'),
+          .describe('Only these kinds; all of them when left out'),
+        from: dayInput
+          .optional()
+          .describe('Only what falls on or after this day'),
+        to: dayInput
+          .optional()
+          .describe('Only what falls on or before this day'),
+        offset: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe('With one kind: where the page starts'),
         limit: z
           .number()
           .int()
           .min(1)
           .max(50)
           .optional()
-          .describe('With one kind: how many; otherwise how many of each kind (5)'),
+          .describe(
+            'With one kind: how many; otherwise how many of each kind (5)',
+          ),
       }),
       annotations: READS,
     },
@@ -133,25 +152,29 @@ export function registerSearchTool(server: McpServer, context: McpCallContext) {
         if (!/[\p{L}\p{N}]/u.test(query))
           throw new McpToolError('The query holds no words to look for.');
         await freshSearchIndex();
-        const wanted = [
-          ...new Set((kinds ?? []).map((kind) => (kind === 'project-section' ? 'project' : kind))),
-        ] as SearchKind[];
+        const wanted = [...new Set(kinds ?? [])];
         const one = wanted.length === 1 ? wanted[0] : undefined;
         const response = await runSearch({
           q: query,
           audience: 'owner',
-          ...(one ? { kind: one, offset: offset ?? 0, limit: limit ?? 20 } : { groupSize: limit ?? 5 }),
+          ...(one
+            ? { kind: one, offset: offset ?? 0, limit: limit ?? 20 }
+            : { groupSize: limit ?? 5 }),
           ...(from ? { from } : {}),
           ...(to ? { to } : {}),
         });
-        const groups = response.groups.filter((group) => !wanted.length || wanted.includes(group.kind));
+        const groups = response.groups.filter(
+          (group) => !wanted.length || wanted.includes(group.kind),
+        );
         const total = one
           ? (response.facets.kinds[one] ?? 0)
           : groups.reduce((sum, group) => sum + group.total, 0);
         if (!total) return toolResult('Nothing found.');
         const start = one ? (offset ?? 0) : 0;
         if (one && !groups.length)
-          return toolResult(`The offset ${start} is past the end: ${total} found.`);
+          return toolResult(
+            `The offset ${start} is past the end: ${total} found.`,
+          );
         const shown = groups.reduce((sum, group) => sum + group.hits.length, 0);
         const lines = [
           `${total} found${response.keyboard ? ` for «${response.keyboard}» (the query as typed on the other keyboard)` : ''}: ${counts(response)}`,
@@ -160,9 +183,12 @@ export function registerSearchTool(server: McpServer, context: McpCallContext) {
           lines.push(`## ${KIND_HEADINGS[group.kind]}`);
           for (const hit of group.hits) lines.push(...hitLines(hit));
           if (!one && group.total > group.hits.length)
-            lines.push(`  (${group.total - group.hits.length} more: ask with kinds: ["${group.kind}"])`);
+            lines.push(
+              `  (${group.total - group.hits.length} more: ask with kinds: ["${group.kind}"])`,
+            );
         }
-        if (one && start + shown < total) lines.push(`next offset: ${start + shown}`);
+        if (one && start + shown < total)
+          lines.push(`next offset: ${start + shown}`);
         return toolResult(lines.join('\n'));
       }),
   );

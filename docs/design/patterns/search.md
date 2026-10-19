@@ -33,26 +33,36 @@ and behaves.
   each kind, under grey group names with no icons: the icon of the kind is in
   each row already.
 - One row per result (`SearchQuickRow.vue`): the kind's icon in the title's
-  line, then its time quiet after it; under it, from the left edge, the place
-  found best and its words, the found ones marked; then, on a line of its
-  own under an arrow from the result, in italics, how many other places hold
-  the words — a bare «+5» on the picture's fading edge was all but unseen.
-  The result's picture dissolves in from the right, or a file's own preview
-  stands there, framed.
+  line, then its time quiet after it — on a phone its years only, where the
+  days have no room; a section's project, quieter still, gives way before
+  the title does. Under it, from the left edge, the place found best and its
+  words, the found ones marked, two lines on a phone that stop short of the
+  picture; then, on a line of its own under an arrow from the result, in
+  italics, how many other places hold the words — a bare «+5» on the
+  picture's fading edge was all but unseen. The result's picture dissolves
+  in from the right, or a file's own preview stands there, framed.
+- A clamped line shows whatever its padding holds, so the find's two lines
+  on a phone have no room for the text halo: they keep off the picture
+  instead.
 - The row Enter takes is ringed as a picker's row is (`useActiveRow`): the
   first, until the arrows or the pointer choose another, so what was typed
   always shows where Enter goes.
-- ↑ ↓ choose, Enter opens, Ctrl+Enter shows everything on the search page,
-  Esc closes and gives the focus back. The foot says so, but for Esc, on a
-  desktop only, in one line.
+- ↑ ↓ choose, Tab and Shift+Tab go from group to group, Enter opens,
+  Ctrl+Enter shows everything on the search page, Esc closes and gives the
+  focus back. The foot says so, but for Esc, on a desktop only, in one line.
+- On a phone the owner's pencil to the editor is a framed square of a
+  finger's size, apart from the row's own link.
 - Enter opens where the owner is: the page on the site, the editor in the
   admin; Shift+Enter the other one.
 - The owner, with nothing typed, is offered the day's diary entry, the other
   side of the page they are on, and what they saved last; with a query, the
   diary of a day the query names and a section of the admin by its name come
-  first, and a new project, event or page named by the query, and ✦ with AI
-  on, come last. Nothing that cannot be undone, nothing rare: those stay in
-  their forms.
+  first, and a new event, project or page named by the query — the smaller
+  first — and ✦ with AI on, come last. A question puts ✦ first and makes
+  nothing; a day makes nothing either. Nothing that cannot be undone, nothing
+  rare: those stay in their forms.
+- Nothing typed, a visitor is offered the site's busiest tags as words to
+  try; so is anyone whose query found nothing, here and on the page.
 
 ## The search page
 
@@ -64,6 +74,12 @@ and behaves.
   of each and «All N» to the rest; chips above count and choose the kinds,
   each with the faint icon of its kind; the years and tags the results fall
   in beside, in the sheet «Filters» on a phone.
+- A phone shows what holds the results as chips above them — a year, a tag,
+  the showcase — each undone with a touch; the sheet of filters is not
+  offered when there is nothing to filter by. The kinds' chips are smaller
+  there, so they take two rows rather than four.
+- One kind can be read by its days, newest or oldest first, beside the best
+  first.
 - The years are a chart and a choice at once: one row a year, newest first,
   its count as a horizontal bar against the busiest year and as a number;
   the year chosen in the accent, the others dimmed, chosen again to show
@@ -78,7 +94,15 @@ and behaves.
 
 - A result named exactly as typed comes first, and its kind first among the
   groups: «где я была» is the page of that name before the projects that
-  say the words.
+  say the words. Then a kind the query names («фото маяка»), then kinds whose
+  best result holds every word in its name; within a kind, a name holding
+  the words comes before a text that only says them.
+- A query of words that only hold a sentence together — «где я была» — is
+  read as a phrase, or every text with an «я» would answer.
+- A section of a project is a result of its own, under «Project sections»
+  right after the projects: its title, description, periods and text are
+  found in it, and it names its project. The project keeps only its
+  sections' titles, which lead to them.
 - When the words are not all found together, the results that hold some of
   them come, those holding more first, under a line that says so above them;
   a query typed on the other keyboard is said the same way.
@@ -89,8 +113,14 @@ and behaves.
 
 - A head like the site's other cards: the kind and its time, the title, the
   description, with the result's picture dissolving in from the right
-  (`MediaEdge`), or a file's own preview, framed. The owner sees its lock,
-  its badges and a pencil to its editor.
+  (`MediaEdge`), or a file's own preview, framed. A section names its
+  project beside its kind, a link of its own. A file with neither title nor
+  description is called by its kind and where it is shown. The words found
+  are marked in the title and the description too.
+- The owner sees its lock with two words beside it («Только вам»), its
+  badges, and a pencil to its editor in the head's corner, on a ground of
+  its own: in the line of badges it wrapped onto a line alone on a phone and
+  sank into the picture.
 - Under the head, the full width of the card, the places the words were
   found at — a section, a caption, a file's description, a hint, a note —
   each with the icon of what it is, its words, and a small preview for a find

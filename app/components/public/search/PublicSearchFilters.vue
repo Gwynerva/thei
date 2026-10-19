@@ -119,7 +119,7 @@ function reset() {
     <!-- Nothing to narrow by: said, rather than an empty column. -->
     <PublicEmptyState
       v-if="!hasFilters"
-      icon="filter"
+      icon="tune"
       :title="phrase.search_no_filters"
     />
     <PublicCollapsibleSection v-if="!query" :title="phrase.search_filter_type">

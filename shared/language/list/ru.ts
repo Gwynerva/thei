@@ -546,8 +546,7 @@ export default defineI18nModule({
     public_search_description:
       'Поиск по всему сайту: проектам, событиям, дневнику, страницам и файлам.',
     public_search_query_title: (query) => `«${query}»`,
-    public_search_query_description: (query) =>
-      `Всё на сайте о «${query}».`,
+    public_search_query_description: (query) => `Всё на сайте о «${query}».`,
     search_placeholder: 'Искать на сайте…',
     search_clear: 'Очистить поиск',
     search_filters: 'Фильтры',
@@ -560,6 +559,7 @@ export default defineI18nModule({
     search_tag_include: (tag) => `Искать с тегом «${tag}»`,
     search_tag_exclude: (tag) => `Искать без тега «${tag}»`,
     search_tag_remove: (tag) => `Убрать тег «${tag}» из фильтра`,
+    search_filter_remove: (filter) => `Убрать фильтр «${filter}»`,
     search_reset_filters: 'Сбросить фильтры',
     search_results_count: (projects, events) => {
       const parts = [
@@ -579,6 +579,7 @@ export default defineI18nModule({
     search_kind: (kind) =>
       ({
         project: 'Проект',
+        'project-section': 'Раздел проекта',
         event: 'Событие',
         'diary-entry': 'Дневник',
         page: 'Страница',
@@ -589,6 +590,7 @@ export default defineI18nModule({
     search_kind_group: (kind) =>
       ({
         project: 'Проекты',
+        'project-section': 'Разделы проектов',
         event: 'События',
         'diary-entry': 'Дневник',
         page: 'Страницы',
@@ -599,9 +601,10 @@ export default defineI18nModule({
     search_where: (where) =>
       ({
         title: 'Название',
-        name: 'Другое имя',
+        name: 'Найдено по другому названию',
         summary: 'Описание',
         heading: 'Заголовок',
+        section: 'Раздел проекта',
         text: 'Текст',
         caption: 'Подпись',
         file: 'Описание файла',
@@ -619,6 +622,8 @@ export default defineI18nModule({
     search_where_section: (title) => `Раздел «${title}»`,
     search_access_private: 'Видно только вам',
     search_access_link: 'Видно только тем, у кого есть ссылка',
+    search_access_private_short: 'Только вам',
+    search_access_link_short: 'По ссылке',
     search_edit: 'Редактировать',
     search_more_finds: (count) =>
       `Ещё в ${plural(count, 'месте', 'местах', 'местах')}`,
@@ -632,11 +637,11 @@ export default defineI18nModule({
     search_keyboard: (read) =>
       `Найдено по «${read}» — так запрос читается в другой раскладке.`,
     search_partial:
-      'Все слова вместе не нашлись — вот найденное хотя бы по одному из них.',
+      'Все слова вместе нигде не встречаются: сначала то, где их больше.',
     search_building: (percent) =>
       `Поиск ещё готовится (${percent} %): часть найденного может не показаться.`,
     search_failed: 'Не удалось выполнить поиск. Попробуйте ещё раз.',
-    search_quick_empty: 'Попробуйте другое слово или другую его форму.',
+    search_quick_empty: 'Попробуйте другое слово.',
     search_key_hint: (key) => `Поиск · ${key}`,
     search_try: 'Например:',
     search_quick_hint:
@@ -645,6 +650,7 @@ export default defineI18nModule({
     search_sort: 'Порядок',
     search_sort_best: 'Сначала точные',
     search_sort_new: 'Сначала новые',
+    search_sort_old: 'Сначала старые',
     search_no_filters: 'Для этого контента фильтров нет',
     search_year_count: (year, count) => `${year}: найдено ${count}`,
     search_recent: 'Недавние',
@@ -661,6 +667,7 @@ export default defineI18nModule({
     search_action_new_page: (title) => `Новая страница «${title}»`,
     search_action_ask_ai: (text) => `Спросить ИИ: «${text}»`,
     search_keys_choose: 'выбрать',
+    search_keys_group: 'к следующей группе',
     search_keys_open: 'открыть',
     search_keys_site: 'на сайте',
     search_keys_edit: 'в редакторе',

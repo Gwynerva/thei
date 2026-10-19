@@ -5,7 +5,11 @@ import {
   refreshSearchIndex,
   useSearchStore,
 } from '../../../server/thei/search/indexer';
-import { findsOfResult, runSearch, type SearchRequest } from '../../../server/thei/search/query';
+import {
+  findsOfResult,
+  runSearch,
+  type SearchRequest,
+} from '../../../server/thei/search/query';
 import type { SearchHit, SearchResponse } from '../../../shared/search/api';
 import { freshAiTestDb } from '../../helpers/fresh-ai-db';
 
@@ -15,7 +19,8 @@ import { freshAiTestDb } from '../../helpers/fresh-ai-db';
  * never does.
  */
 let context: Awaited<ReturnType<typeof freshAiTestDb>>;
-const insert = (table: string, row: Record<string, unknown>) => context.insert(table, row);
+const insert = (table: string, row: Record<string, unknown>) =>
+  context.insert(table, row);
 
 const PROJECT = 'p-11111111-1111-4111-8111-111111111111';
 const HIDDEN_PROJECT = 'p-22222222-2222-4222-8222-222222222222';
@@ -28,9 +33,18 @@ const PRIVATE_DIARY = 'd-22222222-2222-4222-8222-222222222222';
 const FUTURE_DIARY = 'd-33333333-3333-4333-8333-333333333333';
 const TAG = 't-11111111-1111-4111-8111-111111111111';
 
-const paragraph = (id: string, text: string) => ({ id, type: 'paragraph', data: { text } });
+const paragraph = (id: string, text: string) => ({
+  id,
+  type: 'paragraph',
+  data: { text },
+});
 let contentSeq = 0;
-function text(ownerType: string, ownerId: string, slot: string, blocks: unknown[]) {
+function text(
+  ownerType: string,
+  ownerId: string,
+  slot: string,
+  blocks: unknown[],
+) {
   insert('content', {
     contentUuid: `c-${++contentSeq}`,
     ownerType,
@@ -45,7 +59,12 @@ function text(ownerType: string, ownerId: string, slot: string, blocks: unknown[
   });
 }
 
-function project(uuid: string, title: string, access: string, patch: Record<string, unknown> = {}) {
+function project(
+  uuid: string,
+  title: string,
+  access: string,
+  patch: Record<string, unknown> = {},
+) {
   insert('projects', {
     projectUuid: uuid,
     title,
@@ -59,11 +78,17 @@ function project(uuid: string, title: string, access: string, patch: Record<stri
   });
 }
 
-const tomorrow = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const tomorrow = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)
+  .toISOString()
+  .slice(0, 10);
 
 beforeEach(async () => {
   context = await freshAiTestDb();
-  insert('profiles', { profileId: 'profile', displayName: 'Варвара', slogan: 'Шью костюмы' });
+  insert('profiles', {
+    profileId: 'profile',
+    displayName: 'Варвара',
+    slogan: 'Шью костюмы',
+  });
   project(PROJECT, 'Косплей на Шедоухарт', 'public', {
     summary: 'Костюм, парик и рога',
     synonyms: ['Трактир'],
@@ -71,10 +96,21 @@ beforeEach(async () => {
   project(HIDDEN_PROJECT, 'Переезд', 'private');
   project(LINK_PROJECT, 'AR-гид для музея', 'link-only');
   text('project', PROJECT, 'project-description', [
-    paragraph('b1', 'Дошила плащ для <abbr data-content-hint="жрица Шар">косплея</abbr>.'),
-    { id: 'p-start', type: 'privateSectionBoundary', data: { sectionId: 'x', edge: 'start' } },
+    paragraph(
+      'b1',
+      'Дошила плащ для <abbr data-content-hint="жрица Шар">косплея</abbr>.',
+    ),
+    {
+      id: 'p-start',
+      type: 'privateSectionBoundary',
+      data: { sectionId: 'x', edge: 'start' },
+    },
     paragraph('b2', 'Бюджет на линзы держу в секрете: мандрагора.'),
-    { id: 'p-end', type: 'privateSectionBoundary', data: { sectionId: 'x', edge: 'end' } },
+    {
+      id: 'p-end',
+      type: 'privateSectionBoundary',
+      data: { sectionId: 'x', edge: 'end' },
+    },
     paragraph('b3', 'Учу Vue.js, C# и пишу про 2B из NieR:Automata.'),
   ]);
   insert('project-content-sections', {
@@ -107,8 +143,12 @@ beforeEach(async () => {
   text('project-section', PRIVATE_SECTION, 'project-section-body', [
     paragraph('s2', 'Сколько стоил бархат: секретно, слово бергамот.'),
   ]);
-  text('project', HIDDEN_PROJECT, 'project-description', [paragraph('h1', 'Коробки, бергамот и скотч.')]);
-  text('project', LINK_PROJECT, 'project-description', [paragraph('l1', 'Речной флот и кувшинка.')]);
+  text('project', HIDDEN_PROJECT, 'project-description', [
+    paragraph('h1', 'Коробки, бергамот и скотч.'),
+  ]);
+  text('project', LINK_PROJECT, 'project-description', [
+    paragraph('l1', 'Речной флот и кувшинка.'),
+  ]);
   insert('tags', {
     tagUuid: TAG,
     title: 'Косплей',
@@ -119,7 +159,12 @@ beforeEach(async () => {
     synonyms: ['cosplay'],
     updatedAt: 1,
   });
-  insert('tag-usages', { tagUuid: TAG, containerType: 'project', containerId: PROJECT, sortOrder: 0 });
+  insert('tag-usages', {
+    tagUuid: TAG,
+    containerType: 'project',
+    containerId: PROJECT,
+    sortOrder: 0,
+  });
   insert('events', {
     eventUuid: EVENT,
     title: 'Starcon',
@@ -130,14 +175,52 @@ beforeEach(async () => {
     createdAt: 1,
     updatedAt: 1,
   });
-  insert('periods', { ownerType: 'event', ownerId: EVENT, sortOrder: 0, startDate: '2025-07-12', endDate: '2025-07-12', precision: 'exact', precisionNote: '', label: '' });
-  insert('diary-entries', { diaryUuid: DIARY, date: '2025-09-14', access: 'public', createdAt: 1, updatedAt: 1 });
-  text('diary-entry', DIARY, 'diary-body', [paragraph('d1', 'Завтра примерка с париком, весь день шила. Бублику тоже понравилось.')]);
-  insert('diary-entries', { diaryUuid: PRIVATE_DIARY, date: '2025-09-15', access: 'private', createdAt: 1, updatedAt: 1 });
-  text('diary-entry', PRIVATE_DIARY, 'diary-body', [paragraph('d2', 'Только для себя: облепиха.')]);
-  insert('diary-entries', { diaryUuid: FUTURE_DIARY, date: tomorrow, access: 'public', createdAt: 1, updatedAt: 1 });
-  text('diary-entry', FUTURE_DIARY, 'diary-body', [paragraph('d3', 'Ещё не наступило: черёмуха.')]);
-  text('project', PROJECT, 'project-notes', [paragraph('n1', 'Себе на память: шиповник.')]);
+  insert('periods', {
+    ownerType: 'event',
+    ownerId: EVENT,
+    sortOrder: 0,
+    startDate: '2025-07-12',
+    endDate: '2025-07-12',
+    precision: 'exact',
+    precisionNote: '',
+    label: '',
+  });
+  insert('diary-entries', {
+    diaryUuid: DIARY,
+    date: '2025-09-14',
+    access: 'public',
+    createdAt: 1,
+    updatedAt: 1,
+  });
+  text('diary-entry', DIARY, 'diary-body', [
+    paragraph(
+      'd1',
+      'Завтра примерка с париком, весь день шила. Бублику тоже понравилось.',
+    ),
+  ]);
+  insert('diary-entries', {
+    diaryUuid: PRIVATE_DIARY,
+    date: '2025-09-15',
+    access: 'private',
+    createdAt: 1,
+    updatedAt: 1,
+  });
+  text('diary-entry', PRIVATE_DIARY, 'diary-body', [
+    paragraph('d2', 'Только для себя: облепиха.'),
+  ]);
+  insert('diary-entries', {
+    diaryUuid: FUTURE_DIARY,
+    date: tomorrow,
+    access: 'public',
+    createdAt: 1,
+    updatedAt: 1,
+  });
+  text('diary-entry', FUTURE_DIARY, 'diary-body', [
+    paragraph('d3', 'Ещё не наступило: черёмуха.'),
+  ]);
+  text('project', PROJECT, 'project-notes', [
+    paragraph('n1', 'Себе на память: шиповник.'),
+  ]);
   insert('entity-relations', {
     firstType: 'project',
     firstId: PROJECT,
@@ -178,16 +261,112 @@ afterEach(async () => {
 
 const search = (q: string, patch: Partial<SearchRequest> = {}) =>
   runSearch({ q, audience: 'public', ...patch });
-const hits = (response: SearchResponse): SearchHit[] => response.groups.flatMap((group) => group.hits);
-const titles = (response: SearchResponse) => hits(response).map((hit) => hit.title);
+const hits = (response: SearchResponse): SearchHit[] =>
+  response.groups.flatMap((group) => group.hits);
+const titles = (response: SearchResponse) =>
+  hits(response).map((hit) => hit.title);
 
 describe('the global search', () => {
-  it('finds every form of a word, and the name with words in its sections', async () => {
+  it('finds every form of a word', async () => {
     for (const q of ['косплей', 'косплея', 'КОСПЛЕЕМ', 'косплей шедоухарт'])
       expect(titles(await search(q))).toContain('Косплей на Шедоухарт');
-    const found = hits(await search('шедоухарт рога')).find((hit) => hit.title === 'Косплей на Шедоухарт')!;
-    expect(found.finds.map((find) => find.where)).toContain('text');
-    expect(found.finds.find((find) => find.label === 'Парик и рога')?.href).toContain('#b-s1');
+  });
+
+  it('finds a section as a result of its own, naming its project', async () => {
+    const response = await search('шкурила');
+    expect(response.groups.map((group) => group.kind)).toEqual([
+      'project-section',
+    ]);
+    const section = hits(response)[0]!;
+    expect(section).toMatchObject({
+      ref: `project-section:${SECTION}`,
+      title: 'Парик и рога',
+      parent: { title: 'Косплей на Шедоухарт' },
+    });
+    expect(section.href.startsWith(section.parent!.href)).toBe(true);
+    expect(section.editHref).toBeUndefined();
+    // The project is found by the titles of its parts, leading to them.
+    const project = hits(await search('парик и рога', { kind: 'project' }))[0]!;
+    expect(
+      project.finds.find((find) => find.where === 'section')?.href,
+    ).toContain(section.href);
+  });
+
+  it('keeps a private section to the owner, with its lock and its editor', async () => {
+    expect((await search('бархат')).total).toBe(0);
+    const section = hits(await search('бархат', { audience: 'owner' }))[0]!;
+    expect(section).toMatchObject({
+      kind: 'project-section',
+      title: 'Расходы',
+      access: 'private',
+      editHref: `/admin/projects/${PROJECT}/edit/?section=Rashody`,
+    });
+  });
+
+  it('takes in a section saved anew, and its project renamed', async () => {
+    context.rawDb
+      .prepare(
+        'UPDATE "project-content-sections" SET title = ?, updatedAt = ? WHERE sectionUuid = ?',
+      )
+      .run('Рога из пластика', Date.now() + 5000, SECTION);
+    await refreshSearchIndex();
+    const renamed = await search('пластика');
+    expect(renamed.groups[0]!.hits[0]!.title).toBe('Рога из пластика');
+    context.rawDb
+      .prepare(
+        'UPDATE projects SET title = ?, updatedAt = ? WHERE projectUuid = ?',
+      )
+      .run('Костюм ведьмы', Date.now() + 6000, PROJECT);
+    await refreshSearchIndex();
+    expect(hits(await search('пластика'))[0]!.parent?.title).toBe(
+      'Костюм ведьмы',
+    );
+  });
+
+  it('puts a result named by the words before one that only says them', async () => {
+    insert('events', {
+      eventUuid: 'e-mention',
+      title: 'Ярмарка в Твери',
+      summary: 'Видела там рога и копыта',
+      access: 'public',
+      humanReadableSlug: 'yarmarka',
+      publicId: 'Yarmarka',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    insert('events', {
+      eventUuid: 'e-named',
+      title: 'Рога оленя',
+      summary: 'Нашла в лесу',
+      access: 'public',
+      humanReadableSlug: 'roga',
+      publicId: 'Roga',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    await rebuildSearchIndex();
+    const events = await search('рога', { kind: 'event' });
+    expect(titles(events)[0]).toBe('Рога оленя');
+    const mention = hits(events).find(
+      (hit) => hit.title === 'Ярмарка в Твери',
+    )!;
+    expect(mention.summarySegments?.some((segment) => segment.mark)).toBe(true);
+  });
+
+  it('reads a query of words that only hold a sentence together as a phrase', async () => {
+    insert('pages', {
+      pageUuid: 'g-where',
+      title: 'Где я была',
+      summary: '',
+      slug: 'gde-ya-byla',
+      access: 'public',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    await rebuildSearchIndex();
+    const response = await search('где я была');
+    expect(titles(response)).toEqual(['Где я была']);
+    expect(response.groups[0]!.hits[0]!.titleSegments?.[0]?.mark).toBe(true);
   });
 
   it('marks the words found and leads to the block', async () => {
@@ -198,13 +377,31 @@ describe('the global search', () => {
   });
 
   it('finds a hint, a short name, a dotted one and a sign in a name', async () => {
-    expect(hits(await search('жрица')).map((hit) => hit.finds[0]?.where)).toContain('hint');
-    for (const q of ['2B', '2b', 'vue', 'vue.js', 'js', 'C#', 'nier', 'automata'])
+    expect(
+      hits(await search('жрица')).map((hit) => hit.finds[0]?.where),
+    ).toContain('hint');
+    for (const q of [
+      '2B',
+      '2b',
+      'vue',
+      'vue.js',
+      'js',
+      'C#',
+      'nier',
+      'automata',
+    ])
       expect(titles(await search(q)), q).toContain('Косплей на Шедоухарт');
   });
 
   it('never shows a stranger what the page does not', async () => {
-    for (const q of ['мандрагора', 'бергамот', 'облепиха', 'кувшинка', 'черёмуха', 'Переезд'])
+    for (const q of [
+      'мандрагора',
+      'бергамот',
+      'облепиха',
+      'кувшинка',
+      'черёмуха',
+      'Переезд',
+    ])
       expect((await search(q)).total, q).toBe(0);
   });
 
@@ -213,16 +410,21 @@ describe('the global search', () => {
     expect(hits(await owner('облепиха'))[0]?.access).toBe('private');
     expect(hits(await owner('кувшинка'))[0]?.access).toBe('link-only');
     expect(titles(await owner('мандрагора'))).toContain('Косплей на Шедоухарт');
-    expect(titles(await owner('бергамот')).sort()).toEqual(['Косплей на Шедоухарт', 'Переезд'].sort());
+    expect(titles(await owner('бергамот')).sort()).toEqual(
+      ['Переезд', 'Расходы'].sort(),
+    );
     expect((await owner('черёмуха')).total).toBe(1);
   });
 
   it('keeps notes, and relations to what a stranger cannot open, from a stranger', async () => {
-    for (const q of ['шиповник', 'секвойя']) expect((await search(q)).total, q).toBe(0);
+    for (const q of ['шиповник', 'секвойя'])
+      expect((await search(q)).total, q).toBe(0);
     const notes = hits(await search('шиповник', { audience: 'owner' }))[0]!;
     expect(notes.finds[0]).toMatchObject({ where: 'notes' });
     expect(notes.finds[0]!.href).toMatch(/#b-n1:~:text=/);
-    expect((await search('секвойя', { audience: 'owner' })).total).toBeGreaterThan(0);
+    expect(
+      (await search('секвойя', { audience: 'owner' })).total,
+    ).toBeGreaterThan(0);
   });
 
   it('leads each find to its place, out of whatever hides it', async () => {
@@ -239,34 +441,54 @@ describe('the global search', () => {
     const all = findsOfResult({ q: 'рога', audience: 'public', ref: hit.ref })!;
     expect(all.finds.length).toBe(hit.finds.length + hit.more);
     expect(all.more).toBe(0);
-    expect(new Set(all.finds.map((find) => `${find.where}:${find.href}`)).size).toBe(all.finds.length);
-    expect(findsOfResult({ q: 'облепиха', audience: 'public', ref: `diary-entry:${PRIVATE_DIARY}` })).toBeUndefined();
+    expect(
+      new Set(all.finds.map((find) => `${find.where}:${find.href}`)).size,
+    ).toBe(all.finds.length);
+    expect(
+      findsOfResult({
+        q: 'облепиха',
+        audience: 'public',
+        ref: `diary-entry:${PRIVATE_DIARY}`,
+      }),
+    ).toBeUndefined();
   });
 
   it('falls back on some of the words, and says so', async () => {
     const some = await search('шкурила бегемота');
     expect(some.partial).toBe(true);
-    expect(titles(some)).toContain('Косплей на Шедоухарт');
+    expect(titles(some)).toContain('Парик и рога');
     expect((await search('шкурила рога')).partial).toBeUndefined();
     expect((await search('бегемота')).total).toBe(0);
   });
 
   it('reads a word that names a kind as asking for that kind', async () => {
-    const groups = (await search('проект шкурила')).groups;
-    expect(groups[0]!.kind).toBe('project');
+    expect((await search('проект рога')).groups[0]!.kind).toBe('project');
+    expect((await search('раздел рога')).groups[0]!.kind).toBe(
+      'project-section',
+    );
     // Alone, the word is a word like any other.
     expect((await search('событие')).total).toBe(0);
   });
 
   it('reads one kind by its days when asked', async () => {
-    insert('diary-entries', { diaryUuid: 'd-later', date: '2025-10-01', access: 'public', createdAt: 1, updatedAt: 1 });
-    text('diary-entry', 'd-later', 'diary-body', [paragraph('d9', 'Шила снова, и париком довольна.')]);
+    insert('diary-entries', {
+      diaryUuid: 'd-later',
+      date: '2025-10-01',
+      access: 'public',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    text('diary-entry', 'd-later', 'diary-body', [
+      paragraph('d9', 'Шила снова, и париком довольна.'),
+    ]);
     await rebuildSearchIndex();
-    const days = (sort?: 'date') =>
-      search('париком', { kind: 'diary-entry', ...(sort ? { sort } : {}) }).then((response) =>
-        hits(response).map((hit) => hit.date),
-      );
-    expect(await days('date')).toEqual(['2025-10-01', '2025-09-14']);
+    const days = (sort?: 'new' | 'old') =>
+      search('париком', {
+        kind: 'diary-entry',
+        ...(sort ? { sort } : {}),
+      }).then((response) => hits(response).map((hit) => hit.date));
+    expect(await days('new')).toEqual(['2025-10-01', '2025-09-14']);
+    expect(await days('old')).toEqual(['2025-09-14', '2025-10-01']);
   });
 
   it('puts first what is named exactly as typed', async () => {
@@ -312,7 +534,9 @@ describe('the global search', () => {
 
   it('takes in what was saved on the next pass', async () => {
     context.rawDb
-      .prepare('UPDATE projects SET title = ?, updatedAt = ? WHERE projectUuid = ?')
+      .prepare(
+        'UPDATE projects SET title = ?, updatedAt = ? WHERE projectUuid = ?',
+      )
       .run('Костюм ведьмы', Date.now() + 5000, PROJECT);
     await refreshSearchIndex();
     expect(titles(await search('ведьмы'))).toContain('Костюм ведьмы');
@@ -320,6 +544,8 @@ describe('the global search', () => {
 
   it('lists the catalogue without a query', async () => {
     const response = await search('');
-    expect(titles(response).sort()).toEqual(['Starcon', 'Косплей на Шедоухарт'].sort());
+    expect(titles(response).sort()).toEqual(
+      ['Starcon', 'Косплей на Шедоухарт'].sort(),
+    );
   });
 });

@@ -1,7 +1,10 @@
 import { dayQueryRank, parseDayQuery } from '#layers/thei/shared/day-query';
 import { publicIdFromEventUrlPart } from '#layers/thei/shared/event-url';
 import { dateFromDiaryUrlPart } from '#layers/thei/shared/diary-url';
-import { publicIdFromProjectUrlPart } from '#layers/thei/shared/project-url';
+import {
+  publicIdFromProjectSectionUrlPart,
+  publicIdFromProjectUrlPart,
+} from '#layers/thei/shared/project-url';
 import {
   SEARCH_ADMIN_SECTIONS,
   type SearchAction,
@@ -73,7 +76,9 @@ const RELATIVE: Record<string, number> = {
 };
 
 function shiftDay(day: string, by: number): string {
-  return new Date(Date.parse(`${day}T00:00:00Z`) + by * 86_400_000).toISOString().slice(0, 10);
+  return new Date(Date.parse(`${day}T00:00:00Z`) + by * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
 }
 
 /**
@@ -93,21 +98,25 @@ export function namedDay(q: string, today: string): string | undefined {
   }
   if (!found.length) return undefined;
   const sameDay = found.every((day) => day.slice(5) === found[0]!.slice(5));
-  const sameYear = found.every((day) => day.slice(0, 4) === found[0]!.slice(0, 4));
+  const sameYear = found.every(
+    (day) => day.slice(0, 4) === found[0]!.slice(0, 4),
+  );
   return sameDay && (found.length === 1 || !sameYear) ? found[0] : undefined;
 }
 
 function diaryAction(date: string, today: string): SearchAction {
   const { rawDb } = THEI_SERVER.useDb();
-  const entry = rawDb.prepare('SELECT diaryUuid FROM "diary-entries" WHERE date = ?').get(date) as
-    | { diaryUuid: string }
-    | undefined;
+  const entry = rawDb
+    .prepare('SELECT diaryUuid FROM "diary-entries" WHERE date = ?')
+    .get(date) as { diaryUuid: string } | undefined;
   return {
     type: 'diary',
     date,
     today: date === today,
     exists: Boolean(entry),
-    href: entry ? `/admin/diary/${entry.diaryUuid}/edit/` : `/admin/diary/new/?date=${date}`,
+    href: entry
+      ? `/admin/diary/${entry.diaryUuid}/edit/`
+      : `/admin/diary/new/?date=${date}`,
   };
 }
 
@@ -117,35 +126,102 @@ function sidesOf(path: string | undefined): SearchAction | undefined {
   const { rawDb } = THEI_SERVER.useDb();
   const row = (sql: string, value: string) =>
     rawDb.prepare(sql).get(value) as Record<string, string> | undefined;
-  const editor = /^\/admin\/(projects|events|pages|diary)\/([^/]+)\/edit\/?$/u.exec(path);
+  const editor =
+    /^\/admin\/(projects|events|pages|diary)\/([^/]+)\/edit\/?$/u.exec(path);
   if (editor) {
     const [, section, id] = editor as unknown as [string, string, string];
     if (section === 'projects') {
-      const found = row('SELECT title, humanReadableSlug, publicId FROM projects WHERE projectUuid = ?', id);
-      return found && { type: 'view', kind: 'project', title: found.title!, href: buildProjectUrl(found.humanReadableSlug!, found.publicId!) };
+      const found = row(
+        'SELECT title, humanReadableSlug, publicId FROM projects WHERE projectUuid = ?',
+        id,
+      );
+      return (
+        found && {
+          type: 'view',
+          kind: 'project',
+          title: found.title!,
+          href: buildProjectUrl(found.humanReadableSlug!, found.publicId!),
+        }
+      );
     }
     if (section === 'events') {
-      const found = row('SELECT title, humanReadableSlug, publicId FROM events WHERE eventUuid = ?', id);
-      return found && { type: 'view', kind: 'event', title: found.title!, href: buildEventUrl(found.humanReadableSlug!, found.publicId!) };
+      const found = row(
+        'SELECT title, humanReadableSlug, publicId FROM events WHERE eventUuid = ?',
+        id,
+      );
+      return (
+        found && {
+          type: 'view',
+          kind: 'event',
+          title: found.title!,
+          href: buildEventUrl(found.humanReadableSlug!, found.publicId!),
+        }
+      );
     }
     if (section === 'pages') {
       const found = row('SELECT title, slug FROM pages WHERE pageUuid = ?', id);
-      return found && { type: 'view', kind: 'page', title: found.title!, href: buildPageUrl(found.slug!) };
+      return (
+        found && {
+          type: 'view',
+          kind: 'page',
+          title: found.title!,
+          href: buildPageUrl(found.slug!),
+        }
+      );
     }
-    const found = row('SELECT date FROM "diary-entries" WHERE diaryUuid = ?', id);
-    return found && { type: 'view', kind: 'diary-entry', title: found.date!, href: buildDiaryUrl(found.date!) };
+    const found = row(
+      'SELECT date FROM "diary-entries" WHERE diaryUuid = ?',
+      id,
+    );
+    return (
+      found && {
+        type: 'view',
+        kind: 'diary-entry',
+        title: found.date!,
+        href: buildDiaryUrl(found.date!),
+      }
+    );
   }
-  const [, section, part] = /^\/(projects|events|diary|pages)\/([^/]+)\/?$/u.exec(path) ?? [];
+  // A section's page: the section in its project's editor.
+  const [, projectPart, sectionPart] =
+    /^\/projects\/([^/]+)\/([^/]+)\/?$/u.exec(path) ?? [];
+  if (projectPart && sectionPart) {
+    const found = rawDb
+      .prepare(
+        `SELECT s.title, s.publicId, p.projectUuid FROM "project-content-sections" s
+         JOIN projects p ON p.projectUuid = s.projectUuid
+         WHERE s.publicId = ? AND p.publicId = ?`,
+      )
+      .get(
+        publicIdFromProjectSectionUrlPart(sectionPart),
+        publicIdFromProjectUrlPart(projectPart),
+      ) as { title: string; publicId: string; projectUuid: string } | undefined;
+    if (found)
+      return {
+        type: 'edit',
+        kind: 'project-section',
+        title: found.title,
+        href: `/admin/projects/${found.projectUuid}/edit/?section=${found.publicId}`,
+      };
+  }
+  const [, section, part] =
+    /^\/(projects|events|diary|pages)\/([^/]+)\/?$/u.exec(path) ?? [];
   if (!section || !part) return undefined;
   let found: Record<string, string> | undefined;
   let kind: SearchKind;
   let edit: string;
   if (section === 'projects') {
-    found = row('SELECT projectUuid AS id, title FROM projects WHERE publicId = ?', publicIdFromProjectUrlPart(part));
+    found = row(
+      'SELECT projectUuid AS id, title FROM projects WHERE publicId = ?',
+      publicIdFromProjectUrlPart(part),
+    );
     kind = 'project';
     edit = `/admin/projects/${found?.id}/edit/`;
   } else if (section === 'events') {
-    found = row('SELECT eventUuid AS id, title FROM events WHERE publicId = ?', publicIdFromEventUrlPart(part));
+    found = row(
+      'SELECT eventUuid AS id, title FROM events WHERE publicId = ?',
+      publicIdFromEventUrlPart(part),
+    );
     kind = 'event';
     edit = `/admin/events/${found?.id}/edit/`;
   } else if (section === 'pages') {
@@ -154,7 +230,12 @@ function sidesOf(path: string | undefined): SearchAction | undefined {
     edit = `/admin/pages/${found?.id}/edit/`;
   } else {
     const date = dateFromDiaryUrlPart(part);
-    found = date ? row('SELECT diaryUuid AS id, date AS title FROM "diary-entries" WHERE date = ?', date) : undefined;
+    found = date
+      ? row(
+          'SELECT diaryUuid AS id, date AS title FROM "diary-entries" WHERE date = ?',
+          date,
+        )
+      : undefined;
     kind = 'diary-entry';
     edit = `/admin/diary/${found?.id}/edit/`;
   }
@@ -172,7 +253,13 @@ function recentActions(): SearchAction[] {
        UNION ALL SELECT 'diary-entry', diaryUuid, date, access, updatedAt FROM "diary-entries"
        ORDER BY updatedAt DESC LIMIT 5`,
     )
-    .all() as { kind: SearchKind; id: string; title: string; access: string; updatedAt: number }[];
+    .all() as {
+    kind: SearchKind;
+    id: string;
+    title: string;
+    access: string;
+    updatedAt: number;
+  }[];
   const editors: Partial<Record<SearchKind, string>> = {
     project: 'projects',
     event: 'events',
@@ -185,28 +272,60 @@ function recentActions(): SearchAction[] {
     title: row.title,
     href: `/admin/${editors[row.kind]}/${row.id}/edit/`,
     updatedAt: row.updatedAt,
-    ...(row.access === 'private' || row.access === 'link-only' ? { access: row.access } : {}),
+    ...(row.access === 'private' || row.access === 'link-only'
+      ? { access: row.access }
+      : {}),
   }));
 }
 
 /** Words a question opens with, in the languages the site speaks. */
 const QUESTION_WORDS = new Set([
-  'что', 'как', 'когда', 'где', 'куда', 'откуда', 'почему', 'зачем', 'кто',
-  'какой', 'какая', 'какие', 'какое', 'сколько', 'чем', 'чей', 'ли',
-  'what', 'how', 'when', 'where', 'why', 'who', 'which', 'whose',
+  'что',
+  'как',
+  'когда',
+  'где',
+  'куда',
+  'откуда',
+  'почему',
+  'зачем',
+  'кто',
+  'какой',
+  'какая',
+  'какие',
+  'какое',
+  'сколько',
+  'чем',
+  'чей',
+  'ли',
+  'what',
+  'how',
+  'when',
+  'where',
+  'why',
+  'who',
+  'which',
+  'whose',
 ]);
 
 /** A query asked as a question: a title nobody would give a new entity. */
 export function isQuestion(q: string): boolean {
-  const words = normalizeTermText(q).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-  return /\?\s*$/u.test(q) || (words.length > 1 && QUESTION_WORDS.has(words[0]!));
+  const words = normalizeTermText(q)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+  return (
+    /\?\s*$/u.test(q) || (words.length > 1 && QUESTION_WORDS.has(words[0]!))
+  );
 }
 
 export function searchActions(context: SearchActionContext): SearchAction[] {
   const q = context.q.trim();
   const sides = sidesOf(context.path);
   if (!q)
-    return [diaryAction(context.today, context.today), ...(sides ? [sides] : []), ...recentActions()];
+    return [
+      diaryAction(context.today, context.today),
+      ...(sides ? [sides] : []),
+      ...recentActions(),
+    ];
   const actions: SearchAction[] = [];
   const day = namedDay(q, context.today);
   if (day) actions.push(diaryAction(day, context.today));
@@ -217,16 +336,34 @@ export function searchActions(context: SearchActionContext): SearchAction[] {
       actions.push({ type: 'section', section, href: SECTION_HREFS[section] });
   }
   // A question is asked of the model, first; nothing is made with it for a
-  // title.
+  // title, nor with a day.
   if (isQuestion(q)) {
     if (aiOn) actions.unshift({ type: 'ask-ai', text: q });
     return actions;
   }
+  if (day) return aiOn ? [...actions, { type: 'ask-ai', text: q }] : actions;
+  // The smaller first, as the archive is kept: an event costs less than a
+  // project.
   const title = encodeURIComponent(q);
   actions.push(
-    { type: 'create', kind: 'project', title: q, href: `/admin/projects/new/?title=${title}` },
-    { type: 'create', kind: 'event', title: q, href: `/admin/events/new/?title=${title}` },
-    { type: 'create', kind: 'page', title: q, href: `/admin/pages/new/?title=${title}` },
+    {
+      type: 'create',
+      kind: 'event',
+      title: q,
+      href: `/admin/events/new/?title=${title}`,
+    },
+    {
+      type: 'create',
+      kind: 'project',
+      title: q,
+      href: `/admin/projects/new/?title=${title}`,
+    },
+    {
+      type: 'create',
+      kind: 'page',
+      title: q,
+      href: `/admin/pages/new/?title=${title}`,
+    },
   );
   if (aiOn) actions.push({ type: 'ask-ai', text: q });
   return actions;

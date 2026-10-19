@@ -223,6 +223,71 @@ function chooseKind(kind: SearchKind | undefined) {
   });
 }
 
+/**
+ * What narrows the results, as chips to undo it with one touch: on a phone,
+ * where the filters wait in a sheet, the results say what holds them.
+ */
+const activeChips = computed(() => {
+  const value = filters.value;
+  const chips: {
+    key: string;
+    label: string;
+    icon?: 'plus' | 'minus';
+    patch: Partial<PublicSearchFilters>;
+  }[] = [];
+  if (value.year)
+    chips.push({
+      key: 'year',
+      label: String(value.year),
+      patch: { year: undefined },
+    });
+  if (value.showcase)
+    chips.push({
+      key: 'showcase',
+      label: phrase.value.showcase,
+      patch: { showcase: false },
+    });
+  if (value.cv)
+    chips.push({
+      key: 'cv',
+      label: phrase.value.cv_project_label,
+      patch: { cv: false },
+    });
+  const titleOf = (slug: string) =>
+    publicText(
+      search.value.facets.tags.find((facet) => facet.tag.slug === slug)?.tag
+        .title ?? slug,
+    );
+  for (const slug of value.tags)
+    chips.push({
+      key: `+${slug}`,
+      label: titleOf(slug),
+      icon: 'plus',
+      patch: { tags: value.tags.filter((item) => item !== slug) },
+    });
+  for (const slug of value.exclude)
+    chips.push({
+      key: `-${slug}`,
+      label: titleOf(slug),
+      icon: 'minus',
+      patch: { exclude: value.exclude.filter((item) => item !== slug) },
+    });
+  return chips;
+});
+
+/**
+ * Whether the filters have anything to offer: with a query, what was found
+ * may have neither years nor tags, and then the sheet has nothing to open.
+ */
+const filtersOffered = computed(
+  () =>
+    !typed.value ||
+    filters.value.type === 'project' ||
+    search.value.facets.years.length > 1 ||
+    Boolean(filters.value.year) ||
+    search.value.facets.tags.length > 0,
+);
+
 const building = computed(() => {
   const state = search.value.building;
   return state && state.total
@@ -303,10 +368,10 @@ const countLine = computed(() => {
         :key="chip.kind ?? 'all'"
         type="button"
         :aria-pressed="filters.type === chip.kind"
-        class="inline-flex shrink-0 cursor-pointer items-center gap-1.5
-          rounded-full border px-sm py-1 text-sm font-semibold transition
+        class="inline-flex shrink-0 cursor-pointer items-center gap-1
+          rounded-full border px-2 py-0.5 text-xs font-semibold transition
           focus-visible:ring-2 focus-visible:ring-accent
-          focus-visible:outline-none"
+          focus-visible:outline-none sm:gap-1.5 sm:px-sm sm:py-1 sm:text-sm"
         :class="
           filters.type === chip.kind
             ? 'border-accent/50 bg-bg-accent text-accent'
@@ -355,6 +420,29 @@ const countLine = computed(() => {
             phrase.search_failed
           }}</span>
         </div>
+        <!-- What holds the results, on a phone: undone with a touch. -->
+        <ul
+          v-if="activeChips.length"
+          class="flex flex-wrap gap-xs sm:hidden"
+          :aria-label="phrase.search_filters"
+        >
+          <li v-for="chip in activeChips" :key="chip.key">
+            <button
+              type="button"
+              class="inline-flex cursor-pointer items-center gap-1 rounded-sm
+                border border-accent/45 bg-bg-accent py-0.5 pr-0.5 pl-1.5
+                text-xs font-semibold text-accent transition
+                focus-visible:ring-2 focus-visible:ring-accent
+                focus-visible:outline-none"
+              :aria-label="phrase.search_filter_remove(chip.label)"
+              @click="applyFilters(chip.patch)"
+            >
+              <Icon v-if="chip.icon" :name="chip.icon" class="shrink-0" />
+              {{ chip.label }}
+              <Icon name="close" class="shrink-0 text-base text-text-3" />
+            </button>
+          </li>
+        </ul>
         <!-- One kind may be read by its days: the diary of a year in order. -->
         <div
           v-if="typed && filters.type && search.total > 1"
@@ -368,7 +456,8 @@ const countLine = computed(() => {
             <button
               v-for="option in [
                 { sort: undefined, label: phrase.search_sort_best },
-                { sort: 'date' as const, label: phrase.search_sort_new },
+                { sort: 'new' as const, label: phrase.search_sort_new },
+                { sort: 'old' as const, label: phrase.search_sort_old },
               ]"
               :key="option.sort ?? 'best'"
               type="button"
@@ -444,7 +533,24 @@ const countLine = computed(() => {
           v-else-if="!pending"
           :title="phrase.search_empty"
           :description="phrase.search_empty_description"
-        />
+        >
+          <!-- What the site is most about, as words to try instead. -->
+          <template v-if="search.suggestions?.length">
+            <span class="text-sm text-text-3">{{ phrase.search_try }}</span>
+            <TheiLink
+              v-for="word in search.suggestions"
+              :key="word"
+              :to="{ path: '/search/', query: { q: word } }"
+              class="rounded-full border border-border-1 px-sm py-0.5 text-sm
+                font-semibold text-text-2 no-underline transition
+                focus-visible:ring-2 focus-visible:ring-accent
+                focus-visible:outline-none hocus:border-border-2
+                hocus:text-text-1"
+            >
+              {{ publicText(word) }}
+            </TheiLink>
+          </template>
+        </PublicEmptyState>
         <Pagination
           v-if="!typed || filters.type"
           :page="search.page"
@@ -465,6 +571,7 @@ const countLine = computed(() => {
     </div>
 
     <PublicSheet
+      v-if="filtersOffered"
       :title="phrase.search_filters"
       icon="tune"
       @open="sheetOpen = true"

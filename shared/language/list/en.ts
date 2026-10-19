@@ -507,6 +507,7 @@ export default defineI18nBase({
     search_tag_include: (tag) => `Only with “${tag}”`,
     search_tag_exclude: (tag) => `Without “${tag}”`,
     search_tag_remove: (tag) => `Remove “${tag}” from the filter`,
+    search_filter_remove: (filter) => `Remove the filter «${filter}»`,
     search_reset_filters: 'Reset filters',
     search_results_count: (projects, events) => {
       const parts = [
@@ -522,6 +523,7 @@ export default defineI18nBase({
     search_kind: (kind) =>
       ({
         project: 'Project',
+        'project-section': 'Project section',
         event: 'Event',
         'diary-entry': 'Diary',
         page: 'Page',
@@ -532,6 +534,7 @@ export default defineI18nBase({
     search_kind_group: (kind) =>
       ({
         project: 'Projects',
+        'project-section': 'Project sections',
         event: 'Events',
         'diary-entry': 'Diary',
         page: 'Pages',
@@ -542,9 +545,10 @@ export default defineI18nBase({
     search_where: (where) =>
       ({
         title: 'Title',
-        name: 'Another name',
+        name: 'Found by another name',
         summary: 'Description',
         heading: 'Heading',
+        section: 'Project section',
         text: 'Text',
         caption: 'Caption',
         file: 'File description',
@@ -562,6 +566,8 @@ export default defineI18nBase({
     search_where_section: (title) => `Section “${title}”`,
     search_access_private: 'Only you see it',
     search_access_link: 'Only those with the link see it',
+    search_access_private_short: 'Only you',
+    search_access_link_short: 'By link',
     search_edit: 'Edit',
     search_more_finds: (count) =>
       `In ${count} more ${count === 1 ? 'place' : 'places'}`,
@@ -573,11 +579,11 @@ export default defineI18nBase({
     search_keyboard: (read) =>
       `Found for “${read}”, the query as typed in the other keyboard layout.`,
     search_partial:
-      'Not all the words were found together: here is what holds some of them.',
+      'The words never stand all together: first what holds most of them.',
     search_building: (percent) =>
       `Search is still being prepared (${percent}%): some results may be missing.`,
     search_failed: 'Could not search. Try again.',
-    search_quick_empty: 'Try another word, or another form of it.',
+    search_quick_empty: 'Try another word.',
     search_key_hint: (key) => `Search · ${key}`,
     search_try: 'Try:',
     search_quick_hint:
@@ -586,6 +592,7 @@ export default defineI18nBase({
     search_sort: 'Order',
     search_sort_best: 'Best match',
     search_sort_new: 'Newest first',
+    search_sort_old: 'Oldest first',
     search_no_filters: 'There are no filters for this content',
     search_year_count: (year, count) => `${year}: ${count} found`,
     search_recent: 'Recent',
@@ -602,6 +609,7 @@ export default defineI18nBase({
     search_action_new_page: (title) => `New page “${title}”`,
     search_action_ask_ai: (text) => `Ask AI: “${text}”`,
     search_keys_choose: 'choose',
+    search_keys_group: 'next group',
     search_keys_open: 'open',
     search_keys_site: 'on the site',
     search_keys_edit: 'in the editor',

@@ -125,7 +125,9 @@ function hitRow(hit: SearchHit): Row {
     iconLabel: phrase.value.search_kind(hit.kind),
     title: searchHitTitle(hit),
     ...(hit.titleSegments ? { titleSegments: hit.titleSegments } : {}),
+    ...(hit.parent ? { parent: publicText(hit.parent.title) } : {}),
     when: searchHitWhen(hit) || undefined,
+    years: searchHitYears(hit) || undefined,
     access: searchAccessBadge(hit.access),
     ...(find && find.where !== 'title'
       ? {
@@ -136,7 +138,12 @@ function hitRow(hit: SearchHit): Row {
       : hit.file
         ? { detail: searchFileFacts(hit.file, size) }
         : hit.summary
-          ? { detail: publicText(hit.summary) }
+          ? {
+              detail: publicText(hit.summary),
+              ...(hit.summarySegments
+                ? { detailSegments: hit.summarySegments }
+                : {}),
+            }
           : {}),
     more: hit.more + Math.max(0, hit.finds.length - 1) || undefined,
     media: hit.media,
@@ -293,6 +300,29 @@ const { listId, activeIndex, optionId, move, pointAt, current } = useActiveRow(
 const rowIndex = computed(
   () => new Map(rows.value.map((row, index) => [row.key, index])),
 );
+/** Where each group starts: Tab goes from one to the next. */
+const groupStarts = computed(() => {
+  const starts: number[] = [];
+  let at = 0;
+  for (const section of sections.value) {
+    if (section.rows.length) starts.push(at);
+    at += section.rows.length;
+  }
+  return starts;
+});
+
+function moveGroup(step: 1 | -1) {
+  const starts = groupStarts.value;
+  if (starts.length < 2) return;
+  const now = current();
+  const here = starts.findLastIndex((start) => start <= now);
+  // Back: to the start of this group first, when not on it already.
+  const target =
+    step < 0 && starts[here]! < now
+      ? starts[here]!
+      : starts[(here + step + starts.length) % starts.length]!;
+  move(target - now);
+}
 
 function close() {
   open.value = false;
@@ -339,6 +369,9 @@ function onKeyDown(event: KeyboardEvent) {
   if (event.key === 'ArrowDown') {
     event.preventDefault();
     move(1);
+  } else if (event.key === 'Tab' && groupStarts.value.length > 1) {
+    event.preventDefault();
+    moveGroup(event.shiftKey ? -1 : 1);
   } else if (event.key === 'ArrowUp') {
     event.preventDefault();
     move(-1);
@@ -512,21 +545,21 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
           <Icon name="warning" class="shrink-0" />
           {{ phrase.search_failed }}
         </p>
-        <p
-          v-else-if="query && shown && !loading"
-          class="flex flex-col gap-0.5 px-xs py-sm text-sm"
+        <div
+          v-else-if="(query && shown && !loading) || !query"
+          class="flex flex-col gap-sm px-xs py-sm text-sm"
         >
-          <span class="font-semibold text-text-1">{{
-            phrase.search_empty
-          }}</span>
-          <span class="text-text-3">{{ phrase.search_quick_empty }}</span>
-        </p>
-        <div v-else-if="!query" class="flex flex-col gap-sm px-xs py-sm">
-          <p class="text-sm text-text-3">{{ phrase.search_quick_hint }}</p>
+          <p v-if="query" class="flex flex-col gap-0.5">
+            <span class="font-semibold text-text-1">{{
+              phrase.search_empty
+            }}</span>
+            <span class="text-text-3">{{ phrase.search_quick_empty }}</span>
+          </p>
+          <p v-else class="text-text-3">{{ phrase.search_quick_hint }}</p>
           <!-- What the site is most about, as words to try. -->
           <div
             v-if="shown?.suggestions?.length"
-            class="flex flex-wrap items-center gap-xs text-sm"
+            class="flex flex-wrap items-center gap-xs"
           >
             <span class="text-text-3">{{ phrase.search_try }}</span>
             <button
@@ -563,6 +596,9 @@ const KEY = `mr-0.5 inline-flex min-w-5 items-center justify-center rounded-xs
           >
           <span aria-hidden="true"
             ><kbd :class="KEY">Enter</kbd> {{ phrase.search_keys_open }}</span
+          >
+          <span v-if="groupStarts.length > 1" aria-hidden="true"
+            ><kbd :class="KEY">Tab</kbd> {{ phrase.search_keys_group }}</span
           >
           <span v-if="isAdmin" aria-hidden="true"
             ><kbd :class="KEY">Shift Enter</kbd> {{ otherLabel }}</span

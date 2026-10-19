@@ -3,7 +3,10 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { deflateRawSync, inflateRawSync } from 'node:zlib';
 import type { SearchAnalyzer } from '#layers/thei/shared/language/search';
-import { searchIndexTerms, searchTokens } from '#layers/thei/shared/search/tokens';
+import {
+  searchIndexTerms,
+  searchTokens,
+} from '#layers/thei/shared/search/tokens';
 import {
   documentFingerprint,
   placeHref,
@@ -19,7 +22,7 @@ import { SEARCH_FIELDS, type SearchUnit } from './units';
  * no migration, and may be deleted at any time: a file of another format, or
  * one made by another reading of words, is emptied and built again.
  */
-const FORMAT = 5;
+const FORMAT = 6;
 
 /** What a term may hold for FTS5 to keep it whole. */
 export function ftsTerm(term: string): string {
@@ -28,6 +31,8 @@ export function ftsTerm(term: string): string {
 
 export interface StoredCard {
   href: string;
+  parent?: SearchDocument['parent'];
+  shownAt?: string;
   editHref?: string;
   period?: SearchDocument['period'];
   summary?: string;
@@ -78,8 +83,7 @@ export class SearchStore {
     try {
       return (
         this.db.prepare("SELECT value FROM meta WHERE key = 'format'").get() as
-          | { value: string }
-          | undefined
+          { value: string } | undefined
       )?.value;
     } catch {
       return undefined;
@@ -127,14 +131,15 @@ export class SearchStore {
   getMeta(key: string): string | undefined {
     return (
       this.db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as
-        | { value: string }
-        | undefined
+        { value: string } | undefined
     )?.value;
   }
 
   setMeta(key: string, value: string) {
     this.db
-      .prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value')
+      .prepare(
+        'INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value',
+      )
       .run(key, value);
   }
 
@@ -150,7 +155,9 @@ export class SearchStore {
   fingerprints(audience: SearchAudience): Map<string, string> {
     return new Map(
       (
-        this.db.prepare('SELECT ref, fingerprint FROM docs WHERE audience = ?').all(audience) as {
+        this.db
+          .prepare('SELECT ref, fingerprint FROM docs WHERE audience = ?')
+          .all(audience) as {
           ref: string;
           fingerprint: string;
         }[]
@@ -164,7 +171,8 @@ export class SearchStore {
     for (const unit of units) {
       const list = byField.get(unit.field) ?? [];
       for (const token of searchTokens(unit.text, this.analyzer, 'index'))
-        for (const term of searchIndexTerms(unit.text, token)) list.push(ftsTerm(term));
+        for (const term of searchIndexTerms(unit.text, token))
+          list.push(ftsTerm(term));
       byField.set(unit.field, list);
     }
     return SEARCH_FIELDS.map((field) => (byField.get(field) ?? []).join(' '));
@@ -177,12 +185,17 @@ export class SearchStore {
   write(document: SearchDocument): boolean {
     const fingerprint = documentFingerprint(document);
     const existing = this.db
-      .prepare('SELECT id, fingerprint FROM docs WHERE audience = ? AND ref = ?')
-      .get(document.audience, document.ref) as { id: number; fingerprint: string } | undefined;
+      .prepare(
+        'SELECT id, fingerprint FROM docs WHERE audience = ? AND ref = ?',
+      )
+      .get(document.audience, document.ref) as
+      { id: number; fingerprint: string } | undefined;
     if (existing?.fingerprint === fingerprint) return false;
     const columns = this.columns(document.units);
     const card: StoredCard = {
       href: document.href,
+      ...(document.parent ? { parent: document.parent } : {}),
+      ...(document.shownAt ? { shownAt: document.shownAt } : {}),
       ...(document.editHref ? { editHref: document.editHref } : {}),
       ...(document.period ? { period: document.period } : {}),
       ...(document.summary ? { summary: document.summary } : {}),
@@ -193,7 +206,8 @@ export class SearchStore {
       ...(document.cv ? { cv: true } : {}),
     };
     this.db.transaction(() => {
-      if (existing) this.removeRow(document.audience, existing.id, document.ref);
+      if (existing)
+        this.removeRow(document.audience, existing.id, document.ref);
       const { lastInsertRowid } = this.db
         .prepare(
           'INSERT INTO docs (audience, kind, ref, title, date, year, visibleFrom, showcase, cv, fingerprint, card) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -220,14 +234,21 @@ export class SearchStore {
           `INSERT INTO fts_${document.audience} (rowid, ${SEARCH_FIELDS.join(', ')}) VALUES (?, ${SEARCH_FIELDS.map(() => '?').join(', ')})`,
         )
         .run(id, ...columns);
-      const tag = this.db.prepare('INSERT OR IGNORE INTO doc_tags (doc, tag) VALUES (?, ?)');
+      const tag = this.db.prepare(
+        'INSERT OR IGNORE INTO doc_tags (doc, tag) VALUES (?, ?)',
+      );
       for (const tagUuid of document.tags) tag.run(id, tagUuid);
       if (document.kind !== 'file') {
         const place = this.db.prepare(
           'INSERT INTO file_places (audience, ref, family, data) VALUES (?, ?, ?, ?)',
         );
         for (const shown of filePlacesOf(document))
-          place.run(document.audience, document.ref, shown.familyUuid, JSON.stringify(shown));
+          place.run(
+            document.audience,
+            document.ref,
+            shown.familyUuid,
+            JSON.stringify(shown),
+          );
       }
     })();
     return true;
@@ -238,7 +259,9 @@ export class SearchStore {
     this.db.prepare('DELETE FROM units WHERE doc = ?').run(id);
     this.db.prepare('DELETE FROM doc_tags WHERE doc = ?').run(id);
     this.db.prepare('DELETE FROM docs WHERE id = ?').run(id);
-    this.db.prepare('DELETE FROM file_places WHERE audience = ? AND ref = ?').run(audience, ref);
+    this.db
+      .prepare('DELETE FROM file_places WHERE audience = ? AND ref = ?')
+      .run(audience, ref);
   }
 
   /** Forgets a document. Returns whether there was one. */
@@ -252,48 +275,72 @@ export class SearchStore {
   }
 
   /** The places a reader sees the files of these families at. */
-  filePlaces(audience: SearchAudience, families?: Iterable<string>): Map<string, StoredFilePlace[]> {
+  filePlaces(
+    audience: SearchAudience,
+    families?: Iterable<string>,
+  ): Map<string, StoredFilePlace[]> {
     const rows = families
       ? [...new Set(families)].flatMap(
           (family) =>
             this.db
-              .prepare('SELECT family, data FROM file_places WHERE audience = ? AND family = ?')
+              .prepare(
+                'SELECT family, data FROM file_places WHERE audience = ? AND family = ?',
+              )
               .all(audience, family) as { family: string; data: string }[],
         )
-      : (this.db.prepare('SELECT family, data FROM file_places WHERE audience = ?').all(audience) as {
+      : (this.db
+          .prepare('SELECT family, data FROM file_places WHERE audience = ?')
+          .all(audience) as {
           family: string;
           data: string;
         }[]);
     const byFamily = new Map<string, StoredFilePlace[]>();
     for (const row of rows)
-      byFamily.set(row.family, [...(byFamily.get(row.family) ?? []), JSON.parse(row.data) as StoredFilePlace]);
+      byFamily.set(row.family, [
+        ...(byFamily.get(row.family) ?? []),
+        JSON.parse(row.data) as StoredFilePlace,
+      ]);
     return byFamily;
   }
 
   /** The families whose files a document shows, as stored. */
   familiesOf(audience: SearchAudience, ref: string): string[] {
     return (
-      this.db.prepare('SELECT DISTINCT family FROM file_places WHERE audience = ? AND ref = ?').all(audience, ref) as {
+      this.db
+        .prepare(
+          'SELECT DISTINCT family FROM file_places WHERE audience = ? AND ref = ?',
+        )
+        .all(audience, ref) as {
         family: string;
       }[]
     ).map((row) => row.family);
   }
 
   units(id: number): SearchUnit[] {
-    const row = this.db.prepare('SELECT data FROM units WHERE doc = ?').get(id) as { data: Buffer } | undefined;
-    return row ? (JSON.parse(inflateRawSync(row.data).toString()) as SearchUnit[]) : [];
+    const row = this.db
+      .prepare('SELECT data FROM units WHERE doc = ?')
+      .get(id) as { data: Buffer } | undefined;
+    return row
+      ? (JSON.parse(inflateRawSync(row.data).toString()) as SearchUnit[])
+      : [];
   }
 
   refs(audience: SearchAudience, kind?: string): string[] {
     return (
       (kind
-        ? this.db.prepare('SELECT ref FROM docs WHERE audience = ? AND kind = ?').all(audience, kind)
-        : this.db.prepare('SELECT ref FROM docs WHERE audience = ?').all(audience)) as { ref: string }[]
+        ? this.db
+            .prepare('SELECT ref FROM docs WHERE audience = ? AND kind = ?')
+            .all(audience, kind)
+        : this.db
+            .prepare('SELECT ref FROM docs WHERE audience = ?')
+            .all(audience)) as { ref: string }[]
     ).map((row) => row.ref);
   }
 
   count(): number {
-    return (this.db.prepare('SELECT count(*) AS n FROM docs').get() as { n: number }).n;
+    return (
+      this.db.prepare('SELECT count(*) AS n FROM docs').get() as { n: number }
+    ).n;
   }
 
   close() {
@@ -313,11 +360,19 @@ function filePlacesOf(document: SearchDocument): StoredFilePlace[] {
       assetUuid: file.assetUuid,
       ...(file.title ? { title: file.title } : {}),
       href: placeHref(document, unit.place!),
-      placeTitle: unit.place?.section ? `${document.title} · ${unit.place.section.title}` : document.title,
-      ...(unit.media ? { media: unit.media } : {}),
+      placeTitle: unit.place?.section
+        ? `${document.title} · ${unit.place.section.title}`
+        : document.parent
+          ? `${document.parent.title} · ${document.title}`
+          : document.title,
     };
+    // The preview of any of its words at the place: a title may come without.
+    if (!entry.media && unit.media) entry.media = unit.media;
     if (unit.where === 'file') entry.description = unit.text;
-    else entry.caption = entry.caption ? `${entry.caption} ${unit.text}` : unit.text;
+    else
+      entry.caption = entry.caption
+        ? `${entry.caption} ${unit.text}`
+        : unit.text;
     byFamily.set(key, entry);
   }
   return [...byFamily.values()];

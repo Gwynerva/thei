@@ -5,13 +5,19 @@ import {
   type PublicAssetDescriptor,
   type PublicSecretReference,
 } from '#layers/thei/shared/api/public';
-import { coverDatedPeriods, type DatedPeriod } from '#layers/thei/shared/date-precision';
+import {
+  coverDatedPeriods,
+  type DatedPeriod,
+} from '#layers/thei/shared/date-precision';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import { PROFILE_ID } from '#layers/thei/shared/profile';
-import { buildProjectUrl } from '#layers/thei/shared/project-url';
+import {
+  buildProjectSectionUrl,
+  buildProjectUrl,
+} from '#layers/thei/shared/project-url';
 import type { SearchKind } from '#layers/thei/shared/search/api';
 import { landingHash } from '#layers/thei/shared/search/landing';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
@@ -32,7 +38,12 @@ import {
 import { resolvePublicRelated } from '../public/related';
 import type { RelationEntityType } from '#layers/thei/shared/relation';
 import type { StoredFilePlace } from './store';
-import { contentUnits, fieldUnit, type SearchPlace, type SearchUnit } from './units';
+import {
+  contentUnits,
+  fieldUnit,
+  type SearchPlace,
+  type SearchUnit,
+} from './units';
 
 export type SearchAudience = 'public' | 'owner';
 export const SEARCH_AUDIENCES: readonly SearchAudience[] = ['public', 'owner'];
@@ -48,6 +59,10 @@ export interface SearchDocument {
   /** `project:<uuid>`, `file:<family>`…: one per entity and reader. */
   ref: string;
   title: string;
+  /** Of a section: the project it is a part of. */
+  parent?: { title: string; href: string };
+  /** Of a file: what shows it first. */
+  shownAt?: string;
   href: string;
   editHref?: string;
   /** The day it is ordered and filtered by. */
@@ -67,7 +82,9 @@ export interface SearchDocument {
 
 /** The fingerprint of what a document shows: a pass rewrites only changed ones. */
 export function documentFingerprint(document: SearchDocument): string {
-  return createHash('sha1').update(JSON.stringify(document)).digest('base64url');
+  return createHash('sha1')
+    .update(JSON.stringify(document))
+    .digest('base64url');
 }
 
 const viewerOf = (audience: SearchAudience): PublicViewer =>
@@ -90,7 +107,9 @@ export function dayArrives(day: string): number {
 }
 
 const names = (values: (string | undefined)[]) =>
-  values.flatMap((value) => fieldUnit('names', 'name', value, { hidden: true }));
+  values.flatMap((value) =>
+    fieldUnit('names', 'name', value, { hidden: true }),
+  );
 
 function tagUuidsOf(type: 'project' | 'event', id: string): string[] {
   const { db, schema } = THEI_SERVER.useDb();
@@ -130,13 +149,19 @@ function tagUnits(tagUuids: string[]): SearchUnit[] {
     ]);
 }
 
-function statusUnits(ownerType: 'project' | 'profile', ownerId: string): SearchUnit[] {
+function statusUnits(
+  ownerType: 'project' | 'profile',
+  ownerId: string,
+): SearchUnit[] {
   const { db, schema } = THEI_SERVER.useDb();
   return db
     .select()
     .from(schema.statuses)
     .where(
-      and(eq(schema.statuses.ownerType, ownerType), eq(schema.statuses.ownerId, ownerId)),
+      and(
+        eq(schema.statuses.ownerType, ownerType),
+        eq(schema.statuses.ownerId, ownerId),
+      ),
     )
     .all()
     .filter((status) => status.kind === 'regular')
@@ -175,7 +200,11 @@ function referenceUnits(references: {
 }): SearchUnit[] {
   return references.links.flatMap((link) =>
     fieldUnit('extra', 'link', link.note, {
-      place: { relation: { title: link.title }, link: link.href, zone: 'links' },
+      place: {
+        relation: { title: link.title },
+        link: link.href,
+        zone: 'links',
+      },
     }),
   );
 }
@@ -187,8 +216,10 @@ function relationHref(target: {
   publicId: string;
   date?: string;
 }): string {
-  if (target.type === 'project') return buildProjectUrl(target.humanReadableSlug, target.publicId);
-  if (target.type === 'event') return buildEventUrl(target.humanReadableSlug, target.publicId);
+  if (target.type === 'project')
+    return buildProjectUrl(target.humanReadableSlug, target.publicId);
+  if (target.type === 'event')
+    return buildEventUrl(target.humanReadableSlug, target.publicId);
   return buildDiaryUrl(target.date ?? '');
 }
 
@@ -200,13 +231,20 @@ function pageFileUnits(
   return files.flatMap((item) => {
     if (isPublicSecret(item)) return [];
     const place: SearchPlace = {
-      file: { familyUuid: item.key, assetUuid: item.key, ...(item.title ? { title: item.title } : {}) },
+      file: {
+        familyUuid: item.key,
+        assetUuid: item.key,
+        ...(item.title ? { title: item.title } : {}),
+      },
       zone,
     };
     const media = item.media ? { media: item.media } : {};
     return [
       ...fieldUnit('extra', 'caption', item.title, { place, ...media }),
-      ...fieldUnit('extra', 'caption', item.caption ?? item.description, { place, ...media }),
+      ...fieldUnit('extra', 'caption', item.caption ?? item.description, {
+        place,
+        ...media,
+      }),
       ...fieldUnit('extra', 'file', item.alt, { place, ...media }),
     ];
   });
@@ -228,14 +266,24 @@ function noteUnits(notes: Parameters<typeof contentUnits>[0]): SearchUnit[] {
  */
 function assetFamilies(uuids: string[]) {
   const { rawDb } = THEI_SERVER.useDb();
-  const rows = new Map<string, { familyUuid: string; type: string; extension: string; size: number }>();
+  const rows = new Map<
+    string,
+    { familyUuid: string; type: string; extension: string; size: number }
+  >();
   for (let at = 0; at < uuids.length; at += 400) {
     const chunk = uuids.slice(at, at + 400);
     for (const row of rawDb
       .prepare(
         `SELECT assetUuid, slug, familyUuid, type, extension, size FROM assets WHERE assetUuid IN (${chunk.map(() => '?').join(',')}) OR slug IN (${chunk.map(() => '?').join(',')})`,
       )
-      .all(...chunk, ...chunk) as { assetUuid: string; slug: string; familyUuid: string; type: string; extension: string; size: number }[]) {
+      .all(...chunk, ...chunk) as {
+      assetUuid: string;
+      slug: string;
+      familyUuid: string;
+      type: string;
+      extension: string;
+      size: number;
+    }[]) {
       rows.set(row.assetUuid, row);
       rows.set(row.slug, row);
     }
@@ -245,13 +293,27 @@ function assetFamilies(uuids: string[]) {
 
 /** Each file of a document under its family, as the library knows it. */
 function withFamilies(units: SearchUnit[]): SearchUnit[] {
-  const uuids = [...new Set(units.flatMap((unit) => (unit.place?.file ? [unit.place.file.assetUuid] : [])))];
+  const uuids = [
+    ...new Set(
+      units.flatMap((unit) =>
+        unit.place?.file ? [unit.place.file.assetUuid] : [],
+      ),
+    ),
+  ];
   if (!uuids.length) return units;
   const families = assetFamilies(uuids);
   return units.map((unit) => {
     const file = unit.place?.file;
     const family = file && families.get(file.assetUuid);
-    return family ? { ...unit, place: { ...unit.place, file: { ...file, familyUuid: family.familyUuid } } } : unit;
+    return family
+      ? {
+          ...unit,
+          place: {
+            ...unit.place,
+            file: { ...file, familyUuid: family.familyUuid },
+          },
+        }
+      : unit;
   });
 }
 
@@ -265,27 +327,33 @@ export async function projectDocument(
 ): Promise<SearchDocument | undefined> {
   const project = await THEI_SERVER.projects.findByUuid(projectUuid);
   if (!project) return undefined;
-  if (audience === 'public' && !canListPublicEntity(project.access, false)) return undefined;
+  if (audience === 'public' && !canListPublicEntity(project.access, false))
+    return undefined;
   const viewer = viewerOf(audience);
   const page = await buildPublicProject(project, viewer);
   const href = buildProjectUrl(project.humanReadableSlug, project.publicId);
+  // A section is found as a result of its own (`sectionDocument`): the
+  // project keeps only their titles, the parts it is made of.
   const sections = listProjectSections(project.projectUuid).filter(
     (section) => audience === 'owner' || !section.isPrivate,
   );
   const sectionUnits: SearchUnit[] = [];
   const days: DatedPeriod[] = [];
   for (const section of sections) {
-    const built = await buildPublicProjectSection(project, section, viewer);
     const place: SearchPlace = {
-      section: { id: section.sectionUuid, title: section.title, href: built.href },
+      section: {
+        id: section.sectionUuid,
+        title: section.title,
+        href: buildProjectSectionUrl(
+          project.humanReadableSlug,
+          project.publicId,
+          section.humanReadableSlug,
+          section.publicId,
+        ),
+      },
     };
     sectionUnits.push(
-      ...fieldUnit('headings', 'heading', section.title, { place }),
-      ...fieldUnit('summary', 'summary', section.summary, { place }),
-      ...section.periods.flatMap((period) =>
-        fieldUnit('extra', 'period', period.label, { place: { ...place, zone: 'periods' } }),
-      ),
-      ...placed(contentUnits(built.content), place),
+      ...fieldUnit('headings', 'section', section.title, { place }),
     );
     days.push(...section.periods);
   }
@@ -299,8 +367,15 @@ export async function projectDocument(
     ref: `project:${project.projectUuid}`,
     title: project.title,
     href,
-    ...(audience === 'owner' ? { editHref: `/admin/projects/${project.projectUuid}/edit/` } : {}),
-    ...(period ? { date: period.endDate, period: { startDate: period.startDate, endDate: period.endDate } } : {}),
+    ...(audience === 'owner'
+      ? { editHref: `/admin/projects/${project.projectUuid}/edit/` }
+      : {}),
+    ...(period
+      ? {
+          date: period.endDate,
+          period: { startDate: period.startDate, endDate: period.endDate },
+        }
+      : {}),
     visibleFrom: 0,
     ...accessOf(audience, project.access),
     summary: project.summary,
@@ -325,16 +400,95 @@ export async function projectDocument(
   };
 }
 
+/**
+ * A section of a project as a result of its own: its title, description,
+ * periods and text, found by those who may open its page — a stranger not
+ * in a private section, nor in a project that is not public. It carries its
+ * project's tags and names its project.
+ */
+export async function sectionDocument(
+  sectionUuid: string,
+  audience: SearchAudience,
+): Promise<SearchDocument | undefined> {
+  const { rawDb } = THEI_SERVER.useDb();
+  const owner = rawDb
+    .prepare(
+      'SELECT projectUuid FROM "project-content-sections" WHERE sectionUuid = ?',
+    )
+    .get(sectionUuid) as { projectUuid: string } | undefined;
+  const project =
+    owner && (await THEI_SERVER.projects.findByUuid(owner.projectUuid));
+  if (!project) return undefined;
+  const section = listProjectSections(project.projectUuid).find(
+    (item) => item.sectionUuid === sectionUuid,
+  );
+  if (!section) return undefined;
+  if (
+    audience === 'public' &&
+    (section.isPrivate || !canListPublicEntity(project.access, false))
+  )
+    return undefined;
+  const built = await buildPublicProjectSection(
+    project,
+    section,
+    viewerOf(audience),
+  );
+  const period = section.periods.length
+    ? coverDatedPeriods(section.periods)
+    : undefined;
+  return {
+    audience,
+    kind: 'project-section',
+    ref: `project-section:${section.sectionUuid}`,
+    title: section.title,
+    parent: {
+      title: project.title,
+      href: buildProjectUrl(project.humanReadableSlug, project.publicId),
+    },
+    href: built.href,
+    ...(audience === 'owner'
+      ? {
+          editHref: `/admin/projects/${project.projectUuid}/edit/?section=${section.publicId}`,
+        }
+      : {}),
+    ...(period
+      ? {
+          date: period.endDate,
+          period: { startDate: period.startDate, endDate: period.endDate },
+        }
+      : {}),
+    visibleFrom: 0,
+    ...accessOf(audience, section.isPrivate ? 'private' : project.access),
+    summary: section.summary,
+    media: built.media,
+    tags: tagUuidsOf('project', project.projectUuid),
+    units: withFamilies([
+      ...fieldUnit('title', 'title', section.title),
+      ...fieldUnit('summary', 'summary', section.summary),
+      ...names([section.humanReadableSlug]),
+      ...section.periods.flatMap((item) =>
+        fieldUnit('extra', 'period', item.label, {
+          place: { zone: 'periods' },
+        }),
+      ),
+      ...contentUnits(built.content),
+    ]),
+  };
+}
+
 export async function eventDocument(
   eventUuid: string,
   audience: SearchAudience,
 ): Promise<SearchDocument | undefined> {
   const event = await THEI_SERVER.events.findByUuid(eventUuid);
   if (!event) return undefined;
-  if (audience === 'public' && !canListPublicEntity(event.access, false)) return undefined;
+  if (audience === 'public' && !canListPublicEntity(event.access, false))
+    return undefined;
   const viewer = viewerOf(audience);
   const page = await buildPublicEvent(event, viewer);
-  const period = page.periods.length ? coverDatedPeriods(page.periods) : undefined;
+  const period = page.periods.length
+    ? coverDatedPeriods(page.periods)
+    : undefined;
   const tags = tagUuidsOf('event', event.eventUuid);
   return {
     audience,
@@ -342,9 +496,17 @@ export async function eventDocument(
     ref: `event:${event.eventUuid}`,
     title: event.title,
     href: buildEventUrl(event.humanReadableSlug, event.publicId),
-    ...(audience === 'owner' ? { editHref: `/admin/events/${event.eventUuid}/edit/` } : {}),
-    ...(period ? { date: period.endDate, period: { startDate: period.startDate, endDate: period.endDate } } : {}),
-    visibleFrom: audience === 'public' && period ? dayArrives(period.startDate) : 0,
+    ...(audience === 'owner'
+      ? { editHref: `/admin/events/${event.eventUuid}/edit/` }
+      : {}),
+    ...(period
+      ? {
+          date: period.endDate,
+          period: { startDate: period.startDate, endDate: period.endDate },
+        }
+      : {}),
+    visibleFrom:
+      audience === 'public' && period ? dayArrives(period.startDate) : 0,
     ...accessOf(audience, event.access),
     summary: event.summary,
     media: page.media,
@@ -355,7 +517,9 @@ export async function eventDocument(
       ...names([event.humanReadableSlug, ...event.synonyms]),
       ...tagUnits(tags),
       ...page.periods.flatMap((item) =>
-        fieldUnit('extra', 'period', item.label, { place: { zone: 'periods' } }),
+        fieldUnit('extra', 'period', item.label, {
+          place: { zone: 'periods' },
+        }),
       ),
       ...contentUnits(page.content),
       ...pageFileUnits(page.references.files, 'files'),
@@ -372,7 +536,8 @@ export async function diaryDocument(
 ): Promise<SearchDocument | undefined> {
   const entry = await THEI_SERVER.diary.findByUuid(diaryUuid);
   if (!entry) return undefined;
-  if (audience === 'public' && !canListPublicEntity(entry.access, false)) return undefined;
+  if (audience === 'public' && !canListPublicEntity(entry.access, false))
+    return undefined;
   const viewer = viewerOf(audience);
   const page = await buildPublicDiaryEntry(entry, viewer);
   return {
@@ -381,7 +546,9 @@ export async function diaryDocument(
     ref: `diary-entry:${entry.diaryUuid}`,
     title: entry.date,
     href: buildDiaryUrl(entry.date),
-    ...(audience === 'owner' ? { editHref: `/admin/diary/${entry.diaryUuid}/edit/` } : {}),
+    ...(audience === 'owner'
+      ? { editHref: `/admin/diary/${entry.diaryUuid}/edit/` }
+      : {}),
     date: entry.date,
     visibleFrom: audience === 'public' ? dayArrives(entry.date) : 0,
     ...accessOf(audience, entry.access),
@@ -401,7 +568,8 @@ export async function pageDocument(
 ): Promise<SearchDocument | undefined> {
   const stored = await THEI_SERVER.pages.findByUuid(pageUuid);
   if (!stored) return undefined;
-  if (audience === 'public' && !canListPublicEntity(stored.access, false)) return undefined;
+  if (audience === 'public' && !canListPublicEntity(stored.access, false))
+    return undefined;
   const page = await buildPublicPage(stored, viewerOf(audience));
   return {
     audience,
@@ -409,7 +577,9 @@ export async function pageDocument(
     ref: `page:${stored.pageUuid}`,
     title: stored.title,
     href: buildPageUrl(stored.slug),
-    ...(audience === 'owner' ? { editHref: `/admin/pages/${stored.pageUuid}/edit/` } : {}),
+    ...(audience === 'owner'
+      ? { editHref: `/admin/pages/${stored.pageUuid}/edit/` }
+      : {}),
     visibleFrom: 0,
     ...accessOf(audience, stored.access),
     summary: stored.summary,
@@ -429,18 +599,31 @@ export async function pageDocument(
  * The tags a reader may find: every tag for the owner, and for a stranger
  * the ones a public project or event carries — the tags whose page opens.
  */
-export async function tagDocuments(audience: SearchAudience): Promise<SearchDocument[]> {
+export async function tagDocuments(
+  audience: SearchAudience,
+): Promise<SearchDocument[]> {
   const { db, schema } = THEI_SERVER.useDb();
   const tags = db.select().from(schema.tags).all();
   let shown = tags;
   if (audience === 'public') {
     const carried = new Set<string>();
     const publicOwners = new Set([
-      ...db.select().from(schema.projects).all().filter((row) => canListPublicEntity(row.access, false)).map((row) => `project:${row.projectUuid}`),
-      ...db.select().from(schema.events).all().filter((row) => canListPublicEntity(row.access, false)).map((row) => `event:${row.eventUuid}`),
+      ...db
+        .select()
+        .from(schema.projects)
+        .all()
+        .filter((row) => canListPublicEntity(row.access, false))
+        .map((row) => `project:${row.projectUuid}`),
+      ...db
+        .select()
+        .from(schema.events)
+        .all()
+        .filter((row) => canListPublicEntity(row.access, false))
+        .map((row) => `event:${row.eventUuid}`),
     ]);
     for (const usage of db.select().from(schema.tagUsages).all())
-      if (publicOwners.has(`${usage.containerType}:${usage.containerId}`)) carried.add(usage.tagUuid);
+      if (publicOwners.has(`${usage.containerType}:${usage.containerId}`))
+        carried.add(usage.tagUuid);
     shown = tags.filter((tag) => carried.has(tag.tagUuid));
   }
   const summaries = await buildPublicTags(
@@ -458,7 +641,9 @@ export async function tagDocuments(audience: SearchAudience): Promise<SearchDocu
     ref: `tag:${tag.tagUuid}`,
     title: tag.title,
     href: buildTagUrl(tag.slug, tag.publicId),
-    ...(audience === 'owner' ? { editHref: `/admin/tags/${tag.tagUuid}/edit/` } : {}),
+    ...(audience === 'owner'
+      ? { editHref: `/admin/tags/${tag.tagUuid}/edit/` }
+      : {}),
     visibleFrom: 0,
     summary: tag.description,
     media: summaries[at]?.iconMedia,
@@ -471,7 +656,9 @@ export async function tagDocuments(audience: SearchAudience): Promise<SearchDocu
   }));
 }
 
-export async function profileDocument(audience: SearchAudience): Promise<SearchDocument | undefined> {
+export async function profileDocument(
+  audience: SearchAudience,
+): Promise<SearchDocument | undefined> {
   const profile = getProfile();
   if (!profile) return undefined;
   const identity = await getProfileIdentity();
@@ -501,13 +688,19 @@ export async function profileDocument(audience: SearchAudience): Promise<SearchD
       ...fieldUnit('summary', 'summary', profile.slogan),
       ...names([profile.nickname]),
       ...(profile.facts ?? []).flatMap((fact) =>
-        fieldUnit('extra', 'fact', `${fact.name}: ${fact.value}`, { place: { zone: 'facts' } }),
+        fieldUnit('extra', 'fact', `${fact.name}: ${fact.value}`, {
+          place: { zone: 'facts' },
+        }),
       ),
       ...contentUnits(about),
       ...links.flatMap((link) =>
         [link.name, link.note].flatMap((words) =>
           fieldUnit('extra', 'link', words, {
-            place: { relation: { title: link.name || link.title || link.url }, link: link.url, zone: 'links' },
+            place: {
+              relation: { title: link.name || link.title || link.url },
+              link: link.url,
+              zone: 'links',
+            },
           }),
         ),
       ),
@@ -555,16 +748,19 @@ export function fileDocuments(
     }
     const first = shown[0];
     const title = shown.find((place) => place.title)?.title ?? '';
+    // A picture of some place is the file's, whichever place gave it.
+    const media = shown.find((place) => place.media)?.media;
     result.set(family, {
       audience,
       kind: 'file',
       ref: `file:${family}`,
       title,
+      ...(first ? { shownAt: first.placeTitle } : {}),
       // A file lives on the pages that show it: the first of them, at the file.
       href: first?.href ?? '',
       visibleFrom: 0,
       ...(description ? { summary: description } : {}),
-      ...(first?.media ? { media: first.media } : {}),
+      ...(media ? { media } : {}),
       file: {
         assetUuid: first?.assetUuid ?? firstAsset(family)!,
         type: asset.type,
@@ -573,8 +769,18 @@ export function fileDocuments(
       },
       tags: [],
       units: [
-        ...fieldUnit('title', 'title', title, first ? { place: { href: first.href } } : {}),
-        ...fieldUnit('summary', 'file', description, first ? { place: { href: first.href } } : {}),
+        ...fieldUnit(
+          'title',
+          'title',
+          title,
+          first ? { place: { href: first.href } } : {},
+        ),
+        ...fieldUnit(
+          'summary',
+          'file',
+          description,
+          first ? { place: { href: first.href } } : {},
+        ),
         ...shown.flatMap((place) =>
           fieldUnit('text', 'caption', place.caption, {
             place: { href: place.href, relation: { title: place.placeTitle } },
@@ -599,17 +805,25 @@ export function unplacedDescribedFiles(
   return new Map(
     rows
       .filter((row) => row.assetUuid && !placed.has(row.familyUuid))
-      .map((row) => [row.familyUuid, { assetUuid: row.assetUuid!, description: row.text }]),
+      .map((row) => [
+        row.familyUuid,
+        { assetUuid: row.assetUuid!, description: row.text },
+      ]),
   );
 }
 
 /** The address of a place in a document: its page, at its block. */
-export function placeHref(document: Pick<SearchDocument, 'href'>, place: SearchPlace): string {
+export function placeHref(
+  document: Pick<SearchDocument, 'href'>,
+  place: SearchPlace,
+): string {
   if (place.href) return place.href;
   const page = place.section?.href ?? document.href;
   const hash = landingHash({
     ...(place.block ? { block: place.block } : {}),
-    ...(place.file && (place.block || place.zone) ? { file: place.file.assetUuid } : {}),
+    ...(place.file && (place.block || place.zone)
+      ? { file: place.file.assetUuid }
+      : {}),
     ...(place.relation?.kind && place.relation.href
       ? { relation: { kind: place.relation.kind, href: place.relation.href } }
       : {}),

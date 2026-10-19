@@ -33,7 +33,7 @@ export default defineEventHandler(async (event): Promise<SearchResponse> => {
   const started = performance.now();
   // The quick search with nothing typed finds nothing: it offers words to
   // try, and the owner what to do.
-  const response: SearchResponse =
+  const found: SearchResponse =
     quick && !filters.q.trim()
       ? {
           query: '',
@@ -59,6 +59,11 @@ export default defineEventHandler(async (event): Promise<SearchResponse> => {
           typing: query.typing === '1',
         });
   if (!isAdmin) spendSearchTime(performance.now() - started);
+  // Nothing found: what the site is about, as other words to try.
+  const response =
+    filters.q.trim() && !found.total
+      ? { ...found, suggestions: popularTagTitles(isAdmin) }
+      : found;
   if (!isAdmin || !quick) return response;
   const today =
     typeof query.today === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(query.today)

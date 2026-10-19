@@ -121,9 +121,13 @@ export const SEARCH_COLUMNS: Record<string, SearchSource> = {
   'pages.synonyms': { found: 'name, never shown' },
   'project-content-sections.sectionUuid': ID,
   'project-content-sections.projectUuid': ID,
-  'project-content-sections.title': { found: 'heading' },
-  'project-content-sections.summary': { found: 'summary' },
-  'project-content-sections.humanReadableSlug': ID,
+  'project-content-sections.title': {
+    found: 'title of the section; heading of its project',
+  },
+  'project-content-sections.summary': { found: 'summary of the section' },
+  'project-content-sections.humanReadableSlug': {
+    found: 'name of the section',
+  },
   'project-content-sections.publicId': ID,
   'periods.ownerType': ID,
   'periods.ownerId': ID,
@@ -165,7 +169,7 @@ export const SEARCH_COLUMNS: Record<string, SearchSource> = {
 export const SEARCH_CONTENT_SLOTS: Record<ContentSlot, SearchSource> = {
   'profile-about': { found: 'text, on the profile' },
   'project-description': { found: 'text' },
-  'project-section-body': { found: 'text, at its section' },
+  'project-section-body': { found: 'text of the section' },
   'event-body': { found: 'text' },
   'page-body': { found: 'text' },
   'diary-body': { found: 'text' },
