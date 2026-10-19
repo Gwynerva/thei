@@ -29,15 +29,23 @@ function queryString(value: unknown): string {
   return typeof first === 'string' ? first : '';
 }
 
+/** The most tags a search narrows by, each way, and the longest slug read. */
+export const PUBLIC_SEARCH_TAGS_MAX = 10;
+export const PUBLIC_SEARCH_SLUG_MAX_LENGTH = 200;
+
+/**
+ * The tags of an address, each once: the same few on the page and on the
+ * server, so a long list costs nothing to look up.
+ */
 function slugList(value: unknown): string[] {
   return [
     ...new Set(
       queryString(value)
         .split(',')
         .map((slug) => slug.trim())
-        .filter(Boolean),
+        .filter((slug) => slug && slug.length <= PUBLIC_SEARCH_SLUG_MAX_LENGTH),
     ),
-  ];
+  ].slice(0, PUBLIC_SEARCH_TAGS_MAX);
 }
 
 export function parsePublicSearchFilters(

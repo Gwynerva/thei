@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  PUBLIC_SEARCH_TAGS_MAX,
   parsePublicSearchFilters,
   PUBLIC_SEARCH_PRESETS,
   publicSearchPreset,
@@ -70,5 +71,22 @@ describe('public search presets', () => {
       );
       expect(publicSearchPreset(filters(query))?.id).toBe(preset.id);
     }
+  });
+});
+
+describe('public search tags', () => {
+  it('reads a few short slugs each way, each once', () => {
+    const many = Array.from({ length: 30 }, (_, at) => `tag-${at}`).join(',');
+    const parsed = parsePublicSearchFilters({
+      tags: `${many},tag-0,${'x'.repeat(201)}`,
+      exclude: many,
+    });
+    expect(parsed.tags).toHaveLength(PUBLIC_SEARCH_TAGS_MAX);
+    expect(parsed.tags.every((slug) => slug.length <= 200)).toBe(true);
+    // A tag asked for is never also left out.
+    expect(parsed.exclude.some((slug) => parsed.tags.includes(slug))).toBe(
+      false,
+    );
+    expect(parsed.exclude.length).toBeLessThanOrEqual(PUBLIC_SEARCH_TAGS_MAX);
   });
 });

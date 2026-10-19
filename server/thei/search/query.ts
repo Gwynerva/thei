@@ -971,21 +971,36 @@ export function findsOfResult(request: {
 }
 
 /**
- * `runSearch`, remembered: the last answers, each for the index's generation
- * it was made at, so an answer never outlives a change of what it shows.
+ * The key of a remembered answer: the index's generation, so an answer never
+ * outlives a change of what it shows, and the days, so it never outlives one
+ * coming — «вчера» moves at midnight, and a day arrives somewhere on Earth
+ * fourteen hours before (`dayArrives`).
  */
+function cacheKey(request: SearchRequest, generation: number): string {
+  const { now = Date.now(), ...asked } = request;
+  const days = `${utcDayOf(now)}/${utcDayOf(now + 14 * 60 * 60 * 1000)}`;
+  return `${generation}\u0000${days}\u0000${JSON.stringify(asked)}`;
+}
+
+/** A remembered answer, if there is one: costs nothing to give again. */
+export function peekCachedSearch(
+  request: SearchRequest,
+): SearchResponse | undefined {
+  const key = cacheKey(request, useSearchStore().generation);
+  const known = cache.get(key);
+  if (!known || known.building) return undefined;
+  cache.delete(key);
+  cache.set(key, known);
+  return known;
+}
+
+/** `runSearch`, remembered (`cacheKey`). */
 export async function cachedSearch(
   request: SearchRequest,
 ): Promise<SearchResponse> {
-  const store = useSearchStore();
-  const { now: _now, ...asked } = request;
-  const key = `${store.generation}\u0000${JSON.stringify(asked)}`;
-  const known = cache.get(key);
-  if (known && !known.building) {
-    cache.delete(key);
-    cache.set(key, known);
-    return known;
-  }
+  const known = peekCachedSearch(request);
+  if (known) return known;
+  const key = cacheKey(request, useSearchStore().generation);
   const response = await runSearch(request);
   cache.set(key, response);
   if (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value!);

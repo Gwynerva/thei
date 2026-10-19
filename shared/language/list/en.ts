@@ -581,6 +581,7 @@ export default defineI18nBase({
     search_partial: 'Shown by the words apart: they never stand all together.',
     search_building: (percent) =>
       `Search is still being prepared (${percent}%): some results may be missing.`,
+    search_busy: 'The search is busy: an answer is on its way.',
     search_failed: 'Could not search. Try again.',
     search_quick_empty: 'Try another word.',
     search_quick_hint:

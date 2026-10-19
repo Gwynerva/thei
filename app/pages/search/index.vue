@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import {
+  emptySearchResponse,
   SEARCH_KINDS,
   type SearchKind,
   type SearchResponse,
@@ -51,8 +52,29 @@ const request = computed(() => {
 const resource = await useFetch<SearchResponse>('/api/search', {
   query: request,
 });
-if (resource.error.value) throw createResourceError(resource.error.value);
-if (!resource.data.value)
+/** Turned away for a while: too many at once, or the server busy. */
+const turnedAway = (error: unknown) => {
+  const status = (error as { statusCode?: number } | null)?.statusCode;
+  return status === 429 || status === 503;
+};
+// Turned away while the page is rendered on the server, it still opens: the
+// field and the filters, nothing found yet, its status saying so, and it asks
+// again once in the browser. Never a catalogue remembered from before: it
+// could show what has just been closed.
+const refused = turnedAway(resource.error.value);
+if (resource.error.value && !refused)
+  throw createResourceError(resource.error.value);
+if (refused && import.meta.server) {
+  const event = useRequestEvent();
+  if (event) {
+    setResponseStatus(
+      event,
+      (resource.error.value as { statusCode: number }).statusCode,
+    );
+    setResponseHeader(event, 'Retry-After', 1);
+  }
+}
+if (!refused && !resource.data.value)
   throw createResourceError({
     statusCode: 502,
     statusMessage: 'Empty API response',
@@ -60,20 +82,24 @@ if (!resource.data.value)
 
 // A search that fails while typing keeps what was found before: too many at
 // once waits as long as it was told to and asks again.
-let held: SearchResponse = resource.data.value;
+let held: SearchResponse = resource.data.value ?? emptySearchResponse();
 const search = computed(() => {
   if (resource.data.value) held = resource.data.value;
   return held;
 });
 const failed = ref(false);
+const busy = ref(refused);
 let retry: ReturnType<typeof setTimeout> | undefined;
 watch(resource.error, (error) => {
   clearTimeout(retry);
   failed.value = false;
+  busy.value = turnedAway(error);
   if (!error) return;
-  const status = (error as { statusCode?: number }).statusCode;
-  if (status === 429) retry = setTimeout(() => void resource.refresh(), 1500);
+  if (busy.value) retry = setTimeout(() => void resource.refresh(), 1500);
   else failed.value = true;
+});
+onMounted(() => {
+  if (refused) retry = setTimeout(() => void resource.refresh(), 1000);
 });
 onBeforeUnmount(() => clearTimeout(retry));
 
@@ -422,13 +448,14 @@ const countLine = computed(() => {
     >
       <section class="flex min-w-0 flex-col gap-sm" aria-live="polite">
         <div
-          v-if="!typed || failed"
+          v-if="!typed || failed || busy"
           class="flex min-h-6 flex-wrap items-center gap-x-xs gap-y-0.5 text-sm
             text-text-3"
         >
-          <span v-if="!typed">{{ countLine }}</span>
+          <span v-if="busy">{{ phrase.search_busy }}</span>
+          <span v-else-if="!typed">{{ countLine }}</span>
           <Icon
-            v-if="pending && !typed"
+            v-if="(pending && !typed) || busy"
             name="loading"
             class="text-base"
             aria-hidden="true"
@@ -513,7 +540,7 @@ const countLine = computed(() => {
           </section>
         </div>
         <PublicEmptyState
-          v-else-if="!pending"
+          v-else-if="!pending && !busy"
           :title="phrase.search_empty"
           :description="phrase.search_empty_description"
         >

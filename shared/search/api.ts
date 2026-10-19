@@ -174,6 +174,18 @@ export interface SearchFacets {
   }[];
 }
 
+/** An answer with nothing in it: what nothing typed, or a refusal, shows. */
+export function emptySearchResponse(): SearchResponse {
+  return {
+    query: '',
+    total: 0,
+    groups: [],
+    facets: { kinds: {}, years: [], tags: [] },
+    page: 1,
+    pageCount: 1,
+  };
+}
+
 export interface SearchResponse {
   /** The query as read. */
   query: string;
