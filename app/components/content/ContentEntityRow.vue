@@ -5,8 +5,9 @@ import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 /**
  * One entity in a picker's list: its picture along the right edge, its
  * kind's glyph and its title — and, with `secondary`, what it belongs to or
- * says of itself on a quieter line under it. `active` is where the keys
- * are; `chosen`, the choice a confirming picker holds, marked in the accent.
+ * says of itself on a quieter line under it. `active` is the row Enter
+ * takes, ringed as the select's option is; `chosen`, the choice a confirming
+ * picker holds, marked in the accent.
  */
 const props = defineProps<{
   item: ContentEntityChoice;
@@ -37,8 +38,12 @@ const detail = computed(() =>
         hocus:bg-bg-3"
       :class="[
         secondary ? 'min-h-12' : 'min-h-10 pointer-coarse:min-h-11',
-        { 'bg-bg-3': active, 'entity-row-chosen': chosen },
+        {
+          'entity-row-active bg-bg-3': active,
+          'entity-row-chosen': chosen,
+        },
       ]"
+      :data-active="active || undefined"
       @pointermove="$emit('point', $event)"
       @click="$emit('pick')"
     >
@@ -79,9 +84,18 @@ const detail = computed(() =>
 
 <style scoped>
 /*
- * The choice a confirming picker holds, marked in the accent. An outline is
- * drawn over the picture along the edge, where an inset shadow would not be.
+ * Outlines rather than the select's inset ring: an outline is drawn over the
+ * picture along the edge, where an inset shadow would not be.
+ *
+ * The row Enter takes: the ring of the select's option, apart from the shade
+ * a pointer gives.
  */
+.entity-row-active {
+  outline: 2px solid color-mix(in oklab, var(--color-accent) 60%, transparent);
+  outline-offset: -2px;
+}
+
+/* The choice a confirming picker holds, marked in the accent. */
 .entity-row-chosen {
   background-color: color-mix(
     in oklab,
@@ -90,5 +104,10 @@ const detail = computed(() =>
   );
   outline: 1.5px solid var(--color-accent);
   outline-offset: -1.5px;
+}
+
+.entity-row-chosen.entity-row-active {
+  outline-width: 2.5px;
+  outline-offset: -2.5px;
 }
 </style>

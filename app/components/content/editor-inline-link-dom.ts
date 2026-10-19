@@ -3,7 +3,8 @@ import {
   type ContentEntityType,
 } from '#layers/thei/shared/content-link';
 import type EditorJS from '@editorjs/editorjs';
-import { editableFieldOf, insertInlineElement } from './editor-edit-commands';
+import { markupAround } from '#layers/thei/app/composables/editor-inline-dom';
+import { editableFieldOf, writeMarkup } from './editor-edit-commands';
 
 /**
  * Marks words of the text with a highlight of `editor.css`, or takes the
@@ -93,37 +94,36 @@ export function applyLinkAttributes(
 /**
  * A link never holds a link. Text taken over from another link — a selection
  * that began inside one — keeps its words and loses the other link's markup.
+ * Only ever on a link not in the text yet.
  */
-export function unwrapNestedLinks(link: HTMLAnchorElement) {
+function unwrapNestedLinks(link: HTMLAnchorElement) {
   for (const inner of Array.from(link.querySelectorAll('a')))
     inner.replaceWith(...Array.from(inner.childNodes));
 }
 
-/** The link a range lies wholly inside, if any. */
-function linkAroundRange(range: Range): HTMLAnchorElement | undefined {
-  const node = range.commonAncestorContainer;
-  const element = node instanceof Element ? node : node.parentElement;
-  return element?.closest('a') ?? undefined;
-}
-
 /**
- * Makes a range a link: the link it already lies in is rewritten, otherwise
- * its content is wrapped in a new one, put in as one editing command that
- * Ctrl+Z takes back whole. Returns the link, if it is in the text.
+ * Makes a range a link, as one editing command Ctrl+Z takes back whole: the
+ * link it lies in already is put back with the new target, otherwise its
+ * words — or `label`, for a range of none — go into a new one. Returns the
+ * link now in the text.
  */
 export function linkRange(
   range: Range,
   attributes: InlineLinkAttributes,
+  label?: string,
 ): HTMLAnchorElement | undefined {
-  const around = linkAroundRange(range);
-  if (around) {
-    unwrapNestedLinks(around);
-    applyLinkAttributes(around, attributes);
-    return around;
-  }
-  const link = document.createElement('a');
-  link.append(range.cloneContents());
-  unwrapNestedLinks(link);
-  applyLinkAttributes(link, attributes);
-  return insertInlineElement(range, link) as HTMLAnchorElement | undefined;
+  const around = markupAround(range.commonAncestorContainer).find(
+    (element): element is HTMLAnchorElement =>
+      element instanceof HTMLAnchorElement,
+  );
+  return writeMarkup(
+    range,
+    around,
+    () => document.createElement('a'),
+    (link) => {
+      unwrapNestedLinks(link);
+      applyLinkAttributes(link, attributes);
+      if (label && !link.textContent?.trim()) link.textContent = label;
+    },
+  );
 }

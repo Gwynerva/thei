@@ -256,6 +256,19 @@ export default defineI18nModule({
     asset_library_described_none: 'Без описания',
     asset_library_described_some: 'С описанием',
     asset_used_elsewhere: 'Где ещё используется',
+    asset_about: 'О файле',
+    asset_format: (kind, extension) => {
+      const upper = extension.toUpperCase();
+      return {
+        pdf: 'Документ PDF',
+        zip: 'Архив ZIP',
+        table: `Таблица ${upper}`,
+        text: 'Текст',
+        markdown: 'Текст Markdown',
+        html: 'Страница HTML',
+        other: upper ? `Файл ${upper}` : 'Файл',
+      }[kind];
+    },
     asset_library_properties: 'Свойства файла',
     asset_library_settings: 'Как получен файл',
     asset_recipe_original: 'Сохранён как загружен',
@@ -1516,6 +1529,7 @@ export default defineI18nModule({
     content_private_section: 'Приватная секция',
     content_private_section_start: 'Начало приватной секции',
     content_private_section_end: 'Конец приватной секции',
+    content_private_section_remove: 'Убрать приватную секцию',
     content_editor_i18n: {
       add: 'Добавить',
       convert_to: 'Поменять на…',

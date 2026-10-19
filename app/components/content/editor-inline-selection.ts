@@ -1,5 +1,12 @@
-const INLINE_HORIZONTAL_SPACE =
-  /[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/;
+import { HORIZONTAL_SPACE_CHARACTERS } from '#layers/thei/shared/content-link';
+import {
+  caretAfterLetters,
+  editableFieldOf,
+  lettersBefore,
+} from '#layers/thei/app/composables/editor-inline-dom';
+import { selectRange } from './editor-edit-commands';
+
+const INLINE_HORIZONTAL_SPACE = new RegExp(`[${HORIZONTAL_SPACE_CHARACTERS}]`);
 
 export function trimInlineSelectionOffsets(
   text: string,
@@ -26,25 +33,25 @@ export function trimInlineSelectionOffsets(
  */
 export function trimInlineRange(range: Range): Range | undefined {
   if (range.collapsed) return range;
-  const root = editableRoot(range.startContainer);
-  if (!root || !root.contains(range.endContainer)) return range;
+  const field = editableFieldOf(range.startContainer);
+  if (!field || !field.contains(range.endContainer)) return range;
 
-  const prefix = document.createRange();
-  prefix.selectNodeContents(root);
-  prefix.setEnd(range.startContainer, range.startOffset);
-  const start = prefix.toString().length;
+  const start = lettersBefore(field, range.startContainer, range.startOffset);
+  const end = start + range.toString().length;
   const offsets = trimInlineSelectionOffsets(
-    root.textContent ?? '',
+    field.textContent ?? '',
     start,
-    start + range.toString().length,
+    end,
   );
   if (!offsets) return;
+  // Nothing at its edges: the range as it is, its direction kept.
+  if (offsets.start === start && offsets.end === end) return range;
 
   const next = document.createRange();
-  const startPoint = textPoint(root, offsets.start);
-  const endPoint = textPoint(root, offsets.end);
-  next.setStart(startPoint.node, startPoint.offset);
-  next.setEnd(endPoint.node, endPoint.offset);
+  const from = caretAfterLetters(field, offsets.start);
+  const to = caretAfterLetters(field, offsets.end);
+  next.setStart(from.startContainer, from.startOffset);
+  next.setEnd(to.startContainer, to.startOffset);
   return next;
 }
 
@@ -55,27 +62,6 @@ export function trimCurrentInlineSelection(): Range | undefined {
   const range = selection.getRangeAt(0);
   const next = trimInlineRange(range);
   if (!next || next === range) return next;
-  selection.removeAllRanges();
-  selection.addRange(next);
+  selectRange(next);
   return next;
-}
-
-function editableRoot(node: Node): HTMLElement | undefined {
-  const element = node instanceof Element ? node : node.parentElement;
-  return element?.closest<HTMLElement>('[contenteditable="true"]') ?? undefined;
-}
-
-function textPoint(root: Node, target: number): { node: Node; offset: number } {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let remaining = target;
-  let last: Text | undefined;
-  while (walker.nextNode()) {
-    const node = walker.currentNode as Text;
-    last = node;
-    if (remaining <= node.data.length) return { node, offset: remaining };
-    remaining -= node.data.length;
-  }
-  return last
-    ? { node: last, offset: last.data.length }
-    : { node: root, offset: root.childNodes.length };
 }

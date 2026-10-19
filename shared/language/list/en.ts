@@ -213,6 +213,19 @@ export default defineI18nBase({
     asset_library_described_none: 'Without a description',
     asset_library_described_some: 'With a description',
     asset_used_elsewhere: 'Also used in',
+    asset_about: 'About the file',
+    asset_format: (kind, extension) => {
+      const upper = extension.toUpperCase();
+      return {
+        pdf: 'PDF document',
+        zip: 'ZIP archive',
+        table: `${upper} table`,
+        text: 'Text',
+        markdown: 'Markdown text',
+        html: 'HTML page',
+        other: upper ? `${upper} file` : 'File',
+      }[kind];
+    },
     asset_library_properties: 'File properties',
     asset_library_settings: 'How this file was made',
     asset_recipe_original: 'Stored as uploaded',
@@ -1456,6 +1469,7 @@ export default defineI18nBase({
     content_private_section: 'Private section',
     content_private_section_start: 'Start of private section',
     content_private_section_end: 'End of private section',
+    content_private_section_remove: 'Remove private section',
     content_editor_i18n: {
       add: 'Add',
       convert_to: 'Convert to',

@@ -1124,9 +1124,22 @@ function handleAssetMissing(error: unknown) {
 // ---------------------------------------------------------------------------
 // Preview.
 
+/**
+ * A stored file shown as it is: the variant picked from the list, or, on the
+ * last screen, the one taken — never the source under the frame it was cut
+ * with.
+ */
+const shownVariant = computed(() =>
+  screen.value === 'describe'
+    ? taken.value
+    : section.value === 'family'
+      ? selectedVariant.value
+      : undefined,
+);
+
 const previewSource = computed(() => {
-  if (section.value === 'family' && selectedVariant.value) {
-    const variant = selectedVariant.value;
+  if (shownVariant.value) {
+    const variant = shownVariant.value;
     return {
       key: `variant:${variant.assetUuid}`,
       extension: variant.extension,
@@ -1163,8 +1176,8 @@ const previewSource = computed(() => {
  * new version is made from it, that version under it.
  */
 const audioPlayers = computed(() => {
-  if (section.value === 'family' && selectedVariant.value) {
-    const variant = selectedVariant.value;
+  if (shownVariant.value) {
+    const variant = shownVariant.value;
     if (variant.type !== AssetType.Audio) return [];
     return [
       {
@@ -1213,6 +1226,7 @@ const audioPlayers = computed(() => {
 const editingSource = computed(
   () =>
     section.value === 'create' &&
+    !shownVariant.value &&
     Boolean(transformKind.value) &&
     Boolean(transformSource.value),
 );
@@ -1249,7 +1263,11 @@ const compareOutput = computed(() => {
     : undefined;
 });
 const compare = computed(() => {
-  if (section.value !== 'create' || previewMode.value !== 'compare')
+  if (
+    section.value !== 'create' ||
+    shownVariant.value ||
+    previewMode.value !== 'compare'
+  )
     return null;
   const output = compareOutput.value;
   const crop = edit.cropRect.value;
@@ -1279,6 +1297,7 @@ const compare = computed(() => {
 const canCompare = computed(
   () =>
     section.value === 'create' &&
+    !shownVariant.value &&
     Boolean(compareOutput.value?.dimensions) &&
     Boolean(edit.cropRect.value),
 );

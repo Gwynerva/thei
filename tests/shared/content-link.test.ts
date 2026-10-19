@@ -66,17 +66,32 @@ describe('content inline links', () => {
     ).toBe(
       '<a href="https://example.com/path" data-content-link="external">Example</a>',
     );
+    // A link to nowhere it may go is no link: its words stay.
     expect(
       normalizeContentInlineHtml(
         '<a href="javascript:alert(1)" onclick="alert(2)">Bad</a>',
       ),
-    ).toBe('<a>Bad</a>');
+    ).toBe('Bad');
     expect(
       normalizeContentInlineHtml('<a href="//evil.example/path">Bad</a>'),
-    ).toBe('<a>Bad</a>');
+    ).toBe('Bad');
+    expect(
+      normalizeContentInlineHtml(
+        '<b>Mail <a href="mailto:me@example.com">me</a></b>',
+      ),
+    ).toBe('<b>Mail me</b>');
     expect(
       normalizeContentInlineHtml('<a href="/projects/local-P1/">Local</a>'),
     ).toBe('<a href="/projects/local-P1/">Local</a>');
+  });
+
+  it('drops a hint with nothing to say along with its closing tag', () => {
+    // The dropped inner hint's end does not end the outer one early.
+    expect(
+      normalizeContentInlineHtml(
+        '<abbr data-content-hint="outer">a <abbr data-content-hint=" ">b</abbr> c</abbr>',
+      ),
+    ).toBe('<abbr data-content-hint="outer">a b c</abbr>');
   });
 
   it('extracts event entities and nested list links once', () => {

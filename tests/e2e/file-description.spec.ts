@@ -231,6 +231,8 @@ test('the public window and the Markdown copy show it only for a public file', a
   const block = guest.locator('[data-public-asset-description]');
   await expect(block).toBeVisible();
   await expect(block).toContainText(`Seagulls circling pier lamps ${run}`);
+  // With no title, the window is named by what the file is.
+  await expect(guest.locator('[data-asset-panel-title]')).toHaveText('Image');
   await screenshot(guest, 'file-description-public');
   await guest.keyboard.press('Escape');
   // A file in the text says what it is to whoever cannot see it.

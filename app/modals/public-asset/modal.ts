@@ -1,4 +1,5 @@
 import type { PublicAssetDescriptor } from '#layers/thei/shared/api/public';
+import { assetFormatLabel } from '#layers/thei/app/composables/asset-library-labels';
 
 export const publicAssetModal = defineModal(
   'public-asset',
@@ -7,7 +8,11 @@ export const publicAssetModal = defineModal(
     kind: 'file',
     title: (data) => {
       const start = data.items[data.start ?? 0] ?? data.items[0];
-      return start ? publicText(start.title) : phrase.value.asset;
+      if (!start) return phrase.value.asset;
+      return (
+        publicText(start.title) ||
+        assetFormatLabel(start.extension, start.archivedOriginal)
+      );
     },
   },
 );

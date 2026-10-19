@@ -3,7 +3,7 @@ import { contentPlaceLabel } from '#layers/thei/shared/content-headings';
 import type { ContentEntityOutline } from '#layers/thei/shared/admin/content-entity-outline';
 import { suggestContentEntities } from '#layers/thei/shared/admin/content-entity-search';
 import { type ContentLinkTarget } from '#layers/thei/shared/content-link-locate';
-import { normalizeTermText } from '#layers/thei/shared/text-terms';
+import { normalizeTermText, stemTerm } from '#layers/thei/shared/text-terms';
 import { letterSimilarity } from '#layers/thei/shared/text-similarity';
 import { entityPageText } from '../entity-kinds';
 import { listContentEntities } from '../content-entities';
@@ -146,7 +146,13 @@ export async function entityCandidates(
   records: ContentEntityRecords,
 ): Promise<LinkCandidate[]> {
   const found: LinkCandidate[] = [];
-  const terms = new Set(words(linkWords));
+  // By the forms of the words, as the suggester found them: «в музее» names
+  // «Музей». A letter alone — «в», «и» — names nothing.
+  const terms = new Set(
+    words(linkWords)
+      .filter((word) => word.length > 1)
+      .map(stemTerm),
+  );
   if (terms.size) {
     for (const record of suggestContentEntities(
       await records(),
@@ -155,7 +161,7 @@ export async function entityCandidates(
     ))
       if (
         [record.title, ...(record.synonyms ?? [])].some((name) =>
-          words(name).some((word) => terms.has(word)),
+          words(name).some((word) => terms.has(stemTerm(word))),
         )
       )
         found.push({

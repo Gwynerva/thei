@@ -23,7 +23,8 @@ import {
  * A picker that applies its choice at once just listens to `select`. One that
  * waits for a confirmation passes the current choice as `chosen`: it stays
  * pinned at the top of the list, marked, whatever the query, and picking it
- * again says the choice is made (`confirm`).
+ * again says the choice is made (`confirm`). Enter takes it while nothing is
+ * typed; once something is, Enter takes the first match.
  */
 const props = withDefaults(
   defineProps<{
@@ -65,6 +66,7 @@ const rows = computed<Row[]>(() => {
 const { listId, activeIndex, optionId, move, pointAt, current } = useActiveRow(
   () => rows.value.length,
   results,
+  () => (props.chosen && query.value.trim() && rows.value.length > 1 ? 1 : 0),
 );
 
 function isChosen(item: ContentEntityChoice) {

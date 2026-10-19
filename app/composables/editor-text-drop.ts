@@ -1,9 +1,19 @@
 import { normalizeContentInlineHtml } from '#layers/thei/shared/content-link';
 import {
   editableFieldOf,
+  insertHtmlAt,
   runEditCommand,
   selectRange,
 } from '#layers/thei/app/components/content/editor-edit-commands';
+import {
+  caretAfterLetters,
+  caretAtPoint,
+  isMarkup,
+  lettersBefore,
+  markupAround,
+  nodeAt,
+  pathTo,
+} from './editor-inline-dom';
 
 /**
  * Text dragged in the editor lands where it is dropped, and Ctrl+Z takes the
@@ -36,7 +46,8 @@ import {
 
 const BLOCK_DRAG_MIME = 'application/x-thei-editor-block';
 /** The fields whose text keeps inline markup; any other field is plain. */
-const RICH_FIELDS = '.ce-paragraph, .cdx-list__item-content, .cdx-quote__text';
+const RICH_FIELDS =
+  '.ce-paragraph, .cdx-list__item-content, .cdx-quote__text, .cdx-quote__caption';
 /** Markup with nothing to read, dropped whole with what it holds. */
 const DROPPED_ELEMENTS =
   'script, style, noscript, template, iframe, object, embed, svg, math, img, video, audio, picture, canvas, head, meta, link, title';
@@ -128,6 +139,7 @@ export function bindEditorTextDrop(
                 dragged.range.cloneContents(),
                 dragged.range.commonAncestorContainer,
                 dragged.field,
+                point.startContainer,
               ),
             )
           : undefined,
@@ -162,24 +174,7 @@ export function bindEditorTextDrop(
 
 /** Where in a field the pointer let go, as a collapsed range. */
 function dropPoint(event: DragEvent, field: HTMLElement): Range | undefined {
-  const fromPoint = (
-    document as Document & {
-      caretPositionFromPoint?: (
-        x: number,
-        y: number,
-      ) => { offsetNode: Node; offset: number } | null;
-    }
-  ).caretPositionFromPoint?.(event.clientX, event.clientY);
-  let range: Range | undefined;
-  if (fromPoint) {
-    range = document.createRange();
-    range.setStart(fromPoint.offsetNode, fromPoint.offset);
-    range.collapse(true);
-  } else {
-    range =
-      document.caretRangeFromPoint?.(event.clientX, event.clientY) ?? undefined;
-  }
-  return range && field.contains(range.startContainer) ? range : undefined;
+  return caretAtPoint(event.clientX, event.clientY, field);
 }
 
 function insertAt(
@@ -192,10 +187,11 @@ function insertAt(
     insertion.html === undefined
       ? undefined
       : cleanHtml(insertion.html, insertion.text);
-  if (!selectRange(point)) return;
   if (html !== undefined) {
-    if (html && runEditCommand('insertHTML', html)) return;
+    // Into the markup it lands in, which the browser would split round it.
+    if (html && insertHtmlAt(point, html)) return;
   } else if (
+    selectRange(point) &&
     insertion.text &&
     runEditCommand('insertText', plainText(insertion.text))
   ) {
@@ -205,18 +201,6 @@ function insertAt(
   const node = document.createTextNode(plainText(insertion.text));
   point.insertNode(node);
 }
-
-/** Inline markup a moved piece keeps from around it. */
-const CARRIED_ELEMENTS = new Set([
-  'B',
-  'STRONG',
-  'I',
-  'EM',
-  'S',
-  'STRIKE',
-  'A',
-  'ABBR',
-]);
 
 /**
  * Moves a piece of a field to a point in the same field as one editing
@@ -233,13 +217,13 @@ function moveWithinField(
   const where = source.comparePoint(point.startContainer, point.startOffset);
   if (where === 0) return;
   const text = field.textContent ?? '';
-  const sourceStart = textOffset(
+  const sourceStart = lettersBefore(
     field,
     source.startContainer,
     source.startOffset,
   );
-  const sourceEnd = textOffset(field, source.endContainer, source.endOffset);
-  const pointAt = textOffset(field, point.startContainer, point.startOffset);
+  const sourceEnd = lettersBefore(field, source.endContainer, source.endOffset);
+  const pointAt = lettersBefore(field, point.startContainer, point.startOffset);
   const pieceLength = sourceEnd - sourceStart;
   // Where the piece ends once moved, to leave the caret there.
   const caretAt = where > 0 ? pointAt : pointAt + pieceLength;
@@ -249,7 +233,7 @@ function moveWithinField(
   field.focus({ preventScroll: true });
   if (rich) {
     const copy = field.cloneNode(true) as HTMLElement;
-    const copied = (node: Node) => nodeAtPath(copy, pathOf(field, node))!;
+    const copied = (node: Node) => nodeAt(copy, pathTo(field, node)!)!;
     const piece = document.createRange();
     piece.setStart(copied(source.startContainer), source.startOffset);
     piece.setEnd(copied(source.endContainer), source.endOffset);
@@ -260,6 +244,7 @@ function moveWithinField(
       piece.extractContents(),
       piece.commonAncestorContainer,
       copy,
+      landing.startContainer,
     );
     landing.insertNode(carried);
     const html = normalizeContentInlineHtml(copy.innerHTML);
@@ -280,67 +265,39 @@ function moveWithinField(
     if (!selectRange(whole) || !runEditCommand('insertText', plainText(moved)))
       field.textContent = plainText(moved);
   }
-  placeCaretAtOffset(
-    field,
-    Math.min(caretAt, (field.textContent ?? '').length),
+  selectRange(
+    caretAfterLetters(
+      field,
+      Math.min(caretAt, (field.textContent ?? '').length),
+    ),
   );
-}
-
-/** The number of characters of a field's text before a point in it. */
-function textOffset(field: HTMLElement, node: Node, offset: number) {
-  const range = document.createRange();
-  range.selectNodeContents(field);
-  range.setEnd(node, offset);
-  return range.toString().length;
-}
-
-function placeCaretAtOffset(field: HTMLElement, offset: number) {
-  const walker = document.createTreeWalker(field, NodeFilter.SHOW_TEXT);
-  let left = offset;
-  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    const length = (node as Text).data.length;
-    if (left <= length) {
-      const range = document.createRange();
-      range.setStart(node, left);
-      range.collapse(true);
-      selectRange(range);
-      return;
-    }
-    left -= length;
-  }
-}
-
-/** The child indexes leading from `root` down to `node`. */
-function pathOf(root: Node, node: Node) {
-  const path: number[] = [];
-  for (let at = node; at !== root && at.parentNode; at = at.parentNode)
-    path.unshift(Array.prototype.indexOf.call(at.parentNode.childNodes, at));
-  return path;
-}
-
-function nodeAtPath(root: Node, path: number[]) {
-  let node: Node | undefined = root;
-  for (const index of path) node = node?.childNodes[index];
-  return node;
 }
 
 /**
  * A piece taken from inside bold words, a link or a hint, wrapped again in
- * copies of them, so it carries them where it goes.
+ * copies of them, so it carries them where it goes — but for markup the
+ * place it lands in has already, and never a link into a link, which no
+ * text can hold.
  */
 function withInlineAncestors(
   fragment: DocumentFragment,
   from: Node,
   field: HTMLElement,
+  landing: Node,
 ) {
+  const there = markupAround(landing);
+  const inLink = there.some((element) => element.matches('a'));
   let wrapped: Node = fragment;
   for (
     let at: Node | null = from instanceof Element ? from : from.parentNode;
     at && at !== field;
     at = at.parentNode
   ) {
-    if (!(at instanceof Element) || !CARRIED_ELEMENTS.has(at.tagName)) continue;
-    const shell = at.cloneNode(false) as Element;
+    if (!isMarkup(at)) continue;
+    const shell = at.cloneNode(false) as HTMLElement;
+    if (inLink && shell.matches('a')) continue;
+    if (there.some((element) => element.cloneNode(false).isEqualNode(shell)))
+      continue;
     shell.append(wrapped);
     wrapped = shell;
   }
@@ -354,7 +311,7 @@ function htmlOf(node: Node) {
 }
 
 /** Lines become spaces: one field holds one line of text. */
-function plainText(text: string) {
+export function plainText(text: string) {
   return text.replace(/\s*[\r\n]+\s*/g, ' ');
 }
 

@@ -75,6 +75,15 @@ asked about stays in sight.
   under the pointer; a row that deletes shades with
   `[--popup-item-hover:var(--color-bg-error)]`. The row Enter would choose is
   ringed (`ring-2 ring-accent/60 ring-inset`), as in the select.
+- **A list searched by typing always rings the row Enter takes.** It is the
+  first from the moment the list has rows, and again after each new answer,
+  so it is never a guess whether Enter picks something. The entity pickers
+  (`app/components/content/ContentEntityRow.vue`, through `useActiveRow` in
+  `app/composables/content-entity-search.ts`) draw it as an outline, which
+  stays visible over a row's picture. A choice pinned at the top of the list
+  is the row Enter takes until something is typed; after that, it is the
+  first match. The link picker rings it only while its search field has the
+  focus, since elsewhere Enter belongs to ✓.
 - **The arrow is on by default.** It points at the middle of the anchor, or,
   for an anchor as wide as the popup, near the edge the popup is aligned to,
   and goes when it would point past the anchor. Turn it off (`:arrow="false"`)
@@ -181,6 +190,9 @@ The others built on it:
   `app/styles/editor.css` gives it the popup's surface and motion. On a phone
   the block's settings are Editor.js's own sheet, styled as ours; Editor.js
   turns to it at its own layout's width, 650px, a little wider than `sm`.
+  The edge of a private section has "Remove private section" in place of
+  Editor.js's own Delete, which the styles hide beside it: one way out, which
+  takes both edges and keeps the blocks.
 
 ## Why
 

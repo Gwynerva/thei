@@ -12,8 +12,11 @@ import { useContentLinkResolver } from '#layers/thei/app/composables/content-lin
 import { isAssetExtensionSafeInline } from '#layers/thei/shared/assets/formats';
 import type { PublicFilePlace } from '#layers/thei/shared/api/public';
 import {
+  assetFormatLabel,
+  assetKindIcon,
   assetSourceIcon,
   assetSourceTitle,
+  assetTypeOfExtension,
   assetUseLabel,
 } from '#layers/thei/app/composables/asset-library-labels';
 import type { PublicAssetModalData } from './modal';
@@ -32,6 +35,12 @@ const index = ref(
 );
 const count = computed(() => props.modalData.items.length);
 const current = computed(() => props.modalData.items[index.value]!);
+/** The file's title, or, without one, what it is: «Документ PDF». */
+const name = computed(
+  () =>
+    publicText(current.value.title) ||
+    assetFormatLabel(current.value.extension, current.value.archivedOriginal),
+);
 
 function step(delta: number) {
   if (count.value < 2) return;
@@ -91,7 +100,11 @@ async function goTo(event: MouseEvent, href: string) {
 </script>
 
 <template>
-  <AssetModal :aside-title="publicText(current.title)" title-strong>
+  <AssetModal
+    :aside-title="name"
+    :aside-icon="assetKindIcon[assetTypeOfExtension(current.extension)]"
+    title-strong
+  >
     <template #preview>
       <AssetModalPreviewMedia
         v-if="current.media"
@@ -110,7 +123,7 @@ async function goTo(event: MouseEvent, href: string) {
         :extension="current.extension"
         :size="current.size"
         :archived-original="current.archivedOriginal"
-        :title="publicText(current.title)"
+        :title="name"
         :paged="count > 1"
       />
     </template>
@@ -168,7 +181,10 @@ async function goTo(event: MouseEvent, href: string) {
         </AssetPanelSection>
         <!-- The file itself: what it shows, said for whoever cannot see it,
              and what it is. -->
-        <AssetPanelSection :key="`file:${current.key}`" :title="phrase.asset">
+        <AssetPanelSection
+          :key="`file:${current.key}`"
+          :title="phrase.asset_about"
+        >
           <p
             v-if="current.alt"
             class="leading-relaxed wrap-anywhere whitespace-pre-line

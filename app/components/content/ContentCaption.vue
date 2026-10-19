@@ -33,9 +33,6 @@ const shown = computed(() =>
 // it, and only a different one is written.
 const html = ref(shown.value);
 
-// Captions are prose too, so they get the same typing shorthands as a field.
-useSmartTypography(() => (props.editable ? root.value : undefined));
-
 function sync() {
   if (!root.value) return;
   const value = normalizeContentCaption(root.value.innerHTML);

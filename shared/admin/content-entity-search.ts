@@ -4,6 +4,7 @@ import type { MediaDescriptor } from '../media';
 import {
   containsPhrase,
   inverseDocumentFrequency,
+  matchQueryWords,
   normalizeTermText,
   stemTerm,
   wordTokens,
@@ -85,9 +86,10 @@ export function rankContentEntities<T extends Rankable>(
       )
       .slice(0, limit);
   const day = parseDayQuery(query);
+  const words = wordTokens(normalized);
   return (
     items
-      .map((item) => ({ item, rank: bestRank(item, normalized, day) }))
+      .map((item) => ({ item, rank: bestRank(item, normalized, words, day) }))
       .filter(({ rank }) => Number.isFinite(rank))
       // Diary entries found equally well come newest first: of the days of a
       // month or a year, the recent ones are the likely link.
@@ -110,21 +112,32 @@ export function rankContentEntities<T extends Rankable>(
  * since the owner gave that name to it; one found in part, below any title
  * found in part. Case, compatibility forms and «ё» set aside.
  *
+ * A title or a synonym is also found by its words, as a person types a name
+ * from memory (`matchQueryWords`): every word of the query standing in it,
+ * in the order typed just below its start, in any order a little lower —
+ * both above a piece found inside a word.
+ *
  * A diary entry has no name to search by, only its day, written however the
  * person is used to (`day-query.ts`): a whole day as written ranks with a
  * whole title, a month or a year with a title found in part.
  */
-function bestRank(item: Rankable, query: string, day?: DayQuery) {
+function bestRank(
+  item: Rankable,
+  query: string,
+  queryWords: string[],
+  day?: DayQuery,
+) {
   if (item.date)
     return (day && dayQueryRank(item.date, day)) ?? Number.POSITIVE_INFINITY;
   let best = Number.POSITIVE_INFINITY;
   const consider = (
     value: string | undefined,
     ranks: [number, number, number],
+    byWords?: [ordered: number, unordered: number],
   ) => {
     if (!value) return;
     const field = normalizeTermText(value);
-    const rank =
+    let rank =
       field === query
         ? ranks[0]
         : field.startsWith(query)
@@ -132,10 +145,15 @@ function bestRank(item: Rankable, query: string, day?: DayQuery) {
           : field.includes(query)
             ? ranks[2]
             : Number.POSITIVE_INFINITY;
+    if (byWords && rank > ranks[1]) {
+      const match = matchQueryWords(queryWords, wordTokens(field));
+      if (match) rank = Math.min(rank, byWords[match.ordered ? 0 : 1]);
+    }
     best = Math.min(best, rank);
   };
-  consider(item.title, [0, 1, 2]);
-  for (const synonym of item.synonyms ?? []) consider(synonym, [0.5, 3, 4]);
+  consider(item.title, [0, 1, 2], [1.4, 1.7]);
+  for (const synonym of item.synonyms ?? [])
+    consider(synonym, [0.5, 3, 4], [3.4, 3.7]);
   consider(item.publicId, [10, 11, 12]);
   consider(item.humanReadableSlug, [20, 21, 22]);
   return best;

@@ -142,6 +142,16 @@ export type LanguagePhrases = {
   asset_library_described_none: string;
   asset_library_described_some: string;
   asset_used_elsewhere: string;
+  /** The visitor's window: the group of what the file is. */
+  asset_about: string;
+  /**
+   * A file named by what it is, when it has no title: a PDF document, a ZIP
+   * archive; `other` by its extension.
+   */
+  asset_format: (
+    kind: 'pdf' | 'zip' | 'table' | 'text' | 'markdown' | 'html' | 'other',
+    extension: string,
+  ) => string;
   asset_library_properties: string;
   asset_library_settings: string;
   asset_recipe_original: string;
@@ -1048,6 +1058,7 @@ export type LanguagePhrases = {
   content_private_section: string;
   content_private_section_start: string;
   content_private_section_end: string;
+  content_private_section_remove: string;
   content_editor_i18n: EditorJsPhrases;
   content_asset_pick_error: string;
   content_media_pending_confirm: string;

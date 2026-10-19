@@ -34,6 +34,29 @@ describe('admin entity list', () => {
     );
   });
 
+  it('finds an entity by words left apart, in any of their forms', () => {
+    const found = (q: string) =>
+      paginateAdminEntities(items, { q }).items.map((item) => item.entityId);
+    expect(found('первый суть')).toEqual(['p1']);
+    expect(found('первого проекта')).toEqual(['p1']);
+    expect(found('second описание')).toEqual(['p2']);
+    // Every word must stand in the one entity.
+    expect(found('проект описания')).toEqual([]);
+  });
+
+  it('finds a word as a word, never inside another one', () => {
+    const texts = [
+      entity('cat', 'Дом', '', 'cat', 'C1', 1, 1, 'Наш кот спит'),
+      entity('which', 'Дом', '', 'which', 'W1', 2, 2, 'Который день идёт'),
+      entity('music', 'Дом', '', 'music', 'M1', 3, 3, 'Вечер музыки'),
+    ];
+    const found = (q: string) =>
+      paginateAdminEntities(texts, { q }).items.map((item) => item.entityId);
+    expect(found('коты')).toEqual(['cat']);
+    expect(found('кот спит')).toEqual(['cat']);
+    expect(found('музей')).toEqual([]);
+  });
+
   it('also finds what a kind matches in its own way, only while searching', () => {
     const byId = (item: { entityId: string }) => item.entityId === 'p3';
     expect(

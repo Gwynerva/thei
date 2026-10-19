@@ -15,15 +15,15 @@ import type {
 } from './editor-inline-links';
 import { editorIcon } from './editor-icons';
 import {
-  applyLinkAttributes,
-  unwrapNestedLinks,
-  type InlineLinkAttributes,
   highlightWords,
+  linkRange,
+  type InlineLinkAttributes,
 } from './editor-inline-link-dom';
 import {
-  insertInlineElement,
-  placeCaretAfter,
+  runEditCommand,
   unlinkElement,
+  unwrapElement,
+  writeMarkup,
 } from './editor-edit-commands';
 import { rangeAnchor } from '#layers/thei/app/composables/popup-placement';
 import { trimCurrentInlineSelection } from './editor-inline-selection';
@@ -201,47 +201,27 @@ abstract class ContentInlineMarkupTool<
     this.highlighted = false;
   }
 
-  /**
-   * The element the outcome is written to: the existing one, given what
-   * `prepare` sets, or a new one around the remembered selection, made with
-   * it and put in as one editing command, which Ctrl+Z takes back whole.
-   * Nothing when there is neither.
-   */
-  protected wrapSelection(
-    create: () => HTMLElement,
-    prepare: (element: HTMLElement) => void,
-    emptyContent?: string,
-  ): HTMLElement | undefined {
+  /** The remembered selection, given back to be written to. */
+  protected selectedRange(): Range | undefined {
     this.restoreSelection();
     const selection = window.getSelection();
-    const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
-    if (!range) return undefined;
-    if (this.existing) {
-      prepare(this.existing);
-      return this.existing;
-    }
-    if (range.collapsed && !emptyContent) return undefined;
-    const element = create();
-    if (range.collapsed) element.textContent = emptyContent!;
-    else element.append(range.cloneContents());
-    prepare(element);
-    return insertInlineElement(range.cloneRange(), element);
+    return selection?.rangeCount
+      ? selection.getRangeAt(0).cloneRange()
+      : undefined;
   }
 
-  /** Done: the caret goes after the element and the toolbar closes. */
-  protected finish(element: Element) {
-    placeCaretAfter(element);
+  /** Done: the caret is after the element, and the toolbar closes. */
+  protected finish() {
     this.options.api.inlineToolbar.close();
   }
 
+  /** The element comes off its words, as one editing command. */
   protected remove() {
     this.restoreSelection();
     const element = this.existing;
     if (!element) return;
-    // A link comes off as an editing command. A hint has none: it is taken
-    // off by hand, and Ctrl+Z does not reach past it.
     if (element instanceof HTMLAnchorElement) unlinkElement(element);
-    else element.replaceWith(...Array.from(element.childNodes));
+    else unwrapElement(element);
     this.options.api.inlineToolbar.close();
   }
 }
@@ -278,14 +258,19 @@ export class ContentHintTool extends ContentInlineMarkupTool<ContentHintRequest>
       this.remove();
       return;
     }
-    const element = this.wrapSelection(
+    const range = this.selectedRange();
+    if (!range || (!this.existing && range.collapsed)) return;
+    // The hint the words are in is put back saying something else, or a new
+    // one goes round them: one step of Ctrl+Z either way.
+    const element = writeMarkup(
+      range,
+      this.existing,
       () => document.createElement('abbr'),
       (abbr) => {
         abbr.dataset.contentHint = value;
       },
     );
-    if (!element) return;
-    this.finish(element);
+    if (element) this.finish();
   }
 }
 
@@ -328,18 +313,8 @@ export class ContentLinkTool extends ContentInlineMarkupTool<ContentInlineLinkRe
   }
 
   private applyLink(label: string, attributes: InlineLinkAttributes) {
-    const link = this.wrapSelection(
-      () => document.createElement('a'),
-      (element) => {
-        const anchor = element as HTMLAnchorElement;
-        unwrapNestedLinks(anchor);
-        applyLinkAttributes(anchor, attributes);
-        if (!anchor.textContent?.trim()) anchor.textContent = label;
-      },
-      label,
-    );
-    if (!(link instanceof HTMLAnchorElement)) return;
-    this.finish(link);
+    const range = this.selectedRange();
+    if (range && linkRange(range, attributes, label)) this.finish();
   }
 }
 
@@ -351,5 +326,5 @@ const clearPendingSelection = () => highlightWords(PENDING_HIGHLIGHT);
 
 function runInlineCommand(command: string) {
   if (!trimCurrentInlineSelection()) return;
-  document.execCommand(command);
+  runEditCommand(command);
 }

@@ -359,6 +359,18 @@
     display: none;
   }
 
+  /*
+   * The edge of a private section leaves its menu one way: "Remove private
+   * section", which takes both edges and keeps the blocks between them.
+   * Editor.js's own Delete, which every block gets, would say the same in
+   * words that promise to delete something.
+   */
+  &
+    .ce-popover:has([data-item-name='private-section-remove'])
+    [data-item-name='delete'] {
+    display: none;
+  }
+
   & .ce-popover__items {
     @apply scrollbar-hover;
   }
@@ -649,4 +661,38 @@ body.content-editor-block-dragging * {
 /* The `@` a link popup was opened at, while it is open. A highlight too. */
 .content-editor ::highlight(content-editor-at) {
   color: var(--color-accent);
+}
+
+/*
+ * The markup the caret stands in, ringed round each of its lines
+ * (`editor-inline-caret.ts`), and markup whose last letters were deleted,
+ * waiting at the caret as a narrow empty ring (`editor-inline-keep.ts`).
+ * Drawn beside Editor.js's tree, never written into the text.
+ */
+.content-editor :is(.content-inline-ring, .content-inline-kept) {
+  position: absolute;
+  border-radius: 4px;
+  background-color: color-mix(in oklab, var(--color-accent) 6%, transparent);
+  box-shadow: 0 0 0 1.5px
+    color-mix(in oklab, var(--color-accent) 55%, transparent);
+  pointer-events: none;
+  transition: opacity var(--default-transition-duration)
+    var(--default-transition-timing-function);
+
+  @starting-style {
+    opacity: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+.content-editor .content-inline-ring--leaving {
+  opacity: 0;
+}
+
+.content-editor .content-inline-kept {
+  width: 0.5em;
+  background-color: color-mix(in oklab, var(--color-accent) 14%, transparent);
 }
