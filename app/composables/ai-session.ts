@@ -116,9 +116,7 @@ export function useAiSession(sessionUuid: Ref<string | undefined>) {
 
   async function reload(id: string) {
     try {
-      detail.value = await $fetch<AiSessionDetail>(
-        `/api/admin/ai/sessions/${id}`,
-      );
+      detail.value = await aiApi.session(id);
       missing.value = false;
     } catch {
       if (sessionUuid.value === id) missing.value = true;
@@ -301,6 +299,10 @@ export const aiApi = {
     }).catch(() => null);
     return list?.sessions.slice(0, 5) ?? [];
   },
+  /** One session whole: itself, what was said and what was proposed. */
+  session(sessionUuid: string) {
+    return $fetch<AiSessionDetail>(`/api/admin/ai/sessions/${sessionUuid}`);
+  },
   /** The few sessions the dashboard shows; none when unread. */
   sessionOverview(): Promise<AiSessionOverview | null> {
     return $fetch<AiSessionOverview>('/api/admin/ai/overview').catch(
@@ -338,12 +340,34 @@ export const aiApi = {
   },
   /**
    * A proposal taken into a form, the form saved: its words as saved, which
-   * it counts as applied with when they are the owner's.
+   * it counts as applied with when they are the owner's — or, a text edit
+   * taken in the editor, the parts taken and those left.
    */
-  takenWith(actionUuid: string, values: Record<string, string>) {
+  taken(
+    actionUuid: string,
+    body:
+      { values: Record<string, string> } | { parts: Record<string, string> },
+  ) {
     return $fetch(`/api/admin/ai/actions/${actionUuid}/taken`, {
       method: 'POST',
-      body: { values },
+      body,
+    });
+  },
+  /**
+   * Asks the model at a field's ✦ or a text's: `place` as the form names
+   * it, `current` what the form holds there unsaved, `label` the field's
+   * name. The session that answers, in the background.
+   */
+  ask(body: {
+    ref: string;
+    place: string;
+    text: string;
+    current?: string;
+    label?: string;
+  }) {
+    return $fetch<{ sessionUuid: string }>('/api/admin/ai/ask', {
+      method: 'POST',
+      body,
     });
   },
   reject(actionUuid: string, never = false) {
@@ -460,3 +484,70 @@ export const aiApi = {
     });
   },
 };
+
+/**
+ * Applies proposals and says how it went: why not, when it did not, else
+ * how many — with a way back when `undoable`. Every entity whose version
+ * moved is told, a relation's other end too. Whether all of it went.
+ */
+export async function applyAndTell(
+  actionUuids: string[],
+  options: {
+    parts?: Record<string, Record<string, AiRevisePartState>>;
+    undoable?: boolean;
+  } = {},
+): Promise<boolean> {
+  const outcome = await aiApi.apply(actionUuids, options.parts);
+  tellEntitiesChanged(outcome.changed);
+  if (outcome.refused) showToast(outcome.refused);
+  else if (outcome.failed) showToast(outcome.failed.error);
+  else {
+    const done = outcome.applied.map((item) => item.actionUuid);
+    // Said as declining is, so no word of an earlier step stays up.
+    showToast(
+      phrase.value.ai_toast_applied(done.length),
+      options.undoable && done.length
+        ? { label: phrase.value.ai_action_undo, run: () => undoAndTell(done) }
+        : undefined,
+    );
+  }
+  return !outcome.refused && !outcome.failed;
+}
+
+/**
+ * Takes applied proposals back, the last first, and says how it went: the
+ * forms of every entity they moved back read anew, and one that could not
+ * be taken back — changed since — says why.
+ */
+export async function undoAndTell(actionUuids: string[]) {
+  const changed: (string | undefined)[] = [];
+  let refused: string | undefined;
+  for (const actionUuid of [...actionUuids].reverse()) {
+    try {
+      const answer = await aiApi.undo(actionUuid);
+      changed.push(answer.entity, ...answer.changed);
+    } catch (caught) {
+      refused ??= errorMessage(caught, phrase.value.ai_error);
+    }
+  }
+  tellEntitiesChanged(changed);
+  showToast(refused ?? phrase.value.ai_toast_undone);
+}
+
+/**
+ * What a session asked at a ✦ answered: what it proposed, and its model's
+ * last words as a line — why, when it proposed nothing. None when unread.
+ */
+export async function askAnswer(
+  sessionUuid: string,
+): Promise<{ actions: AiActionItem[]; said: string } | null> {
+  const detail = await aiApi.session(sessionUuid).catch(() => null);
+  if (!detail) return null;
+  const last = detail.messages
+    .filter((message) => message.role === 'model' && message.text.trim())
+    .at(-1);
+  return {
+    actions: detail.actions,
+    said: last ? plainWords(last.text, 280) : '',
+  };
+}

@@ -100,7 +100,7 @@ const PAUSES = new Set(['turns', 'timeout', 'stopped']);
  * How much of a tool's answer the model is handed: every answer is reread
  * on every later call, so one huge answer costs many times over.
  */
-const TOOL_ANSWER_MAX = 30_000;
+export const TOOL_ANSWER_MAX = 30_000;
 /** How often the words written so far are saved while they stream. */
 const SAVE_EVERY_MS = 800;
 

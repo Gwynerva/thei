@@ -2588,6 +2588,7 @@ export default defineI18nBase({
     ai_toast_restored: 'Back to deciding',
     ai_comment_label: 'Comment',
     ai_comment_placeholder: 'What to change?',
+    ai_comment_too_long: (max) => `At most ${max} characters`,
     ai_comment_quick: ['Another option', 'Why so?'],
     ai_model_states: {
       ready: 'working',

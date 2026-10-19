@@ -16,9 +16,9 @@ import {
   assetKindIcon,
   assetSourceIcon,
   assetSourceTitle,
-  assetTypeOfExtension,
   assetUseLabel,
 } from '#layers/thei/app/composables/asset-library-labels';
+import { assetTypeOfExtension } from '#layers/thei/shared/content-file-placement';
 import type { PublicAssetModalData } from './modal';
 
 const props = defineProps<{ modalData: PublicAssetModalData }>();

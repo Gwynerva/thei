@@ -8,7 +8,8 @@ import { typedLines } from '#layers/thei/shared/ai-message-text';
  * offers two quick answers to an action, and grows with
  * its words up to a height of its own; the send button sits inside it and
  * wakes up when there is something to send. Enter sends, Shift+Enter breaks
- * the line; on a touch screen Enter breaks it and the button sends.
+ * the line; on a touch screen Enter breaks it and the button sends. Past
+ * the length it is given, it says so and sends nothing.
  */
 const props = defineProps<{
   about?: string;
@@ -16,11 +17,19 @@ const props = defineProps<{
   /** Ready answers to send at a tap; an action's two by default. */
   quick?: readonly string[];
   placeholder?: string;
+  /**
+   * The longest the words may be, where the server takes no more: past it
+   * the field says so and sends nothing, rather than have them cut.
+   */
+  max?: number;
 }>();
 const emit = defineEmits<{ send: [text: string] }>();
 
 const text = ref('');
 const area = ref<HTMLTextAreaElement>();
+const tooLong = computed(
+  () => props.max !== undefined && typedLines(text.value).length > props.max,
+);
 
 /** The field grows with its words; past its height it scrolls. */
 function grow() {
@@ -34,7 +43,7 @@ function grow() {
 
 function send(value = text.value) {
   const words = typedLines(value);
-  if (!words) return;
+  if (!words || (props.max !== undefined && words.length > props.max)) return;
   emit('send', words);
 }
 
@@ -102,7 +111,7 @@ defineExpose({ focus: () => area.value?.focus() });
           bg-transparent text-lg text-accent transition-opacity
           disabled:cursor-default disabled:text-text-3 disabled:opacity-100
           pointer-coarse:size-11 hocus:opacity-75"
-        :disabled="!text.trim()"
+        :disabled="!text.trim() || tooLong"
         :aria-label="phrase.ai_send"
         :data-title-popup="phrase.ai_send"
         data-comment-send
@@ -111,5 +120,13 @@ defineExpose({ focus: () => area.value?.focus() });
         <Icon name="send" />
       </button>
     </div>
+    <p
+      v-if="tooLong"
+      role="alert"
+      class="px-1 text-xs text-text-error"
+      data-comment-too-long
+    >
+      {{ phrase.ai_comment_too_long(max!) }}
+    </p>
   </div>
 </template>

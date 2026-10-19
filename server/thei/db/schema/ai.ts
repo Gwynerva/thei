@@ -278,7 +278,9 @@ export const aiTemplates = sqliteTable('ai-templates', {
  * and, where it looks at less than the whole, the parts it went over (the
  * paragraphs of a text). A subject that reads otherwise now is due again.
  * The entity it belongs to, if any, forgets it when deleted; a family of
- * files — `asset` by its family's id — once no file of it is left.
+ * files — `asset` by its family's id — once no file of it is left. The
+ * session whose run looked at it last keeps it among what that session
+ * looked at; what a fix applied in a form left looked at has none.
  */
 export const aiTemplateCoverage = sqliteTable(
   'ai-template-coverage',
@@ -289,6 +291,7 @@ export const aiTemplateCoverage = sqliteTable(
     entityId: text(),
     fingerprint: text().notNull(),
     parts: text({ mode: 'json' }).notNull().default([]).$type<string[]>(),
+    sessionUuid: text(),
     at: integer().notNull(),
   },
   (t) => [

@@ -66,7 +66,6 @@ function textsByOwner(): Map<string, string[]> {
 }
 
 export const graphSource: TemplateSource = {
-  size: BATCH,
   areas: AREAS,
   kinds: KINDS,
 

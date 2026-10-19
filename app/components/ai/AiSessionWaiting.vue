@@ -94,22 +94,10 @@ async function applySure() {
   if (Date.now() - shownAt < SETTLE_MS) return;
   busy.value = true;
   try {
-    const outcome = await aiApi.apply(
+    await applyAndTell(
       sure.value.map((action) => action.actionUuid),
+      { undoable: true },
     );
-    tellEntitiesChanged(outcome.changed);
-    const done = outcome.applied.map((item) => item.actionUuid);
-    if (outcome.refused) showToast(outcome.refused);
-    else if (outcome.failed) showToast(outcome.failed.error);
-    else
-      showToast(phrase.value.ai_toast_applied(done.length), {
-        label: phrase.value.ai_action_undo,
-        run: async () => {
-          for (const id of [...done].reverse())
-            await aiApi.undo(id).catch(() => undefined);
-          showToast(phrase.value.ai_toast_undone);
-        },
-      });
   } catch (caught) {
     showToast(errorMessage(caught, phrase.value.ai_error));
   } finally {

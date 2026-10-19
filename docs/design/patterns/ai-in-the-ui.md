@@ -24,9 +24,9 @@ about how it looks.
 - The switch (`app/components/ai/AiSwitch.vue`) stands first on the AI
   page's connection tab, and first in the site's settings too: with AI off
   and its ✦ gone, settings are where it is looked for, and at their end it
-  took a long scroll to find (the AI lab, round r09). Its words never say
-  anything is deleted — off, AI hides, and what it kept comes back on, and
-  they say where it is turned on again.
+  took a long scroll to find. Its words never say anything is deleted —
+  off, AI hides, and what it kept comes back on, and they say where it is
+  turned on again.
 
 ## Where the ✦ goes
 
@@ -125,7 +125,7 @@ attention.
 - Taken at the form's head, a row stays where it stood too, saying it is in
   the form and changes once saved, with «Отменить» to take it back, until
   the form is saved: a row gone at once moved the form under the owner's
-  finger, onto the access switch (the AI lab, round r10). Taken at a label
+  finger, and the next tap landed on the access switch. Taken at a label
   or among chips, the toast says the form changed.
 - What the form cannot take opens in its session (the `ai-chat` icon); a text
   edit opens on the review screen of the text's own editor. Once its parts
@@ -152,15 +152,18 @@ attention.
   (`app/components/ai/AiSessionWaiting.vue`) says how many and goes to the
   next one down the thread at a click, and applies the sure ones together —
   never a final one, nor a text decided part by part — with an undo in its
-  toast. Nothing is declined from there. The sure ones are offered once the
+  toast, which takes them back the last first, tells the open forms, and
+  says why one changed since could not be. Nothing is declined from there. The sure ones are offered once the
   session has stopped answering, and their button takes no press in its
   first moments, so «Проверить ещё» pressed twice never applies what nobody
   has seen. On a phone the button goes under the count rather than cut it.
 - A check with more to look at goes on from that same line, where the owner
-  is however far up its answer: «Просмотрено: M файлов» and a button
-  «Проверить ещё N файлов» — files, entries, links or texts, what the check
-  looks at, never a bare number — that runs the next batch in the same
-  session — after a turn paused at its limits too — once no sure ones wait.
+  is however far up its answer: «Просмотрено: M файлов» — in this session,
+  never another run's — and a button «Проверить ещё N файлов», as many as
+  are due of what its model last asked for — files, entries, links or texts,
+  what the check looks at, never a bare number — that runs the next batch
+  in the same session — after a turn paused at its limits too — once no
+  sure ones wait.
   It stands beside the count, never where «Применить уверенные» stands, so
   one never turns into the other under the pointer. The thread follows the next
   batch down as it comes. With nothing left, the answer says that all of it
@@ -224,12 +227,12 @@ attention.
 
 ## Why
 
-- The owner chose the words on 2026-10-18, from the AI lab's rounds, where
-  a newcomer read «Применить» in a form as «saved at once» in every review:
-  the accept says what it does where it stands, «Шаблоны» became «Готовые
-  просьбы», «Связанные сущности» became «Связи», and no copy speaks of
-  «сущности». «Сессии» stay: a session of the AI and a sign-in session are
-  told apart by where they stand.
+- The owner chose the words on 2026-10-18: a newcomer read «Применить» in
+  a form as «saved at once», every time, so the accept says what it does
+  where it stands, «Шаблоны» became «Готовые просьбы», «Связанные
+  сущности» became «Связи», and no copy speaks of «сущности». «Сессии»
+  stay: a session of the AI and a sign-in session are told apart by where
+  they stand.
 - The owner wants AI to stay a guest: a site that works the same without it,
   and that, with it, shows proposals where they belong rather than in a feed.
 - Blocks under fields, a pager on a row of its own and three button styles in
@@ -237,12 +240,12 @@ attention.
 - A card whose head, body and buttons each kept an inset of their own read
   as "a mess" to the owner, who set the one shape above (2026-10-17): what
   changes, old → new, why, and the same footer everywhere.
-- In the AI lab (round r08) a check gone on with «Проверить ещё 4 файла»
-  brought its batch out of view, and «Применить уверенные · 4» took the
-  pressed button's place: a second press applied what nobody had seen.
-- In the AI lab (round r07) a phone's sheet that stayed open after «nothing
-  to propose» covered the next ✦ and the Save four times in one journey, and
-  «check the dates» on a section with none cost a wait for a sure «nothing».
+- A check gone on with «Проверить ещё 4 файла» brought its batch out of
+  view, and «Применить уверенные · 4» took the pressed button's place: a
+  second press applied what nobody had seen.
+- A phone's sheet that stayed open after «nothing to propose» covered the
+  next ✦ and the Save again and again in one journey, and «check the dates»
+  on a section with none cost a wait for a sure «nothing».
   The box now goes with such an answer, which stays at the ✦ instead, and
   only requests that can find something are offered — an empty field says
   so in its box (`ai_field_ask_empty`), the owner's own words still welcome.

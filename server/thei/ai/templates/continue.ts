@@ -7,7 +7,7 @@ import {
   sessionMessages,
   updateMessage,
 } from '../sessions/store';
-import { busySubjects, coverageOf, coveredSince, lastAsked } from './coverage';
+import { busySubjects, coverageOf, coveredCount, lastAsked } from './coverage';
 import { TEMPLATE_SOURCES } from './sources';
 import { findTemplate } from './store';
 
@@ -53,22 +53,21 @@ export async function dueNext(
   const bound = run.scope?.flatMap((ref) => findTarget(ref) ?? []);
   const named = ask?.refs?.flatMap((ref) => findTarget(ref) ?? []);
   const scope: ActionTarget[] | undefined = named?.length ? named : bound;
+  // A number the model asked for is what goes on, as far as what is due
+  // now reaches: counted among all of it, as `check_batch` looks for it.
   const due = await source.due({
     scope,
     areas: ask?.areas?.length ? new Set(ask.areas) : undefined,
     covered: coverageOf(run.template.templateId),
     busy: busySubjects(run.template.templateId),
+    ...(ask?.count ? { whole: true } : {}),
   });
   if (!due.length) return null;
-  // A number the model asked for is what goes on, as far as it reaches.
-  const asked = ask?.count
-    ? Math.min(ask.count, Math.max(ask.left ?? ask.count, 1))
-    : undefined;
-  // How far it is: what it looked at in this session, counted, never what
+  // How far it is: what this session's runs looked at, counted, never what
   // is left, which would read the whole archive at the end of every turn.
   return {
-    next: asked ?? due.length,
-    looked: coveredSince(run.template.templateId, run.session.createdAt),
+    next: ask?.count ? Math.min(ask.count, due.length) : due.length,
+    looked: coveredCount(run.template.templateId, sessionUuid),
   };
 }
 

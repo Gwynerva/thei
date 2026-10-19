@@ -72,10 +72,10 @@ of a field that is not a text is a proposal at the field's label instead
   found again, a picture or a list changed showed nothing, and the foot did
   not say what it would do. Every part is now in reach and every change is
   drawn.
-- In the AI lab a newcomer read only the corrected words — a letter changed
-  is no change to the eye — and took the coloured «Close» for the way to
-  accept, beside a bare «✓✓ 1». The review now opens on what goes and what
-  comes, and its finish names the next step.
+- A newcomer read only the corrected words — a letter changed is no change
+  to the eye — and took the coloured «Close» for the way to accept, beside a
+  bare «✓✓ 1». The review now opens on what goes and what comes, and its
+  finish names the next step.
 
 ## How it is checked
 

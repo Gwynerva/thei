@@ -12,6 +12,7 @@ import {
 } from '../../ai/templates/coverage';
 import { TEMPLATE_SOURCES, type CheckItem } from '../../ai/templates/sources';
 import { findTemplate } from '../../ai/templates/store';
+import { TOOL_ANSWER_MAX } from '../../ai/runner/loop';
 import { READS } from '../annotations';
 import type { McpCallContext } from '../context';
 import { guardTool, McpToolError, toolResult } from '../result';
@@ -112,7 +113,7 @@ export function registerCheckTools(server: McpServer, context: McpCallContext) {
         // A number asked for is looked for among all that is due; else a
         // batch is the check's own.
         const due = await source.due(count ? { ...input, whole: true } : input);
-        const room = ANSWER_ROOM - source.brief([]).length;
+        const room = TOOL_ANSWER_MAX - AFTER_BATCH - source.brief([]).length;
         const given = fitting(due, room, count);
         const held = db.transaction((tx) =>
           own.live()
@@ -123,19 +124,23 @@ export function registerCheckTools(server: McpServer, context: McpCallContext) {
           return toolResult(
             'Nothing of that is due: the check has looked at all of it as it reads now.',
           );
-        const left = due.length - held.length;
         // Kept for «go on»: the next batch is as much as was asked for.
         rememberAsked(own.sessionUuid, {
           areas,
           refs,
-          ...(count ? { count, left } : {}),
+          ...(count ? { count } : {}),
         });
+        // Counted among all that is due only when a number was asked for;
+        // a batch of the check's own says only whether more may follow.
+        const left = due.length - held.length;
         return toolResult(
           [
             source.brief(held),
-            left > 0
-              ? `(${left} more of that ${left === 1 ? 'is' : 'are'} due after this batch.)`
-              : '(That is all of it that is due.)',
+            !count
+              ? '(More of that may be due: ask again while the owner’s words ask for more; it says when nothing is.)'
+              : left > 0
+                ? `(${left} more of that ${left === 1 ? 'is' : 'are'} due after this batch.)`
+                : '(That is all of it that is due.)',
           ].join('\n\n'),
         );
       }),
@@ -143,10 +148,11 @@ export function registerCheckTools(server: McpServer, context: McpCallContext) {
 }
 
 /**
- * How much of a tool's answer a batch may fill: what is beyond the answer's
- * cap would be cut off while still counted as looked at.
+ * What of a tool's answer a batch leaves for the line said after it: what
+ * is beyond the answer's cap would be cut off while still counted as looked
+ * at.
  */
-const ANSWER_ROOM = 28_000;
+const AFTER_BATCH = 2_000;
 
 /**
  * What of what is due fits one answer, in order, at most `count` of it;

@@ -2665,6 +2665,7 @@ export default defineI18nModule({
     ai_toast_restored: 'Возвращено к решению',
     ai_comment_label: 'Комментарий',
     ai_comment_placeholder: 'Что изменить?',
+    ai_comment_too_long: (max) => `Не больше ${max} символов`,
     ai_comment_quick: ['Другой вариант', 'Почему так?'],
     ai_model_states: {
       ready: 'работает',

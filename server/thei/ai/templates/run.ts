@@ -1,5 +1,6 @@
 import type { AiEntityType, AiMessagePart } from '#layers/thei/shared/ai';
 import type { AiTemplateRunResponse } from '#layers/thei/shared/ai-template';
+import { plainMarkdown } from '#layers/thei/shared/ai-message-text';
 import { refuse as fail } from '../../entity-patch/text';
 import { entityFace } from '../../entity-kinds';
 import {
@@ -21,7 +22,7 @@ import { CHECK_BATCH_TOOL } from '../../mcp/tools/checks';
 import {
   busySubjects,
   coverageOf,
-  coveredSince,
+  coveredCount,
   forgetAll,
   forgetSubjects,
   holdBatch,
@@ -42,14 +43,11 @@ import { postOwnerMessage } from '../sessions/owner';
  * that is due. Without them, the run is given its batch at once.
  */
 
-/** A request's words alone: mentions, marks and spacing aside. */
+/** A request's words alone, to compare: mentions, marks and spacing aside. */
 function plainWords(markdown: string) {
-  return markdown
-    .replace(/\[([^\]]*)\]\(thei:[^)]*\)/g, ' ')
-    .replace(/[*_`#>~\\]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLocaleLowerCase();
+  return plainMarkdown(
+    markdown.replace(/\[([^\]]*)\]\(thei:[^)]*\)/g, ' '),
+  ).toLocaleLowerCase();
 }
 
 function shortDate(at: number) {
@@ -138,7 +136,7 @@ export async function runTemplate(
     const last = template.lastSession;
     return {
       sessionUuid: null,
-      ...(scope ? {} : { looked: coveredSince(templateId, 0) }),
+      ...(scope ? {} : { looked: coveredCount(templateId) }),
       ...(last
         ? {
             lastSessionUuid: last.sessionUuid,

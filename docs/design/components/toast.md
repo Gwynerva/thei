@@ -74,8 +74,8 @@ showToast(phrase.value.ai_toast_declined(1), {
   layer, and took the clicks meant for the page under it.
 - On a phone a finger lifted where a toast then appeared left a hover behind
   it, which held «Taken into the form — save it» over the form's first field
-  until the next tap elsewhere — nine seconds in the AI lab, over the fields
-  the owner went on to. A finger holds nothing now, and the next press
+  until the next tap elsewhere, however long that was, over the fields the
+  owner went on to. A finger holds nothing now, and the next press
   anywhere takes the toast away.
 
 ## How it is checked

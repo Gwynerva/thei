@@ -147,11 +147,7 @@ watch(waiting, (now, before) => {
         `[data-ai-field-offer="${CSS.escape(place)}"]`,
       )
     : null;
-  const label = star?.closest('[data-field-label]')?.cloneNode(true) as
-    HTMLElement | undefined;
-  for (const extra of label?.querySelectorAll('[data-field-label-extra]') ?? [])
-    extra.remove();
-  const name = label?.textContent?.replace(/\s+/g, ' ').trim();
+  const name = star && fieldLabelWords(star);
   // Several at once are counted; «Показать» goes to the latest of them.
   const came = now - before;
   showToast(

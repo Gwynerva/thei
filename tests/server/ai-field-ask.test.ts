@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AiMessagePart } from '../../shared/ai';
-import { askablePlace } from '../../shared/ai-field-ask';
+import { askablePlace, FIELD_ASK_MAX } from '../../shared/ai-field-ask';
 import { askAtField, asksRunning } from '../../server/thei/ai/field-ask';
 import { entityPanel } from '../../server/thei/ai/entity-panel';
 import { turnsSettled } from '../../server/thei/ai/runner/queue';
@@ -146,5 +146,16 @@ describe('an ask at a field’s ✦', () => {
     expect(() =>
       askAtField({ ref: 'project:nope', place: 'field:title', text: 'Hm' }),
     ).toThrow();
+  });
+
+  it('refuses words past its limit rather than cut them', async () => {
+    await useModel([{ text: 'Done.' }]);
+    expect(() =>
+      askAtField({
+        ref: `project:${PROJECT}`,
+        place: 'field:title',
+        text: 'a'.repeat(FIELD_ASK_MAX + 1),
+      }),
+    ).toThrow(new RegExp(`at most ${FIELD_ASK_MAX}`));
   });
 });

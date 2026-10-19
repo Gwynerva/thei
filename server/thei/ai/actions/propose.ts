@@ -77,7 +77,22 @@ interface Checked {
   certainty: AiCertainty;
   reason: string;
   supersedes?: string;
+  /** What it supersedes was found by the owner's comment, not named. */
+  commented?: boolean;
 }
+
+/** An action as what it changes is read from: proposed now, or kept. */
+interface Changing {
+  kind: string;
+  target: ActionTarget | undefined;
+  payload: unknown;
+}
+
+const changingOf = (item: Checked): Changing => ({
+  kind: item.kind,
+  target: item.target,
+  payload: item.prepared.payload,
+});
 
 function zodProblem(error: {
   issues: { path: PropertyKey[]; message: string }[];
@@ -144,7 +159,12 @@ async function check(
         `${proposal.supersedes} is decided already (${previous.state}): propose this one on its own.`,
       );
     supersedes = previous.actionUuid;
-  } else supersedes = commentedOn(sessionUuid, kind, target);
+  } else
+    supersedes = commentedOn(sessionUuid, {
+      kind,
+      target,
+      payload: prepared.payload,
+    });
   return {
     kind,
     target,
@@ -153,20 +173,18 @@ async function check(
     certainty,
     reason,
     supersedes,
+    commented: Boolean(supersedes && !proposal.supersedes),
   };
 }
 
 /**
  * The action the owner's last message commented on, when this proposal is
- * its new version — the same kind about the same target, the commented one
- * still waiting. A model that forgets to say so would leave both open, and
- * «apply the sure ones» would apply the version the owner asked to change.
+ * its new version — the same kind changing the same of the same target
+ * (`subjectOf`), the commented one still waiting. A model that forgets to
+ * say so would leave both open, and «apply the sure ones» would apply the
+ * version the owner asked to change.
  */
-function commentedOn(
-  sessionUuid: string,
-  kind: string,
-  target: ActionTarget | undefined,
-): string | undefined {
+function commentedOn(sessionUuid: string, item: Changing): string | undefined {
   const { db, schema } = THEI_SERVER.useDb();
   const last = db
     .select({ parts: schema.aiMessages.parts })
@@ -187,14 +205,60 @@ function commentedOn(
   if (!comment) return undefined;
   const previous = findAction(comment.actionUuid);
   if (!previous || previous.sessionUuid !== sessionUuid) return undefined;
-  if (previous.state !== 'pending' || previous.kind !== kind) return undefined;
+  if (previous.state !== 'pending' || previous.kind !== item.kind)
+    return undefined;
   const was = targetOf(previous);
   // By kind and id: a diary entry's ref may name its day or its id.
+  const sameTarget =
+    was && item.target
+      ? was.kind === item.target.kind && was.id === item.target.id
+      : !was && !item.target;
+  if (!sameTarget) return undefined;
+  const before = subjectOf({
+    kind: previous.kind,
+    target: item.target,
+    payload: previous.payload,
+  });
+  const now = subjectOf(item);
   const same =
-    was && target
-      ? was.kind === target.kind && was.id === target.id
-      : !was && !target;
+    (!before.length && !now.length) ||
+    now.some((name) => before.includes(name));
   return same ? previous.actionUuid : undefined;
+}
+
+/**
+ * What of its target a proposal is about, to know a new version of one
+ * from another proposal of its kind: what it changes, by name — a field, a
+ * text — or the relation of its pair, whatever word it is named by, the
+ * word of the dictionary, where a fact is remembered. None for a kind its
+ * target alone names: the tags of an entity, an idea for its notes.
+ */
+function subjectOf(item: Changing): string[] {
+  const names = changes(item);
+  if (names.length) return names;
+  const on = item.target ? targetRef(item.target) : '';
+  const payload = item.payload as {
+    other?: string;
+    about?: string;
+    entityKind?: string;
+  };
+  switch (item.kind) {
+    case 'relation':
+      return payload.other
+        ? [`the relation of ${[on, payload.other].sort().join(' and ')}`]
+        : [];
+    case 'term':
+      return [
+        `the word ${JSON.stringify(actionDef(item.kind).identity(item.payload as never, item.target))}`,
+      ];
+    case 'remember':
+    case 'memory-compact':
+      return [
+        `the memory ${[payload.about, on, payload.other, payload.entityKind].filter(Boolean).join(' ')}`,
+      ];
+    default:
+      return [];
+  }
 }
 
 /**
@@ -202,10 +266,10 @@ function commentedOn(
  * may see it, one of its texts. Tags, relations and the like name what
  * they add or take away, and two of them stand side by side.
  */
-function changes(item: Checked): string[] {
+function changes(item: Changing): string[] {
   if (!item.target) return [];
   const on = targetRef(item.target);
-  const payload = item.prepared.payload as {
+  const payload = item.payload as {
     field?: string;
     changes?: Record<string, unknown>;
     text?: string;
@@ -224,7 +288,7 @@ function changes(item: Checked): string[] {
     case 'describe':
       // One description serves a whole family.
       return [
-        `the description of ${(item.prepared.payload as { family?: string }).family ?? on}`,
+        `the description of ${(item.payload as { family?: string }).family ?? on}`,
       ];
     default:
       return [];
@@ -239,13 +303,40 @@ function sameChange(checked: (Checked | { refused: string })[]) {
   const taken = new Set<string>();
   return checked.map((item) => {
     if ('refused' in item) return item;
-    const names = changes(item);
+    const names = changes(changingOf(item));
     const clash = names.find((name) => taken.has(name));
     if (clash)
       return {
         refused: `An earlier action of this call changes ${clash} too, and actions proposed together are applied together. Propose alternatives in calls of their own.`,
       };
     for (const name of names) taken.add(name);
+    return item;
+  });
+}
+
+/**
+ * An action is replaced by one new version a call: the first that names
+ * it — what a model says outweighs what is found for it — else the first
+ * the owner's comment makes one. Another found by the same comment is a
+ * proposal of its own; another naming it is refused, its model having said
+ * two versions stand.
+ */
+function oneVersionEach(checked: (Checked | { refused: string })[]) {
+  const claimed = new Set<string>();
+  const named = checked.map((item) => {
+    if ('refused' in item || !item.supersedes || item.commented) return item;
+    if (claimed.has(item.supersedes))
+      return {
+        refused: `An earlier action of this call is the new version of ${item.supersedes} already: propose this one on its own.`,
+      };
+    claimed.add(item.supersedes);
+    return item;
+  });
+  return named.map((item) => {
+    if ('refused' in item || !item.commented) return item;
+    if (claimed.has(item.supersedes!))
+      return { ...item, supersedes: undefined, commented: false };
+    claimed.add(item.supersedes!);
     return item;
   });
 }
@@ -314,7 +405,7 @@ export async function proposeActions(
       outcomes.push({ refused: error.message });
     }
   }
-  const alone = sameChange(outcomes);
+  const alone = oneVersionEach(sameChange(outcomes));
   const met = metBefore(
     alone.filter((item): item is Checked => !('refused' in item)),
   );
