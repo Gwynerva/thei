@@ -6,6 +6,7 @@ dist
 .playground/content
 .realdata/content
 /.ai-lab/
+/.search-lab/
 tests/e2e/fixture/content
 tests/e2e/.artifacts
 tests/.artifacts
