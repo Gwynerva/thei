@@ -1375,6 +1375,7 @@ export default defineI18nBase({
     content_private_section: 'Private section',
     content_private_section_start: 'Start of private section',
     content_private_section_end: 'End of private section',
+    content_private_section_remove: 'Remove private section',
     content_editor_i18n: {
       add: 'Add',
       convert_to: 'Convert to',

@@ -124,6 +124,7 @@ interface ContentToolLabels {
   privateSection: string;
   privateSectionStart: string;
   privateSectionEnd: string;
+  removePrivateSection: string;
   externalLinkError: string;
   refreshExternalLink: string;
   linkNote: string;
@@ -1651,6 +1652,7 @@ export class PrivateSectionBoundaryTool implements BlockTool {
   private sectionId: string;
   private edge: ContentPrivateSectionEdge;
   private createPair: boolean;
+  private element?: HTMLElement;
 
   constructor(
     private options: ContentToolOptions<
@@ -1684,11 +1686,61 @@ export class PrivateSectionBoundaryTool implements BlockTool {
         : this.labels.privateSectionEnd
     }</span>`;
     element.append(label);
+    this.element = element;
     return element;
   }
 
+  /**
+   * The section and the edge the bracket stands for now. The editor's
+   * private sections keep both on the element as the text changes
+   * (`editor-private-sections.ts`): the edge its place makes — a start is
+   * the first of the pair — and a new id for a pasted copy of a section.
+   */
   save(): ContentPrivateSectionBoundaryData {
-    return { sectionId: this.sectionId, edge: this.edge };
+    const dataset = this.element?.dataset;
+    return {
+      sectionId: dataset?.privateSectionId || this.sectionId,
+      edge:
+        (dataset?.privateSectionEdge ?? this.edge) === 'end' ? 'end' : 'start',
+    };
+  }
+
+  renderSettings() {
+    if (this.options.readOnly) return [];
+    return [
+      {
+        icon: editorIcon('lock-open'),
+        title: this.labels.removePrivateSection,
+        // Editor.js's own Delete is hidden beside it (`editor.css`).
+        name: 'private-section-remove',
+        closeOnActivate: true,
+        onActivate: () => this.removeSection(),
+      },
+    ];
+  }
+
+  /**
+   * The section stops being private: both its edges go at once, and the
+   * blocks between them stay where they are.
+   */
+  private removeSection() {
+    const { blocks } = this.options.api;
+    const sectionId = this.save().sectionId;
+    const edges: number[] = [];
+    for (let index = 0; index < blocks.getBlocksCount(); index++) {
+      const bracket = blocks
+        .getBlockByIndex(index)
+        ?.holder.querySelector<HTMLElement>('[data-private-section-id]');
+      if (bracket?.dataset.privateSectionId === sectionId) edges.push(index);
+    }
+    if (!edges.length) return;
+    for (const index of [...edges].reverse()) blocks.delete(index);
+    // Editor.js leaves the caret at the end of the block before each one
+    // deleted, selecting it when it has no text; it goes to the first block
+    // that was inside instead.
+    const first = blocks.getBlockByIndex(edges[0]!);
+    if (first && !first.holder.querySelector('[data-private-section-id]'))
+      this.options.api.caret.setToBlock(first, 'start');
   }
 
   private get labels() {
@@ -1726,6 +1778,7 @@ function getLabels(
       privateSection: 'Private section',
       privateSectionStart: 'Start of private section',
       privateSectionEnd: 'End of private section',
+      removePrivateSection: 'Remove private section',
       externalLinkError: 'Could not load link preview',
       refreshExternalLink: 'Refresh link',
       linkNote: 'A note for the link',

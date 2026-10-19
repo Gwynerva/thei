@@ -1435,6 +1435,7 @@ export default defineI18nModule({
     content_private_section: 'Приватная секция',
     content_private_section_start: 'Начало приватной секции',
     content_private_section_end: 'Конец приватной секции',
+    content_private_section_remove: 'Убрать приватную секцию',
     content_editor_i18n: {
       add: 'Добавить',
       convert_to: 'Поменять на…',

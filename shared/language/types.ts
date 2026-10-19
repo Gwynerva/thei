@@ -1008,6 +1008,7 @@ export type LanguagePhrases = {
   content_private_section: string;
   content_private_section_start: string;
   content_private_section_end: string;
+  content_private_section_remove: string;
   content_editor_i18n: EditorJsPhrases;
   content_asset_pick_error: string;
   content_media_pending_confirm: string;

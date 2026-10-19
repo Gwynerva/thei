@@ -181,6 +181,9 @@ The others built on it:
   `app/styles/editor.css` gives it the popup's surface and motion. On a phone
   the block's settings are Editor.js's own sheet, styled as ours; Editor.js
   turns to it at its own layout's width, 650px, a little wider than `sm`.
+  The edge of a private section has "Remove private section" in place of
+  Editor.js's own Delete, which the styles hide beside it: one way out, which
+  takes both edges and keeps the blocks.
 
 ## Why
 

@@ -359,6 +359,18 @@
     display: none;
   }
 
+  /*
+   * The edge of a private section leaves its menu one way: "Remove private
+   * section", which takes both edges and keeps the blocks between them.
+   * Editor.js's own Delete, which every block gets, would say the same in
+   * words that promise to delete something.
+   */
+  &
+    .ce-popover:has([data-item-name='private-section-remove'])
+    [data-item-name='delete'] {
+    display: none;
+  }
+
   & .ce-popover__items {
     @apply scrollbar-hover;
   }

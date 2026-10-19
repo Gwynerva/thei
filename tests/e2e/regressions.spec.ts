@@ -274,6 +274,551 @@ test('each private section in the editor lies on one lock pattern', async ({
     .toEqual({ boxes: 2, aligned: true });
 });
 
+/**
+ * The text of the editor as its private sections read: `[id` and `]id` for
+ * the edges (`?id` for one that pairs with nothing), the words of a paragraph
+ * or a quote, `(empty)` for an empty one, the id of any other block, with `*`
+ * before a block inside a section.
+ */
+async function sectionOutline(page: Page) {
+  return page.locator('.content-editor .ce-block').evaluateAll((blocks) =>
+    blocks.map((block) => {
+      const item = block as HTMLElement;
+      const bracket = item.querySelector<HTMLElement>(
+        '[data-private-section-id]',
+      );
+      if (bracket) {
+        const edge = item.dataset.privateSectionEdge;
+        return `${edge === 'end' ? ']' : edge === 'start' ? '[' : '?'}${bracket.dataset.privateSectionId}`;
+      }
+      const text = item.querySelector('.ce-paragraph, .cdx-quote__text');
+      const words = text ? text.textContent?.trim() || '(empty)' : undefined;
+      return `${item.dataset.privateSectionMember ? '*' : ''}${words ?? item.dataset.id}`;
+    }),
+  );
+}
+
+/** The saved text, a line a block (`savedOutline` of the fixture). */
+async function savedText(page: Page) {
+  return JSON.parse(
+    (await page.locator('[data-ready]').getAttribute('data-saved')) ?? '[]',
+  ) as string[];
+}
+
+/** The section ids in an outline that are not `known`, renamed in order. */
+function namedSections(outline: string[], known = ['one', 'two']) {
+  const names = new Map<string, string>();
+  return outline.map((line) =>
+    line.replace(/^([[\]?])(.+)$/, (_, edge: string, id: string) => {
+      if (known.includes(id)) return `${edge}${id}`;
+      if (!names.has(id)) names.set(id, `copy${names.size + 1}`);
+      return `${edge}${names.get(id)}`;
+    }),
+  );
+}
+
+const PRIVATE_FIXTURE_TAIL = ['media', 'gallery', 'divider', 'Quoted', 'After'];
+
+async function openPrivateFixture(page: Page, query = '') {
+  await page.route('**/slow-image.svg', (route) =>
+    route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="gray"/></svg>',
+    }),
+  );
+  await page.goto(`/editor-regression${query}`);
+  await expect(page.locator('[data-ready]')).toHaveAttribute(
+    'data-ready',
+    'true',
+  );
+  await expect(page.locator('[data-ready]')).toHaveAttribute(
+    'data-snapshot-pending',
+    'false',
+  );
+  expect(await sectionOutline(page)).toEqual([
+    'Before',
+    '[one',
+    '*Inside one',
+    ']one',
+    'Between',
+    '[two',
+    '*Inside two',
+    ']two',
+    ...PRIVATE_FIXTURE_TAIL,
+  ]);
+}
+
+/** Puts the caret in a block's text, at its start or its end. */
+async function caretIn(page: Page, id: string, at: 'start' | 'end') {
+  const field = page.locator(`[data-id="${id}"] [contenteditable="true"]`);
+  await field.click();
+  await page.keyboard.press(at === 'start' ? 'Home' : 'End');
+}
+
+async function caretPlace(page: Page) {
+  return page.evaluate(() => {
+    const selection = window.getSelection();
+    const node = selection?.anchorNode;
+    const element =
+      node instanceof Element ? node : (node?.parentElement ?? null);
+    return {
+      block: element?.closest<HTMLElement>('.ce-block')?.dataset.id,
+      offset: selection?.anchorOffset ?? -1,
+      selected: Array.from(
+        document.querySelectorAll<HTMLElement>('.ce-block--selected'),
+        (block) => block.dataset.id,
+      ),
+    };
+  });
+}
+
+/**
+ * A block dragged by its handle onto another, as the fixture's drag binding
+ * takes it: the events a pointer drag fires, in their order.
+ */
+async function dragBlock(
+  page: Page,
+  sourceId: string,
+  targetId: string,
+  placement: 'before' | 'after',
+) {
+  // The handle stands beside the block the caret, or the focus, is in.
+  const source = page.locator(`.ce-block[data-id="${sourceId}"]`);
+  const field = source.locator('[contenteditable="true"]');
+  await ((await field.count()) ? field.first() : source).click();
+  await page.evaluate(
+    ([targetId, placement]) => {
+      const root = document.querySelector<HTMLElement>('.content-editor')!;
+      const button = root.querySelector<HTMLElement>(
+        '.ce-toolbar__settings-btn',
+      )!;
+      const target = root.querySelector<HTMLElement>(
+        `.ce-block[data-id="${targetId}"]`,
+      )!;
+      const handle = button.getBoundingClientRect();
+      button.dispatchEvent(
+        new MouseEvent('mousedown', {
+          bubbles: true,
+          button: 0,
+          clientX: handle.x + 2,
+          clientY: handle.y + 2,
+        }),
+      );
+      const dataTransfer = new DataTransfer();
+      button.dispatchEvent(
+        new DragEvent('dragstart', { bubbles: true, dataTransfer }),
+      );
+      const box = target.getBoundingClientRect();
+      const point = {
+        clientX: box.x + 40,
+        clientY: placement === 'before' ? box.y + 2 : box.bottom - 2,
+      };
+      for (const type of ['dragover', 'drop'])
+        target.dispatchEvent(
+          new DragEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer,
+            ...point,
+          }),
+        );
+      button.dispatchEvent(
+        new DragEvent('dragend', { bubbles: true, dataTransfer }),
+      );
+    },
+    [targetId, placement] as const,
+  );
+}
+
+/** Blocks pasted where the caret is, as Editor.js copies them. */
+async function pasteBlocks(
+  page: Page,
+  blocks: Array<{ tool: string; data: object }>,
+) {
+  await page.evaluate((blocks) => {
+    const selection = window.getSelection()!;
+    const node = selection.anchorNode!;
+    const element = node instanceof Element ? node : node.parentElement!;
+    const dataTransfer = new DataTransfer();
+    dataTransfer.setData('application/x-editor-js', JSON.stringify(blocks));
+    dataTransfer.setData('text/plain', 'pasted');
+    element.dispatchEvent(
+      new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: dataTransfer,
+      }),
+    );
+  }, blocks);
+}
+
+const copyOfSectionOne = [
+  {
+    tool: 'privateSectionBoundary',
+    data: { sectionId: 'one', edge: 'start' },
+  },
+  { tool: 'paragraph', data: { text: 'Copied inside' } },
+  { tool: 'privateSectionBoundary', data: { sectionId: 'one', edge: 'end' } },
+];
+
+test.describe('private sections in the editor', () => {
+  let errors: string[] = [];
+  test.beforeEach(({ page }) => {
+    errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+  });
+  test.afterEach(async ({ page }) => {
+    expect(errors).toEqual([]);
+    await expect(page.locator('[data-ready]')).toHaveAttribute(
+      'data-save-errors',
+      '',
+    );
+  });
+
+  test('moving the only block of a section into another removes the empty one and keeps the rest private', async ({
+    page,
+  }) => {
+    await openPrivateFixture(page, '?drag');
+    const save = page.locator('[data-save]');
+
+    // By its handle: "Inside one" dropped above "Inside two".
+    await dragBlock(page, 'p1', 'p3', 'before');
+    const moved = [
+      'Before',
+      'Between',
+      '[two',
+      '*Inside one',
+      '*Inside two',
+      ']two',
+      ...PRIVATE_FIXTURE_TAIL,
+    ];
+    await expect.poll(() => sectionOutline(page)).toEqual(moved);
+    await expect(save).toHaveText('Save');
+    await page.getByRole('button', { name: 'Reopen' }).click();
+    await expect(page.locator('[data-ready]')).toHaveAttribute(
+      'data-reopened',
+      '1',
+    );
+    expect(await savedText(page)).toEqual([
+      'Before',
+      'Between',
+      '[two',
+      'Inside one',
+      'Inside two',
+      ']two',
+      'contentMedia',
+      'contentGallery',
+      'delimiter',
+      'quote',
+      'After',
+    ]);
+    await expect.poll(() => sectionOutline(page)).toEqual(moved);
+  });
+
+  test('moving the only block of a section out by its menu removes the empty section at once', async ({
+    page,
+  }) => {
+    await openPrivateFixture(page);
+    // Editor.js's own "Move down", three times: out of the first section,
+    // past "Between", and into the second.
+    for (const outline of [
+      ['Before', 'Inside one', 'Between', '[two', '*Inside two', ']two'],
+      ['Before', 'Between', 'Inside one', '[two', '*Inside two', ']two'],
+      ['Before', 'Between', '[two', '*Inside one', '*Inside two', ']two'],
+    ]) {
+      await page.locator('[data-id="p1"] [contenteditable="true"]').click();
+      await page.locator('.ce-toolbar__settings-btn').click();
+      await page
+        .locator('.ce-popover-item[data-item-name="move-down"]')
+        .click();
+      await expect
+        .poll(() => sectionOutline(page))
+        .toEqual([...outline, ...PRIVATE_FIXTURE_TAIL]);
+      await page.keyboard.press('Escape');
+    }
+    await page.getByRole('button', { name: 'Reopen' }).click();
+    await expect
+      .poll(() => sectionOutline(page))
+      .toEqual([
+        'Before',
+        'Between',
+        '[two',
+        '*Inside one',
+        '*Inside two',
+        ']two',
+        ...PRIVATE_FIXTURE_TAIL,
+      ]);
+  });
+
+  test('an edge never crosses its partner, and its menu removes the section whole', async ({
+    page,
+  }) => {
+    await openPrivateFixture(page, '?drag');
+    // The end of the first section dragged above its start would wrap
+    // "Before" and leave "Inside one" public: refused.
+    await dragBlock(page, 'e1', 'p0', 'before');
+    await page.waitForTimeout(500);
+    expect((await sectionOutline(page)).slice(0, 4)).toEqual([
+      'Before',
+      '[one',
+      '*Inside one',
+      ']one',
+    ]);
+
+    // The edge's menu has one way out, which keeps the blocks.
+    await page.locator('[data-id="s1"]').click();
+    await page.locator('.ce-toolbar__settings-btn').click();
+    const remove = page.locator(
+      '.ce-popover-item[data-item-name="private-section-remove"]',
+    );
+    await expect(remove).toBeVisible();
+    await expect(remove).toHaveText('Remove private section');
+    await expect(
+      page.locator('.ce-popover--opened [data-item-name="delete"]'),
+    ).toBeHidden();
+    await remove.click();
+    await expect
+      .poll(() => sectionOutline(page))
+      .toEqual([
+        'Before',
+        'Inside one',
+        'Between',
+        '[two',
+        '*Inside two',
+        ']two',
+        ...PRIVATE_FIXTURE_TAIL,
+      ]);
+    await expect(page.locator('[data-save]')).toHaveText('Save');
+  });
+
+  test('a pasted copy of a section becomes a section of its own, and goes inside another', async ({
+    page,
+  }) => {
+    await openPrivateFixture(page);
+    await caretIn(page, 'p4', 'end');
+    await pasteBlocks(page, copyOfSectionOne);
+    const pasted = [
+      'Before',
+      '[one',
+      '*Inside one',
+      ']one',
+      'Between',
+      '[two',
+      '*Inside two',
+      ']two',
+      ...PRIVATE_FIXTURE_TAIL,
+      '[copy1',
+      '*Copied inside',
+      ']copy1',
+    ];
+    await expect
+      .poll(async () => namedSections(await sectionOutline(page)))
+      .toEqual(pasted);
+    // Nothing is left selected for the next key to replace.
+    expect((await caretPlace(page)).selected).toEqual([]);
+
+    // Its edge's menu takes its own partner, never the original's.
+    const copyStart = page
+      .locator('.content-editor .ce-block')
+      .filter({ hasText: 'Start of private section' })
+      .last();
+    await copyStart.click();
+    await page.locator('.ce-toolbar__settings-btn').click();
+    await page
+      .locator('.ce-popover-item[data-item-name="private-section-remove"]')
+      .click();
+    await expect
+      .poll(() => sectionOutline(page))
+      .toEqual([...pasted.slice(0, -3), 'Copied inside']);
+
+    // Pasted inside the second section, the copy's edges go and its block
+    // stays there, private.
+    await caretIn(page, 'p3', 'end');
+    await pasteBlocks(page, copyOfSectionOne);
+    await expect
+      .poll(async () => (await sectionOutline(page)).slice(4, 9))
+      .toEqual(['Between', '[two', '*Inside two', '*Copied inside', ']two']);
+    // An edge pasted alone goes.
+    const edges = page.locator('.content-editor [data-private-section-id]');
+    await expect(edges).toHaveCount(4);
+    await caretIn(page, 'p0', 'end');
+    await pasteBlocks(page, copyOfSectionOne.slice(0, 1));
+    await expect(edges).toHaveCount(5);
+    await expect(edges).toHaveCount(4);
+    expect((await sectionOutline(page)).slice(0, 4)).toEqual([
+      'Before',
+      '[one',
+      '*Inside one',
+      ']one',
+    ]);
+
+    await page.getByRole('button', { name: 'Reopen' }).click();
+    await expect(page.locator('[data-ready]')).toHaveAttribute(
+      'data-reopened',
+      '1',
+    );
+    expect((await savedText(page)).slice(0, 10)).toEqual([
+      'Before',
+      '[one',
+      'Inside one',
+      ']one',
+      'Between',
+      '[two',
+      'Inside two',
+      'Copied inside',
+      ']two',
+      'contentMedia',
+    ]);
+  });
+
+  test('Backspace and Delete step over the edges of a section and never remove them', async ({
+    page,
+  }) => {
+    await openPrivateFixture(page);
+    // Twice at the start of a section's first block: the caret goes to the
+    // end of the block before the section, then takes a letter there.
+    await caretIn(page, 'p1', 'start');
+    await page.keyboard.press('Backspace');
+    expect(await caretPlace(page)).toEqual({
+      block: 'p0',
+      offset: 'Before'.length,
+      selected: [],
+    });
+    await page.keyboard.press('Backspace');
+    await expect
+      .poll(() => sectionOutline(page))
+      .toEqual([
+        'Befor',
+        '[one',
+        '*Inside one',
+        ']one',
+        'Between',
+        '[two',
+        '*Inside two',
+        ']two',
+        ...PRIVATE_FIXTURE_TAIL,
+      ]);
+
+    // Delete at the end of the block before a section goes in past its start.
+    await caretIn(page, 'p0', 'end');
+    await page.keyboard.press('Delete');
+    expect(await caretPlace(page)).toEqual({
+      block: 'p1',
+      offset: 0,
+      selected: [],
+    });
+
+    // An empty first line of a section: Backspace leaves it, and the section.
+    await caretIn(page, 'p3', 'start');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('Backspace');
+    await page.keyboard.press('Backspace');
+    await expect
+      .poll(async () => (await sectionOutline(page)).slice(4, 9))
+      .toEqual(['Betwee', '[two', '*(empty)', '*Inside two', ']two']);
+
+    // An edge the arrows selected takes no key: a letter or Backspace
+    // leaves it in place.
+    await caretIn(page, 'p1', 'start');
+    await page.keyboard.press('ArrowUp');
+    expect((await caretPlace(page)).selected).toEqual(['s1']);
+    await page.keyboard.press('x');
+    await page.keyboard.press('Backspace');
+    expect(await caretPlace(page)).toMatchObject({
+      block: 'p0',
+      selected: [],
+    });
+    expect((await sectionOutline(page)).slice(0, 4)).toEqual([
+      'Befor',
+      '[one',
+      '*Inside one',
+      ']one',
+    ]);
+  });
+
+  test('cutting across the edge of a section keeps the edge, and what stays private stays private', async ({
+    page,
+  }) => {
+    await page
+      .context()
+      .grantPermissions(['clipboard-read', 'clipboard-write']);
+    await openPrivateFixture(page);
+    // A second line in the first section.
+    await caretIn(page, 'p1', 'end');
+    await page.keyboard.press('Enter');
+    await page.keyboard.insertText('Second inside');
+    await expect
+      .poll(async () => (await sectionOutline(page)).slice(0, 5))
+      .toEqual(['Before', '[one', '*Inside one', '*Second inside', ']one']);
+
+    // "Before", the start of the section and "Inside one", selected and cut.
+    await caretIn(page, 'p0', 'end');
+    // The first Shift+arrow selects the block and its neighbour.
+    await page.keyboard.press('Shift+ArrowDown');
+    await page.keyboard.press('Shift+ArrowDown');
+    expect((await caretPlace(page)).selected).toEqual(['p0', 's1', 'p1']);
+    await page.keyboard.press('Control+X');
+    await expect
+      .poll(async () => (await sectionOutline(page)).slice(0, 4))
+      .toEqual(['(empty)', '[one', '*Second inside', ']one']);
+
+    // Pasted at the end, they are plain blocks there: the cut took no edge.
+    await caretIn(page, 'p4', 'end');
+    await page.keyboard.press('Control+V');
+    await expect
+      .poll(async () => (await sectionOutline(page)).slice(-3))
+      .toEqual(['After', 'Before', 'Inside one']);
+
+    // The same across the end of a section. Backspace over the selection,
+    // with the caret Shift and the arrows leave at the start of "Between",
+    // removes nothing at all, and the end stays.
+    await caretIn(page, 'p2', 'start');
+    await page.keyboard.press('Shift+ArrowUp');
+    await page.keyboard.press('Shift+ArrowUp');
+    expect((await caretPlace(page)).selected).toEqual([
+      expect.any(String),
+      'e1',
+      'p2',
+    ]);
+    await page.keyboard.press('Backspace');
+    // Past Editor.js's batch of changes, nothing has gone.
+    await page.waitForTimeout(500);
+    expect((await sectionOutline(page)).slice(0, 5)).toEqual([
+      '(empty)',
+      '[one',
+      '*Second inside',
+      ']one',
+      'Between',
+    ]);
+    await caretIn(page, 'p2', 'start');
+    await page.keyboard.press('Shift+ArrowUp');
+    await page.keyboard.press('Shift+ArrowUp');
+    await page.keyboard.press('Control+X');
+    await expect
+      .poll(async () => (await sectionOutline(page)).slice(0, 5))
+      .toEqual(['(empty)', '[one', '*(empty)', ']one', '[two']);
+
+    await page.getByRole('button', { name: 'Reopen' }).click();
+    await expect(page.locator('[data-ready]')).toHaveAttribute(
+      'data-reopened',
+      '1',
+    );
+    expect(await savedText(page)).toEqual([
+      '[two',
+      'Inside two',
+      ']two',
+      'contentMedia',
+      'contentGallery',
+      'delimiter',
+      'quote',
+      'After',
+      'Before',
+      'Inside one',
+    ]);
+  });
+});
+
 test('a click beside a paragraph places the caret at the start or end of that line', async ({
   page,
 }) => {
