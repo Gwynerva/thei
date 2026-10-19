@@ -48,7 +48,8 @@ and behaves.
 - The row Enter takes is ringed as a picker's row is (`useActiveRow`): the
   first, until the arrows or the pointer choose another, so what was typed
   always shows where Enter goes.
-- ↑ ↓ choose, Tab and Shift+Tab go from group to group, Enter opens,
+- ↑ ↓ choose, Tab and Shift+Tab go from group to group — past the last,
+  Tab goes on to «All results» at the foot — Enter opens,
   Ctrl+Enter shows everything on the search page, Esc closes and gives the
   focus back. None of it is told on screen: the foot holds how many were
   found, always a link to all of them.

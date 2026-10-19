@@ -317,6 +317,13 @@ export function useSearchLanding() {
     void land(route.hash, first);
   }
   let stopPageHook: (() => void) | undefined;
+  // A run still on its way stops when the page is left: what it waited for
+  // would be looked for, opened or clicked on the next one.
+  const stopLeaving = useRouter().beforeEach((to, from) => {
+    if (to.path === from.path) return;
+    run += 1;
+    clear();
+  });
   onMounted(() => {
     landOnce(true);
     stopPageHook = nuxtApp.hook('page:finish', () => landOnce(false));
@@ -326,6 +333,8 @@ export function useSearchLanding() {
     () => landOnce(false),
   );
   onBeforeUnmount(() => {
+    run += 1;
+    stopLeaving();
     stopPageHook?.();
     clear();
   });

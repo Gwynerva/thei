@@ -313,17 +313,21 @@ const groupStarts = computed(() => {
   return starts;
 });
 
-function moveGroup(step: 1 | -1) {
+/**
+ * Moves to the next group, or back to the start of this one and then the
+ * one before. Whether it moved: past the last group Tab goes on as Tab does,
+ * to «All results» at the foot, and Shift+Tab before the first, back.
+ */
+function moveGroup(step: 1 | -1): boolean {
   const starts = groupStarts.value;
-  if (starts.length < 2) return;
+  if (!starts.length) return false;
   const now = current();
   const here = starts.findLastIndex((start) => start <= now);
-  // Back: to the start of this group first, when not on it already.
   const target =
-    step < 0 && starts[here]! < now
-      ? starts[here]!
-      : starts[(here + step + starts.length) % starts.length]!;
+    step < 0 && starts[here]! < now ? starts[here] : starts[here + step];
+  if (target === undefined) return false;
   move(target - now);
+  return true;
 }
 
 function close() {
@@ -371,9 +375,8 @@ function onKeyDown(event: KeyboardEvent) {
   if (event.key === 'ArrowDown') {
     event.preventDefault();
     move(1);
-  } else if (event.key === 'Tab' && groupStarts.value.length > 1) {
-    event.preventDefault();
-    moveGroup(event.shiftKey ? -1 : 1);
+  } else if (event.key === 'Tab') {
+    if (moveGroup(event.shiftKey ? -1 : 1)) event.preventDefault();
   } else if (event.key === 'ArrowUp') {
     event.preventDefault();
     move(-1);
