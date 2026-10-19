@@ -14,11 +14,13 @@ import {
   containsPhrase,
   inverseDocumentFrequency,
   normalizeTermText,
-  readTerms,
-  stemTerm,
   termVector,
-  wordTokens,
 } from '../../shared/text-terms';
+import {
+  textTerms as readTerms,
+  textWords,
+  wordTerm as stemTerm,
+} from '../../shared/search/match';
 
 const flat = () => 1;
 
@@ -75,7 +77,11 @@ function corpus(entries: Entry[]) {
 
 describe('text terms', () => {
   it('reads words, not characters, and folds ё', () => {
-    expect(wordTokens('Ёжик said: «AI»!')).toEqual(['ежик', 'said', 'ai']);
+    expect(textWords('Ёжик said: «AI»!').map(({ word }) => word)).toEqual([
+      'ежик',
+      'said',
+      'ai',
+    ]);
   });
 
   it('finds a phrase only where it stands on its own', () => {

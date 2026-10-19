@@ -12,12 +12,13 @@ import {
   type SearchKind,
 } from '#layers/thei/shared/search/api';
 import { matchName } from '#layers/thei/shared/search/match';
+import { isQuestion } from '#layers/thei/shared/search/tokens';
 import { normalizeTermText } from '#layers/thei/shared/text-terms';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import { buildProjectUrl } from '#layers/thei/shared/project-url';
-import { searchAnalyzer } from './indexer';
+import { searchAnalyzer } from './analyzer';
 
 /**
  * What the owner may do from the quick search, besides finding.
@@ -67,14 +68,6 @@ function sectionName(section: SearchAdminSection): string {
   }[section];
 }
 
-const RELATIVE: Record<string, number> = {
-  сегодня: 0,
-  вчера: -1,
-  позавчера: -2,
-  today: 0,
-  yesterday: -1,
-};
-
 function shiftDay(day: string, by: number): string {
   return new Date(Date.parse(`${day}T00:00:00Z`) + by * 86_400_000)
     .toISOString()
@@ -87,8 +80,8 @@ function shiftDay(day: string, by: number): string {
  * the last such day up to today.
  */
 export function namedDay(q: string, today: string): string | undefined {
-  const word = normalizeTermText(q.trim());
-  if (word in RELATIVE) return shiftDay(today, RELATIVE[word]!);
+  const shift = searchAnalyzer().relativeDay(normalizeTermText(q.trim()));
+  if (shift !== undefined) return shiftDay(today, shift);
   const query = parseDayQuery(q);
   if (!query) return undefined;
   const found: string[] = [];
@@ -278,45 +271,6 @@ function recentActions(): SearchAction[] {
   }));
 }
 
-/** Words a question opens with, in the languages the site speaks. */
-const QUESTION_WORDS = new Set([
-  'что',
-  'как',
-  'когда',
-  'где',
-  'куда',
-  'откуда',
-  'почему',
-  'зачем',
-  'кто',
-  'какой',
-  'какая',
-  'какие',
-  'какое',
-  'сколько',
-  'чем',
-  'чей',
-  'ли',
-  'what',
-  'how',
-  'when',
-  'where',
-  'why',
-  'who',
-  'which',
-  'whose',
-]);
-
-/** A query asked as a question: a title nobody would give a new entity. */
-export function isQuestion(q: string): boolean {
-  const words = normalizeTermText(q)
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter(Boolean);
-  return (
-    /\?\s*$/u.test(q) || (words.length > 1 && QUESTION_WORDS.has(words[0]!))
-  );
-}
-
 export function searchActions(context: SearchActionContext): SearchAction[] {
   const q = context.q.trim();
   const sides = sidesOf(context.path);
@@ -337,7 +291,7 @@ export function searchActions(context: SearchActionContext): SearchAction[] {
   }
   // A question is asked of the model, first; nothing is made with it for a
   // title, nor with a day.
-  if (isQuestion(q)) {
+  if (isQuestion(q, searchAnalyzer())) {
     if (aiOn) actions.unshift({ type: 'ask-ai', text: q });
     return actions;
   }

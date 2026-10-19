@@ -20,6 +20,7 @@ import {
 } from '#layers/thei/shared/search/snippet';
 import {
   answersQueryWord,
+  isQuestion,
   parseSearchQuery,
   requiredQueryWords,
   searchTokens,
@@ -28,10 +29,10 @@ import {
 import { searchKey } from '#layers/thei/shared/search/match';
 import { normalizeTermText } from '#layers/thei/shared/text-terms';
 import { buildPublicTags } from '../public/entities';
-import { isQuestion } from './actions';
 import { runCatalogue } from './catalogue';
 import { placeHref, type SearchAudience } from './documents';
-import { searchAnalyzer, searchIndexProgress, useSearchStore } from './indexer';
+import { searchAnalyzer } from './analyzer';
+import { searchIndexProgress, useSearchStore } from './indexer';
 import { ftsTerm, type SearchStore, type StoredCard } from './store';
 import { SEARCH_FIELD_WEIGHTS, SEARCH_FIELDS, type SearchUnit } from './units';
 
@@ -86,14 +87,6 @@ interface DocRow {
 const WEIGHTS = SEARCH_FIELDS.map((field) => SEARCH_FIELD_WEIGHTS[field]).join(
   ', ',
 );
-const RELATIVE_DAYS: Record<string, number> = {
-  сегодня: 0,
-  вчера: -1,
-  позавчера: -2,
-  today: 0,
-  yesterday: -1,
-};
-
 /** The FTS5 query of the words a search insists on, and its phrases. */
 /**
  * The query as FTS5 reads it: every word in one of its forms, and each
@@ -187,9 +180,9 @@ function dayMatcher(
   q: string,
   now: number,
 ): ((date: string) => number | undefined) | undefined {
-  const word = normalizeTermText(q.trim());
-  if (word in RELATIVE_DAYS) {
-    const day = utcDayOf(now + RELATIVE_DAYS[word]! * 24 * 60 * 60 * 1000);
+  const shift = searchAnalyzer().relativeDay(normalizeTermText(q.trim()));
+  if (shift !== undefined) {
+    const day = utcDayOf(now + shift * 24 * 60 * 60 * 1000);
     return (date) => (date === day ? 0 : undefined);
   }
   const parsed = parseDayQuery(q);
@@ -515,56 +508,6 @@ function asPhrase(query: SearchQuery): SearchQuery {
 }
 
 /**
- * Words that name a kind of result rather than say what it is about: «фото
- * маяка» asks for the files of a lighthouse. Beside other words, such a word
- * need not stand in a text, and its kind comes first.
- */
-const KIND_WORDS: Partial<Record<SearchKind, string[]>> = {
-  file: [
-    'фото',
-    'фотка',
-    'фотография',
-    'снимок',
-    'картинка',
-    'изображение',
-    'видео',
-    'ролик',
-    'файл',
-    'скан',
-    'photo',
-    'picture',
-    'image',
-    'video',
-    'file',
-    'scan',
-  ],
-  'diary-entry': ['дневник', 'diary'],
-  project: ['проект', 'project'],
-  'project-section': ['раздел', 'этап', 'section', 'stage'],
-  event: ['событие', 'event'],
-  page: ['страница', 'page'],
-  tag: ['тег', 'tag'],
-};
-const kindTerms = new Map<string, Map<string, SearchKind>>();
-
-function kindOfWord(
-  word: SearchQuery['words'][number],
-): SearchKind | undefined {
-  const analyzer = searchAnalyzer();
-  let terms = kindTerms.get(analyzer.id);
-  if (!terms) {
-    terms = new Map();
-    for (const [kind, words] of Object.entries(KIND_WORDS) as [
-      SearchKind,
-      string[],
-    ][])
-      for (const each of words) terms.set(analyzer.read(each).term, kind);
-    kindTerms.set(analyzer.id, terms);
-  }
-  return terms.get(word.term);
-}
-
-/**
  * The kind a query names beside its other words, and the query without
  * insisting on that word. None when the word stands alone: «фото» is then
  * a word like any other.
@@ -574,7 +517,10 @@ function kindHint(query: SearchQuery): {
   query: SearchQuery;
 } {
   const named = query.words.map((word) =>
-    word.stop ? undefined : kindOfWord(word),
+    // Words that name a kind of result rather than say what it is about
+    // (`kindWords`): beside other words, such a word need not stand in a
+    // text, and its kind comes first.
+    word.stop ? undefined : searchAnalyzer().kindOf(word.term),
   );
   const others = query.words.filter((word, at) => !word.stop && !named[at]);
   const kind = named.find(Boolean);
@@ -956,7 +902,7 @@ export async function runSearch(
   };
   // A question holds words that only carry it — «что я делала на байкале»:
   // what holds the rarer of them leads, though it lacks «делала».
-  const asked = isQuestion(request.q) && words(request.q) > 1;
+  const asked = isQuestion(request.q, searchAnalyzer()) && words(request.q) > 1;
   const response = await searchOnce(request, store, request.q, asked);
   if (!response.total && response.query) {
     const other = searchAnalyzer().otherKeyboard(normalizeTermText(request.q));

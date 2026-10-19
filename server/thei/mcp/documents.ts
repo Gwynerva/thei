@@ -4,11 +4,7 @@ import {
   type ContentOutputData,
 } from '#layers/thei/shared/content';
 import type { Period } from '#layers/thei/shared/period';
-import {
-  saysLittle,
-  stemTerm,
-  wordTokens,
-} from '#layers/thei/shared/text-terms';
+import { saysLittle, textWords } from '#layers/thei/shared/search/match';
 import { readPeriodsOf } from '../periods';
 import { PROFILE_ID } from '#layers/thei/shared/profile';
 import {
@@ -387,12 +383,11 @@ function buildDocuments(): McpDocument[] {
  * told in the form the record itself uses most.
  */
 function withDigests(drafts: Draft[]): McpDocument[] {
-  const tokensOf = drafts.map((draft) => wordTokens(draft.text));
+  const wordsOf = drafts.map((draft) => textWords(draft.text));
+  const tokensOf = wordsOf.map((words) => words.map(({ word }) => word));
   const documentFrequency = new Map<string, number>();
-  const stemsOf = tokensOf.map((tokens) => {
-    const stems = tokens.map((token) =>
-      saysLittle(token) ? '' : stemTerm(token),
-    );
+  const stemsOf = wordsOf.map((words) => {
+    const stems = words.map(({ word, term }) => (saysLittle(word) ? '' : term));
     for (const stem of new Set(stems))
       if (stem)
         documentFrequency.set(stem, (documentFrequency.get(stem) ?? 0) + 1);

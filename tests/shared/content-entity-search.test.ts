@@ -429,6 +429,26 @@ describe('a name typed from memory, word by word', () => {
     expect(ids('пле')).toEqual(['play', 'cosplay', 'fest']);
   });
 
+  it('reads a word as the index does: forms, scripts and accents', () => {
+    const items = [
+      entity('eva', 'Броня из EVA'),
+      entity('birthday', 'День рождения'),
+      entity('cafe', 'Café на углу'),
+    ];
+    const found = (query: string) =>
+      rankContentEntities(items, query, 10).map((item) => item.entityId);
+    expect(found('броня из евы')).toEqual(['eva']);
+    expect(found('дня рождения')).toEqual(['birthday']);
+    expect(found('cafe')).toEqual(['cafe']);
+  });
+
+  it('matches the words in the order typed first', () => {
+    const items = [entity('cat', 'Кот кофе кот')];
+    expect(
+      rankContentEntities(items, 'ко кот', 10).map((item) => item.entityId),
+    ).toEqual(['cat']);
+  });
+
   it('puts words in the order typed before words in another order', () => {
     const items = [
       entity('reversed', 'Шедоухарт: косплей'),

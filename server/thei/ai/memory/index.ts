@@ -4,7 +4,7 @@ import type {
   AiMemoryEntityGroup,
   AiMemoryIndex,
 } from '#layers/thei/shared/ai-memory';
-import { normalizeTermText } from '#layers/thei/shared/text-terms';
+import { wordsFilter } from '#layers/thei/shared/search/match';
 import type { AiEntityRef, AiEntityType } from '#layers/thei/shared/ai';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { entityFaces, type EntityKind } from '../../entity-kinds';
@@ -35,10 +35,10 @@ export async function memoryIndex(
     .from(schema.aiMemory)
     .orderBy(desc(schema.aiMemory.updatedAt))
     .all() as MemoryRow[];
-  const query = normalizeTermText(options.q ?? '').trim();
+  // Words found as words, in any of their forms, as every list finds them.
+  const matches = options.q?.trim() ? wordsFilter(options.q) : undefined;
   const has = (...texts: (string | undefined)[]) =>
-    !query ||
-    texts.some((text) => text && normalizeTermText(text).includes(query));
+    !matches || matches(texts.filter((text): text is string => Boolean(text)));
 
   const owner = rows.filter((row) => row.anchor === 'owner');
   const kinds = rows.filter((row) => row.anchor === 'kind');

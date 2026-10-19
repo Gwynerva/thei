@@ -9,6 +9,8 @@
  * language only decides which pack a script goes to when several languages
  * share it (`shared/language/search/index.ts`).
  */
+import type { SearchKind } from '../../search/api';
+
 export type SearchScript = 'latin' | 'cyrillic';
 
 export interface SearchLanguagePack {
@@ -21,6 +23,21 @@ export interface SearchLanguagePack {
    * about: a query does not insist on them. Normalized, as typed.
    */
   stopWords: ReadonlySet<string>;
+  /**
+   * Words too common in any text to say what it is about, for an archive
+   * still too small for their frequency to rule them out: not a keyword,
+   * not a word a tag is recognized by. Normalized, as written.
+   */
+  vagueWords: readonly string[];
+  /**
+   * Words that name a kind of result rather than say what it is about:
+   * «фото маяка» asks for the files of a lighthouse.
+   */
+  kindWords: Partial<Record<SearchKind, readonly string[]>>;
+  /** Words a question opens with: «что я делала на байкале». */
+  questionWords: ReadonlySet<string>;
+  /** Days named by a word, as days from today: «вчера» is −1. */
+  relativeDays: Readonly<Record<string, number>>;
   /**
    * The language's keyboard, key for key over `LATIN_KEYBOARD`: what a word
    * typed on the wrong layout was meant to be. None for a Latin language.

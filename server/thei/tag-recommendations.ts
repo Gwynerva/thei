@@ -15,10 +15,10 @@ import {
   type TagRecommendationRequest,
   type TagSynonymSuggestion,
 } from '#layers/thei/shared/tag-recommendation';
+import { textTerms } from '#layers/thei/shared/search/match';
 import {
   inverseDocumentFrequency,
   normalizeTermText,
-  readTerms,
   termVector,
   type TermCounts,
 } from '#layers/thei/shared/text-terms';
@@ -239,7 +239,7 @@ function documentTerms(key: string, title: string, text: string) {
   const hash = textHash(`${title}\u0000${text}`);
   const known = termsByDocument.get(key);
   if (known?.hash === hash) return known;
-  const terms = { hash, ...readTerms({ title, text }) };
+  const terms = { hash, ...textTerms({ title, text }) };
   termsByDocument.set(key, terms);
   return terms;
 }
@@ -260,7 +260,7 @@ export async function recommendTagsForDraft(
 ): Promise<TagRecommendation[]> {
   const index = getTagRecommendationIndex();
   const ownerKey = request.owner && tagEntityKey(request.owner);
-  const { counts, surfaces } = readTerms(request);
+  const { counts, surfaces } = textTerms(request);
   const ranked = recommendTags(
     {
       ownerKey,

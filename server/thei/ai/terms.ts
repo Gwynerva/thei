@@ -8,9 +8,8 @@ import type { AiTermItem } from '#layers/thei/shared/ai-memory';
 import {
   containsPhrase,
   normalizeTermText,
-  stemTerm,
-  wordTokens,
 } from '#layers/thei/shared/text-terms';
+import { textWords, wordTerm } from '#layers/thei/shared/search/match';
 import { termKey } from '#layers/thei/shared/identity-key';
 import { refuse as fail } from '../entity-patch/text';
 import { loadDocuments, type McpDocument } from '../mcp/documents';
@@ -179,8 +178,8 @@ export function termMatcher(text: string) {
       return true;
     if (term.word.includes(' ') || term.word.length < STEMMED_FROM)
       return false;
-    stems ??= new Set(wordTokens(normalized).map(stemTerm));
-    return stems.has(stemTerm(term.word));
+    stems ??= new Set(textWords(normalized).map(({ term }) => term));
+    return stems.has(wordTerm(term.word));
   };
 }
 
@@ -202,13 +201,13 @@ export function keptWordsIn(phrase: string): string[] {
   const kept = listTerms().filter((term) => term.keep);
   if (!kept.length) return [];
   const normalized = normalizeTermText(phrase);
-  const tokens = wordTokens(normalized);
+  const tokens = textWords(normalized).map(({ word }) => word);
   const words = new Set<string>();
   for (const term of kept)
     if (term.word.includes(' ')) {
       for (const form of [term.word, ...term.forms.map(termKey)])
         if (containsPhrase(normalized, form))
-          for (const token of wordTokens(form)) words.add(token);
+          for (const { word } of textWords(form)) words.add(word);
     } else
       for (const token of tokens)
         if (termMatcher(token)(term)) words.add(token);

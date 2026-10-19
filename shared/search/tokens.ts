@@ -186,6 +186,16 @@ export function parseSearchQuery(
   return { text: text.trim(), words, phrases };
 }
 
+/**
+ * A query asked as a question — it opens with a word that asks, or ends with
+ * a question mark: a title nobody would give a new entity.
+ */
+export function isQuestion(text: string, analyzer: SearchAnalyzer): boolean {
+  if (/\?\s*$/u.test(text)) return true;
+  const words = searchTokens(text, analyzer, 'query');
+  return words.length > 1 && analyzer.asks(words[0]!.word);
+}
+
 /** The words a query insists on: all of them when they are all stop words. */
 export function requiredQueryWords(query: SearchQuery): SearchQueryWord[] {
   const meaningful = query.words.filter((word) => !word.stop || word.prefix);

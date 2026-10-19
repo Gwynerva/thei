@@ -1,9 +1,5 @@
 import { createHash } from 'node:crypto';
-import {
-  createSearchAnalyzer,
-  type SearchAnalyzer,
-} from '#layers/thei/shared/language/search';
-import type { LanguageCode } from '#layers/thei/shared/language';
+import { searchAnalyzer } from './analyzer';
 import {
   diaryDocument,
   eventDocument,
@@ -78,19 +74,6 @@ const state: IndexState = { passedAt: 0, complete: false, again: 'none' };
 
 export function searchIndexPath() {
   return THEI_SERVER.projectPath('.thei', 'search.db');
-}
-
-function siteLanguage(): LanguageCode {
-  return (THEI_SERVER.language?.code ?? 'en') as LanguageCode;
-}
-
-let analyzer: { language: LanguageCode; value: SearchAnalyzer } | undefined;
-/** How this site reads words: by its language. */
-export function searchAnalyzer(): SearchAnalyzer {
-  const language = siteLanguage();
-  if (analyzer?.language !== language)
-    analyzer = { language, value: createSearchAnalyzer(language) };
-  return analyzer.value;
 }
 
 /** The index, opened on first use; another reading of words empties it. */

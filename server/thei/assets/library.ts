@@ -2,10 +2,7 @@ import { createError } from 'h3';
 import type Database from 'better-sqlite3';
 import { inArray } from 'drizzle-orm';
 import { AssetType, type AssetUsageMeta } from '../../../shared/asset';
-import {
-  normalizeAdminSearchText,
-  resolveAdminPagination,
-} from '../../../shared/admin/entity-list';
+import { resolveAdminPagination } from '../../../shared/admin/entity-list';
 import {
   assetSelectionError,
   assetSourceKey,
@@ -25,7 +22,7 @@ import {
 import { normalizeAssetExtension } from '../../../shared/assets/formats';
 import { dayQueryRank, parseDayQuery } from '../../../shared/day-query';
 import { richTextToPlainText } from '../../../shared/rich-text';
-import { queryWordsFilter, wordTokens } from '../../../shared/text-terms';
+import { useWordsSql } from '../search/words-sql';
 import {
   buildProjectSectionUrl,
   buildProjectUrl,
@@ -94,7 +91,7 @@ members AS (
  * description, kept for its family, finds it wherever it is placed.
  * `scoped` restricts the match by placements to the member row's own
  * source. Takes the query five times. Words are found as words
- * (`asset_search_words`).
+ * (`thei_words`, `server/thei/search/words-sql.ts`).
  */
 function siteTextMatchSql(scoped: boolean) {
   const scope = scoped
@@ -102,22 +99,22 @@ function siteTextMatchSql(scoped: boolean) {
     : '';
   return `(EXISTS (
       SELECT 1 FROM placements p WHERE p.assetUuid=a.assetUuid${scope}
-      AND (asset_search_words(asset_search_text(CASE WHEN p.sourceType='diary-entry' THEN '' ELSE coalesce(p.title,'') END || ' ' || coalesce(p.summary,'') || ' ' || p.description || ' ' || coalesce(json_extract(p.meta,'$.caption'),'') || ' ' || coalesce(json_extract(p.meta,'$.title'),'')),?)
+      AND (thei_words(asset_search_text(CASE WHEN p.sourceType='diary-entry' THEN '' ELSE coalesce(p.title,'') END || ' ' || coalesce(p.summary,'') || ' ' || p.description || ' ' || coalesce(json_extract(p.meta,'$.caption'),'') || ' ' || coalesce(json_extract(p.meta,'$.title'),'')),?)
         OR (p.sourceType='diary-entry' AND asset_day_match(p.slug,?))))
     OR EXISTS (
       SELECT 1 FROM placements p JOIN content c ON p.containerType='content' AND c.contentUuid=p.containerId,
         json_each(c.data,'$.blocks') b
       WHERE p.assetUuid=a.assetUuid${scope} AND (
         (json_extract(b.value,'$.data.asset.assetUuid')=a.assetUuid AND
-          asset_search_words(asset_search_text(coalesce(json_extract(b.value,'$.data.caption'),'') || ' ' || coalesce(json_extract(b.value,'$.data.title'),'')),?))
+          thei_words(asset_search_text(coalesce(json_extract(b.value,'$.data.caption'),'') || ' ' || coalesce(json_extract(b.value,'$.data.title'),'')),?))
         OR EXISTS (SELECT 1 FROM json_each(b.value,'$.data.items') i
           WHERE json_extract(i.value,'$.asset.assetUuid')=a.assetUuid
-            AND asset_search_words(asset_search_text(coalesce(json_extract(i.value,'$.caption'),'') || ' ' || coalesce(json_extract(i.value,'$.title'),'') || ' ' || coalesce(json_extract(b.value,'$.data.title'),'')),?))
+            AND thei_words(asset_search_text(coalesce(json_extract(i.value,'$.caption'),'') || ' ' || coalesce(json_extract(i.value,'$.title'),'') || ' ' || coalesce(json_extract(b.value,'$.data.title'),'')),?))
       )
     )
     OR EXISTS (
       SELECT 1 FROM "asset-descriptions" d WHERE d.familyUuid=a.familyUuid
-      AND asset_search_words(asset_search_plain(d.text),?)
+      AND thei_words(d.text,?)
     ))`;
 }
 const registered = new WeakSet<Database.Database>();
@@ -129,36 +126,9 @@ function connection() {
       { deterministic: true },
       // Captions are rich text: their markup is not what anyone searches for.
       (value: unknown) =>
-        normalizeAdminSearchText(
-          typeof value === 'string' ? richTextToPlainText(value) : '',
-        ),
+        typeof value === 'string' ? richTextToPlainText(value) : '',
     );
-    // A file's description is plain text: what looks like markup in it is
-    // words, and is searched as typed.
-    context.rawDb.function(
-      'asset_search_plain',
-      { deterministic: true },
-      (value: unknown) =>
-        normalizeAdminSearchText(typeof value === 'string' ? value : ''),
-    );
-    // Words found as words, each at the start of a word or in another of its
-    // forms (`queryWordsFilter`): «кошка диван» finds «Кошка спит на
-    // диване»; never inside another word: «кот» never finds «скот». Asked
-    // row after row with one query, so the query is read once.
-    let wordsQuery: string | undefined;
-    let wordsFilter: ReturnType<typeof queryWordsFilter> = () => false;
-    context.rawDb.function(
-      'asset_search_words',
-      { deterministic: true },
-      (text: unknown, query: unknown) => {
-        if (typeof text !== 'string' || typeof query !== 'string') return 0;
-        if (query !== wordsQuery) {
-          wordsQuery = query;
-          wordsFilter = queryWordsFilter(wordTokens(query));
-        }
-        return wordsFilter([text]) ? 1 : 0;
-      },
-    );
+    useWordsSql(context.rawDb);
     // Asked once per diary placement with the same query each time, so the
     // query is read once.
     let lastQuery: string | undefined;
@@ -216,7 +186,7 @@ function matchSql(query: LibraryQuery, scoped = false) {
     parts.push('a.type=?');
     args.push(query.type);
   }
-  const q = normalizeAdminSearchText(query.q ?? '');
+  const q = (query.q ?? '').replace(/\s+/g, ' ').trim();
   if (q) {
     parts.push(siteTextMatchSql(scoped));
     args.push(q, q, q, q, q);

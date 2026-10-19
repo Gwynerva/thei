@@ -2,12 +2,17 @@ import type { ContentEntityType } from '../content-link';
 import { dayQueryRank, parseDayQuery, type DayQuery } from '../day-query';
 import type { MediaDescriptor } from '../media';
 import {
+  keyTier,
+  NAME_RANKS,
+  nameTier,
+  prepareNameQuery,
+  textWords,
+  type NameQuery,
+} from '../search/match';
+import {
   containsPhrase,
   inverseDocumentFrequency,
-  matchQueryWords,
   normalizeTermText,
-  stemTerm,
-  wordTokens,
 } from '../text-terms';
 
 export type ContentEntitySearchItem = {
@@ -78,18 +83,17 @@ export function rankContentEntities<T extends Rankable>(
   query: string,
   limit = CONTENT_ENTITY_SEARCH_LIMIT,
 ): T[] {
-  const normalized = normalizeTermText(query.trim());
-  if (!normalized)
+  const prepared = prepareNameQuery(query);
+  if (!prepared.key)
     return [...items]
       .sort(
         (a, b) => b.updatedAt - a.updatedAt || a.title.localeCompare(b.title),
       )
       .slice(0, limit);
   const day = parseDayQuery(query);
-  const words = wordTokens(normalized);
   return (
     items
-      .map((item) => ({ item, rank: bestRank(item, normalized, words, day) }))
+      .map((item) => ({ item, rank: bestRank(item, prepared, day) }))
       .filter(({ rank }) => Number.isFinite(rank))
       // Diary entries found equally well come newest first: of the days of a
       // month or a year, the recent ones are the likely link.
@@ -106,56 +110,33 @@ export function rankContentEntities<T extends Rankable>(
 
 /**
  * How well an entity answers a query, lower being better: by its title, then
- * its synonyms, then its public ID, then its slug — the whole of one, its
- * start, or any part of it; 0 to 2 for the title, 10 to 12 for the public
- * ID, and so on. A synonym said whole ranks just below the title said whole,
- * since the owner gave that name to it; one found in part, below any title
- * found in part. Case, compatibility forms and «ё» set aside.
- *
- * A title or a synonym is also found by its words, as a person types a name
- * from memory (`matchQueryWords`): every word of the query standing in it,
- * in the order typed just below its start, in any order a little lower —
- * both above a piece found inside a word.
+ * its synonyms, then its public ID, then its slug. A title or a synonym is
+ * found as a person types a name from memory (`nameTier`): whole, by its
+ * start, by its words in the order typed, in any order, or inside it from a
+ * word's start — never inside a word. A synonym said whole ranks just below
+ * the title said whole, since the owner gave that name to it; one found
+ * otherwise, below any title (`NAME_RANKS`). An ID and an address are found
+ * by any part of them, 10 to 12 and 20 to 22.
  *
  * A diary entry has no name to search by, only its day, written however the
  * person is used to (`day-query.ts`): a whole day as written ranks with a
  * whole title, a month or a year with a title found in part.
  */
-function bestRank(
-  item: Rankable,
-  query: string,
-  queryWords: string[],
-  day?: DayQuery,
-) {
+function bestRank(item: Rankable, query: NameQuery, day?: DayQuery) {
   if (item.date)
     return (day && dayQueryRank(item.date, day)) ?? Number.POSITIVE_INFINITY;
   let best = Number.POSITIVE_INFINITY;
-  const consider = (
-    value: string | undefined,
-    ranks: [number, number, number],
-    byWords?: [ordered: number, unordered: number],
-  ) => {
-    if (!value) return;
-    const field = normalizeTermText(value);
-    let rank =
-      field === query
-        ? ranks[0]
-        : field.startsWith(query)
-          ? ranks[1]
-          : field.includes(query)
-            ? ranks[2]
-            : Number.POSITIVE_INFINITY;
-    if (byWords && rank > ranks[1]) {
-      const match = matchQueryWords(queryWords, wordTokens(field));
-      if (match) rank = Math.min(rank, byWords[match.ordered ? 0 : 1]);
-    }
-    best = Math.min(best, rank);
-  };
-  consider(item.title, [0, 1, 2], [1.4, 1.7]);
-  for (const synonym of item.synonyms ?? [])
-    consider(synonym, [0.5, 3, 4], [3.4, 3.7]);
-  consider(item.publicId, [10, 11, 12]);
-  consider(item.humanReadableSlug, [20, 21, 22]);
+  const titleTier = nameTier(query, item.title);
+  if (titleTier) best = NAME_RANKS.title[titleTier];
+  for (const synonym of item.synonyms ?? []) {
+    const tier = nameTier(query, synonym);
+    if (tier) best = Math.min(best, NAME_RANKS.synonym[tier]);
+  }
+  const ids = { exact: 0, start: 1, inside: 2 };
+  const publicId = keyTier(query, item.publicId);
+  if (publicId) best = Math.min(best, 10 + ids[publicId]);
+  const slug = keyTier(query, item.humanReadableSlug);
+  if (slug) best = Math.min(best, 20 + ids[slug]);
   return best;
 }
 
@@ -181,15 +162,15 @@ function normalizePhrase(value: string) {
 }
 
 function suggestProfile(item: Suggestible): SuggestProfile {
-  const titleWords = item.date ? [] : wordTokens(item.title);
+  const title = item.date ? [] : textWords(item.title);
   return {
-    titleWords,
-    titleStems: new Set(titleWords.map(stemTerm)),
-    summaryStems: new Set(wordTokens(item.summary).map(stemTerm)),
+    titleWords: title.map(({ word }) => word),
+    titleStems: new Set(title.map(({ term }) => term)),
+    summaryStems: new Set(textWords(item.summary).map(({ term }) => term)),
     titlePhrase: item.date ? '' : normalizePhrase(item.title),
     synonymStems: new Set(
       (item.synonyms ?? []).flatMap((synonym) =>
-        wordTokens(synonym).map(stemTerm),
+        textWords(synonym).map(({ term }) => term),
       ),
     ),
     synonymPhrases: (item.synonyms ?? []).map(normalizePhrase),
@@ -220,7 +201,9 @@ export function suggestContentEntities<T extends Suggestible>(
   const source = Array.from(text)
     .slice(0, CONTENT_ENTITY_SUGGEST_TEXT_LIMIT)
     .join('');
-  const tokens = [...new Set(wordTokens(source))];
+  const tokens = [
+    ...new Map(textWords(source).map((word) => [word.word, word])).values(),
+  ];
   const phrase = normalizePhrase(source);
   if (!tokens.length && !phrase) return recent.slice(0, limit);
 
@@ -237,7 +220,7 @@ export function suggestContentEntities<T extends Suggestible>(
   const idf = (stem: string) =>
     inverseDocumentFrequency(items.length, frequency.get(stem) ?? 0);
   const terms = tokens
-    .map((token) => ({ token, stem: stemTerm(token) }))
+    .map(({ word, term }) => ({ token: word, stem: term }))
     .filter(({ stem }) => !isCommon(stem));
 
   const matched = items

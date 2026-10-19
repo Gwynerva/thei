@@ -22,12 +22,7 @@ import {
   type AiSessionOrigin,
   type AiSessionOverview,
 } from '#layers/thei/shared/ai';
-import type { Database } from 'better-sqlite3';
-import {
-  normalizeTermText,
-  queryWordsFilter,
-  wordTokens,
-} from '#layers/thei/shared/text-terms';
+import { useWordsSql, WORDS_SQL } from '../../search/words-sql';
 import {
   entityFace,
   findEntity,
@@ -265,38 +260,6 @@ export function sessionAnswerable(row: SessionRow): boolean {
   return row.origin !== 'app' && !row.closedAt && !row.archivedAt;
 }
 
-/** Words as a search compares them: case, «ё» and runs of space set aside. */
-function searchable(value: string): string {
-  return normalizeTermText(value).replace(/\s+/g, ' ').trim();
-}
-
-/** The SQL function a search compares words with, as `searchable` reads them. */
-const SEARCHABLE_SQL = 'thei_search_words';
-const searchableIn = new WeakSet<object>();
-
-/**
- * Words are looked for in SQL with the site's own reading of them — SQLite's
- * lower() knows only Latin letters — given to each connection once.
- */
-function searchableSql(rawDb: Database) {
-  if (searchableIn.has(rawDb)) return;
-  // Words found as words, each at the start of a word or in another of its
-  // forms (`queryWordsFilter`): «кошка диван» finds «кошка спит на диване»;
-  // never inside another word: «кот» never finds «скот». Asked row after row
-  // with one query, so the query is read once.
-  let asked: string | undefined;
-  let matches: ReturnType<typeof queryWordsFilter> = () => false;
-  rawDb.function(SEARCHABLE_SQL, { deterministic: true }, (value, query) => {
-    if (typeof value !== 'string' || typeof query !== 'string') return 0;
-    if (query !== asked) {
-      asked = query;
-      matches = queryWordsFilter(wordTokens(query));
-    }
-    return matches([searchable(value)]) ? 1 : 0;
-  });
-  searchableIn.add(rawDb);
-}
-
 /**
  * The owner's sessions, the latest first, a page at a time: by where they
  * came from, archived or not, and by words of their title, app or of what
@@ -324,7 +287,7 @@ export function listSessions(
 ): AiSessionListResponse {
   const { db, schema, rawDb } = THEI_SERVER.useDb();
   const table = schema.aiSessions;
-  const words = searchable(filter.q ?? '');
+  const words = (filter.q ?? '').replace(/\s+/g, ' ').trim();
   const about = filter.about
     ? sessionsAbout([{ type: filter.about.kind as never, id: filter.about.id }])
     : undefined;
@@ -334,9 +297,9 @@ export function listSessions(
       modelReady: Boolean(sessionModel()),
       waiting: aiWaiting(),
     };
-  if (words) searchableSql(rawDb);
+  if (words) useWordsSql(rawDb);
   const found = (value: SQL) =>
-    sql`${sql.raw(SEARCHABLE_SQL)}(${value}, ${words}) = 1`;
+    sql`${sql.raw(WORDS_SQL)}(${value}, ${words}) = 1`;
   const where = (moment?: SQL) =>
     and(
       filter.origin ? eq(table.origin, filter.origin) : undefined,

@@ -1,3 +1,4 @@
+import type { SearchKind } from '../../search/api';
 import type { LanguageCode } from '../types';
 import { englishSearch } from './en';
 import { russianSearch } from './ru';
@@ -59,6 +60,14 @@ export interface SearchAnalyzer {
    * «EVA» on any site. None for a word that is not a Latin one.
    */
   fromLatin(word: string): string | undefined;
+  /** Whether a normalized word is too common to say what a text is about. */
+  vague(word: string): boolean;
+  /** The kind of result a word names, by its term: «фото» is a file. */
+  kindOf(term: string): SearchKind | undefined;
+  /** Whether a normalized word may open a question: «что», «where». */
+  asks(word: string): boolean;
+  /** The day a normalized word names, as days from today: «вчера» is −1. */
+  relativeDay(word: string): number | undefined;
 }
 
 /**
@@ -83,7 +92,11 @@ export function createSearchAnalyzer(language: LanguageCode): SearchAnalyzer {
       toLatin.set(keyboard[at]!, key);
     });
 
-  return {
+  const packs = [...new Set([own, latin, cyrillic])];
+  const vagueTerms = new Map<SearchLanguagePack, Set<string>>();
+  let kinds: Map<string, SearchKind> | undefined;
+
+  const analyzer: SearchAnalyzer = {
     id: `${PACKS_VERSION}:${language}`,
     read(word) {
       if (CYRILLIC_WORD.test(word))
@@ -118,5 +131,38 @@ export function createSearchAnalyzer(language: LanguageCode): SearchAnalyzer {
       if (!map) return undefined;
       return [...text].map((char) => map.get(char) ?? char).join('');
     },
+    vague(word) {
+      const pack = CYRILLIC_WORD.test(word)
+        ? cyrillic
+        : LATIN_LETTER.test(word)
+          ? latin
+          : undefined;
+      if (!pack) return false;
+      let terms = vagueTerms.get(pack);
+      if (!terms) {
+        terms = new Set(pack.vagueWords.map((each) => pack.stem(each)));
+        vagueTerms.set(pack, terms);
+      }
+      return terms.has(analyzer.read(word).term);
+    },
+    kindOf(term) {
+      if (!kinds) {
+        kinds = new Map();
+        for (const pack of packs)
+          for (const [kind, words] of Object.entries(pack.kindWords) as [
+            SearchKind,
+            string[],
+          ][])
+            for (const each of words) kinds.set(analyzer.read(each).term, kind);
+      }
+      return kinds.get(term);
+    },
+    asks: (word) => packs.some((pack) => pack.questionWords.has(word)),
+    relativeDay(word) {
+      for (const pack of packs)
+        if (word in pack.relativeDays) return pack.relativeDays[word];
+      return undefined;
+    },
   };
+  return analyzer;
 }

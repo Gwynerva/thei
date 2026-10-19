@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { isQuestion } from '../../../server/thei/search/actions';
+import { createSearchAnalyzer } from '../../../shared/language/search';
+import { isQuestion as asks } from '../../../shared/search/tokens';
+
+const ru = createSearchAnalyzer('ru');
+const isQuestion = (text: string) => asks(text, ru);
 
 /** A question typed into the quick search is asked, not made a title of. */
 describe('a question typed', () => {
