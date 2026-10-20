@@ -38,6 +38,7 @@ vi.mock('../../server/thei/public/entities', async () => ({
     rows.map(({ tag, ...counts }: any) => ({ ...tag, ...counts })),
   ),
   buildPublicTags: vi.fn(async (tags) => tags),
+  buildPublicTagRows: vi.fn(async (tags) => tags),
 }));
 let context: Awaited<ReturnType<typeof freshTestDb>>;
 let handle: ReturnType<typeof toWebHandler>;

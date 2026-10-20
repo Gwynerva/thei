@@ -34,6 +34,22 @@ describe('admin entity list', () => {
     );
   });
 
+  it('finds words as words, in any form or script, never inside another', () => {
+    const list = [
+      entity('cattle', 'Скот и пастбища', '', 'cattle', 'CATTLE', 1, 1),
+      entity('cat', 'Кот на окне', '', 'cat', 'CAT', 2, 2),
+      entity('eva', 'Броня из EVA', '', 'eva', 'EVA1', 3, 3),
+      entity('day', 'День рождения', '', 'day', 'DAY', 4, 4),
+      entity('cafe', 'Café', '', 'cafe-1', 'CAFE', 5, 5),
+    ];
+    const found = (q: string) =>
+      paginateAdminEntities(list, { q }).items.map((item) => item.entityId);
+    expect(found('кот')).toEqual(['cat']);
+    expect(found('евы')).toEqual(['eva']);
+    expect(found('дня')).toEqual(['day']);
+    expect(found('cafe')).toEqual(['cafe']);
+  });
+
   it('finds an entity by words left apart, in any of their forms', () => {
     const found = (q: string) =>
       paginateAdminEntities(items, { q }).items.map((item) => item.entityId);

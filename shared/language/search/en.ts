@@ -27,4 +27,20 @@ export const englishSearch: SearchLanguagePack = {
       'ought shall may might must'
     ).split(' '),
   ),
+  vagueWords: (
+    'that this with from have were will would there their about which what ' +
+    'when into than then them they been also just some more very around ' +
+    'after before could should other these those where while'
+  ).split(' '),
+  kindWords: {
+    file: ['photo', 'picture', 'image', 'video', 'file', 'scan'],
+    'diary-entry': ['diary'],
+    project: ['project'],
+    'project-section': ['section', 'stage'],
+    event: ['event'],
+    page: ['page'],
+    tag: ['tag'],
+  },
+  questionWords: new Set('what how when where why who which whose'.split(' ')),
+  relativeDays: { today: 0, yesterday: -1 },
 };

@@ -6,11 +6,9 @@ import {
 } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import sharp from 'sharp';
-import { createOriginalAssetSettings } from '../../shared/asset-upload-settings';
-import { buildUploadHeaders } from '../../shared/api/asset-upload-headers';
 import { E2E_ORIGIN } from './fixture-url';
 import { screenshot } from './screenshots';
+import { uploadPicture, uploadText } from './helpers/upload';
 
 /**
  * A file's description — «Описание файла» — as the owner writes it in the
@@ -25,38 +23,7 @@ test.use({
 });
 test.describe.configure({ mode: 'serial' });
 
-/** A picture of its own colour, so every run stores new bytes. */
-async function upload(request: APIRequestContext) {
-  const [r, g, b] = [0, 0, 0].map(() => Math.floor(Math.random() * 256));
-  const buffer = await sharp({
-    create: { width: 64, height: 48, channels: 3, background: { r, g, b } },
-  })
-    .png()
-    .toBuffer();
-  const response = await request.post('/api/admin/assets', {
-    headers: buildUploadHeaders({
-      settings: createOriginalAssetSettings(),
-      extension: 'png',
-    }),
-    data: buffer,
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  return (await response.json()) as { assetUuid: string };
-}
-
-/** A text file of its own words, so every run stores new bytes. */
-async function uploadText(request: APIRequestContext, words: string) {
-  const response = await request.post('/api/admin/assets', {
-    headers: buildUploadHeaders({
-      settings: createOriginalAssetSettings(),
-      extension: 'txt',
-    }),
-    data: Buffer.from(words),
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  return (await response.json()) as { assetUuid: string };
-}
-
+/** Writes a file's description through the API, as its window saves it. */
 async function describeFile(
   request: APIRequestContext,
   assetUuid: string,
@@ -86,7 +53,7 @@ test('a description typed in the file’s window finds the file in the library',
   request,
 }) => {
   const run = randomUUID().slice(0, 8);
-  const file = await upload(request);
+  const file = (await uploadPicture(request)).asset;
   await page.setViewportSize({ width: 960, height: 720 });
   await open(page, '/admin/assets/');
   await expect(page.locator('[data-admin-assets-ready]')).toHaveAttribute(
@@ -138,8 +105,8 @@ test('the public window and the Markdown copy show it only for a public file', a
   playwright,
 }) => {
   const run = randomUUID().slice(0, 8);
-  const shown = await upload(request);
-  const hidden = await upload(request);
+  const shown = (await uploadPicture(request)).asset;
+  const hidden = (await uploadPicture(request)).asset;
   await describeFile(
     request,
     shown.assetUuid,

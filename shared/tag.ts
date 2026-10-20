@@ -4,7 +4,15 @@ import { normalizeUrlSegment } from './language/slugify';
 import type { ImageAccent } from './accent-color';
 import { imageAccentCssColor } from './accent-color';
 import { stringColorHue } from './utils/string-color';
-import { matchQueryWords, normalizeTermText, wordTokens } from './text-terms';
+import { identityKey } from './identity-key';
+import {
+  keyTier,
+  NAME_RANKS,
+  nameTier,
+  prepareNameQuery,
+  type NameQuery,
+  type NameTier,
+} from './search/match';
 import {
   normalizeSynonyms,
   SYNONYM_LIMIT,
@@ -96,10 +104,11 @@ export const TAG_SYNONYM_SEPARATOR = SYNONYM_SEPARATOR;
 
 /**
  * A tag's identity: its title without case, compatibility forms or the
- * difference between «ё» and «е». Two titles that normalize alike name one tag.
+ * difference between «ё» and «е». Two titles that normalize alike name one
+ * tag. Stored as `tags.normalizedTitle`, so it is an identity key.
  */
 export function normalizeTagTitle(value: string): string {
-  return normalizeTermText(value.trim());
+  return identityKey(value.trim());
 }
 
 /**
@@ -211,19 +220,21 @@ type SearchableTag = Pick<TagItem, 'title' | 'publicId' | 'slug'> & {
 };
 
 /**
- * Tags matching what is typed, best first: the title, then a synonym, then
- * the public ID and the slug. A synonym typed word for word ranks right after
- * a title typed word for word, above titles that merely begin with the query.
+ * Tags matching what is typed, best first, as a picker ranks entities: the
+ * title found whole, by its start, by its words in the order typed or in any
+ * order, or inside it from a word's start — «косплея» finds «Косплей»; then a
+ * synonym, one typed word for word right after a title typed word for word
+ * (`NAME_RANKS`); then the public ID and the slug by any part of them.
  */
 export function rankTagSearch<T extends SearchableTag>(
   tags: T[],
   query: string,
   limit = TAG_SEARCH_LIMIT,
 ): T[] {
-  const needle = normalizeTagTitle(cleanTagTitle(query));
-  if (!needle) return tags.slice(0, limit);
+  const prepared = prepareNameQuery(cleanTagTitle(query));
+  if (!prepared.key) return tags.slice(0, limit);
   return tags
-    .map((tag) => ({ tag, score: tagSearchScore(tag, needle) }))
+    .map((tag) => ({ tag, score: tagSearchScore(tag, prepared) }))
     .filter((item) => item.score < Number.POSITIVE_INFINITY)
     .sort(
       (a, b) =>
@@ -241,45 +252,35 @@ export function matchedTagSynonym(
   tag: SearchableTag,
   query: string,
 ): string | undefined {
-  const needle = normalizeTagTitle(cleanTagTitle(query));
-  if (!needle || textMatch(tag.title, needle) !== undefined) return undefined;
-  return synonymMatch(tag, needle)?.synonym;
+  const prepared = prepareNameQuery(cleanTagTitle(query));
+  if (!prepared.key || nameTier(prepared, tag.title)) return undefined;
+  return synonymMatch(tag, prepared)?.synonym;
 }
 
-function tagSearchScore(tag: SearchableTag, needle: string) {
-  const title = textMatch(tag.title, needle);
-  if (title !== undefined) return title;
-  const synonym = synonymMatch(tag, needle);
-  if (synonym) return synonym.score ? 10 + synonym.score : 0.5;
-  const publicId = textMatch(tag.publicId, needle);
-  if (publicId !== undefined) return 20 + publicId;
-  const slug = textMatch(tag.slug, needle);
-  if (slug !== undefined) return 30 + slug;
-  return Number.POSITIVE_INFINITY;
+const ID_RANKS = { exact: 0, start: 1, inside: 2 };
+
+function tagSearchScore(tag: SearchableTag, query: NameQuery) {
+  let best = Number.POSITIVE_INFINITY;
+  const title = nameTier(query, tag.title);
+  if (title) best = NAME_RANKS.title[title];
+  const synonym = synonymMatch(tag, query);
+  if (synonym) best = Math.min(best, NAME_RANKS.synonym[synonym.tier]);
+  const publicId = keyTier(query, tag.publicId);
+  if (publicId) best = Math.min(best, 10 + ID_RANKS[publicId]);
+  const slug = keyTier(query, tag.slug);
+  if (slug) best = Math.min(best, 20 + ID_RANKS[slug]);
+  return best;
 }
 
-/**
- * 0 for the whole value, 1 for its beginning, 2 for anywhere in it, 3 for
- * its words in other forms or order: «косплей шедоухарт» finds «Косплей на
- * Шедоухарт», as a picker finds an entity (`matchQueryWords`).
- */
-function textMatch(value: string, needle: string) {
-  const normalized = normalizeTagTitle(value);
-  if (normalized === needle) return 0;
-  if (normalized.startsWith(needle)) return 1;
-  if (normalized.includes(needle)) return 2;
-  const words = wordTokens(needle);
-  if (words.length > 1 && matchQueryWords(words, wordTokens(normalized)))
-    return 3;
-  return undefined;
-}
-
-function synonymMatch(tag: SearchableTag, needle: string) {
-  let best: { synonym: string; score: number } | undefined;
+function synonymMatch(tag: SearchableTag, query: NameQuery) {
+  let best: { synonym: string; tier: NameTier } | undefined;
   for (const synonym of tag.synonyms ?? []) {
-    const score = textMatch(synonym, needle);
-    if (score !== undefined && (!best || score < best.score))
-      best = { synonym, score };
+    const tier = nameTier(query, synonym);
+    if (
+      tier &&
+      (!best || NAME_RANKS.synonym[tier] < NAME_RANKS.synonym[best.tier])
+    )
+      best = { synonym, tier };
   }
   return best;
 }

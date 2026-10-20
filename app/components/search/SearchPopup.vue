@@ -1,9 +1,10 @@
 <script lang="ts" setup>
-import type {
-  SearchAction,
-  SearchAdminSection,
-  SearchHit,
-  SearchKind,
+import {
+  searchAdminSectionName,
+  type SearchAction,
+  type SearchAdminSection,
+  type SearchHit,
+  type SearchKind,
 } from '#layers/thei/shared/search/api';
 import type { IconName } from '#thei/icons';
 import { SEARCH_QUERY_MAX_LENGTH } from '#layers/thei/shared/search/tokens';
@@ -85,22 +86,6 @@ const SECTION_ICONS: Record<SearchAdminSection, IconName> = {
   updates: 'refresh',
   ai: 'sparkles',
 };
-
-function sectionName(section: SearchAdminSection): string {
-  const value = phrase.value;
-  return {
-    projects: value.projects,
-    events: value.events,
-    diary: value.diary,
-    pages: value.pages,
-    tags: value.tags,
-    files: value.asset_library,
-    profile: value.about_me,
-    settings: value.settings,
-    updates: value.admin_updates,
-    ai: value.ai_page,
-  }[section];
-}
 
 function titleOf(kind: SearchKind, title: string) {
   return kind === 'diary-entry'
@@ -225,7 +210,7 @@ function actionRow(action: SearchAction, at: number): Row {
       return {
         key,
         icon: SECTION_ICONS[action.section],
-        title: sectionName(action.section),
+        title: searchAdminSectionName(action.section, phrase.value),
         detail: value.search_action_section,
         href: action.href,
       };
@@ -313,17 +298,21 @@ const groupStarts = computed(() => {
   return starts;
 });
 
-function moveGroup(step: 1 | -1) {
+/**
+ * Moves to the next group, or back to the start of this one and then the
+ * one before. Whether it moved: past the last group Tab goes on as Tab does,
+ * to «All results» at the foot, and Shift+Tab before the first, back.
+ */
+function moveGroup(step: 1 | -1): boolean {
   const starts = groupStarts.value;
-  if (starts.length < 2) return;
+  if (!starts.length) return false;
   const now = current();
   const here = starts.findLastIndex((start) => start <= now);
-  // Back: to the start of this group first, when not on it already.
   const target =
-    step < 0 && starts[here]! < now
-      ? starts[here]!
-      : starts[(here + step + starts.length) % starts.length]!;
+    step < 0 && starts[here]! < now ? starts[here] : starts[here + step];
+  if (target === undefined) return false;
   move(target - now);
+  return true;
 }
 
 function close() {
@@ -371,9 +360,8 @@ function onKeyDown(event: KeyboardEvent) {
   if (event.key === 'ArrowDown') {
     event.preventDefault();
     move(1);
-  } else if (event.key === 'Tab' && groupStarts.value.length > 1) {
-    event.preventDefault();
-    moveGroup(event.shiftKey ? -1 : 1);
+  } else if (event.key === 'Tab') {
+    if (moveGroup(event.shiftKey ? -1 : 1)) event.preventDefault();
   } else if (event.key === 'ArrowUp') {
     event.preventDefault();
     move(-1);

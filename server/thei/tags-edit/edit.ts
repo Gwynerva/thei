@@ -180,7 +180,11 @@ export async function saveTagEdit(
   return { type: 'success', tagUuid, version: now } satisfies TagSaveResponse;
 }
 
-/** Deletes it with everything that is its own. */
+/**
+ * Deletes it with everything that is its own. What carried it changes with
+ * it: its version moves — a form opened over the old list of tags is told
+ * it is outdated — and the search reads it again.
+ */
 export async function deleteTag(
   tag: typeof import('../db/schema/tags').tags.$inferSelect,
   options: Pick<EntityEditOptions, 'onWrite' | 'beforeWrite'> = {},
@@ -189,6 +193,27 @@ export async function deleteTag(
   const tagUuid = tag.tagUuid;
   db.transaction((tx) => {
     options.beforeWrite?.(tx, schema);
+    const carriers = tx
+      .select({
+        type: schema.tagUsages.containerType,
+        id: schema.tagUsages.containerId,
+      })
+      .from(schema.tagUsages)
+      .where(eq(schema.tagUsages.tagUuid, tagUuid))
+      .all();
+    const now = Date.now();
+    for (const carrier of carriers) {
+      if (carrier.type === 'project')
+        tx.update(schema.projects)
+          .set({ updatedAt: now })
+          .where(eq(schema.projects.projectUuid, carrier.id))
+          .run();
+      else if (carrier.type === 'event')
+        tx.update(schema.events)
+          .set({ updatedAt: now })
+          .where(eq(schema.events.eventUuid, carrier.id))
+          .run();
+    }
     tx.delete(schema.tagUsages)
       .where(eq(schema.tagUsages.tagUuid, tagUuid))
       .run();

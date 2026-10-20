@@ -14,35 +14,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import sharp from 'sharp';
-import { createOriginalAssetSettings } from '../../shared/asset-upload-settings';
-import { buildUploadHeaders } from '../../shared/api/asset-upload-headers';
 import { screenshot } from './screenshots';
-import { skipDescription, uploadControls } from './helpers/upload';
+import {
+  skipDescription,
+  uploadControls,
+  uploadFile,
+  uploadPicture,
+} from './helpers/upload';
 
 test.use({
   storageState: fileURLToPath(
     new URL('./.artifacts/admin.json', import.meta.url),
   ),
 });
-async function upload(api: APIRequestContext, color = '#4368a2') {
-  const buffer = await sharp({
-    create: { width: 80, height: 60, channels: 3, background: color },
-  })
-    .png()
-    .toBuffer();
-  // The file is the raw body; its metadata rides in headers so the server can
-  // stream it to disk instead of buffering the whole request.
-  const response = await api.post('/api/admin/assets', {
-    headers: buildUploadHeaders({
-      settings: createOriginalAssetSettings(),
-      extension: 'png',
-    }),
-    data: buffer,
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  return { asset: await response.json(), buffer };
-}
-
 async function uploadVideo(api: APIRequestContext) {
   const video = await readFile(
     fileURLToPath(
@@ -55,16 +39,7 @@ async function uploadVideo(api: APIRequestContext) {
   const free = Buffer.alloc(8);
   free.writeUInt32BE(free.length + filler.length, 0);
   free.write('free', 4, 'latin1');
-  const buffer = Buffer.concat([video, free, filler]);
-  const response = await api.post('/api/admin/assets', {
-    headers: buildUploadHeaders({
-      settings: createOriginalAssetSettings(),
-      extension: 'mp4',
-    }),
-    data: buffer,
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  return response.json();
+  return uploadFile(api, 'mp4', Buffer.concat([video, free, filler]));
 }
 async function library(page: Page, batch = false) {
   await page.goto('/asset-regression');
@@ -174,7 +149,11 @@ test('hash lookup reuses stored bytes without multipart upload, including rename
   page,
   request,
 }) => {
-  const { asset, buffer } = await upload(request, '#5a3d21');
+  const { asset, buffer } = await uploadPicture(request, {
+    color: '#5a3d21',
+    width: 80,
+    height: 60,
+  });
   const lookup = await request.post('/api/admin/assets/lookup', {
     data: {
       hash: createHash('sha256').update(buffer).digest('hex'),
@@ -215,11 +194,16 @@ for (const width of [1280, 390]) {
     request,
   }) => {
     await page.setViewportSize({ width, height: 900 });
-    const first = await upload(request, width === 1280 ? '#763a55' : '#7d405b');
-    const second = await upload(
-      request,
-      width === 1280 ? '#1c5362' : '#245b69',
-    );
+    const first = await uploadPicture(request, {
+      color: width === 1280 ? '#763a55' : '#7d405b',
+      width: 80,
+      height: 60,
+    });
+    const second = await uploadPicture(request, {
+      color: width === 1280 ? '#1c5362' : '#245b69',
+      width: 80,
+      height: 60,
+    });
     expect(JSON.stringify([first.asset, second.asset])).not.toContain('.png"');
     await page.goto('/asset-regression');
     await expect(page.locator('[data-ready]')).toHaveAttribute(
@@ -344,9 +328,13 @@ test('the library narrows to one kind of entity and finds a diary entry by its d
   request,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  const { asset } = await upload(request, '#3d6b4f');
+  const { asset } = await uploadPicture(request, {
+    color: '#3d6b4f',
+    width: 80,
+    height: 60,
+  });
   // One file nothing holds, so the unused ones are never an empty choice.
-  await upload(request, '#6b3d5a');
+  await uploadPicture(request, { color: '#6b3d5a', width: 80, height: 60 });
   // A day no earlier run is likely to have taken: one entry per day.
   const random = (size: number) => 1 + Math.floor(Math.random() * size);
   // Past the 12th, the day cannot be read as a month the other way round.
@@ -622,15 +610,7 @@ async function uploadChangingVideo(api: APIRequestContext) {
         code === 0 ? resolve() : reject(new Error(`ffmpeg exited ${code}`)),
       );
     });
-    const response = await api.post('/api/admin/assets', {
-      headers: buildUploadHeaders({
-        settings: createOriginalAssetSettings(),
-        extension: 'mp4',
-      }),
-      data: await readFile(path),
-    });
-    expect(response.ok(), await response.text()).toBe(true);
-    return await response.json();
+    return await uploadFile(api, 'mp4', await readFile(path));
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

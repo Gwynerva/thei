@@ -4,9 +4,9 @@ import { normalizeTermText } from '../text-terms';
 /** The longest query read, in characters; the rest is dropped. */
 export const SEARCH_QUERY_MAX_LENGTH = 200;
 /** The most words a query is read for. */
-export const SEARCH_QUERY_MAX_WORDS = 8;
+const SEARCH_QUERY_MAX_WORDS = 8;
 /** The shortest last word read as the start of a word still being typed. */
-export const SEARCH_PREFIX_MIN_LENGTH = 2;
+const SEARCH_PREFIX_MIN_LENGTH = 2;
 
 /** A word of a text, where it stands in it, and how search reads it. */
 export interface SearchToken {
@@ -43,7 +43,7 @@ const ABBREVIATION = /^[\p{Lu}\p{N}]{2,6}$/u;
  *   together; a query asks for them written together, so «email» and
  *   «e-mail» find each other.
  */
-export type SearchTokensMode = 'index' | 'query';
+type SearchTokensMode = 'index' | 'query';
 
 /**
  * The words of a text, read the way search reads them, with their places in
@@ -184,6 +184,16 @@ export function parseSearchQuery(
       token.word.length >= SEARCH_PREFIX_MIN_LENGTH,
   }));
   return { text: text.trim(), words, phrases };
+}
+
+/**
+ * A query asked as a question — it opens with a word that asks, or ends with
+ * a question mark: a title nobody would give a new entity.
+ */
+export function isQuestion(text: string, analyzer: SearchAnalyzer): boolean {
+  if (/\?\s*$/u.test(text)) return true;
+  const words = searchTokens(text, analyzer, 'query');
+  return words.length > 1 && analyzer.asks(words[0]!.word);
 }
 
 /** The words a query insists on: all of them when they are all stop words. */

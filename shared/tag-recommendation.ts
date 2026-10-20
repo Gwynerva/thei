@@ -1,13 +1,11 @@
 import type { MediaDescriptor } from './media';
 import type { RelationEndpoint } from './relation';
 import type { TagContainerType, TagItem } from './tag';
+import { saysLittle, textWords } from './search/match';
 import {
   containsPhrase,
   cosineSimilarity,
   normalizeTermText,
-  saysLittle,
-  stemTerm,
-  wordTokens,
   type TermCounts,
   type TermVector,
 } from './text-terms';
@@ -148,7 +146,7 @@ function nameParts(name: string): TagNamePart[] {
     .map((part) => normalizeTermText(part).trim())
     .filter(Boolean)
     .map((part) => ({
-      stems: [...new Set(wordTokens(part).map(stemTerm))].filter(
+      stems: [...new Set(textWords(part).map(({ term }) => term))].filter(
         (stem) => stem.length > 1,
       ),
       // A name made of more than words is also looked for as it is written.
@@ -179,17 +177,15 @@ export function buildTagProfile(
     .filter((parts) => parts.length);
   const nameStems = new Set(names.flat().flatMap((part) => part.stems));
   const words = new Map<string, string>();
-  for (const token of wordTokens(
+  for (const { word, term } of textWords(
     [tag.title, ...(tag.synonyms ?? []), tag.description ?? ''].join(' '),
-  )) {
-    const stem = stemTerm(token);
-    if (!words.has(stem)) words.set(stem, token);
-  }
+  ))
+    if (!words.has(term)) words.set(term, word);
   const descriptionStems = [
     ...new Set(
-      wordTokens(tag.description ?? '')
-        .filter((token) => !saysLittle(token))
-        .map(stemTerm),
+      textWords(tag.description ?? '')
+        .filter(({ word }) => !saysLittle(word))
+        .map(({ term }) => term),
     ),
   ]
     .filter((stem) => !nameStems.has(stem) && idf(stem) > commonIdf)

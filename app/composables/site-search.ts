@@ -57,9 +57,23 @@ function keyAnchor(): ReferenceElement {
   };
 }
 
+/** How long a closed popup keeps its anchor: its leaving transition. */
+const ANCHOR_KEPT_MS = 500;
+
 /** Ctrl+K and "/": once for the whole page, in the search popup. */
 export function useSiteSearchKeys(onAgain: () => void) {
   const { open, show } = useSiteSearch();
+  // What it opened by is let go once it has closed and left, so a button of
+  // a page gone is never held — or opened by — again.
+  let letGo: ReturnType<typeof setTimeout> | undefined;
+  watch(open, (isOpen) => {
+    clearTimeout(letGo);
+    if (!isOpen)
+      letGo = setTimeout(() => {
+        if (!open.value) anchor.value = null;
+      }, ANCHOR_KEPT_MS);
+  });
+  onBeforeUnmount(() => clearTimeout(letGo));
   // Ctrl+K anywhere, in a field too, as the sites people know do it; again
   // while the search is open, it selects the query to type a new one.
   useShortcut(

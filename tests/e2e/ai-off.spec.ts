@@ -5,6 +5,7 @@ import {
   type Page,
 } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
+import { uploadPicture } from './helpers/upload';
 
 /**
  * With AI off, the admin works as if AI were not there: no page, form or
@@ -42,6 +43,9 @@ async function open(page: Page, path: string) {
   );
   await page.waitForLoadState('networkidle');
 }
+
+/** The quick search's ✦ row; its phrase is set with non-breaking spaces. */
+const ASK_AI = /Ask\sAI/u;
 
 const content = (text: string) => ({
   data: { blocks: [{ type: 'paragraph', data: { text } }] },
@@ -189,12 +193,9 @@ test('a file’s description is a field like any other while AI is off', async (
   request,
 }) => {
   await setAccess(request, false);
-  const listed = (
-    await (
-      await request.get('/api/admin/assets', { params: { page: 1 } })
-    ).json()
-  ).items as { asset: { assetUuid: string } }[];
-  const assetUuid = listed[0]!.asset.assetUuid;
+  // A picture of its own: the spec runs alone or after any other, and the
+  // fixture's own files were seeded with no settings to show them by.
+  const { assetUuid } = (await uploadPicture(request)).asset;
   const read = await (
     await request.get(`/api/admin/assets/${assetUuid}/description`)
   ).json();
@@ -256,6 +257,11 @@ test('what would change AI answers as if it were not there', async ({
     ['post', '/api/admin/ai/actions/aia-none/comment'],
     ['post', '/api/admin/ai/actions/aia-none/parts'],
     ['get', '/api/admin/ai/entities/project/p-none'],
+    ['post', '/api/admin/ai/ask'],
+    ['get', '/api/admin/ai/entity-at'],
+    ['post', '/api/admin/ai/sessions/ais-none/continue'],
+    ['post', '/api/admin/ai/actions/aia-none/edit'],
+    ['post', '/api/admin/ai/actions/aia-none/taken'],
   ] as const) {
     const response =
       method === 'get' || method === 'delete'
@@ -265,6 +271,32 @@ test('what would change AI answers as if it were not there', async ({
       `${method} ${path}: 404`,
     );
   }
+});
+
+test('the quick search offers no ✦ while AI is off', async ({
+  page,
+  request,
+}) => {
+  await setAccess(request, false);
+  const question = 'what did I do on the lake';
+  const answer = await (
+    await request.get('/api/search', {
+      params: { q: question, quick: '1', typing: '1' },
+    })
+  ).json();
+  expect(
+    (answer.actions as { type: string }[]).map((action) => action.type),
+  ).not.toContain('ask-ai');
+  await open(page, '/admin/');
+  await page.keyboard.press('Control+KeyK');
+  const answered = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/search' &&
+      new URL(response.url()).searchParams.get('q') === question,
+  );
+  await page.getByRole('combobox').fill(question);
+  await answered;
+  await expect(page.getByRole('option', { name: ASK_AI })).toHaveCount(0);
 });
 
 test('turned on from the switch, the admin offers it at once', async ({
@@ -282,4 +314,17 @@ test('turned on from the switch, the admin offers it at once', async ({
   await expect(page.locator('[data-ai-bar]')).toBeVisible();
   await page.getByRole('tab', { name: 'Sessions' }).click();
   await expect(page.locator('[data-sessions-panel]')).toBeVisible();
+  // And the quick search offers to ask it.
+  const question = 'what did I do on the lake';
+  const answer = await (
+    await request.get('/api/search', {
+      params: { q: question, quick: '1', typing: '1' },
+    })
+  ).json();
+  expect(
+    (answer.actions as { type: string }[]).map((action) => action.type),
+  ).toContain('ask-ai');
+  await page.keyboard.press('Control+KeyK');
+  await page.getByRole('combobox').fill(question);
+  await expect(page.getByRole('option', { name: ASK_AI })).toBeVisible();
 });

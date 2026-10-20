@@ -424,6 +424,7 @@ export type LanguagePhrases = {
   search_partial: string;
   search_building: (percent: number) => string;
   search_failed: string;
+  search_busy: string;
   search_quick_hint: string;
   search_quick_empty: string;
   search_years: string;

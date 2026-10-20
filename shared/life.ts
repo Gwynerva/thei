@@ -57,7 +57,18 @@ type LifePointBase = {
  * period's planned end, a day still to come — waits for its day.
  */
 export function lifeArrivalCutoff(now: Date | number = Date.now()): string {
-  return utcDayOf(Number(now) + 14 * 60 * 60 * 1000);
+  return utcDayOf(Number(now) + EARLIEST_ZONE_MS);
+}
+
+/** How far ahead of UTC the earliest time zone is. */
+const EARLIEST_ZONE_MS = 14 * 60 * 60 * 1000;
+
+/**
+ * A day as the moment it has come somewhere on Earth (`lifeArrivalCutoff`):
+ * what is dated on it may first be shown to a stranger.
+ */
+export function dayArrives(day: string): number {
+  return Date.parse(`${day}T00:00:00Z`) - EARLIEST_ZONE_MS;
 }
 
 export type VisibleLifePoint = LifePointBase & {

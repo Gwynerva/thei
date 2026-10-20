@@ -4,7 +4,6 @@ import { buildAdminAssetUrls } from '../../../thei/assets/urls';
 import { contentPlainText } from '#layers/thei/shared/content';
 import type { EventListResponse } from '#layers/thei/shared/api/event';
 import {
-  normalizeAdminSearchText,
   paginateAdminEntities,
   resolveAdminPagination,
   type AdminEntityListOrder,
@@ -87,7 +86,7 @@ export default defineEventHandler(async (event): Promise<EventListResponse> => {
     };
   }
 
-  const result = normalizeAdminSearchText(q)
+  const result = q.trim()
     ? await searchEvents(q, order, paginationQuery)
     : await listEvents(order, paginationQuery);
   const eventUuids = result.items.map((item) => item.eventUuid);

@@ -3,12 +3,13 @@ import { contentPlaceLabel } from '#layers/thei/shared/content-headings';
 import type { ContentEntityOutline } from '#layers/thei/shared/admin/content-entity-outline';
 import { suggestContentEntities } from '#layers/thei/shared/admin/content-entity-search';
 import { type ContentLinkTarget } from '#layers/thei/shared/content-link-locate';
-import { normalizeTermText, stemTerm } from '#layers/thei/shared/text-terms';
+import { wordTerm } from '#layers/thei/shared/search/match';
+import { normalizeTermText } from '#layers/thei/shared/text-terms';
 import { letterSimilarity } from '#layers/thei/shared/text-similarity';
 import { entityPageText } from '../entity-kinds';
 import { listContentEntities } from '../content-entities';
 import { anchorsByBlock, blocksThatHad } from './anchor-ledger';
-import { searchAnalyzer } from '../search/indexer';
+import { searchAnalyzer } from '../search/analyzer';
 
 /**
  * Where a broken link may lead instead, best first: for a heading no longer
@@ -155,7 +156,7 @@ export async function entityCandidates(
   const terms = new Set(
     words(linkWords)
       .filter((word) => word.length > 1 && !analyzer.read(word).stop)
-      .map(stemTerm),
+      .map((word) => wordTerm(word, analyzer)),
   );
   if (terms.size) {
     for (const record of suggestContentEntities(
@@ -165,7 +166,7 @@ export async function entityCandidates(
     ))
       if (
         [record.title, ...(record.synonyms ?? [])].some((name) =>
-          words(name).some((word) => terms.has(stemTerm(word))),
+          words(name).some((word) => terms.has(wordTerm(word, analyzer))),
         )
       )
         found.push({

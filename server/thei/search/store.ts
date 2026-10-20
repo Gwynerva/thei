@@ -22,7 +22,7 @@ import { SEARCH_FIELDS, type SearchUnit } from './units';
  * no migration, and may be deleted at any time: a file of another format, or
  * one made by another reading of words, is emptied and built again.
  */
-const FORMAT = 9;
+const FORMAT = 10;
 
 /** What a term may hold for FTS5 to keep it whole. */
 export function ftsTerm(term: string): string {
@@ -31,6 +31,11 @@ export function ftsTerm(term: string): string {
 
 export interface StoredCard {
   href: string;
+  /**
+   * What a stranger's answer names it by: its public id or address, never
+   * the id it is stored by.
+   */
+  publicRef?: string;
   /**
    * The day it is read by when sorted, where its card has no days of its
    * own to show: when it was made, or for a file when its place was.
@@ -48,15 +53,6 @@ export interface StoredCard {
   cv?: boolean;
 }
 
-export interface StoredDocument {
-  id: number;
-  kind: SearchDocument['kind'];
-  ref: string;
-  title: string;
-  date: string | null;
-  card: StoredCard;
-}
-
 /** A file shown at a place of a document: what its own document is built from. */
 export interface StoredFilePlace {
   familyUuid: string;
@@ -70,6 +66,8 @@ export interface StoredFilePlace {
   placeName: string;
   /** The days of what shows it, which the file is sorted by. */
   sort?: SearchDocument['sort'];
+  /** Not found by a stranger before this moment: the place's own day. */
+  visibleFrom: number;
   media?: SearchDocument['media'];
 }
 
@@ -105,7 +103,8 @@ export class SearchStore {
       `CREATE VIRTUAL TABLE ${name} USING fts5(${columns}, content='', contentless_delete=1, tokenize="unicode61 remove_diacritics 0 tokenchars '_'")`;
     this.db.exec(`
       DROP TABLE IF EXISTS meta; DROP TABLE IF EXISTS docs; DROP TABLE IF EXISTS units;
-      DROP TABLE IF EXISTS doc_tags; DROP TABLE IF EXISTS file_places;
+      DROP TABLE IF EXISTS doc_tags; DROP TABLE IF EXISTS doc_years;
+      DROP TABLE IF EXISTS file_places;
       DROP TABLE IF EXISTS fts_public; DROP TABLE IF EXISTS fts_owner;
       CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE docs (
@@ -115,7 +114,6 @@ export class SearchStore {
         ref TEXT NOT NULL,
         title TEXT NOT NULL,
         date TEXT,
-        year INTEGER,
         sortFrom TEXT,
         sortTo TEXT,
         sortLife INTEGER NOT NULL DEFAULT 0,
@@ -130,6 +128,8 @@ export class SearchStore {
       CREATE TABLE units (doc INTEGER PRIMARY KEY, data BLOB NOT NULL);
       CREATE TABLE doc_tags (doc INTEGER NOT NULL, tag TEXT NOT NULL, PRIMARY KEY (doc, tag)) WITHOUT ROWID;
       CREATE INDEX doc_tags_tag ON doc_tags (tag);
+      CREATE TABLE doc_years (doc INTEGER NOT NULL, year INTEGER NOT NULL, PRIMARY KEY (doc, year)) WITHOUT ROWID;
+      CREATE INDEX doc_years_year ON doc_years (year);
       CREATE TABLE file_places (audience TEXT NOT NULL, ref TEXT NOT NULL, family TEXT NOT NULL, data TEXT NOT NULL);
       CREATE INDEX file_places_ref ON file_places (audience, ref);
       CREATE INDEX file_places_family ON file_places (audience, family);
@@ -137,6 +137,8 @@ export class SearchStore {
       ${fts('fts_owner')};
     `);
     this.setMeta('format', format);
+    // What the old reading held goes back to the disk.
+    this.db.exec('VACUUM');
     this.setMeta('generation', '0');
   }
 
@@ -161,20 +163,6 @@ export class SearchStore {
 
   bumpGeneration() {
     this.setMeta('generation', String(this.generation + 1));
-  }
-
-  /** The fingerprints of what is stored for a reader, by ref. */
-  fingerprints(audience: SearchAudience): Map<string, string> {
-    return new Map(
-      (
-        this.db
-          .prepare('SELECT ref, fingerprint FROM docs WHERE audience = ?')
-          .all(audience) as {
-          ref: string;
-          fingerprint: string;
-        }[]
-      ).map((row) => [row.ref, row.fingerprint]),
-    );
   }
 
   /** The terms of a document's units, column by column, as FTS5 takes them. */
@@ -207,6 +195,7 @@ export class SearchStore {
     const columns = this.columns(document.units);
     const card: StoredCard = {
       href: document.href,
+      ...(document.publicRef ? { publicRef: document.publicRef } : {}),
       ...(document.parent ? { parent: document.parent } : {}),
       // A file shows no days of its own; the rest show theirs when they
       // have them.
@@ -236,7 +225,7 @@ export class SearchStore {
         this.removeRow(document.audience, existing.id, document.ref);
       const { lastInsertRowid } = this.db
         .prepare(
-          'INSERT INTO docs (audience, kind, ref, title, date, year, sortFrom, sortTo, sortLife, visibleFrom, showcase, cv, fingerprint, card) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO docs (audience, kind, ref, title, date, sortFrom, sortTo, sortLife, visibleFrom, showcase, cv, fingerprint, card) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         )
         .run(
           document.audience,
@@ -244,7 +233,6 @@ export class SearchStore {
           document.ref,
           document.title,
           document.date ?? null,
-          document.date ? Number(document.date.slice(0, 4)) : null,
           document.sort?.from ?? null,
           document.sort?.to ?? null,
           document.sort?.life ? 1 : 0,
@@ -267,6 +255,10 @@ export class SearchStore {
         'INSERT OR IGNORE INTO doc_tags (doc, tag) VALUES (?, ?)',
       );
       for (const tagUuid of document.tags) tag.run(id, tagUuid);
+      const year = this.db.prepare(
+        'INSERT OR IGNORE INTO doc_years (doc, year) VALUES (?, ?)',
+      );
+      for (const each of lifeYears(document.sort)) year.run(id, each);
       if (document.kind !== 'file') {
         const place = this.db.prepare(
           'INSERT INTO file_places (audience, ref, family, data) VALUES (?, ?, ?, ?)',
@@ -287,6 +279,7 @@ export class SearchStore {
     this.db.prepare(`DELETE FROM fts_${audience} WHERE rowid = ?`).run(id);
     this.db.prepare('DELETE FROM units WHERE doc = ?').run(id);
     this.db.prepare('DELETE FROM doc_tags WHERE doc = ?').run(id);
+    this.db.prepare('DELETE FROM doc_years WHERE doc = ?').run(id);
     this.db.prepare('DELETE FROM docs WHERE id = ?').run(id);
     this.db
       .prepare('DELETE FROM file_places WHERE audience = ? AND ref = ?')
@@ -366,15 +359,23 @@ export class SearchStore {
     ).map((row) => row.ref);
   }
 
-  count(): number {
-    return (
-      this.db.prepare('SELECT count(*) AS n FROM docs').get() as { n: number }
-    ).n;
-  }
-
   close() {
     this.db.close();
   }
+}
+
+/**
+ * The years the days of a life cover, which the years facet counts and a
+ * year filters by: a stretch over several years is in each of them.
+ */
+function lifeYears(sort: SearchDocument['sort']): number[] {
+  if (!sort?.life) return [];
+  const from = Number(sort.from.slice(0, 4));
+  const to = Math.min(Number(sort.to.slice(0, 4)), from + 100);
+  return Array.from(
+    { length: Math.max(0, to - from) + 1 },
+    (_, at) => from + at,
+  );
 }
 
 /** The files a document shows, each at its place, for the file's own document. */
@@ -396,6 +397,7 @@ function filePlacesOf(document: SearchDocument): StoredFilePlace[] {
           : document.title,
       placeName: unit.place?.section?.title ?? document.title,
       ...(document.sort ? { sort: document.sort } : {}),
+      visibleFrom: document.visibleFrom,
     };
     // The preview of any of its words at the place: a title may come without.
     if (!entry.media && unit.media) entry.media = unit.media;

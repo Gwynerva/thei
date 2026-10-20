@@ -112,7 +112,8 @@ export function registerSearchTool(server: McpServer, context: McpCallContext) {
         'private notes and diary included, as the site’s own search finds ' +
         'it: every form of a word counts as the word, and a phrase in double ' +
         'quotes must stand as written. A query that names a day finds the ' +
-        'diary of that day. Results come grouped by kind, best first; each ' +
+        'diary of that day; a day filter takes whatever of a life overlaps it. ' +
+        'Results come grouped by kind, best first; each ' +
         'entity by its ref, and each place it was found at — a section, a ' +
         'block, a file — with its ids and the words around the find. Open in ' +
         'full only what you need. With one kind, results come a page at a ' +
@@ -178,6 +179,13 @@ export function registerSearchTool(server: McpServer, context: McpCallContext) {
         const shown = groups.reduce((sum, group) => sum + group.hits.length, 0);
         const lines = [
           `${total} found${response.keyboard ? ` for «${response.keyboard}» (the query as typed on the other keyboard)` : ''}: ${counts(response)}`,
+          // Not every word together: say so, or a model reads these as
+          // holding them all.
+          ...(response.partial
+            ? [
+                'No result holds every word: these hold some of them, those holding more first.',
+              ]
+            : []),
         ];
         for (const group of groups) {
           lines.push(`## ${KIND_HEADINGS[group.kind]}`);

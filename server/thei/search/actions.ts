@@ -7,17 +7,19 @@ import {
 } from '#layers/thei/shared/project-url';
 import {
   SEARCH_ADMIN_SECTIONS,
+  searchAdminSectionName,
   type SearchAction,
   type SearchAdminSection,
   type SearchKind,
 } from '#layers/thei/shared/search/api';
 import { matchName } from '#layers/thei/shared/search/match';
+import { isQuestion } from '#layers/thei/shared/search/tokens';
 import { normalizeTermText } from '#layers/thei/shared/text-terms';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import { buildProjectUrl } from '#layers/thei/shared/project-url';
-import { searchAnalyzer } from './indexer';
+import { searchAnalyzer } from './analyzer';
 
 /**
  * What the owner may do from the quick search, besides finding.
@@ -30,7 +32,7 @@ import { searchAnalyzer } from './indexer';
  * and, with AI on, to ask the site's model. Nothing that cannot be undone, and
  * nothing rare: those stay in their forms.
  */
-export interface SearchActionContext {
+interface SearchActionContext {
   q: string;
   /** The address the owner is on, without the base. */
   path?: string;
@@ -51,30 +53,6 @@ const SECTION_HREFS: Record<SearchAdminSection, string> = {
   ai: '/admin/ai/',
 };
 
-function sectionName(section: SearchAdminSection): string {
-  const phrase = THEI_SERVER.phrase;
-  return {
-    projects: phrase.projects,
-    events: phrase.events,
-    diary: phrase.diary,
-    pages: phrase.pages,
-    tags: phrase.tags,
-    files: phrase.asset_library,
-    profile: phrase.about_me,
-    settings: phrase.settings,
-    updates: phrase.admin_updates,
-    ai: phrase.ai_page,
-  }[section];
-}
-
-const RELATIVE: Record<string, number> = {
-  сегодня: 0,
-  вчера: -1,
-  позавчера: -2,
-  today: 0,
-  yesterday: -1,
-};
-
 function shiftDay(day: string, by: number): string {
   return new Date(Date.parse(`${day}T00:00:00Z`) + by * 86_400_000)
     .toISOString()
@@ -86,9 +64,9 @@ function shiftDay(day: string, by: number): string {
  * year names many days and none of them. A day of the month without a year is
  * the last such day up to today.
  */
-export function namedDay(q: string, today: string): string | undefined {
-  const word = normalizeTermText(q.trim());
-  if (word in RELATIVE) return shiftDay(today, RELATIVE[word]!);
+function namedDay(q: string, today: string): string | undefined {
+  const shift = searchAnalyzer().relativeDay(normalizeTermText(q.trim()));
+  if (shift !== undefined) return shiftDay(today, shift);
   const query = parseDayQuery(q);
   if (!query) return undefined;
   const found: string[] = [];
@@ -278,45 +256,6 @@ function recentActions(): SearchAction[] {
   }));
 }
 
-/** Words a question opens with, in the languages the site speaks. */
-const QUESTION_WORDS = new Set([
-  'что',
-  'как',
-  'когда',
-  'где',
-  'куда',
-  'откуда',
-  'почему',
-  'зачем',
-  'кто',
-  'какой',
-  'какая',
-  'какие',
-  'какое',
-  'сколько',
-  'чем',
-  'чей',
-  'ли',
-  'what',
-  'how',
-  'when',
-  'where',
-  'why',
-  'who',
-  'which',
-  'whose',
-]);
-
-/** A query asked as a question: a title nobody would give a new entity. */
-export function isQuestion(q: string): boolean {
-  const words = normalizeTermText(q)
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter(Boolean);
-  return (
-    /\?\s*$/u.test(q) || (words.length > 1 && QUESTION_WORDS.has(words[0]!))
-  );
-}
-
 export function searchActions(context: SearchActionContext): SearchAction[] {
   const q = context.q.trim();
   const sides = sidesOf(context.path);
@@ -332,12 +271,18 @@ export function searchActions(context: SearchActionContext): SearchAction[] {
   const aiOn = Boolean(THEI_SERVER.config?.mcp?.enabled);
   for (const section of SEARCH_ADMIN_SECTIONS) {
     if (section === 'ai' && !aiOn) continue;
-    if (matchName(q, sectionName(section), searchAnalyzer()))
+    if (
+      matchName(
+        q,
+        searchAdminSectionName(section, THEI_SERVER.phrase),
+        searchAnalyzer(),
+      )
+    )
       actions.push({ type: 'section', section, href: SECTION_HREFS[section] });
   }
   // A question is asked of the model, first; nothing is made with it for a
   // title, nor with a day.
-  if (isQuestion(q)) {
+  if (isQuestion(q, searchAnalyzer())) {
     if (aiOn) actions.unshift({ type: 'ask-ai', text: q });
     return actions;
   }

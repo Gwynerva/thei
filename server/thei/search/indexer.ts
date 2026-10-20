@@ -1,9 +1,6 @@
 import { createHash } from 'node:crypto';
-import {
-  createSearchAnalyzer,
-  type SearchAnalyzer,
-} from '#layers/thei/shared/language/search';
-import type { LanguageCode } from '#layers/thei/shared/language';
+import { rmSync } from 'node:fs';
+import { searchAnalyzer } from './analyzer';
 import {
   diaryDocument,
   eventDocument,
@@ -72,25 +69,36 @@ interface IndexState {
   visibility?: string;
   /** The statuses of each owner, as last read. */
   statuses?: Map<string, string>;
+  /** The description of each file family, as last read. */
+  descriptions?: Map<string, string>;
 }
 
 const state: IndexState = { passedAt: 0, complete: false, again: 'none' };
 
-export function searchIndexPath() {
+function searchIndexPath() {
   return THEI_SERVER.projectPath('.thei', 'search.db');
 }
 
-function siteLanguage(): LanguageCode {
-  return (THEI_SERVER.language?.code ?? 'en') as LanguageCode;
-}
-
-let analyzer: { language: LanguageCode; value: SearchAnalyzer } | undefined;
-/** How this site reads words: by its language. */
-export function searchAnalyzer(): SearchAnalyzer {
-  const language = siteLanguage();
-  if (analyzer?.language !== language)
-    analyzer = { language, value: createSearchAnalyzer(language) };
-  return analyzer.value;
+/**
+ * The index file, opened. It is derived data: one that cannot be opened or
+ * read — cut short by a full disk, broken — is deleted with its journal and
+ * built again.
+ */
+function openStore(
+  path: string,
+  reading: ReturnType<typeof searchAnalyzer>,
+): SearchStore {
+  try {
+    return new SearchStore(path, reading);
+  } catch (error) {
+    if (path === ':memory:') throw error;
+    THEI_SERVER.console
+      .tag('Search')
+      .warn('The search index could not be read and is built again', error);
+    for (const file of [path, `${path}-wal`, `${path}-shm`])
+      rmSync(file, { force: true });
+    return new SearchStore(path, reading);
+  }
 }
 
 /** The index, opened on first use; another reading of words empties it. */
@@ -105,7 +113,7 @@ export function useSearchStore(
   )
     return state.store;
   state.store?.close();
-  state.store = new SearchStore(path, reading);
+  state.store = openStore(path, reading);
   state.path = path;
   state.complete = state.store.getMeta('complete') === '1';
   return state.store;
@@ -127,6 +135,7 @@ export function closeSearchStore() {
     staleSince: undefined,
     visibility: undefined,
     statuses: undefined,
+    descriptions: undefined,
   } satisfies IndexState);
 }
 
@@ -197,6 +206,34 @@ function readStatuses(): Map<string, string> {
   return new Map(rows.map((row) => [row.owner, row.words]));
 }
 
+/**
+ * The description of each file family, as one fingerprint each: a cleared
+ * description leaves no row with a time of its save, so a pass compares
+ * these to learn whose changed.
+ */
+function readDescriptions(): Map<string, string> {
+  const { rawDb } = THEI_SERVER.useDb();
+  const rows = rawDb
+    .prepare('SELECT familyUuid AS family, text FROM "asset-descriptions"')
+    .all() as { family: string; text: string }[];
+  return new Map(
+    rows.map((row) => [
+      row.family,
+      createHash('sha1').update(row.text).digest('base64url'),
+    ]),
+  );
+}
+
+/** The keys whose fingerprints differ between two readings, either way. */
+function differing(
+  now: Map<string, string>,
+  before: Map<string, string> | undefined,
+): string[] {
+  return [...new Set([...now.keys(), ...(before?.keys() ?? [])])].filter(
+    (key) => now.get(key) !== before?.get(key),
+  );
+}
+
 /** The entities saved since a moment, and whatever a change elsewhere names. */
 function changedSince(
   since: number,
@@ -245,24 +282,16 @@ function changedSince(
     if (row.kind && row.kind in BUILDERS) add(row.kind as EntityKind, row.id);
   if (rows('SELECT tagUuid AS id FROM tags WHERE updatedAt > ?').length)
     add('tags', 'tags');
-  // A file described anew: every place it is shown at.
-  for (const row of rows(
-    `SELECT u.containerType AS kind, u.containerId AS id FROM "asset-descriptions" d
-       JOIN assets a ON a.familyUuid = d.familyUuid
-       JOIN "asset-usages" u ON u.assetUuid = a.assetUuid
-     WHERE d.updatedAt > ?`,
-  )) {
-    if (row.kind === 'content') {
-      const owner = rawDb
+  // An entity changed: what is related to it names it, by its title.
+  for (const kind of ['project', 'event', 'diary-entry'] as const)
+    for (const id of changed.get(kind) ?? [])
+      for (const row of rawDb
         .prepare(
-          'SELECT ownerType AS kind, ownerId AS id FROM content WHERE contentUuid = ?',
+          `SELECT secondType AS kind, secondId AS id FROM "entity-relations" WHERE firstType = ? AND firstId = ?
+           UNION ALL SELECT firstType, firstId FROM "entity-relations" WHERE secondType = ? AND secondId = ?`,
         )
-        .get(row.id) as { kind: string; id: string } | undefined;
-      if (owner && owner.kind in BUILDERS)
-        add(owner.kind as EntityKind, owner.id);
-    } else if (row.kind && row.kind in BUILDERS)
-      add(row.kind as EntityKind, row.id);
-  }
+        .all(kind, id, kind, id) as { kind: string; id: string }[])
+        if (row.kind in BUILDERS) add(row.kind as EntityKind, row.id);
   // A project changed: its sections name it, carry its tags and its access.
   for (const projectUuid of changed.get('project') ?? [])
     for (const row of rawDb
@@ -272,6 +301,32 @@ function changedSince(
       .all(projectUuid) as { id: string }[])
       add('project-section', row.id);
   return changed;
+}
+
+/** The entities that show these file families: a description reaches them. */
+function placesOfFamilies(
+  families: string[],
+  add: (kind: EntityKind, id: string) => void,
+) {
+  const { rawDb } = THEI_SERVER.useDb();
+  for (const family of families)
+    for (const row of rawDb
+      .prepare(
+        `SELECT u.containerType AS kind, u.containerId AS id FROM assets a
+           JOIN "asset-usages" u ON u.assetUuid = a.assetUuid
+         WHERE a.familyUuid = ?`,
+      )
+      .all(family) as { kind: string; id: string }[]) {
+      if (row.kind === 'content') {
+        const owner = rawDb
+          .prepare(
+            'SELECT ownerType AS kind, ownerId AS id FROM content WHERE contentUuid = ?',
+          )
+          .get(row.id) as { kind: string; id: string } | undefined;
+        if (owner && owner.kind in BUILDERS)
+          add(owner.kind as EntityKind, owner.id);
+      } else if (row.kind in BUILDERS) add(row.kind as EntityKind, row.id);
+    }
 }
 
 /** Rewrites the documents of one entity for both readers. */
@@ -347,6 +402,11 @@ function rewriteFiles(
 async function passEverything(store: SearchStore) {
   const started = Date.now();
   sliceStart = performance.now();
+  // Read before building: a change made while the pass runs differs from
+  // these, and the next pass takes it in.
+  const visibility = readVisibility();
+  const statuses = readStatuses();
+  const descriptions = readDescriptions();
   const ids = entityIds();
   const total = Object.values(ids).reduce((sum, list) => sum + list.length, 0);
   state.progress = { done: 0, total };
@@ -369,8 +429,9 @@ async function passEverything(store: SearchStore) {
     changed = rewriteFiles(store, audience) || changed;
   if (changed) store.bumpGeneration();
   state.passedAt = started;
-  state.visibility = readVisibility();
-  state.statuses = readStatuses();
+  state.visibility = visibility;
+  state.statuses = statuses;
+  state.descriptions = descriptions;
   state.complete = true;
   store.setMeta('complete', '1');
   state.progress = undefined;
@@ -385,16 +446,19 @@ async function passChanges(store: SearchStore) {
   sliceStart = performance.now();
   // A second of overlap: a save that landed while the last pass read.
   const changed = changedSince(state.passedAt - 1000);
+  const add = (kind: EntityKind | 'profile' | 'tags', id: string) =>
+    changed.set(kind, (changed.get(kind) ?? new Set()).add(id));
   const statuses = readStatuses();
-  for (const owner of new Set([
-    ...statuses.keys(),
-    ...(state.statuses?.keys() ?? []),
-  ])) {
-    if (statuses.get(owner) === state.statuses?.get(owner)) continue;
+  for (const owner of differing(statuses, state.statuses)) {
     const [kind, id] = owner.split(':') as [string, string];
-    if (kind === 'project')
-      changed.set('project', (changed.get('project') ?? new Set()).add(id));
+    if (kind === 'project') add('project', id);
+    else if (kind === 'profile') add('profile', 'profile');
   }
+  // A file described anew, or its description cleared: its own document,
+  // and every place that shows it.
+  const descriptions = readDescriptions();
+  const described = differing(descriptions, state.descriptions);
+  placesOfFamilies(described, add);
   let any = false;
   const families = new Map(
     SEARCH_AUDIENCES.map((audience) => [audience, new Set<string>()]),
@@ -414,23 +478,25 @@ async function passChanges(store: SearchStore) {
         any = store.remove(audience, ref) || any;
       }
   }
-  any = (await rewriteSmallKinds(store)) || any;
+  // The tags and the profile only when something they show may have moved:
+  // a tag renamed, the profile saved, or what carries a tag.
+  if (
+    changed.has('tags') ||
+    changed.has('profile') ||
+    changed.has('project') ||
+    changed.has('event')
+  )
+    any = (await rewriteSmallKinds(store)) || any;
   for (const audience of SEARCH_AUDIENCES) {
     const touched = families.get(audience)!;
-    // A description saved anew reaches the file's own document too.
-    const { rawDb } = THEI_SERVER.useDb();
-    for (const row of rawDb
-      .prepare(
-        'SELECT familyUuid AS family FROM "asset-descriptions" WHERE updatedAt > ?',
-      )
-      .all(state.passedAt - 1000) as { family: string }[])
-      touched.add(row.family);
+    for (const family of described) touched.add(family);
     if (touched.size) any = rewriteFiles(store, audience, touched) || any;
   }
   if (any) store.bumpGeneration();
   state.passedAt = started;
   state.visibility = visibility;
   state.statuses = statuses;
+  state.descriptions = descriptions;
 }
 
 function run(kind: 'changes' | 'all'): Promise<void> {

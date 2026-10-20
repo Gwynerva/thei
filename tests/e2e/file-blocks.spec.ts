@@ -7,8 +7,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
-import { createOriginalAssetSettings } from '../../shared/asset-upload-settings';
-import { buildUploadHeaders } from '../../shared/api/asset-upload-headers';
+import { uploadFile, uploadText } from './helpers/upload';
 
 /**
  * Files in a text: whatever is pasted or picked goes where the one rule
@@ -335,31 +334,6 @@ test('a file’s title takes no marks; its caption does', async ({ page }) => {
 
 // ---- In the admin's own editor --------------------------------------------
 
-async function uploadPicture(request: APIRequestContext) {
-  const { bytes } = await picture('any.png');
-  const response = await request.post('/api/admin/assets', {
-    headers: buildUploadHeaders({
-      settings: createOriginalAssetSettings(),
-      extension: 'png',
-    }),
-    data: bytes,
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  return (await response.json()) as { assetUuid: string };
-}
-
-async function uploadText(request: APIRequestContext, words: string) {
-  const response = await request.post('/api/admin/assets', {
-    headers: buildUploadHeaders({
-      settings: createOriginalAssetSettings(),
-      extension: 'txt',
-    }),
-    data: Buffer.from(`${words} ${randomUUID()}`),
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  return (await response.json()) as { assetUuid: string };
-}
-
 /** A private page holding these blocks; nothing a public list reads. */
 async function createPage(request: APIRequestContext, content: object[]) {
   const stamp = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -394,7 +368,11 @@ test('a picture shown as a file is the same block, its caption kept with its mar
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  const { assetUuid } = await uploadPicture(page.request);
+  const { assetUuid } = await uploadFile(
+    page.request,
+    'png',
+    (await picture('any.png')).bytes,
+  );
   const { pageUuid } = await createPage(page.request, [
     {
       id: 'pic',
@@ -438,8 +416,8 @@ test('a gallery’s caption shows its placeholder only while the picture shown h
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   const [first, second] = [
-    await uploadPicture(page.request),
-    await uploadPicture(page.request),
+    await uploadFile(page.request, 'png', (await picture('any.png')).bytes),
+    await uploadFile(page.request, 'png', (await picture('any.png')).bytes),
   ];
   const { pageUuid } = await createPage(page.request, [
     {
@@ -539,8 +517,12 @@ test('a group of files on the page: its title, its files, and its captions in th
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  const map = await uploadPicture(page.request);
-  const notes = await uploadText(page.request, 'Notes');
+  const map = await uploadFile(
+    page.request,
+    'png',
+    (await picture('any.png')).bytes,
+  );
+  const notes = await uploadText(page.request, `Notes ${randomUUID()}`);
   const { slug } = await createPage(page.request, [
     {
       type: 'contentFileGroup',

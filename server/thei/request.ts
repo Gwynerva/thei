@@ -29,16 +29,65 @@ function isLoopbackIp(ip: string): boolean {
   return ip === '::1' || ip.startsWith('127.') || ip.startsWith('::ffff:127.');
 }
 
+/** Who a request is for, as `requestClient` tells it. */
+export interface RequestClient {
+  /** The visitor's address, as far as it can be trusted. */
+  address: string | undefined;
+  /**
+   * A request a page makes of the server's own routes while it is rendered:
+   * it has no connection of its own, and stands for the page's visitor.
+   */
+  rendering: boolean;
+}
+
+/** What a page's own request leaves for the requests it makes while rendered. */
+interface PageContext {
+  theiClient?: { address: string | undefined };
+}
+
+/**
+ * Who a request comes from. A page rendered on the server fetches the API
+ * through Nitro without a network — its request carries the page's context
+ * as `__unenv__`, as Nitro and Nuxt read it, and has a socket with no
+ * address — so it is known by the address of the page's own visitor, which
+ * the `request` hook of `server/thei/plugin.ts` set before anything ran. No
+ * header is believed on such a request: none of them came from the network.
+ */
+export function requestClient(event: H3Event): RequestClient {
+  const req = event.node.req as { __unenv__?: PageContext };
+  if ('__unenv__' in req)
+    return { address: req.__unenv__?.theiClient?.address, rendering: true };
+  return { address: networkAddress(event), rendering: false };
+}
+
+/**
+ * The page's own visitor, set on a request from the network for whatever it
+ * renders: called by the `request` hook before anything else runs.
+ */
+export function rememberRequestClient(event: H3Event) {
+  if ('__unenv__' in event.node.req) return;
+  (event.context as PageContext).theiClient = {
+    address: networkAddress(event),
+  };
+}
+
 /**
  * The address a request comes from, as far as it can be trusted: what every
- * limit per address counts by. A proxy on this computer — the nginx of
- * `update/instance/nginx.conf.example` — names the address it took the
- * request from in `X-Real-IP`, and adds it as the last hop of
+ * limit per address counts by (`requestClient`).
+ */
+export function getRequestIp(event: H3Event): string | undefined {
+  return requestClient(event).address;
+}
+
+/**
+ * The address of a request from the network. A proxy on this computer — the
+ * nginx of `update/instance/nginx.conf.example` — names the address it took
+ * the request from in `X-Real-IP`, and adds it as the last hop of
  * `X-Forwarded-For`; the hops before it are whatever the client wrote. Any
  * other request is known by the address of its connection, which no header
  * a client sends can move.
  */
-export function getRequestIp(event: H3Event): string | undefined {
+function networkAddress(event: H3Event): string | undefined {
   const peer: string | undefined =
     event.context?.clientAddress ?? event.node.req.socket?.remoteAddress;
   if (!peer || !isLoopbackIp(peer)) return peer;

@@ -1,16 +1,17 @@
 import type { SearchFind } from '#layers/thei/shared/search/api';
 import { SEARCH_QUERY_MAX_LENGTH } from '#layers/thei/shared/search/tokens';
 import {
-  searchBudgetLeft,
+  searchBudgetWait,
   spendSearchTime,
   takeSearch,
 } from '../../thei/search/limits';
 import { findsOfResult } from '../../thei/search/query';
-import { getRequestIp } from '../../thei/request';
+import { requestClient } from '../../thei/request';
 
 /**
  * Every place one result of a search holds the words at: what its card's
- * «in N more places» opens. Read as the search reads it, for this reader.
+ * «in N more places» opens. Read as the search reads it, for this reader,
+ * within the same limits a stranger's search keeps.
  */
 export default defineEventHandler(
   async (event): Promise<{ finds: SearchFind[]; more: number }> => {
@@ -27,23 +28,29 @@ export default defineEventHandler(
       });
     const isAdmin = await THEI_SERVER.isAdmin(event);
     if (!isAdmin) {
-      const wait = takeSearch(getRequestIp(event) ?? 'unknown');
-      if (wait || !searchBudgetLeft()) {
-        setResponseHeader(event, 'Retry-After', wait || 1);
+      const client = requestClient(event);
+      const wait = takeSearch(client.address ?? 'unknown');
+      const busy = wait ? 0 : searchBudgetWait({ rendering: client.rendering });
+      if (wait || busy) {
+        setResponseHeader(event, 'Retry-After', wait || busy);
         throw createError({
-          statusCode: 429,
-          statusMessage: 'Too Many Requests',
+          statusCode: wait ? 429 : 503,
+          statusMessage: wait ? 'Too Many Requests' : 'Service Unavailable',
         });
       }
     }
     const started = performance.now();
-    const found = findsOfResult({
-      q,
-      ref,
-      audience: isAdmin ? 'owner' : 'public',
-      typing: query.typing === '1',
-    });
-    if (!isAdmin) spendSearchTime(performance.now() - started);
+    let found: ReturnType<typeof findsOfResult>;
+    try {
+      found = findsOfResult({
+        q,
+        ref,
+        audience: isAdmin ? 'owner' : 'public',
+        typing: query.typing === '1',
+      });
+    } finally {
+      if (!isAdmin) spendSearchTime(performance.now() - started);
+    }
     if (!found)
       throw createError({ statusCode: 404, statusMessage: 'Not found' });
     return found;

@@ -292,8 +292,12 @@ function reset() {
                   : `border-border-error bg-bg-error text-text-2
                     hocus:text-text-1`
               "
-              :aria-label="phrase.search_tag_remove(facet.tag.title)"
-              :data-title-popup="phrase.search_tag_remove(facet.tag.title)"
+              :aria-label="
+                phrase.search_tag_remove(publicText(facet.tag.title))
+              "
+              :data-title-popup="
+                phrase.search_tag_remove(publicText(facet.tag.title))
+              "
               @click="removeTag(facet.tag.slug)"
             >
               <Icon
@@ -366,8 +370,12 @@ function reset() {
                 justify-center rounded-sm text-text-3 transition
                 focus-visible:ring-2 focus-visible:ring-accent
                 focus-visible:outline-none hocus:bg-accent/15 hocus:text-accent"
-              :aria-label="phrase.search_tag_include(facet.tag.title)"
-              :data-title-popup="phrase.search_tag_include(facet.tag.title)"
+              :aria-label="
+                phrase.search_tag_include(publicText(facet.tag.title))
+              "
+              :data-title-popup="
+                phrase.search_tag_include(publicText(facet.tag.title))
+              "
               @click="includeTag(facet.tag.slug)"
             >
               <Icon name="plus" />
@@ -379,8 +387,12 @@ function reset() {
                 focus-visible:ring-2 focus-visible:ring-accent
                 focus-visible:outline-none hocus:bg-bg-error
                 hocus:text-text-error"
-              :aria-label="phrase.search_tag_exclude(facet.tag.title)"
-              :data-title-popup="phrase.search_tag_exclude(facet.tag.title)"
+              :aria-label="
+                phrase.search_tag_exclude(publicText(facet.tag.title))
+              "
+              :data-title-popup="
+                phrase.search_tag_exclude(publicText(facet.tag.title))
+              "
               @click="excludeTag(facet.tag.slug)"
             >
               <Icon name="minus" />

@@ -1,6 +1,11 @@
 import type { H3Event } from 'h3';
 import { describe, expect, it } from 'vitest';
-import { getRequestIp, isPrivateIp } from '../../server/thei/request';
+import {
+  getRequestIp,
+  isPrivateIp,
+  rememberRequestClient,
+  requestClient,
+} from '../../server/thei/request';
 
 /**
  * The address every limit per address counts by. A client writes whatever
@@ -47,6 +52,49 @@ describe('the address of a request', () => {
       ),
     ).toBe('203.0.113.7');
     expect(getRequestIp(request('127.0.0.1'))).toBe('127.0.0.1');
+  });
+});
+
+describe('a request a page makes while it is rendered', () => {
+  const internal = (
+    page: { theiClient?: { address: string | undefined } } | undefined,
+    headers: Record<string, string> = {},
+  ) =>
+    ({
+      node: {
+        req: { headers, socket: { remoteAddress: '' }, __unenv__: page },
+      },
+      context: {},
+    }) as unknown as H3Event;
+
+  it('stands for the page’s own visitor', () => {
+    expect(
+      requestClient(internal({ theiClient: { address: '203.0.113.7' } })),
+    ).toEqual({ address: '203.0.113.7', rendering: true });
+  });
+
+  it('believes no header, none of which came from the network', () => {
+    const forged = internal(
+      { theiClient: { address: '203.0.113.7' } },
+      { 'x-real-ip': '198.51.100.1', 'x-forwarded-for': '198.51.100.2' },
+    );
+    expect(getRequestIp(forged)).toBe('203.0.113.7');
+    // Fetched with no page behind it: nobody, never a header's word.
+    expect(
+      getRequestIp(internal(undefined, { 'x-real-ip': '198.51.100.1' })),
+    ).toBeUndefined();
+  });
+
+  it('is told the visitor before it runs, by the page’s own request', () => {
+    const page = request('127.0.0.1', { 'x-real-ip': '203.0.113.7' });
+    rememberRequestClient(page);
+    expect(page.context).toMatchObject({
+      theiClient: { address: '203.0.113.7' },
+    });
+    // An internal request keeps the page's.
+    const inner = internal({ theiClient: { address: '203.0.113.7' } });
+    rememberRequestClient(inner);
+    expect(inner.context).toEqual({});
   });
 });
 

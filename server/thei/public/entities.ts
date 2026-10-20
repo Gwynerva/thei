@@ -851,6 +851,24 @@ async function buildManualSiteLink(
   return buildPublicEntityLink({ ...candidate, note: link.note }, viewer);
 }
 
+/** The public summaries of tags as the database keeps them. */
+export function buildPublicTagRows(
+  rows: Pick<
+    typeof import('../db/schema/tags').tags.$inferSelect,
+    'tagUuid' | 'title' | 'slug' | 'publicId' | 'description'
+  >[],
+): Promise<PublicTagSummary[]> {
+  return buildPublicTags(
+    rows.map((tag) => ({
+      tagUuid: tag.tagUuid,
+      title: tag.title,
+      slug: tag.slug,
+      publicId: tag.publicId,
+      description: tag.description || undefined,
+    })),
+  );
+}
+
 export async function buildPublicTags(
   tags: TagItem[],
 ): Promise<PublicTagSummary[]> {

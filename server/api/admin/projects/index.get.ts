@@ -2,7 +2,6 @@ import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { contentPlainText } from '#layers/thei/shared/content';
 import type { ProjectListResponse } from '#layers/thei/shared/api/project';
 import {
-  normalizeAdminSearchText,
   paginateAdminEntities,
   resolveAdminPagination,
   type AdminEntityListOrder,
@@ -97,7 +96,7 @@ export default defineEventHandler(
       };
     }
 
-    const result = normalizeAdminSearchText(q)
+    const result = q.trim()
       ? await searchProjects(q, order, paginationQuery)
       : await listProjects(order, paginationQuery);
     const projectUuids = result.items.map((project) => project.projectUuid);
