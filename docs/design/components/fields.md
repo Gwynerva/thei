@@ -77,6 +77,9 @@ with the old. See [File window](file-window.md).
 
 - `app/components/field/Field.vue` — the column (`flex flex-col gap-xs`), and
   the `ai` place it provides to what is inside (`app/composables/field-ai.ts`).
+  A field of parts — an entity's link, its address and its public ID — holds a
+  `Field` for each part, each with its own `need`
+  (`app/pages/admin/components/LinkField.vue`).
 - `app/components/field/FieldLabel.vue` — `font-semibold tracking-tight`;
   `required` adds an accent asterisk.
 - `app/components/field/FieldHint.vue` — `text-sm tracking-tight text-text-2`.
@@ -101,8 +104,10 @@ The other controls in `app/components/field/`: `FieldInput`, `FieldTextarea`,
 `FieldContentEditor`.
 
 `FieldOptions` is a row of buttons, the chosen one pressed (`aria-pressed`),
-each named by its words; given its field's `label`, the row is a group of
-that name. A button holds only what a button may — `span`s, never a `div` —
+each named by its words; in a `Field` with a label, the row is a group named
+by the label's words (`aria-labelledby`): the field's first `FieldLabel`
+wears the id `Field` gives it (`app/components/field/field-label.ts`). The
+access of an entity is chosen from `app/components/field/access-options.ts`. A button holds only what a button may — `span`s, never a `div` —
 so its name reads the same to anything that reads the page.
 
 A text's editor is a column of Editor.js blocks; each paragraph is a text

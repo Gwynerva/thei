@@ -12,6 +12,7 @@ import ModalContainer from '#layers/thei/app/modals/ModalContainer.vue';
 import ModalHeaderButton from '#layers/thei/app/modals/ModalHeaderButton.vue';
 import FloatingPopup from '#layers/thei/app/components/FloatingPopup.vue';
 import { registerDismissLayer } from '#layers/thei/app/composables/modal';
+import { scrollIntoSight } from '#layers/thei/app/modals/layer-motion';
 import ReviewDocument from './ReviewDocument.vue';
 import ReviewList from './ReviewList.vue';
 import ReviewPartCard from './ReviewPartCard.vue';
@@ -146,7 +147,7 @@ async function focusPart(id: string | undefined) {
   }
   const anchor = documentView.value?.anchorOf(id);
   if (!anchor) return;
-  anchor.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  scrollIntoSight(anchor);
   opening = setTimeout(() => {
     if (current.value !== id) return;
     cardAnchor.value = documentView.value?.anchorOf(id) ?? anchor;
@@ -165,10 +166,7 @@ onMounted(async () => {
   if (view.value === 'list') return;
   const first = reachable()[0];
   const anchor = first ? documentView.value?.anchorOf(first.id) : undefined;
-  if (!anchor) return;
-  const box = anchor.getBoundingClientRect();
-  if (box.top >= 0 && box.bottom <= window.innerHeight) return;
-  anchor.scrollIntoView({ block: 'center' });
+  if (anchor) scrollIntoSight(anchor, { instant: true, covered: 0 });
 });
 
 /**

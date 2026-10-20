@@ -14,9 +14,7 @@ const props = withDefaults(
     phoneIcon?: IconName;
     /**
      * All of it is saved: the phone's square shows `check` in place of its
-     * icon. Both stay in the page, one hidden: pointing an icon's `<use>`
-     * elsewhere while the owner types in a text ends the browser's run of
-     * typing, and Ctrl+Z would then stop after the first letter.
+     * icon, both kept in the page (`AdminSaveIcons`).
      */
     phoneDone?: boolean;
     label: string;
@@ -26,8 +24,7 @@ const props = withDefaults(
     /**
      * Why it cannot act yet (`useFormNeeds`), a line per need: it looks
      * disabled but stays pressable, for the modal to answer a press — a tap
-     * on a phone too — by saying the same; and it is its hint, under the
-     * label, and what a screen reader hears with it.
+     * on a phone too — by saying the same (`useBlockedReason`).
      */
     reason?: string;
     /**
@@ -48,30 +45,25 @@ const props = withDefaults(
 );
 
 const slots = useSlots();
-const reasonId = useId();
-const blocked = computed(() =>
-  Boolean(!props.to && !props.disabled && props.reason),
-);
-const hint = computed(() => {
-  if (blocked.value)
-    return titlePopup(
-      { text: props.label, bold: true },
-      ...props.reason!.split('\n').map((text) => ({ text, italic: true })),
-    );
-  return props.icon && !slots.default
-    ? { 'data-title-popup': props.label }
-    : {};
-});
+// A link has no reason not to lead where it does.
+const {
+  blocked,
+  reasonId,
+  attributes: blockedAttributes,
+} = useBlockedReason(() => ({
+  label: props.label,
+  reason: props.to ? undefined : props.reason,
+  disabled: props.disabled,
+}));
 const attributes = computed(() => ({
   ...(props.to
     ? { to: sitePath(props.to), external: true }
-    : {
-        type: 'button',
-        disabled: props.disabled,
-        'aria-disabled': blocked.value ? 'true' : undefined,
-        'aria-describedby': blocked.value ? reasonId : undefined,
-      }),
-  ...hint.value,
+    : { type: 'button', disabled: props.disabled }),
+  ...(blocked.value
+    ? blockedAttributes.value
+    : props.icon && !slots.default
+      ? { 'data-title-popup': props.label }
+      : {}),
 }));
 </script>
 
@@ -81,7 +73,8 @@ const attributes = computed(() => ({
     v-bind="attributes"
     :aria-label="label"
     class="flex shrink-0 cursor-pointer items-center justify-center gap-1
-      rounded-normal text-sm font-semibold transition-colors off:cursor-auto"
+      rounded-normal text-sm font-semibold transition-colors
+      disabled:cursor-not-allowed aria-disabled:cursor-default"
     :class="{
       'h-9 px-xs pointer-coarse:h-11': size === 'default',
       'size-7 px-0': size === 'compact',
@@ -103,18 +96,7 @@ const attributes = computed(() => ({
     }"
   >
     <Icon v-if="icon" :name="icon" :class="iconClass" />
-    <Icon
-      v-if="phoneIcon"
-      :name="phoneIcon"
-      class="sm:hidden"
-      :class="{ hidden: phoneDone }"
-    />
-    <Icon
-      v-if="phoneIcon && phoneDone !== undefined"
-      name="check"
-      class="sm:hidden"
-      :class="{ hidden: !phoneDone }"
-    />
+    <AdminSaveIcons v-if="phoneIcon" :icon="phoneIcon" :done="phoneDone" />
     <span v-if="phoneIcon" class="max-sm:hidden"><slot></slot></span>
     <slot v-else></slot>
     <span v-if="blocked" :id="reasonId" hidden>{{ reason }}</span>

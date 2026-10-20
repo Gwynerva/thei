@@ -226,15 +226,6 @@ export function normalizeProjectAction(value: unknown): ProjectActionEditData {
   };
 }
 
-export function projectActionValidationError(value: unknown) {
-  try {
-    normalizeProjectAction(value);
-    return undefined;
-  } catch (error) {
-    return error instanceof Error ? error.message : 'Invalid action button';
-  }
-}
-
 /** Assets the button actually shows or links to once it is saved. */
 export function projectActionAssetUuids(
   action: ProjectActionEditData | undefined,

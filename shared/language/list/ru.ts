@@ -1393,7 +1393,7 @@ export default defineI18nModule({
     project_action_needs: (issues) => `укажите ${issues}`,
     project_action_issue_text: 'текст кнопки',
     project_action_issue_text_length: (max) =>
-      `текст не длиннее ${max} ${plural(max, 'символа', 'символов', 'символов')}`,
+      `текст не длиннее ${plural(max, 'символа', 'символов', 'символов')}`,
     project_action_issue_url: 'корректный адрес ссылки',
     project_action_issue_file: 'файл для скачивания',
     project_action_issue_icon: 'изображение иконки',

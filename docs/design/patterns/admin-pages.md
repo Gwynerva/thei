@@ -10,9 +10,11 @@ rather than from a switch.
 ## Headers
 
 - A form's header is a sticky glass row (`StickyGlassHeader`): the icon and
-  the title, then the controls, then the main action. The settings and "about
-  me" pages use `app/components/admin/AdminSaveHeader.vue`, whose button says
-  "Save" while there are changes and "Saved" when there are none.
+  the title, then the controls, then the main action. The forms of the
+  entities, the settings and "about me" use
+  `app/components/admin/AdminSaveHeader.vue`, whose button says "Create" for
+  something not made yet, "Save" while there are changes and "Saved" when
+  there are none.
 - Save stays at the top, at the end of the header, on every screen: on a
   phone it is a square with a floppy disk (`app/components/admin/AdminSaveButton.vue`),
   so the title and the header's squares keep to one row.

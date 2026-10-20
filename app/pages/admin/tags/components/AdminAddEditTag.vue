@@ -101,16 +101,23 @@ useRegisterAdminBarContextButton(
   }),
 );
 /** What the tag still needs before it can be saved, in the form's order. */
-const needs = useFormNeeds(() => {
-  const list: FormNeed[] = [];
-  if (!data.value.title.trim())
-    list.push({ key: 'title', label: phrase.value.tag_title });
-  if (!data.value.slug.trim())
-    list.push({ key: 'link', label: phrase.value.human_readable_url });
-  if (!data.value.publicId.trim())
-    list.push({ key: 'link', label: phrase.value.public_id });
-  return list;
-});
+const needs = useFormNeeds(
+  () => {
+    const list: FormNeed[] = [];
+    if (!data.value.title.trim())
+      list.push({ key: 'title', label: phrase.value.tag_title });
+    if (!data.value.slug.trim())
+      list.push({ key: 'link-slug', label: phrase.value.human_readable_url });
+    if (!data.value.publicId.trim())
+      list.push({ key: 'link-public-id', label: phrase.value.public_id });
+    return list;
+  },
+  {
+    ready: () => !saving.value && (!isEdit.value || dirty.value),
+    save,
+    error,
+  },
+);
 watch(
   () => data.value.publicId,
   () => {
@@ -146,10 +153,8 @@ const iconAsset = useSingleMediaAsset({
   },
 });
 
+/** The save itself; a press or Ctrl+S comes to it through `needs.submit`. */
 async function save() {
-  if (saving.value || (isEdit.value && !dirty.value)) return;
-  // Asked by a press or Ctrl+S, a save it cannot make says why.
-  if (needs.blocked.value) return needs.ask();
   saving.value = true;
   error.value = undefined;
   try {
@@ -189,11 +194,6 @@ async function save() {
   }
 }
 
-// Ctrl+S on a tag not ready to save says what it still needs.
-useSaveShortcut(save, {
-  canSave: () => !saving.value && (!isEdit.value || dirty.value),
-});
-
 async function remove() {
   if (!tagUuid) return;
 
@@ -232,44 +232,17 @@ await useAdminTabTitle(
 </script>
 
 <template>
-  <StickyGlassHeader
-    width="var(--width-wide)"
-    :error="error ?? needs.line.value"
-    :error-again="needs.asks.value"
-  >
-    <div class="flex items-center justify-between gap-xs py-xs">
-      <div
-        class="flex min-w-0 items-center gap-xs text-lg font-bold sm:text-xl"
-      >
-        <Icon name="tag" />
-        <span class="truncate">{{
-          isEdit ? phrase.edit_tag : phrase.new_tag
-        }}</span>
-      </div>
-      <div class="flex items-center gap-xs">
-        <AiEntityButton />
-        <Button
-          v-if="isEdit"
-          variant="delete"
-          size="icon"
-          class="pointer-coarse:size-11"
-          :aria-label="phrase.delete"
-          :data-title-popup="phrase.delete"
-          @click="remove"
-        >
-          <Icon name="delete" />
-        </Button>
-        <AdminSaveButton
-          :label="isEdit ? (dirty ? phrase.save : phrase.saved) : phrase.create"
-          :saving
-          :done="isEdit && !dirty"
-          :disabled="saving || (isEdit && !dirty)"
-          :reason="needs.reason.value"
-          @click="save"
-        />
-      </div>
-    </div>
-  </StickyGlassHeader>
+  <AdminSaveHeader
+    :title="isEdit ? phrase.edit_tag : phrase.new_tag"
+    icon="tag"
+    :dirty
+    :saving
+    :creating="!isEdit"
+    :deletable="isEdit"
+    :needs
+    @delete="remove"
+    ><AiEntityButton
+  /></AdminSaveHeader>
   <div
     class="m-auto flex w-(--width-wide) max-w-full flex-col gap-lg px-window
       py-lg"

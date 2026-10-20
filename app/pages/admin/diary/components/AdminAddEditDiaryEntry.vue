@@ -11,6 +11,7 @@ import { toDateString } from '#layers/thei/shared/date-range';
 import { diaryDeleteModal } from '../composables';
 import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
 import type { FormNeed } from '#layers/thei/app/composables/form-needs';
+import { accessOptions } from '#layers/thei/app/components/field/access-options';
 
 const { diaryUuid } = defineProps<{ diaryUuid?: string }>();
 
@@ -90,23 +91,29 @@ const occupiedBy = computed(() => {
 });
 
 /** What the entry still needs before it can be saved, in the form's order. */
-const needs = useFormNeeds(() => {
-  const list: FormNeed[] = [];
-  const date = phrase.value.diary_date;
-  if (!diaryData.value.date) list.push({ key: 'date', label: date });
-  else if (occupiedBy.value)
-    list.push({
-      key: 'date',
-      label: date,
-      problem: phrase.value.diary_date_taken,
-    });
-  if (!diaryData.value.access)
-    list.push({ key: 'access', label: phrase.value.diary_access });
-  if (isContentEmpty(diaryData.value.content?.data))
-    list.push({ key: 'content', label: phrase.value.diary_content });
-  return list;
-});
-const isValid = computed(() => !needs.blocked.value);
+const needs = useFormNeeds(
+  () => {
+    const list: FormNeed[] = [];
+    const date = phrase.value.diary_date;
+    if (!diaryData.value.date) list.push({ key: 'date', label: date });
+    else if (occupiedBy.value)
+      list.push({
+        key: 'date',
+        label: date,
+        problem: phrase.value.diary_date_taken,
+      });
+    if (!diaryData.value.access)
+      list.push({ key: 'access', label: phrase.value.diary_access });
+    if (isContentEmpty(diaryData.value.content?.data))
+      list.push({ key: 'content', label: phrase.value.diary_content });
+    return list;
+  },
+  {
+    ready: () => !saving.value && (!isEdit.value || isDirty.value),
+    save,
+    error: headerError,
+  },
+);
 
 if (isEdit.value) {
   const data = await useRequestFetch()<DiaryGetResponse>(
@@ -124,10 +131,8 @@ if (isEdit.value) {
   formVersion.value = data.version;
 }
 
+/** The save itself; a press or Ctrl+S comes to it through `needs.submit`. */
 async function save() {
-  if (saving.value) return;
-  // Asked by a press or Ctrl+S, a save it cannot make says why.
-  if (needs.blocked.value) return needs.ask();
   saving.value = true;
   headerError.value = undefined;
   try {
@@ -162,10 +167,6 @@ async function save() {
   }
 }
 
-// Ctrl+S on an entry not ready to save says what it still needs.
-useSaveShortcut(save, {
-  canSave: () => !saving.value && (!isEdit.value || isDirty.value),
-});
 await useAdminTabTitle(
   computed(() =>
     isEdit.value ? phrase.value.edit_diary_entry : phrase.value.new_diary_entry,
@@ -188,7 +189,8 @@ const CONTENT_FIELDS = ['content', 'notes'];
 
 /** Saving from inside the editor saves the entry too; see the event form. */
 function saveAfterContentEdit() {
-  if (saving.value || !isValid.value || !isEdit.value || !isDirty.value) return;
+  if (saving.value || needs.blocked.value || !isEdit.value || !isDirty.value)
+    return;
   if (!changedOnlyIn(diaryPayload(), savedSnapshot.value, CONTENT_FIELDS))
     return;
   void save();
@@ -244,46 +246,17 @@ useRegisterAdminBarContextButton(
 </script>
 
 <template>
-  <StickyGlassHeader
-    width="var(--width-wide)"
-    :error="headerError ?? needs.line.value"
-    :error-again="needs.asks.value"
-  >
-    <div class="flex items-center justify-between gap-xs py-xs">
-      <div
-        class="flex min-w-0 items-center gap-xs text-lg font-bold sm:text-xl"
-      >
-        <Icon name="thought" />
-        <span class="truncate">{{
-          isEdit ? phrase.edit_diary_entry : phrase.new_diary_entry
-        }}</span>
-      </div>
-      <div class="flex items-center gap-xs">
-        <AiEntityButton />
-        <Button
-          v-if="isEdit"
-          variant="delete"
-          size="icon"
-          class="pointer-coarse:size-11"
-          :aria-label="phrase.delete"
-          :data-title-popup="phrase.delete"
-          @click="deleteEntry"
-        >
-          <Icon name="delete" />
-        </Button>
-        <AdminSaveButton
-          :label="
-            isEdit ? (isDirty ? phrase.save : phrase.saved) : phrase.create
-          "
-          :saving
-          :done="isEdit && !isDirty"
-          :disabled="saving || (isEdit && !isDirty)"
-          :reason="needs.reason.value"
-          @click="save"
-        />
-      </div>
-    </div>
-  </StickyGlassHeader>
+  <AdminSaveHeader
+    :title="isEdit ? phrase.edit_diary_entry : phrase.new_diary_entry"
+    icon="thought"
+    :dirty="isDirty"
+    :saving
+    :creating="!isEdit"
+    :deletable="isEdit"
+    :needs
+    @delete="deleteEntry"
+    ><AiEntityButton
+  /></AdminSaveHeader>
 
   <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
     <AiFormOffers />
@@ -313,17 +286,7 @@ useRegisterAdminBarContextButton(
           <FieldOptions
             v-model="diaryData.access"
             direction="row"
-            :label="phrase.diary_access"
-            :options="{
-              [ProjectEventAccessLevel.Public]: {
-                icon: 'lock-open',
-                title: phrase.public,
-              },
-              [ProjectEventAccessLevel.Private]: {
-                icon: 'lock-close',
-                title: phrase.private,
-              },
-            }"
+            :options="accessOptions(phrase, false)"
           />
         </Field>
       </div>

@@ -9,6 +9,7 @@ import {
   POPUP_ARROW_TIP,
   usePopupPlacement,
 } from '#layers/thei/app/composables/popup-placement';
+import { scrollMotion } from '#layers/thei/app/modals/layer-motion';
 
 defineOptions({ inheritAttrs: false });
 
@@ -303,12 +304,7 @@ function liftAnchor(element: HTMLElement) {
       break;
     }
   }
-  box.scrollBy({
-    top: below,
-    behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      ? 'auto'
-      : 'smooth',
-  });
+  box.scrollBy({ top: below, behavior: scrollMotion() });
 }
 
 // Opened once drawn where it stands: until then it may still be hidden as

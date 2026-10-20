@@ -46,6 +46,7 @@ import {
 } from '#layers/thei/shared/assets/extensions';
 import { ASSET_UPLOAD_LIMITS } from '#layers/thei/shared/asset-upload-limits';
 import ModalContainer from '#layers/thei/app/modals/ModalContainer.vue';
+import { scrollIntoSight } from '#layers/thei/app/modals/layer-motion';
 import ModalTitle from '#layers/thei/app/modals/ModalTitle.vue';
 import ModalHeaderButton from '#layers/thei/app/modals/ModalHeaderButton.vue';
 import FloatingPopup from '#layers/thei/app/components/FloatingPopup.vue';
@@ -223,20 +224,16 @@ const updatedAt = computed(
       ? props.modalData.current()?.updatedAt
       : undefined) ?? props.modalData.value?.updatedAt,
 );
-let cleanupSmartTypography: (() => void) | undefined;
-let cleanupFilePaste: (() => void) | undefined;
-let cleanupPlainFields: (() => void) | undefined;
-let cleanupGutterClick: (() => void) | undefined;
-let cleanupCurrentBlock: (() => void) | undefined;
-let cleanupLinkPaste: (() => void) | undefined;
-let cleanupAtLink: (() => void) | undefined;
+/**
+ * What the editor has bound to its holder, its dialog and the page, each
+ * undone as the modal goes: the last bound first, so nothing outlives what
+ * it leans on.
+ */
+const disposers: (() => void)[] = [];
+function bound(dispose: () => void) {
+  disposers.push(dispose);
+}
 let inlineKeep: EditorInlineKeep | undefined;
-let cleanupInlineBoundary: (() => void) | undefined;
-let cleanupInlineCaret: (() => void) | undefined;
-let cleanupKeyboardBoundary: (() => void) | undefined;
-let cleanupTextDrop: (() => void) | undefined;
-let cleanupTextPaste: (() => void) | undefined;
-let cleanupNativeUndo: (() => void) | undefined;
 /**
  * Editor.js switches to its mobile layout at this width — its own constant,
  * not the project's breakpoint — and the styling follows the same switch, so
@@ -322,11 +319,23 @@ const isDirty = computed(
   () => unread.value || currentKey.value !== savedKey.value,
 );
 /**
- * Only a text that is stored, and that the form holds as it is here, is
- * saved: one whose entity is not made yet has never been, whatever the form
- * holds.
+ * The stamp the form's text bore when this editor last wrote into it; none
+ * before it has. A save of the entity stamps the text it stores anew
+ * (`stampSavedContent`), so a text still bearing this one was not stored:
+ * the form saves itself for it only when nothing else waits there.
  */
-const isSaved = computed(() => !isDirty.value && Boolean(updatedAt.value));
+const writtenOver = ref<number | null>();
+/**
+ * Only a text that is stored, and that the form holds as it is here, is
+ * saved: one whose entity is not made yet has never been, nor one written
+ * into a form that has not stored it since, whatever the form holds.
+ */
+const isSaved = computed(
+  () =>
+    !isDirty.value &&
+    Boolean(updatedAt.value) &&
+    updatedAt.value !== writtenOver.value,
+);
 /**
  * The texts this editor knows as saved by itself: the one it opened with and
  * each one it saved since. The server's text being one of them is no news,
@@ -361,9 +370,6 @@ let disposed = false;
 const editorReady = ref(false);
 let editorAcceptsChanges = false;
 let transientEntitySelections = 0;
-let cleanupEditorDrag: (() => void) | undefined;
-let cleanupEditorPopoverLayer: (() => void) | undefined;
-let cleanupEditorPrivatePattern: (() => void) | undefined;
 let editorPrivateSections:
   ReturnType<typeof createEditorPrivateSections> | undefined;
 
@@ -473,12 +479,23 @@ const editorSession = createEditorHistorySession({
 });
 const editorChangePending = editorSession.isPending;
 
+/** Fields of a block whose `input` is words: the rest pick or set. */
+const WORD_INPUTS = new Set(['text', 'search', 'url', 'email', 'tel']);
+
+/**
+ * Whether an `input` is words typed, pasted or dropped: into the text, or a
+ * field of words in a block. A recording's volume slid, a file picked, a
+ * box ticked are not; a block tells of what of them changes the text.
+ */
+function typedInto(target: EventTarget | null) {
+  if (target instanceof HTMLTextAreaElement) return true;
+  if (target instanceof HTMLInputElement) return WORD_INPUTS.has(target.type);
+  return target instanceof HTMLElement && target.isContentEditable;
+}
+
 /** Words typed, pasted or dropped into the text: a change, before it is read. */
 function noteTyped(event: Event) {
-  if (!editorAcceptsChanges) return;
-  // A file picked is not in the text yet; the block says so once it is.
-  if (event.target instanceof HTMLInputElement && event.target.type === 'file')
-    return;
+  if (!editorAcceptsChanges || !typedInto(event.target)) return;
   typedSerial += 1;
   unread.value = true;
   // Should Editor.js never tell of it, the text is read all the same.
@@ -917,14 +934,10 @@ function firstChangedBlock(
 async function showBlock(id: string) {
   await nextTick();
   await new Promise(requestAnimationFrame);
-  holder.value
-    ?.querySelector(`.ce-block[data-id="${CSS.escape(id)}"]`)
-    ?.scrollIntoView({
-      block: 'center',
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        ? 'auto'
-        : 'smooth',
-    });
+  const block = holder.value?.querySelector(
+    `.ce-block[data-id="${CSS.escape(id)}"]`,
+  );
+  if (block) scrollIntoSight(block);
 }
 
 /** What was just taken can be put back at once, from its word too. */
@@ -1103,9 +1116,11 @@ async function startEditor() {
 
   // Bound before the editor, so its listeners stand in front of Editor.js's
   // own drop handling on the same holder.
-  cleanupTextDrop = bindEditorTextDrop(holder.value!, {
-    closeInlineToolbar: () => editor?.inlineToolbar.close(),
-  });
+  bound(
+    bindEditorTextDrop(holder.value!, {
+      closeInlineToolbar: () => editor?.inlineToolbar.close(),
+    }),
+  );
   const tools: EditorConfig['tools'] = {
     spoiler: {
       class: ContentSpoilerTune as unknown as ToolConstructable,
@@ -1307,65 +1322,91 @@ async function startEditor() {
     root: holder.value!,
     keyTaken: () => inlineKeep?.holdsCaret() ?? false,
   });
-  cleanupEditorPrivatePattern = createEditorPrivatePattern(holder.value!);
+  bound(() => {
+    editorPrivateSections?.destroy();
+    editorPrivateSections = undefined;
+  });
+  bound(createEditorPrivatePattern(holder.value!));
   await editorSession.initialize();
   if (disposed) return;
   editorAcceptsChanges = true;
   void editorSession.loadOffers();
   if (props.modalData.review) void openAskedReview(props.modalData.review);
-  cleanupEditorPopoverLayer = createEditorPopoverLayer(holder.value!);
-  cleanupEditorDrag = createEditorBlockDrag(holder.value!, editor, {
-    canMove: editorPrivateSections.canMove,
-  });
+  bound(createEditorPopoverLayer(holder.value!));
+  bound(
+    createEditorBlockDrag(holder.value!, editor, {
+      canMove: editorPrivateSections.canMove,
+    }),
+  );
   // One binding for the whole editor: the events bubble up from whichever
   // block is being typed in, and the rules read the caret, not the target.
-  cleanupSmartTypography = bindSmartTypography(holder.value!);
-  cleanupFilePaste = bindEditorFilePaste(holder.value!, editor, {
-    onSkipped: (skipped) => {
-      errorMessage.value = skippedContentFilesMessage(skipped);
-    },
-  });
-  cleanupPlainFields = bindEditorPlainFields(holder.value!, editor);
-  cleanupGutterClick = bindEditorGutterClick(holder.value!, editor);
+  bound(bindSmartTypography(holder.value!));
+  bound(
+    bindEditorFilePaste(holder.value!, editor, {
+      onSkipped: (skipped) => {
+        errorMessage.value = skippedContentFilesMessage(skipped);
+      },
+    }),
+  );
+  bound(bindEditorPlainFields(holder.value!, editor));
+  bound(bindEditorGutterClick(holder.value!, editor));
   blockToolbox = bindEditorBlockToolbox(holder.value!, editor, {
     open: openToolbox,
+  });
+  bound(() => {
+    blockToolbox?.destroy();
+    blockToolbox = undefined;
   });
   blockToolbox.hint({
     add: phrase.value.content_block_add,
     settings: phrase.value.content_block_settings,
   });
-  cleanupCurrentBlock = bindEditorCurrentBlock(holder.value!, editor, {
-    // The blocks whose Enter is Editor.js's own: split, before, after.
-    textBlocks: new Set(['paragraph', 'header', 'list', 'quote']),
-  });
+  bound(
+    bindEditorCurrentBlock(holder.value!, editor, {
+      // The blocks whose Enter is Editor.js's own: split, before, after.
+      textBlocks: new Set(['paragraph', 'header', 'list', 'quote']),
+    }),
+  );
   // The popups and the header live in the dialog, beside the editor.
-  cleanupKeyboardBoundary = bindEditorKeyboardBoundary(
-    holder.value!.closest('dialog') ?? document.body,
-    holder.value!,
+  bound(
+    bindEditorKeyboardBoundary(
+      holder.value!.closest('dialog') ?? document.body,
+      holder.value!,
+    ),
   );
   // The heading is plain text; captions are the media blocks' own.
   const linkBlocks = new Set(['paragraph', 'list', 'quote']);
-  cleanupLinkPaste = bindEditorLinkPaste(holder.value!, editor, {
-    site: internalSite,
-    linkBlocks,
-    findEntity: (url) => findEntityByInternalUrl(url, internalSite),
-  });
+  bound(
+    bindEditorLinkPaste(holder.value!, editor, {
+      site: internalSite,
+      linkBlocks,
+      findEntity: (url) => findEntityByInternalUrl(url, internalSite),
+    }),
+  );
   // The caret steps in and out of markup; a tap is settled before words go
   // where it left the caret.
-  cleanupInlineBoundary = bindEditorInlineBoundary(holder.value!);
+  bound(bindEditorInlineBoundary(holder.value!));
   // Where words go against markup, which outlives them.
   inlineKeep = bindEditorInlineKeep(holder.value!);
-  cleanupAtLink = bindEditorAtLink(holder.value!, editor, {
-    linkBlocks,
-    open: (request) => inlineLinkControls.value?.open(request),
-    inline: inlineKeep,
+  bound(() => {
+    inlineKeep?.dispose();
+    inlineKeep = undefined;
   });
-  cleanupInlineCaret = bindEditorInlineCaret(holder.value!);
+  bound(
+    bindEditorAtLink(holder.value!, editor, {
+      linkBlocks,
+      open: (request) => inlineLinkControls.value?.open(request),
+      inline: inlineKeep,
+    }),
+  );
+  bound(bindEditorInlineCaret(holder.value!));
   // After the media and link pastes, which claim theirs first.
-  cleanupTextPaste = bindEditorTextPaste(holder.value!, inlineKeep);
-  cleanupNativeUndo = bindEditorNativeUndo(
-    holder.value!,
-    holder.value!.closest('dialog') ?? document.body,
+  bound(bindEditorTextPaste(holder.value!, inlineKeep));
+  bound(
+    bindEditorNativeUndo(
+      holder.value!,
+      holder.value!.closest('dialog') ?? document.body,
+    ),
   );
 }
 
@@ -1385,44 +1426,7 @@ onBeforeUnmount(() => {
       ? ((props.modalData.current?.() ?? savedValue)?.data ?? null)
       : undefined,
   });
-  cleanupGutterClick?.();
-  cleanupGutterClick = undefined;
-  cleanupCurrentBlock?.();
-  cleanupCurrentBlock = undefined;
-  cleanupLinkPaste?.();
-  cleanupLinkPaste = undefined;
-  cleanupAtLink?.();
-  cleanupAtLink = undefined;
-  inlineKeep?.dispose();
-  inlineKeep = undefined;
-  cleanupInlineBoundary?.();
-  cleanupInlineBoundary = undefined;
-  cleanupInlineCaret?.();
-  cleanupInlineCaret = undefined;
-  cleanupTextDrop?.();
-  cleanupTextDrop = undefined;
-  cleanupTextPaste?.();
-  cleanupTextPaste = undefined;
-  cleanupNativeUndo?.();
-  cleanupNativeUndo = undefined;
-  blockToolbox?.destroy();
-  blockToolbox = undefined;
-  cleanupKeyboardBoundary?.();
-  cleanupKeyboardBoundary = undefined;
-  cleanupEditorPopoverLayer?.();
-  cleanupEditorPopoverLayer = undefined;
-  cleanupSmartTypography?.();
-  cleanupSmartTypography = undefined;
-  cleanupFilePaste?.();
-  cleanupFilePaste = undefined;
-  cleanupPlainFields?.();
-  cleanupPlainFields = undefined;
-  cleanupEditorDrag?.();
-  cleanupEditorDrag = undefined;
-  cleanupEditorPrivatePattern?.();
-  cleanupEditorPrivatePattern = undefined;
-  editorPrivateSections?.destroy();
-  editorPrivateSections = undefined;
+  for (const dispose of disposers.splice(0).reverse()) dispose();
   document.body.classList.remove(
     'content-editor-block-dragging',
     'content-editor-modal-open',
@@ -1487,6 +1491,7 @@ async function writeIntoForm() {
         : {}),
     };
     headerSummary.value = summary;
+    writtenOver.value = savedValue.updatedAt ?? null;
     props.modalData.onSave(savedValue);
     handTaken();
     await props.modalData.onSaved?.();

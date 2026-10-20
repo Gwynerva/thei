@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { formNeedsWords } from '../../../app/composables/form-needs';
+import {
+  actionNeed,
+  formNeedsWords,
+} from '../../../app/composables/form-needs';
+import { DEFAULT_PROJECT_ACTION } from '../../../shared/project-action';
 import type { LanguagePhrases } from '../../../shared/language/types';
 import enModule from '../../../shared/language/list/en';
 import ruModule from '../../../shared/language/list/ru';
@@ -66,5 +70,52 @@ describe('formNeedsWords', () => {
   it('says nothing when nothing is needed', () => {
     expect(formNeedsWords(en, [])).toEqual([]);
     expect(formNeedsWords(en, [], true)).toEqual([]);
+  });
+});
+
+describe('actionNeed', () => {
+  const enabled = { ...DEFAULT_PROJECT_ACTION, enabled: true };
+
+  it('needs nothing of a button left off, or of none', () => {
+    expect(actionNeed(en, DEFAULT_PROJECT_ACTION, 'Action')).toBeUndefined();
+    expect(actionNeed(en, undefined, 'Action')).toBeUndefined();
+  });
+
+  it('needs nothing of a button set whole', () => {
+    expect(
+      actionNeed(
+        en,
+        { ...enabled, text: 'Open', externalUrl: 'https://example.com/' },
+        'Action',
+      ),
+    ).toBeUndefined();
+  });
+
+  it('says what a button still lacks in the words of its box, in each language', () => {
+    expect(actionNeed(en, enabled, 'Event action button')).toEqual({
+      key: 'action',
+      label: 'Event action button',
+      problem: 'provide button text, a valid link URL',
+    });
+    expect(
+      actionNeed(
+        ru,
+        { ...enabled, text: 'Скачать', target: 'file' },
+        'Кнопка действия',
+      ),
+    ).toEqual({
+      key: 'action',
+      label: 'Кнопка действия',
+      problem: 'укажите файл для скачивания',
+    });
+  });
+
+  it('says a text too long by its limit, never in the server’s words', () => {
+    const need = actionNeed(
+      ru,
+      { ...enabled, text: 'x'.repeat(31), externalUrl: 'https://example.com/' },
+      'Кнопка',
+    );
+    expect(need?.problem).toBe('укажите текст не длиннее 30 символов');
   });
 });

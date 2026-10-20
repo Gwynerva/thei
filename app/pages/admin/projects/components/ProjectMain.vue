@@ -6,6 +6,7 @@ import {
 import { projectDataInjectionKey, publicIdErrorKey } from '../composables';
 import LinkField from '../../components/LinkField.vue';
 import FieldContentEditor from '#layers/thei/app/components/field/FieldContentEditor.vue';
+import { accessOptions } from '#layers/thei/app/components/field/access-options';
 import { saveAfterContentEditKey } from '../composables';
 
 const projectData = inject(projectDataInjectionKey)!;
@@ -48,20 +49,7 @@ const saveAfterContentEdit = inject(saveAfterContentEditKey, undefined);
         <FieldOptions
           v-model="projectData.access"
           direction="row"
-          :options="{
-            [ProjectEventAccessLevel.Public]: {
-              icon: 'lock-open',
-              title: phrase.public,
-            },
-            [ProjectEventAccessLevel.LinkOnly]: {
-              icon: 'lock-partial',
-              title: phrase.link_only,
-            },
-            [ProjectEventAccessLevel.Private]: {
-              icon: 'lock-close',
-              title: phrase.private,
-            },
-          }"
+          :options="accessOptions(phrase)"
         />
         <FieldHint v-if="accessHint">{{ accessHint }}</FieldHint>
         <FieldHint

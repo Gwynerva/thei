@@ -6,8 +6,10 @@ import { fileURLToPath } from 'node:url';
  * button looks disabled but stays pressable, its hint and description name
  * what the form needs; a press, a tap or Ctrl+S says it on the line under
  * the header — short enough for a phone — and marks the fields; filled, the
- * line and the marks go. The diary form has its own spec
- * (`diary-new-entry.spec.ts`).
+ * line and the marks go, and a line closed by hand stays closed until the
+ * next press. A form being edited says the same, and a refusal of the
+ * server gives way to what the form needs once it cannot be saved. The
+ * diary form has its own spec too (`diary-new-entry.spec.ts`).
  */
 
 test.use({
@@ -85,6 +87,44 @@ const create = (page: Page) =>
 const save = (page: Page) =>
   page.getByRole('button', { name: 'Save', exact: true });
 
+/** A day of 2012 that holds no diary entry yet, as the diary's spec finds one. */
+async function freeDay(page: Page) {
+  const taken = new Set(
+    (
+      (await (await page.request.get('/api/admin/diary/dates')).json()) as {
+        date: string;
+      }[]
+    ).map((entry) => entry.date),
+  );
+  for (let day = Date.UTC(2012, 0, 1); ; day += 86_400_000) {
+    const date = new Date(day).toISOString().slice(0, 10);
+    if (!taken.has(date)) return date;
+  }
+}
+
+/** A project made through the API, whole: its uuid. */
+async function createProject(page: Page) {
+  const stamp = Date.now();
+  const response = await page.request.post('/api/admin/projects', {
+    data: {
+      title: `Harbour ${stamp}`,
+      summary: 'A project.',
+      access: 'public',
+      humanReadableSlug: 'harbour',
+      publicId: `hb${stamp}`,
+      showcase: false,
+      cv: false,
+      descriptionContent: {
+        data: { blocks: [{ type: 'paragraph', data: { text: 'Text.' } }] },
+      },
+      relations: [],
+    },
+  });
+  const body = await response.json();
+  expect(body.type, JSON.stringify(body)).toBe('success');
+  return body.projectUuid as string;
+}
+
 test('a new event says what it needs: in its hint, on Ctrl+S, at its labels', async ({
   page,
 }) => {
@@ -114,6 +154,119 @@ test('a new event says what it needs: in its hint, on Ctrl+S, at its labels', as
     .fill('Makers fair');
   await expect(marked(page)).toHaveCount(count - 1);
   await expect(line(page)).not.toContainText('Event title');
+
+  // The choice of access is a group called by its field's label.
+  await expect(
+    page.getByRole('group', { name: 'Event access', exact: true }),
+  ).toBeVisible();
+});
+
+test('a line closed by hand stays closed as fields are filled, and comes back for a new press', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  await open(page, '/admin/events/new/');
+  await page.keyboard.press('ControlOrMeta+s');
+  await expect(line(page)).toContainText('Event title');
+  await line(page).getByRole('button', { name: 'Hide the message' }).click();
+  await expect(line(page)).toHaveCount(0);
+
+  // Its words change with the field filled, and it stays closed.
+  await page
+    .locator('[data-need="title"]')
+    .getByRole('textbox')
+    .fill('Makers fair');
+  await page.waitForTimeout(500);
+  await expect(line(page)).toHaveCount(0);
+
+  await page.keyboard.press('ControlOrMeta+s');
+  await expect(line(page)).toBeVisible();
+  await expect(line(page)).not.toContainText('Event title');
+});
+
+test('an edited project refused by the server says why, then what it needs once it cannot be saved', async ({
+  page,
+  context,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  const url = `/admin/projects/${await createProject(page)}/edit/`;
+  await open(page, url);
+
+  // Another tab saves the project meanwhile.
+  const other = await context.newPage();
+  await other.setViewportSize(DESKTOP);
+  await open(other, url);
+  await other
+    .locator('[data-need="summary"]')
+    .getByRole('textbox')
+    .fill('Changed in another tab.');
+  await save(other).click();
+  await expect(
+    other.getByRole('button', { name: 'Saved', exact: true }),
+  ).toBeVisible();
+  await other.close();
+
+  // Saved here over it, the save is refused, and the line says so.
+  await page
+    .locator('[data-need="summary"]')
+    .getByRole('textbox')
+    .fill('Changed here.');
+  await save(page).click();
+  await expect(line(page)).toContainText('has changed since');
+
+  // A project left without its title cannot be saved: a press says what it
+  // needs, not the refusal of the form as it was.
+  await page.locator('[data-need="title"]').getByRole('textbox').fill('');
+  await expectBlocked(save(page), /Still to fill in: Project Title/);
+  await press(save(page));
+  await expect(line(page)).toHaveText(
+    loose(/^Still to fill in: Project Title$/),
+  );
+  await expect(marked(page)).toHaveText([/Project Title/]);
+});
+
+test('an edited event left without a field says so, and saves once it is back', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  const stamp = Date.now();
+  const response = await page.request.post('/api/admin/events', {
+    data: {
+      title: `Fair ${stamp}`,
+      summary: 'A fair.',
+      access: 'private',
+      humanReadableSlug: 'fair',
+      publicId: `fr${stamp}`,
+      content: {
+        data: { blocks: [{ type: 'paragraph', data: { text: 'Fair.' } }] },
+      },
+      periods: [{ startDate: '2024-03-14', endDate: '2024-03-14' }],
+    },
+  });
+  const body = await response.json();
+  expect(body.type, JSON.stringify(body)).toBe('success');
+  await open(page, `/admin/events/${body.eventUuid}/edit/`);
+  await expect(
+    page.getByRole('button', { name: 'Saved', exact: true }),
+  ).toBeDisabled();
+
+  const summary = page.locator('[data-need="summary"]').getByRole('textbox');
+  await summary.fill('');
+  await expectBlocked(save(page), /Still to fill in: Event summary/);
+  await page.keyboard.press('ControlOrMeta+s');
+  await expect(line(page)).toHaveText(
+    loose(/^Still to fill in: Event summary$/),
+  );
+  await expect(marked(page)).toHaveText([/Event summary/]);
+
+  await summary.fill('A fair, written again.');
+  await expect(line(page)).toHaveCount(0);
+  await expect(marked(page)).toHaveCount(0);
+  await expect(save(page)).not.toHaveAttribute('aria-disabled');
+  await save(page).click();
+  await expect(
+    page.getByRole('button', { name: 'Saved', exact: true }),
+  ).toBeVisible();
 });
 
 test('on a phone, a tap on the Create square says it, in two lines at most', async ({
@@ -140,6 +293,39 @@ test('on a phone, a tap on the Create square says it, in two lines at most', asy
   await expectLineFits(page, create(page));
   await context.close();
 });
+
+for (const form of [
+  {
+    name: 'diary entry',
+    url: async (page: Page) => `/admin/diary/new/?date=${await freeDay(page)}`,
+    needs: /Still to fill in: Entry content/,
+  },
+  {
+    name: 'project',
+    url: async () => '/admin/projects/new/',
+    needs: /Still to fill in: Project Title, .+/,
+  },
+])
+  test(`on a phone, a tap on a new ${form.name}’s Create square says what it needs`, async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({
+      storageState: fileURLToPath(
+        new URL('./.artifacts/admin.json', import.meta.url),
+      ),
+      viewport: PHONE,
+      hasTouch: true,
+    });
+    const page = await context.newPage();
+    await open(page, await form.url(page));
+    await expectBlocked(create(page), form.needs);
+    const box = (await create(page).boundingBox())!;
+    await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(line(page)).toContainText(loose(form.needs));
+    await expect(marked(page).first()).toBeVisible();
+    await expectLineFits(page, create(page));
+    await context.close();
+  });
 
 test('a new project says what it needs on Ctrl+S', async ({ page }) => {
   await page.setViewportSize(DESKTOP);
@@ -205,6 +391,8 @@ test('a new tag says what it needs, and lets go once its title is typed', async 
   await press(create(page));
   await expect(line(page)).toContainText('Still to fill in: Tag title');
   await expectLineFits(page, create(page));
+  // Of its link, the address alone is marked: its public ID is there.
+  await expect(marked(page)).toHaveText([/Tag title/, /Readable URL/]);
   await page
     .locator('[data-need="title"]')
     .getByRole('textbox')
@@ -251,25 +439,7 @@ test('a new section says what it needs under its own header', async ({
   page,
 }) => {
   await page.setViewportSize(PHONE);
-  const stamp = Date.now();
-  const response = await page.request.post('/api/admin/projects', {
-    data: {
-      title: `Harbour ${stamp}`,
-      summary: 'A project.',
-      access: 'public',
-      humanReadableSlug: 'harbour',
-      publicId: `hb${stamp}`,
-      showcase: false,
-      cv: false,
-      descriptionContent: {
-        data: { blocks: [{ type: 'paragraph', data: { text: 'Text.' } }] },
-      },
-      relations: [],
-    },
-  });
-  const body = await response.json();
-  expect(body.type, JSON.stringify(body)).toBe('success');
-  await open(page, `/admin/projects/${body.projectUuid}/edit/`);
+  await open(page, `/admin/projects/${await createProject(page)}/edit/`);
   await page.getByRole('button', { name: 'Add section' }).click();
   const dialog = page.locator('dialog[open]');
   const button = dialog.getByRole('button', { name: 'Save', exact: true });

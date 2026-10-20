@@ -158,28 +158,34 @@ const isDirty = computed(
 );
 
 /** What the project still needs before it can be saved, in the form's order. */
-const needs = useFormNeeds(() => {
-  const data = projectData.value;
-  const list: FormNeed[] = [];
-  if (!data.title.trim())
-    list.push({ key: 'title', label: phrase.value.project_title });
-  if (!data.access)
-    list.push({ key: 'access', label: phrase.value.project_access });
-  if (!data.summary.trim())
-    list.push({ key: 'summary', label: phrase.value.project_summary });
-  if (!data.publicId.trim())
-    list.push({ key: 'link', label: phrase.value.public_id });
-  const action = actionNeed(data.action, phrase.value.project_action);
-  if (action) list.push(action);
-  return list;
-});
-const isFormValid = computed(() => !needs.blocked.value);
-
-const canSave = computed(() => isDirty.value && isFormValid.value);
-// Ctrl+S on a project not ready to save says what it still needs.
-const canUseSaveShortcut = computed(
-  () => !saving.value && (!isEdit.value || isDirty.value),
+const needs = useFormNeeds(
+  () => {
+    const data = projectData.value;
+    const list: FormNeed[] = [];
+    if (!data.title.trim())
+      list.push({ key: 'title', label: phrase.value.project_title });
+    if (!data.access)
+      list.push({ key: 'access', label: phrase.value.project_access });
+    if (!data.summary.trim())
+      list.push({ key: 'summary', label: phrase.value.project_summary });
+    if (!data.publicId.trim())
+      list.push({ key: 'link-public-id', label: phrase.value.public_id });
+    const action = actionNeed(
+      phrase.value,
+      data.action,
+      phrase.value.project_action,
+    );
+    if (action) list.push(action);
+    return list;
+  },
+  {
+    ready: () => !saving.value && (!isEdit.value || isDirty.value),
+    save: handleSave,
+    error: headerError,
+  },
 );
+
+const canSave = computed(() => isDirty.value && !needs.blocked.value);
 
 const requestFetch = useRequestFetch();
 
@@ -251,10 +257,8 @@ if (isEdit.value) {
   }
 }
 
+/** The save itself; a press or Ctrl+S comes to it through `needs.submit`. */
 async function handleSave() {
-  if (saving.value) return;
-  // Asked by a press or Ctrl+S, a save it cannot make says why.
-  if (needs.blocked.value) return needs.ask();
   saving.value = true;
   headerError.value = undefined;
   try {
@@ -310,8 +314,6 @@ async function handleSave() {
     saving.value = false;
   }
 }
-
-useSaveShortcut(handleSave, { canSave: canUseSaveShortcut });
 
 await useAdminTabTitle(
   computed(() =>
@@ -462,47 +464,17 @@ async function openDeleteProjectModal() {
 </script>
 
 <template>
-  <StickyGlassHeader
-    width="var(--width-wide)"
-    :error="headerError ?? needs.line.value"
-    :error-again="needs.asks.value"
-  >
-    <div class="flex items-center justify-between gap-xs py-xs">
-      <div
-        class="flex min-w-0 items-center gap-xs text-lg font-bold sm:text-xl"
-      >
-        <Icon name="project" class="shrink-0" />
-        <span class="truncate">
-          {{ isEdit ? phrase.edit_project : phrase.new_project }}
-        </span>
-      </div>
-
-      <div class="flex items-center gap-xs">
-        <AiEntityButton />
-        <Button
-          v-if="isEdit"
-          variant="delete"
-          size="icon"
-          class="pointer-coarse:size-11"
-          :aria-label="phrase.delete"
-          :data-title-popup="phrase.delete"
-          @click="openDeleteProjectModal"
-        >
-          <Icon name="delete" />
-        </Button>
-        <AdminSaveButton
-          :label="
-            isEdit ? (isDirty ? phrase.save : phrase.saved) : phrase.create
-          "
-          :saving
-          :done="isEdit && !isDirty"
-          :disabled="saving || (isEdit && !isDirty)"
-          :reason="needs.reason.value"
-          @click="handleSave"
-        />
-      </div>
-    </div>
-  </StickyGlassHeader>
+  <AdminSaveHeader
+    :title="isEdit ? phrase.edit_project : phrase.new_project"
+    icon="project"
+    :dirty="isDirty"
+    :saving
+    :creating="!isEdit"
+    :deletable="isEdit"
+    :needs
+    @delete="openDeleteProjectModal"
+    ><AiEntityButton
+  /></AdminSaveHeader>
   <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
     <AiFormOffers />
     <ProjectMain />

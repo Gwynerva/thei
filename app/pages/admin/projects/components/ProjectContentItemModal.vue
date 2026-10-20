@@ -23,6 +23,11 @@ import type { FormNeed } from '#layers/thei/app/composables/form-needs';
 type ModalData = {
   projectHumanReadableSlug: string;
   projectPublicId: string;
+  /**
+   * The project's address as it was last saved, where its sections' pages
+   * are: the form's may be one not stored yet — a public ID just rolled.
+   */
+  savedProject: { humanReadableSlug: string; publicId: string };
   item?: ProjectSectionItem;
   /**
    * Hands the section over to the project form, which saves itself when
@@ -30,6 +35,12 @@ type ModalData = {
    * and closing is a decision of its own.
    */
   onSave: (item: ProjectSectionItem) => void;
+  /**
+   * Whether the section the project form holds — the one handed over last,
+   * or opened — is stored as it is: the form does not save itself for it
+   * while anything else waits, nor before the project is made.
+   */
+  stored: () => boolean;
   /**
    * How many more times each file would be placed in the project, were this
    * section saved as it stands: the editor counts a file's uses with it.
@@ -74,6 +85,15 @@ const pendingPeriod = ref<Period>();
 const editedPeriodIndex = ref<number>();
 const modalContainer =
   useTemplateRef<InstanceType<typeof ModalContainer>>('modalContainer');
+const headerRow = useTemplateRef<HTMLElement>('headerRow');
+/**
+ * Saved: nothing here waits to be handed over, and what the project form
+ * holds of the section is stored. Handed over to a form that waits on
+ * something else, it is not saved yet.
+ */
+const isSaved = computed(
+  () => exists.value && !isDirty.value && props.modalData.stored(),
+);
 const hasBody = computed(() => !isContentEmpty(item.value.content?.data));
 const bannerAssetUuid = computed({
   get: () => item.value.bannerAssetUuid ?? null,
@@ -103,7 +123,12 @@ const needs = useFormNeeds(
       });
     return list;
   },
-  { root: () => modalContainer.value?.root },
+  {
+    root: () => modalContainer.value?.root,
+    header: () => headerRow.value,
+    ready: () => !exists.value || isDirty.value,
+    save: handOver,
+  },
 );
 
 useModalCloseGuard(
@@ -165,9 +190,10 @@ watch(periodPopupOpen, (isOpen) => {
  * project could save it straight away.
  */
 function saveAfterContentEdit() {
-  if (exists.value) save();
+  if (exists.value) needs.submit();
 }
 
+/** The save itself; a press or Ctrl+S comes to it through `needs.submit`. */
 function handOver() {
   const built = buildItem();
   props.modalData.onSave(built);
@@ -199,19 +225,6 @@ function buildItem(): ProjectSectionItem {
   };
 }
 
-function save() {
-  if (exists.value && !isDirty.value) return;
-  // Asked by a press or Ctrl+S, a save it cannot make says why.
-  if (needs.blocked.value) return needs.ask();
-  handOver();
-}
-
-useSaveShortcut(save, {
-  canSave: () => !exists.value || isDirty.value,
-  root: () => modalContainer.value?.root,
-  exclusive: true,
-});
-
 function createInitialItem(data: ModalData): SectionDraft {
   return {
     sectionUuid: data.item?.sectionUuid,
@@ -238,15 +251,21 @@ function sectionLinkDescription(slug: string, publicId: string) {
 
 /**
  * The way to the section's own page, for a section that already exists on the
- * site. It uses the address the section was opened with: an unsaved edit of
- * the slug has no page yet, and the page finds a section by its id and leads
- * on to its address of the moment. A section added here gets one once it is
- * opened again.
+ * site. It uses the address the section was opened with, in the project as
+ * last saved: an unsaved edit of the slug has no page yet, and the page finds
+ * a section by its id and leads on to its address of the moment. A section
+ * added here gets one once it is opened again.
  */
 const pageUrl = computed(() => {
   const opened = props.modalData.item;
-  if (!opened?.sectionUuid || !props.modalData.projectPublicId) return;
-  return sectionLinkDescription(opened.humanReadableSlug, opened.publicId);
+  const project = props.modalData.savedProject;
+  if (!opened?.sectionUuid || !project.publicId) return;
+  return buildProjectSectionUrl(
+    project.humanReadableSlug,
+    project.publicId,
+    opened.humanReadableSlug,
+    opened.publicId,
+  );
 });
 
 function removePeriod(index: number) {
@@ -265,7 +284,7 @@ async function deleteItem() {
 <template>
   <ModalContainer ref="modalContainer" class="max-w-160">
     <template #header>
-      <div class="flex items-center gap-sm p-sm">
+      <div ref="headerRow" class="flex items-center gap-sm p-sm">
         <ModalTitle
           :icon="entityTypeIcon('project-section')"
           :title="phrase.content_section"
@@ -291,24 +310,22 @@ async function deleteItem() {
             :label="phrase.close_modal"
             @click="closeModal"
           />
+          <!-- «Saved» and its check only once the project stored what was
+               handed over. -->
           <ModalHeaderButton
             variant="accent"
             phone-icon="save"
-            :phone-done="exists && !isDirty"
+            :phone-done="isSaved"
             :label="phrase.save"
             :disabled="exists && !isDirty"
             :reason="needs.reason.value"
-            @click="save"
+            @click="needs.submit()"
           >
-            {{ isDirty || !exists ? phrase.save : phrase.saved }}
+            {{ isSaved ? phrase.saved : phrase.save }}
           </ModalHeaderButton>
         </div>
       </div>
-      <HeaderErrorLine
-        inset
-        :message="needs.line.value"
-        :again="needs.asks.value"
-      />
+      <HeaderErrorLine inset v-bind="needs.line.value" />
     </template>
 
     <div class="flex flex-col gap-md p-sm">

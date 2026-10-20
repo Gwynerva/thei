@@ -19,6 +19,47 @@ export function modalMotion(): { duration: number; easing: string } {
   };
 }
 
+/** How a scroll moves: gently, and at once under reduced motion. */
+export function scrollMotion(): ScrollBehavior {
+  return typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ? 'instant'
+    : 'smooth';
+}
+
+/**
+ * Brings an element into sight as `scrollIntoView` does — `block` and
+ * `inline` as there, `block` centred unless told — moving as `scrollMotion`
+ * says, or at once with `instant`. Given `covered`, how far down the window
+ * something stays over what scrolls — a header and the line it shows — an
+ * element already in sight under it and above the window's foot stays where
+ * it is.
+ */
+export function scrollIntoSight(
+  element: Element,
+  {
+    block = 'center',
+    inline,
+    instant = false,
+    covered,
+  }: {
+    block?: ScrollLogicalPosition;
+    inline?: ScrollLogicalPosition;
+    instant?: boolean;
+    covered?: number;
+  } = {},
+) {
+  if (covered !== undefined) {
+    const box = element.getBoundingClientRect();
+    if (box.top >= covered && box.bottom <= window.innerHeight) return;
+  }
+  element.scrollIntoView({
+    block,
+    inline,
+    behavior: instant ? 'instant' : scrollMotion(),
+  });
+}
+
 function cssTime(value: string): number | undefined {
   const text = value.trim();
   const number = Number.parseFloat(text);

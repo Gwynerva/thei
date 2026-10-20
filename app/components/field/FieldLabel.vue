@@ -1,10 +1,17 @@
 <script lang="ts" setup>
+import { wearFieldLabelName } from './field-label';
+
 const props = defineProps<{
   required?: boolean;
   onActivate?: (element: HTMLElement) => void;
 }>();
 
 const root = useTemplateRef('root');
+/**
+ * Its words, without the asterisk and the ✦, name the field's control where
+ * it has no name of its own (`field-label.ts`).
+ */
+const nameId = wearFieldLabelName();
 /** What an AI proposes for the field: the label turns accent, with a ✦. */
 const { place, offered } = useFieldOffers('label');
 /**
@@ -39,7 +46,8 @@ function handleClick() {
     :class="needed ? 'text-text-error' : offered ? 'text-accent' : ''"
     @click="handleClick"
   >
-    <slot></slot
+    <span v-if="nameId" :id="nameId" class="contents"><slot></slot></span
+    ><slot v-else></slot
     ><span
       v-if="required"
       class="relative -top-1 -right-1.5 text-xs transition-colors"

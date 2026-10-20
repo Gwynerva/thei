@@ -46,15 +46,6 @@ export function useLeaveGuard(options: {
   });
 }
 
-export function useSavedForm(
-  isDirty: Ref<boolean>,
-  save: () => void | Promise<void>,
-  canSave: Ref<boolean>,
-) {
-  useSaveShortcut(save, { canSave });
-  useLeaveGuard({ dirty: () => isDirty.value });
-}
-
 /**
  * Whether a form differs from its last save only inside the named fields,
  * wherever in the form they appear.

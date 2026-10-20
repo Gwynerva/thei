@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { normalizeHeadingText } from '#layers/thei/shared/terminal-punctuation';
-import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
+import { accessOptions } from '#layers/thei/app/components/field/access-options';
 import { isContentEmpty } from '#layers/thei/shared/content';
 import type { PageEditData } from '#layers/thei/shared/page';
 import type { FormNeed } from '#layers/thei/app/composables/form-needs';
@@ -141,33 +141,40 @@ const slugTaken = computed(() =>
   ),
 );
 /** What the page still needs before it can be saved, in the form's order. */
-const needs = useFormNeeds(() => {
-  const page = data.value;
-  const list: FormNeed[] = [];
-  if (!page.title.trim())
-    list.push({ key: 'title', label: phrase.value.page_title });
-  if (!page.access)
-    list.push({ key: 'access', label: phrase.value.page_access });
-  if (!page.summary.trim())
-    list.push({ key: 'summary', label: phrase.value.page_summary });
-  const slug = phrase.value.page_slug;
-  if (!page.slug.trim()) list.push({ key: 'slug', label: slug });
-  else if (slugInvalid.value)
-    list.push({
-      key: 'slug',
-      label: slug,
-      problem: phrase.value.page_slug_invalid,
-    });
-  else if (slugTaken.value)
-    list.push({
-      key: 'slug',
-      label: slug,
-      problem: phrase.value.page_slug_already_taken,
-    });
-  if (isContentEmpty(page.content?.data))
-    list.push({ key: 'content', label: phrase.value.page_content });
-  return list;
-});
+const needs = useFormNeeds(
+  () => {
+    const page = data.value;
+    const list: FormNeed[] = [];
+    if (!page.title.trim())
+      list.push({ key: 'title', label: phrase.value.page_title });
+    if (!page.access)
+      list.push({ key: 'access', label: phrase.value.page_access });
+    if (!page.summary.trim())
+      list.push({ key: 'summary', label: phrase.value.page_summary });
+    const slug = phrase.value.page_slug;
+    if (!page.slug.trim()) list.push({ key: 'slug', label: slug });
+    else if (slugInvalid.value)
+      list.push({
+        key: 'slug',
+        label: slug,
+        problem: phrase.value.page_slug_invalid,
+      });
+    else if (slugTaken.value)
+      list.push({
+        key: 'slug',
+        label: slug,
+        problem: phrase.value.page_slug_already_taken,
+      });
+    if (isContentEmpty(page.content?.data))
+      list.push({ key: 'content', label: phrase.value.page_content });
+    return list;
+  },
+  {
+    ready: () => !saving.value && (!isEdit.value || dirty.value),
+    save,
+    error,
+  },
+);
 const canSave = computed(
   () => !saving.value && !needs.blocked.value && (!isEdit.value || dirty.value),
 );
@@ -212,10 +219,8 @@ watch(
   },
 );
 
+/** The save itself; a press or Ctrl+S comes to it through `needs.submit`. */
 async function save() {
-  if (saving.value || (isEdit.value && !dirty.value)) return;
-  // Asked by a press or Ctrl+S, a save it cannot make says why.
-  if (needs.blocked.value) return needs.ask();
   saving.value = true;
   error.value = undefined;
   serverSlugError.value = undefined;
@@ -304,10 +309,6 @@ function emptyData(): PageEditData {
   };
 }
 
-// Ctrl+S on a page not ready to save says what it still needs.
-useSaveShortcut(save, {
-  canSave: () => !saving.value && (!isEdit.value || dirty.value),
-});
 await useAdminTabTitle(
   computed(() =>
     isEdit.value ? phrase.value.edit_page : phrase.value.new_page,
@@ -316,44 +317,17 @@ await useAdminTabTitle(
 </script>
 
 <template>
-  <StickyGlassHeader
-    width="var(--width-wide)"
-    :error="error ?? needs.line.value"
-    :error-again="needs.asks.value"
-  >
-    <div class="flex items-center justify-between gap-xs py-xs">
-      <div
-        class="flex min-w-0 items-center gap-xs text-lg font-bold sm:text-xl"
-      >
-        <Icon name="page" />
-        <span class="truncate">{{
-          isEdit ? phrase.edit_page : phrase.new_page
-        }}</span>
-      </div>
-      <div class="flex items-center gap-xs">
-        <AiEntityButton />
-        <Button
-          v-if="isEdit"
-          variant="delete"
-          size="icon"
-          class="pointer-coarse:size-11"
-          :aria-label="phrase.delete"
-          :data-title-popup="phrase.delete"
-          @click="remove"
-        >
-          <Icon name="delete" />
-        </Button>
-        <AdminSaveButton
-          :label="isEdit ? (dirty ? phrase.save : phrase.saved) : phrase.create"
-          :saving
-          :done="isEdit && !dirty"
-          :disabled="saving || (isEdit && !dirty)"
-          :reason="needs.reason.value"
-          @click="save"
-        />
-      </div>
-    </div>
-  </StickyGlassHeader>
+  <AdminSaveHeader
+    :title="isEdit ? phrase.edit_page : phrase.new_page"
+    icon="page"
+    :dirty
+    :saving
+    :creating="!isEdit"
+    :deletable="isEdit"
+    :needs
+    @delete="remove"
+    ><AiEntityButton
+  /></AdminSaveHeader>
 
   <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
     <AiFormOffers />
@@ -376,20 +350,7 @@ await useAdminTabTitle(
           <FieldOptions
             v-model="data.access"
             direction="row"
-            :options="{
-              [ProjectEventAccessLevel.Public]: {
-                icon: 'lock-open',
-                title: phrase.public,
-              },
-              [ProjectEventAccessLevel.LinkOnly]: {
-                icon: 'lock-partial',
-                title: phrase.link_only,
-              },
-              [ProjectEventAccessLevel.Private]: {
-                icon: 'lock-close',
-                title: phrase.private,
-              },
-            }"
+            :options="accessOptions(phrase)"
           />
         </Field>
       </div>

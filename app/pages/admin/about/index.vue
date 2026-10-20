@@ -61,23 +61,24 @@ const pageDetails = ref<ProfilePageLink[]>(initial.pinnedPages);
 const saving = ref(false);
 const error = ref<string>();
 /** What the profile still needs before it can be saved, in the page's order. */
-const needs = useFormNeeds(() => {
-  const list: FormNeed[] = [];
-  if (!data.value.displayName.trim())
-    list.push({ key: 'name', label: phrase.value.profile_name });
-  if (data.value.facts.some((fact) => !fact.name.trim() || !fact.value.trim()))
-    list.push({
-      key: 'facts',
-      label: phrase.value.profile_custom_facts,
-      problem: phrase.value.profile_fact_incomplete,
-    });
-  return list;
-});
-const canSave = computed(
-  () => isDirty.value && !saving.value && !needs.blocked.value,
+const needs = useFormNeeds(
+  () => {
+    const list: FormNeed[] = [];
+    if (!data.value.displayName.trim())
+      list.push({ key: 'name', label: phrase.value.profile_name });
+    if (
+      data.value.facts.some((fact) => !fact.name.trim() || !fact.value.trim())
+    )
+      list.push({
+        key: 'facts',
+        label: phrase.value.profile_custom_facts,
+        problem: phrase.value.profile_fact_incomplete,
+      });
+    return list;
+  },
+  { ready: () => isDirty.value && !saving.value, save, error },
 );
-// Ctrl+S on changes not ready to save says what they still need.
-const canAsk = computed(() => isDirty.value && !saving.value);
+useLeaveGuard({ dirty: () => isDirty.value });
 const oldAvatars = computed(() =>
   avatars.items.value.filter(
     (a) =>
@@ -112,10 +113,8 @@ const usageDelta = computed(() => {
     add(avatars.items.value.find((a) => a.id === id)?.assetUuid, -1);
   return addStatusUsageDelta(delta, data.value, savedStatuses.value);
 });
+/** The save itself; a press or Ctrl+S comes to it through `needs.submit`. */
 async function save() {
-  if (!canAsk.value) return;
-  // Asked by a press or Ctrl+S, a save it cannot make says why.
-  if (needs.blocked.value) return needs.ask();
   saving.value = true;
   error.value = undefined;
   try {
@@ -147,7 +146,6 @@ async function save() {
     saving.value = false;
   }
 }
-useSavedForm(isDirty, save, canAsk);
 const factAnchor = useTemplateRef<HTMLElement>('factAnchor');
 const factOpen = ref(false);
 const factName = ref('');
@@ -183,12 +181,8 @@ const birthDateMax = new Date();
       :title="phrase.about_me"
       icon="person"
       :dirty="isDirty"
-      :saving="saving"
-      :can-save="canSave"
-      :reason="isDirty ? needs.reason.value : undefined"
-      :error="error ?? needs.line.value"
-      :error-again="needs.asks.value"
-      @save="save"
+      :saving
+      :needs
       ><AiEntityButton
     /></AdminSaveHeader>
     <fieldset

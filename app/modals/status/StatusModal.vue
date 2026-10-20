@@ -51,6 +51,14 @@ const assetUuid = ref<string | null>(initial?.assetUuid ?? null);
 const media = ref<MediaDescriptor | undefined>(initial?.media);
 const modalContainer =
   useTemplateRef<InstanceType<typeof ModalContainer>>('modalContainer');
+const headerRow = useTemplateRef<HTMLElement>('headerRow');
+const dirty = computed(() =>
+  initial
+    ? text.value !== initial.text ||
+      date.value !== initial.date ||
+      assetUuid.value !== (initial.assetUuid ?? null)
+    : Boolean(text.value || assetUuid.value),
+);
 // A regular status keeps something to say; a blank one is empty, which only
 // a new or an already empty status may be, and only where the order allows.
 const needs = useFormNeeds(
@@ -67,19 +75,15 @@ const needs = useFormNeeds(
       list.push({ key: 'text', label: phrase.value.profile_status });
     return list;
   },
-  { root: () => modalContainer.value?.root },
+  {
+    root: () => modalContainer.value?.root,
+    header: () => headerRow.value,
+    ready: () => !initial || dirty.value,
+    save,
+  },
 );
-const dirty = computed(() =>
-  initial
-    ? text.value !== initial.text ||
-      date.value !== initial.date ||
-      assetUuid.value !== (initial.assetUuid ?? null)
-    : Boolean(text.value || assetUuid.value),
-);
+/** The save itself; a press or Ctrl+S comes to it through `needs.submit`. */
 function save() {
-  if (initial && !dirty.value) return;
-  // Asked by a press or Ctrl+S, a save it cannot make says why.
-  if (needs.blocked.value) return needs.ask();
   const value = normalizeCaptionText(text.value.trim());
   const id = initial?.id ?? crypto.randomUUID();
   emit(
@@ -97,11 +101,6 @@ function save() {
       : { type: 'save', id, kind: 'empty', date: date.value },
   );
 }
-useSaveShortcut(save, {
-  canSave: () => !initial || dirty.value,
-  root: () => modalContainer.value?.root,
-  exclusive: true,
-});
 useModalCloseGuard(
   () => !dirty.value || window.confirm(phrase.value.unsaved_modal_confirm),
 );
@@ -109,7 +108,10 @@ useModalCloseGuard(
 <template>
   <ModalContainer ref="modalContainer" class="max-w-120">
     <template #header
-      ><div class="flex items-center justify-between gap-sm p-sm">
+      ><div
+        ref="headerRow"
+        class="flex items-center justify-between gap-sm p-sm"
+      >
         <ModalTitle
           :title="
             initial ? phrase.profile_edit_status : phrase.profile_new_status
@@ -119,13 +121,10 @@ useModalCloseGuard(
           :label="initial ? phrase.save : phrase.add"
           :disabled="Boolean(initial) && !dirty"
           :reason="needs.reason.value"
-          @click="save"
+          @click="needs.submit()"
         />
       </div>
-      <HeaderErrorLine
-        inset
-        :message="needs.line.value"
-        :again="needs.asks.value"
+      <HeaderErrorLine inset v-bind="needs.line.value"
     /></template>
     <div class="flex flex-col gap-md p-md">
       <div class="flex min-w-0 items-start gap-md">

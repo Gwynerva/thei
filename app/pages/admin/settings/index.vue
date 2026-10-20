@@ -87,44 +87,41 @@ const siteUrlError = computed(() =>
     : undefined,
 );
 /** What the settings still need before they can be saved, in the page's order. */
-const needs = useFormNeeds(() => {
-  const list: FormNeed[] = [];
-  if (siteUrlError.value)
-    list.push({
-      key: 'site-url',
-      label: phrase.value.site_url,
-      problem: phrase.value.site_url_invalid_short,
-    });
-  for (const field of analyticsFields)
-    if (analyticsErrors.value[field.key])
+const needs = useFormNeeds(
+  () => {
+    const list: FormNeed[] = [];
+    if (siteUrlError.value)
       list.push({
-        key: `analytics-${field.key}`,
-        label: field.label(),
-        problem: phrase.value.analytics_invalid_short,
+        key: 'site-url',
+        label: phrase.value.site_url,
+        problem: phrase.value.site_url_invalid_short,
       });
-  if (!data.value.secretPhrase.trim())
-    list.push({ key: 'secret-phrase', label: phrase.value.secret_phrase });
-  if (data.value.password !== confirmPassword.value)
-    list.push(
-      confirmPassword.value
-        ? {
-            key: 'repeat-password',
-            label: phrase.value.repeat_password,
-            problem: phrase.value.profile_password_mismatch,
-          }
-        : { key: 'repeat-password', label: phrase.value.repeat_password },
-    );
-  return list;
-});
-const canSave = computed(
-  () => isDirty.value && !saving.value && !needs.blocked.value,
+    for (const field of analyticsFields)
+      if (analyticsErrors.value[field.key])
+        list.push({
+          key: `analytics-${field.key}`,
+          label: field.label(),
+          problem: phrase.value.analytics_invalid_short,
+        });
+    if (!data.value.secretPhrase.trim())
+      list.push({ key: 'secret-phrase', label: phrase.value.secret_phrase });
+    if (data.value.password !== confirmPassword.value)
+      list.push(
+        confirmPassword.value
+          ? {
+              key: 'repeat-password',
+              label: phrase.value.repeat_password,
+              problem: phrase.value.profile_password_mismatch,
+            }
+          : { key: 'repeat-password', label: phrase.value.repeat_password },
+      );
+    return list;
+  },
+  { ready: () => isDirty.value && !saving.value, save, error },
 );
-// Ctrl+S on changes not ready to save says what they still need.
-const canAsk = computed(() => isDirty.value && !saving.value);
+useLeaveGuard({ dirty: () => isDirty.value });
+/** The save itself; a press or Ctrl+S comes to it through `needs.submit`. */
 async function save() {
-  if (!canAsk.value) return;
-  // Asked by a press or Ctrl+S, a save it cannot make says why.
-  if (needs.blocked.value) return needs.ask();
   saving.value = true;
   error.value = undefined;
   try {
@@ -143,7 +140,6 @@ async function save() {
     saving.value = false;
   }
 }
-useSavedForm(isDirty, save, canAsk);
 </script>
 <template>
   <div>
@@ -151,12 +147,8 @@ useSavedForm(isDirty, save, canAsk);
       :title="phrase.site_settings"
       icon="cog"
       :dirty="isDirty"
-      :saving="saving"
-      :can-save="canSave"
-      :reason="isDirty ? needs.reason.value : undefined"
-      :error="error ?? needs.line.value"
-      :error-again="needs.asks.value"
-      @save="save"
+      :saving
+      :needs
     />
     <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
       <div>

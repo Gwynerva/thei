@@ -103,12 +103,19 @@ neutral — and in square icon-only sizes.
 
 `to` makes it a link (`TheiLink`) with the same look. `dragHandle` gives it
 the grab cursor. Disabled, it fades its colours and
-shows the not-allowed cursor.
+shows the not-allowed cursor; `aria-disabled`, left pressable to say why, it
+fades the same and keeps the arrow. `ModalHeaderButton` does the same.
 
 `app/components/admin/AdminSaveButton.vue` takes `label`, `saving`,
 `disabled` (nothing to do), `done` (all of the form saved: the `check`
 square) and `reason` (why it cannot save yet; pressable, the form answering
-the press with `useFormNeeds`'s `ask`).
+the press with `useFormNeeds`'s `submit`). A form's header is
+`app/components/admin/AdminSaveHeader.vue`, which sets them from the form's
+`dirty`, `saving`, `creating` and `useFormNeeds`. The blocked look, its
+hint and the reason a screen reader hears come from `useBlockedReason`
+(`app/composables/form-needs.ts`), for this button and `ModalHeaderButton`
+alike; the phone's square is `app/components/admin/AdminSaveIcons.vue` in
+both.
 
 `app/modals/ModalHeaderButton.vue` takes `label` (required), `icon`,
 `variant` (`default`, `delete`, `accent`), `size` (`default`, `h-9`;
@@ -118,11 +125,20 @@ icon its words give way to on a phone, and `phoneDone` swaps it for `check`:
 both icons stay in the page, one hidden, since pointing an icon's `<use>`
 elsewhere while the owner types in a text ends the browser's run of typing,
 and Ctrl+Z would then stop after the first letter. `AdminSaveButton` keeps
-its two squares the same way. `to`, a path in data, makes it a link with the
+its two squares the same way, with the same `AdminSaveIcons`. `to`, a path in data, makes it a link with the
 same look (`TheiLink` with `external`, the base path added by `sitePath()`):
 the page loads in full, as the admin's other ways to the site do, and Ctrl or
 the middle button opens it in a new tab. `disabled` and `reason` are a
 button's alone.
+
+What is stored, a Save in a modal learns from the form behind it. A text's
+editor reads the stamp a save of the entity puts on each text it stores
+(`stampSavedContent`, `app/composables/saved-form.ts`): a text it wrote
+into the form that still bears the stamp it had then is not stored, the form
+not having saved itself for it while something else waited there. A
+section's modal asks the project form whether its last save holds the
+section as it was handed over (`stored`,
+`app/pages/admin/projects/components/ProjectContentItems.vue`).
 
 ```vue
 <Button
@@ -162,8 +178,15 @@ row that overflows shows first. E2E specs find buttons by their accessible
 name, which an icon-only button must have. `tests/e2e/diary-new-entry.spec.ts`
 checks what the save controls of a new diary entry say, before and after its
 text is written and once the entry is made, and the reason its Create gives
-under a mouse, a finger and Ctrl+S; `tests/e2e/form-needs.spec.ts` does the
-same for every other form, at 1280 and 375 px.
+under a mouse, a finger and Ctrl+S. `tests/e2e/form-needs.spec.ts` checks the
+reason, the line and the marks of a new event, project, page, tag, section
+and status, the profile and the settings — the phone at 375 px with a tap
+for the event, the diary entry and the project, at 375 px for the tag, the
+settings and the section — an edited event and project, a line closed by
+hand, and a refusal of the server giving way to what the form needs.
+`tests/e2e/save-state.spec.ts` checks that a text and a section are called
+saved only once stored, and that a recording's volume slid in a text leaves
+its Save as it is.
 `tests/e2e/admin-sections.spec.ts` follows the eye of a section's modal to
 the section's page, and finds none in a new section's.
 `tests/app/styles/off-variant.test.ts` compiles `off:`.

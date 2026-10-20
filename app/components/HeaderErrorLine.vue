@@ -4,7 +4,9 @@
  * made: under a page's sticky header (`StickyGlassHeader`'s `error`) and
  * under a modal's (`inset`). It wraps as long as its words need, a part of
  * them on a line of its own after each `\n`, the cross staying at its end;
- * closed by hand, it comes back for a new message.
+ * closed by hand, it comes back for a new press, or for a message after
+ * none — not as its words change, which those of a form's needs do with
+ * each field filled.
  *
  * It grows into its room and gives it back as it goes, fading meanwhile,
  * so the form under the header slides rather than jumps; gone, nothing of
@@ -27,9 +29,15 @@ const {
 
 const closed = ref(false);
 watch(
-  () => [message, again],
+  () => again,
   () => {
     closed.value = false;
+  },
+);
+watch(
+  () => Boolean(message),
+  (said) => {
+    if (said) closed.value = false;
   },
 );
 const shown = computed(() => Boolean(message) && !closed.value);

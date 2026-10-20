@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { IconName } from '#thei/icons';
+import { useFieldLabelName } from './field-label';
 
 export interface FieldOptionValue {
   icon?: IconName;
@@ -14,11 +15,11 @@ const { direction = 'row' } = defineProps<{
   options: FieldOptions;
   direction?: 'row' | 'column';
   classes?: string;
-  /** The field's name, its label's words: what the group of options is. */
-  label?: string;
 }>();
 
 const model = defineModel<string>();
+/** The field's label: what the group of options is called. */
+const labelledBy = useFieldLabelName();
 </script>
 
 <!-- Each option is a button pressed while chosen, named by its words; inside
@@ -29,8 +30,8 @@ const model = defineModel<string>();
     <div
       class="flex flex-wrap gap-1 rounded-normal bg-bg-3 p-1 text-sm"
       :class="[direction === 'column' ? 'flex-1 flex-col' : '', classes]"
-      :role="label ? 'group' : undefined"
-      :aria-label="label"
+      :role="labelledBy ? 'group' : undefined"
+      :aria-labelledby="labelledBy"
     >
       <button
         v-for="(option, key) in options"

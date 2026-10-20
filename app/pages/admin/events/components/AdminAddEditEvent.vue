@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { normalizeHeadingText } from '#layers/thei/shared/terminal-punctuation';
-import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
+import { accessOptions } from '#layers/thei/app/components/field/access-options';
 import {
   analyzeContentData,
   isContentEmpty,
@@ -114,26 +114,36 @@ useLeaveGuard({
   pendingUploads: () => pendingUploads.value,
 });
 /** What the event still needs before it can be saved, in the form's order. */
-const needs = useFormNeeds(() => {
-  const data = eventData.value;
-  const list: FormNeed[] = [];
-  if (!data.title.trim())
-    list.push({ key: 'title', label: phrase.value.event_title });
-  if (!data.access)
-    list.push({ key: 'access', label: phrase.value.event_access });
-  if (!data.summary.trim())
-    list.push({ key: 'summary', label: phrase.value.event_summary });
-  if (!data.periods.length)
-    list.push({ key: 'periods', label: phrase.value.event_periods });
-  if (isContentEmpty(data.content?.data))
-    list.push({ key: 'content', label: phrase.value.event_content });
-  if (!data.publicId.trim())
-    list.push({ key: 'link', label: phrase.value.public_id });
-  const action = actionNeed(data.action, phrase.value.event_action);
-  if (action) list.push(action);
-  return list;
-});
-const isValid = computed(() => !needs.blocked.value);
+const needs = useFormNeeds(
+  () => {
+    const data = eventData.value;
+    const list: FormNeed[] = [];
+    if (!data.title.trim())
+      list.push({ key: 'title', label: phrase.value.event_title });
+    if (!data.access)
+      list.push({ key: 'access', label: phrase.value.event_access });
+    if (!data.summary.trim())
+      list.push({ key: 'summary', label: phrase.value.event_summary });
+    if (!data.periods.length)
+      list.push({ key: 'periods', label: phrase.value.event_periods });
+    if (isContentEmpty(data.content?.data))
+      list.push({ key: 'content', label: phrase.value.event_content });
+    if (!data.publicId.trim())
+      list.push({ key: 'link-public-id', label: phrase.value.public_id });
+    const action = actionNeed(
+      phrase.value,
+      data.action,
+      phrase.value.event_action,
+    );
+    if (action) list.push(action);
+    return list;
+  },
+  {
+    ready: () => !saving.value && (!isEdit.value || isDirty.value),
+    save,
+    error: headerError,
+  },
+);
 
 if (isEdit.value) {
   const data = await useRequestFetch()<EventGetResponse>(
@@ -198,10 +208,8 @@ watch(
   },
 );
 
+/** The save itself; a press or Ctrl+S comes to it through `needs.submit`. */
 async function save() {
-  if (saving.value) return;
-  // Asked by a press or Ctrl+S, a save it cannot make says why.
-  if (needs.blocked.value) return needs.ask();
   saving.value = true;
   headerError.value = undefined;
   try {
@@ -236,9 +244,6 @@ async function save() {
   }
 }
 
-useSaveShortcut(save, {
-  canSave: () => !saving.value && (!isEdit.value || isDirty.value),
-});
 await useAdminTabTitle(
   computed(() =>
     isEdit.value ? phrase.value.edit_event : phrase.value.new_event,
@@ -314,7 +319,8 @@ function eventPayload(): EventEditData {
 const CONTENT_FIELDS = ['content', 'descriptionContent', 'notes'];
 
 function saveAfterContentEdit() {
-  if (saving.value || !isValid.value || !isEdit.value || !isDirty.value) return;
+  if (saving.value || needs.blocked.value || !isEdit.value || !isDirty.value)
+    return;
   if (!changedOnlyIn(eventPayload(), savedSnapshot.value, CONTENT_FIELDS))
     return;
   void save();
@@ -367,46 +373,17 @@ function clone<T>(value: T): T {
 </script>
 
 <template>
-  <StickyGlassHeader
-    width="var(--width-wide)"
-    :error="headerError ?? needs.line.value"
-    :error-again="needs.asks.value"
-  >
-    <div class="flex items-center justify-between gap-xs py-xs">
-      <div
-        class="flex min-w-0 items-center gap-xs text-lg font-bold sm:text-xl"
-      >
-        <Icon name="event" />
-        <span class="truncate">{{
-          isEdit ? phrase.edit_event : phrase.new_event
-        }}</span>
-      </div>
-      <div class="flex items-center gap-xs">
-        <AiEntityButton />
-        <Button
-          v-if="isEdit"
-          variant="delete"
-          size="icon"
-          class="pointer-coarse:size-11"
-          :aria-label="phrase.delete"
-          :data-title-popup="phrase.delete"
-          @click="deleteEvent"
-        >
-          <Icon name="delete" />
-        </Button>
-        <AdminSaveButton
-          :label="
-            isEdit ? (isDirty ? phrase.save : phrase.saved) : phrase.create
-          "
-          :saving
-          :done="isEdit && !isDirty"
-          :disabled="saving || (isEdit && !isDirty)"
-          :reason="needs.reason.value"
-          @click="save"
-        />
-      </div>
-    </div>
-  </StickyGlassHeader>
+  <AdminSaveHeader
+    :title="isEdit ? phrase.edit_event : phrase.new_event"
+    icon="event"
+    :dirty="isDirty"
+    :saving
+    :creating="!isEdit"
+    :deletable="isEdit"
+    :needs
+    @delete="deleteEvent"
+    ><AiEntityButton
+  /></AdminSaveHeader>
 
   <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
     <AiFormOffers />
@@ -428,20 +405,7 @@ function clone<T>(value: T): T {
           <FieldOptions
             v-model="eventData.access"
             direction="row"
-            :options="{
-              [ProjectEventAccessLevel.Public]: {
-                icon: 'lock-open',
-                title: phrase.public,
-              },
-              [ProjectEventAccessLevel.LinkOnly]: {
-                icon: 'lock-partial',
-                title: phrase.link_only,
-              },
-              [ProjectEventAccessLevel.Private]: {
-                icon: 'lock-close',
-                title: phrase.private,
-              },
-            }"
+            :options="accessOptions(phrase)"
           />
         </Field>
       </div>

@@ -5,6 +5,7 @@ import {
   provide,
   ref,
   toValue,
+  useId,
   watch,
   type ComputedRef,
   type InjectionKey,
@@ -12,10 +13,10 @@ import {
   type Ref,
 } from 'vue';
 import type { LanguagePhrases } from '#layers/thei/shared/language/types';
+import { scrollIntoSight } from '#layers/thei/app/modals/layer-motion';
 import {
   projectActionIssueWords,
   projectActionIssues,
-  projectActionValidationError,
   type ProjectActionEditData,
 } from '#layers/thei/shared/project-action';
 
@@ -76,25 +77,24 @@ export function formNeedsWords(
  * The action button of a project or an event, when it cannot be saved as it
  * is set: called by its section's title, with what it still lacks — the
  * words its own box says them in. Its box is its place (`data-need`).
+ *
+ * What it lacks is all the server would refuse in a button set in its box:
+ * the box offers only the targets, icons and backgrounds there are.
  */
 export function actionNeed(
+  phrase: LanguagePhrases,
   action: ProjectActionEditData | undefined,
   label: string,
 ): FormNeed | undefined {
-  if (!action) return undefined;
-  const issues = projectActionIssues(action);
-  if (issues.length)
-    return {
-      key: 'action',
-      label,
-      problem: phrase.value.project_action_needs(
-        issues
-          .map((issue) => projectActionIssueWords(phrase.value, issue))
-          .join(', '),
-      ),
-    };
-  const error = projectActionValidationError(action);
-  return error ? { key: 'action', label, problem: error } : undefined;
+  const issues = action ? projectActionIssues(action) : [];
+  if (!issues.length) return undefined;
+  return {
+    key: 'action',
+    label,
+    problem: phrase.project_action_needs(
+      issues.map((issue) => projectActionIssueWords(phrase, issue)).join(', '),
+    ),
+  };
 }
 
 interface FormNeedsContext {
@@ -109,45 +109,77 @@ export const FIELD_NEED_MARKED: InjectionKey<Readonly<Ref<boolean>>> = Symbol(
   'thei-field-need-marked',
 );
 
+/** The line under a form's header: its words, and `again` for a new press. */
+export interface FormNeedsLine {
+  message?: string;
+  /**
+   * Each save asked for that could not be made, counted: a line closed by
+   * hand comes back for a new press (`HeaderErrorLine`'s `again`).
+   */
+  again: number;
+}
+
+export interface FormNeedsOptions {
+  /** Where the fields are, for a form inside a modal; the page otherwise. */
+  root?: () => HTMLElement | null | undefined;
+  /**
+   * The header the fields go under, for a form inside a modal: a field
+   * brought into view clears its foot. A page's is its sticky header, under
+   * the admin bar.
+   */
+  header?: () => HTMLElement | null | undefined;
+  /**
+   * Whether a save is to be asked for at all: something to save, and no
+   * save under way. A press or Ctrl+S does nothing otherwise.
+   */
+  ready?: () => boolean;
+  /**
+   * The save itself, made by a press or Ctrl+S once the form needs nothing
+   * more. Given it, the form's Ctrl+S is registered here — inside `root`, a
+   * modal's own.
+   */
+  save?: () => unknown;
+  /**
+   * Why the last save failed, as the server said: shown on the same line,
+   * ahead of what the form needs, and cleared by a press that cannot save —
+   * it was said of the form as it was then.
+   */
+  error?: Ref<string | undefined>;
+}
+
 /**
  * A form's needs, said where the owner looks. Its Save, pressable even
  * while it cannot save, carries them as its `reason`; a press of it, or
- * Ctrl+S, asks: the line under the header says them, the fields they are
- * about are marked at their labels (`Field`'s `need`), and the first of them
- * is brought into view when it is out of it. Filled, the line and the marks
- * go by themselves.
+ * Ctrl+S, goes to `submit`, which saves or asks: the line under the header
+ * says them, the fields they are about are marked at their labels
+ * (`Field`'s `need`), and the first of them is brought into view when it is
+ * out of it. Filled, the line and the marks go by themselves.
  */
 export function useFormNeeds(
   needs: MaybeRefOrGetter<FormNeed[]>,
-  options: {
-    /** Where the fields are, for a form inside a modal; the page otherwise. */
-    root?: () => HTMLElement | null | undefined;
-  } = {},
+  options: FormNeedsOptions = {},
 ) {
   const list = computed(() => toValue(needs));
   const blocked = computed(() => list.value.length > 0);
   const stickyHeader = useStickyHeaderContext();
   const asked = ref(false);
+  const asks = ref(0);
   const reason = computed(() =>
     blocked.value
       ? formNeedsWords(phrase.value, list.value).join('\n')
       : undefined,
   );
-  const line: ComputedRef<string | undefined> = computed(() =>
-    asked.value && blocked.value
-      ? formNeedsWords(phrase.value, list.value, true).join('\n')
-      : undefined,
-  );
+  const line: ComputedRef<FormNeedsLine> = computed(() => ({
+    message:
+      options.error?.value ??
+      (asked.value && blocked.value
+        ? formNeedsWords(phrase.value, list.value, true).join('\n')
+        : undefined),
+    again: asks.value,
+  }));
   watch(blocked, (now) => {
     if (!now) asked.value = false;
   });
-
-  /**
-   * Each save asked for that could not be made, counted: the line takes it
-   * as `again`, so one closed by hand comes back for a new press, while one
-   * on show stays as it is.
-   */
-  const asks = ref(0);
 
   /** A save asked for that cannot be made: said, and its fields shown. */
   function ask() {
@@ -156,6 +188,21 @@ export function useFormNeeds(
     void nextTick(showFirst);
   }
 
+  /** A press of the Save, or Ctrl+S: the save, or what it still needs. */
+  function submit() {
+    if (options.ready && !options.ready()) return;
+    if (!blocked.value) return options.save?.();
+    if (options.error) options.error.value = undefined;
+    ask();
+  }
+
+  if (options.save)
+    useSaveShortcut(submit, {
+      canSave: () => options.ready?.() ?? true,
+      root: options.root,
+      exclusive: Boolean(options.root),
+    });
+
   function showFirst() {
     const first = list.value[0];
     const root = options.root?.() ?? document;
@@ -163,15 +210,12 @@ export function useFormNeeds(
       first &&
       root.querySelector<HTMLElement>(`[data-need="${CSS.escape(first.key)}"]`);
     if (!element || !element.getClientRects().length) return;
-    const box = element.getBoundingClientRect();
-    // Under the header, the line it now shows and a margin: in sight.
-    const covered = (stickyHeader?.height.value ?? 0) + 96;
-    if (box.top >= covered && box.bottom <= window.innerHeight) return;
-    element.scrollIntoView({
-      block: 'center',
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        ? 'auto'
-        : 'smooth',
+    // Under the header, the line it now shows and a margin: in sight. A
+    // modal's header is where it is; a page's stands under the admin bar.
+    scrollIntoSight(element, {
+      covered: options.header
+        ? (options.header()?.getBoundingClientRect().bottom ?? 0) + 48
+        : (stickyHeader?.height.value ?? 0) + 96,
     });
   }
 
@@ -179,7 +223,38 @@ export function useFormNeeds(
     marked: (key) => asked.value && list.value.some((need) => need.key === key),
   });
 
-  return { needs: list, blocked, reason, line, asks, ask };
+  return { needs: list, blocked, reason, line, submit };
+}
+
+/**
+ * A button that cannot act yet but stays pressable, to say why: what its
+ * form still needs (`reason`, a line per need). It looks disabled
+ * (`aria-disabled`, `off:`), its hint is its label in bold over the reason
+ * in italic, and a screen reader hears the reason with it, from a hidden
+ * element of the button's own (`reasonId`). With nothing to do — `disabled`
+ * — or no reason, it is not blocked.
+ */
+export function useBlockedReason(
+  button: () => { label: string; reason?: string; disabled?: boolean },
+) {
+  const reasonId = useId();
+  const blocked = computed(() => {
+    const { reason, disabled } = button();
+    return Boolean(!disabled && reason);
+  });
+  const attributes = computed(() => {
+    if (!blocked.value) return {};
+    const { label, reason } = button();
+    return {
+      'aria-disabled': 'true' as const,
+      'aria-describedby': reasonId,
+      ...titlePopup(
+        { text: label, bold: true },
+        ...reason!.split('\n').map((text) => ({ text, italic: true })),
+      ),
+    };
+  });
+  return { blocked, reasonId, attributes };
 }
 
 export function injectFormNeeds() {

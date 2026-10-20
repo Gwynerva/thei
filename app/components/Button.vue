@@ -56,7 +56,8 @@ const sizeClasses = {
   <component
     :is="to ? TheiLink : 'button'"
     :to
-    class="text-sm transition-colors off:cursor-not-allowed"
+    class="text-sm transition-colors disabled:cursor-not-allowed
+      aria-disabled:cursor-default"
     :class="[
       variantClasses[variant],
       sizeClasses[size],
