@@ -30,7 +30,7 @@ import type {
 
 /** The format this reader knows, and the highest revision of it. */
 export const READS_FORMAT = 1;
-export const READS_REVISION = 0;
+export const READS_REVISION = 1;
 
 export const ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;

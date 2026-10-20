@@ -372,6 +372,22 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
     };
   };
 
+  // Keys the admin's forms hold that the seeder does not know: a field added
+  // to a form without its place here (tests/lab/archive/fields.ts).
+  const unknownKeys = new Set<string>();
+  const noteUnknownKeys = (formKind: string, form: Record<string, unknown>) => {
+    const keys = FORM_KEYS[formKind]!;
+    for (const key of Object.keys(form))
+      if (
+        !keys.written.includes(key) &&
+        !keys.kept.includes(key) &&
+        !key.endsWith('Media') &&
+        !key.endsWith('Size') &&
+        !key.startsWith('action')
+      )
+        unknownKeys.add(`${formKind}.${key}`);
+  };
+
   // ----------------------------------------------------------------- tags
   const tagItems = new Map<
     string,
@@ -411,6 +427,7 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
         continue;
       }
       site.ok(`Reading ${ref}`, existing);
+      noteUnknownKeys('tag', existing.body);
       if (
         recorded(ref)?.fingerprint === fingerprint &&
         recorded(ref)?.version === existing.body.version
@@ -823,7 +840,6 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
 
   log('Writing links, relations and statuses');
   finalPass = true;
-  const unknownKeys = new Set<string>();
   for (const kind of kinds) {
     let kindSaved = 0;
     await inPool(kind.items, 4, async ({ ref, item }) => {
@@ -838,23 +854,16 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
           await site.request('GET', `${kind.route}/${uuid}`),
         );
         const form = read.body;
-        const formKind =
+        noteUnknownKeys(
           kind === diaryKind
             ? 'diary'
             : kind === pageKind
               ? 'page'
               : kind === projectKind
                 ? 'project'
-                : 'event';
-        for (const key of Object.keys(form))
-          if (
-            !FORM_KEYS[formKind]!.written.includes(key) &&
-            !FORM_KEYS[formKind]!.kept.includes(key) &&
-            !key.endsWith('Media') &&
-            !key.endsWith('Size') &&
-            !key.startsWith('action')
-          )
-            unknownKeys.add(`${formKind}.${key}`);
+                : 'event',
+          form,
+        );
         const desired = {
           ...kind.desired(item, ref, form),
           relations: relationsOf(ref),
@@ -1252,6 +1261,7 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
     [event.banner, ...event.files.map((f) => f.file)].forEach((id) =>
       place(id, refOf.event(event)),
     );
+  for (const tag of archive.tags) place(tag.icon, refOf.tag(tag));
   for (const file of archive.files) {
     const site = uploaded.get(file.id)!;
     const release = source.release?.files[file.id];

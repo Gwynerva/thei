@@ -210,7 +210,7 @@ export function validateArchive(
 
   if (archive.person) {
     const person = archive.person;
-    for (const avatar of person.avatars) placed(person.file, avatar, 'picture');
+    for (const avatar of person.avatars) placed(person.file, avatar, 'visual');
     placed(person.file, person.banner, 'visual');
     placed(person.file, person.favicon, 'picture');
     if (person.birthDate) day(person.file, person.birthDate, 'birthDate');
@@ -219,10 +219,12 @@ export function validateArchive(
         error(person.file, `pinned "${page}" is not a page of the archive`);
     statuses(person.file, person.statuses);
   }
-  for (const tag of archive.tags) placed(tag.file, tag.icon, 'picture');
-  for (const page of archive.pages) placed(page.file, page.icon, 'picture');
+  // An icon may be a picture or a video, as the admin takes it; a favicon and
+  // an action's icon and background stay pictures.
+  for (const tag of archive.tags) placed(tag.file, tag.icon, 'visual');
+  for (const page of archive.pages) placed(page.file, page.icon, 'visual');
   for (const project of archive.projects) {
-    placed(project.file, project.icon, 'picture');
+    placed(project.file, project.icon, 'visual');
     placed(project.file, project.banner, 'visual');
     for (const item of project.files) placed(project.file, item.file, 'any');
     for (const item of project.showcase)

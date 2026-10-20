@@ -1,6 +1,7 @@
 // What an archive uses of what Thei can show (FORMAT.md, "What an archive
 // covers"): every construct of the texts, every access level, every kind of
-// period, status, relation and file — counted, and held against a minimum.
+// period, status, relation and file, tags with an icon and without, icons
+// that are pictures and videos — counted, and held against a minimum.
 import { resolveDay } from './dates';
 import type { TextScan } from './dialect';
 import type { Archive } from './model';
@@ -104,6 +105,19 @@ export function archiveUsage(
       add(section.periods.length ? 'section: dated' : 'section: general');
     }
 
+  // Tags: a tag may carry an icon, and most do not.
+  for (const tag of archive.tags)
+    add(tag.icon ? 'tag: with an icon' : 'tag: without an icon');
+  // Icons of tags, pages and projects: a picture or a video.
+  const kindOf = new Map(archive.files.map((file) => [file.id, file.kind]));
+  for (const icon of [
+    ...archive.tags.map((tag) => tag.icon),
+    ...archive.pages.map((page) => page.icon),
+    ...archive.projects.map((project) => project.icon),
+  ])
+    if (icon)
+      add(kindOf.get(icon) === 'video' ? 'icon: a video' : 'icon: a picture');
+
   // Periods.
   const allPeriods = [
     ...archive.events.flatMap((event) => event.periods),
@@ -168,6 +182,7 @@ export function archiveUsage(
   }
   for (const event of archive.events)
     [event.banner, ...event.files.map((f) => f.file)].forEach(place);
+  for (const tag of archive.tags) place(tag.icon);
   add(
     'file: in more than one place',
     [...places.values()].filter((n) => n > 1).length,
@@ -194,6 +209,13 @@ export function archiveUsage(
     for (const access of ['public', 'link-only', 'private'])
       need(`access: ${kind} ${access}`, 1);
   for (const name of ['section: private', 'section: dated', 'section: general'])
+    need(name, 1);
+  for (const name of [
+    'tag: with an icon',
+    'tag: without an icon',
+    'icon: a picture',
+    'icon: a video',
+  ])
     need(name, 1);
   for (const precision of ['exact', 'day', 'month', 'year'])
     need(`period: precision ${precision}`, 1);

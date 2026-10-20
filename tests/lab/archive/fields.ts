@@ -189,7 +189,7 @@ export const FORM_KEYS: Record<string, { written: string[]; kept: string[] }> =
         'synonyms',
         'iconAssetUuid',
       ],
-      kept: ['tagUuid', 'version', 'iconMedia', 'usageCounts'],
+      kept: ['tagUuid', 'version', 'iconMedia', 'usageStats'],
     },
     profile: {
       written: [
