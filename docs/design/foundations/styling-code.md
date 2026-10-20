@@ -55,7 +55,7 @@ scoped rule for what no utility expresses, everything else in the template.
 </style>
 ```
 
-Two traps of scoped CSS:
+Three traps of scoped CSS:
 
 - `:global(.a) .b` compiles to `.a` alone: everything after `:global()` is
   dropped, and the rule styles the ancestor. No `:global` is needed to key an
@@ -66,6 +66,16 @@ Two traps of scoped CSS:
   parent's class when rendered on the server. Set `inheritAttrs: false` and
   bind `$attrs` to the element inside the transition, as
   `app/components/admin/AdminAiSessions.vue` does.
+- A parent's `:deep(.b)` and the child's own scoped `.b` weigh the same, one
+  class and one attribute each, so the stylesheet loaded last wins. In a
+  production build that order depends on the page a visit began on: the
+  server inlines the page's styles and leaves a stylesheet linked only while
+  some of its components did not render, and the client links the others
+  after it, an order a client navigation keeps. Write a component's defaults
+  that a parent may override in `:where()`, as `.media-backdrop` in
+  `app/components/MediaSurface.vue` is: Vue scopes inside it, the rule weighs
+  nothing, and it still beats the utilities, which sit in a layer.
+  `bun run dev` inlines nothing and never shows it.
 
 ## Why
 

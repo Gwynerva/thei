@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { screenshot } from './screenshots';
 
 let releaseAmbientSlow: () => void;
@@ -76,6 +76,39 @@ async function expectEdgeMedia(
   }
 }
 
+/**
+ * On a wide screen the hero banner's blurred copy keeps the banner's centre
+ * and shape, enlarged until it covers the whole hero: the hero's black ground
+ * never shows past it.
+ */
+async function expectBackdropCovers(banner: Locator) {
+  const box = (await banner.boundingBox())!;
+  const main = (await banner.locator('[data-media-main]').boundingBox())!;
+  const background = (await banner
+    .locator('[data-media-original-pair] .media-backdrop')
+    .boundingBox())!;
+  expect(background.x + background.width / 2).toBeCloseTo(
+    main.x + main.width / 2,
+    1,
+  );
+  expect(background.y + background.height / 2).toBeCloseTo(
+    main.y + main.height / 2,
+    1,
+  );
+  expect(background.width / background.height).toBeCloseTo(
+    main.width / main.height,
+    2,
+  );
+  expect(background.x).toBeLessThanOrEqual(box.x);
+  expect(background.x + background.width).toBeGreaterThanOrEqual(
+    box.x + box.width,
+  );
+  expect(background.y).toBeLessThanOrEqual(box.y);
+  expect(background.y + background.height).toBeGreaterThanOrEqual(
+    box.y + box.height,
+  );
+}
+
 test.beforeEach(async ({ page }) => {
   await images(page);
 });
@@ -137,29 +170,7 @@ for (const width of [390, 1280]) {
         banner.locator('[data-media-original-pair] img.media-backdrop'),
       ).toHaveCSS('object-fit', 'cover');
       if (width === 1280) {
-        const background = await banner
-          .locator('[data-media-original-pair] .media-backdrop')
-          .boundingBox();
-        expect(background!.x + background!.width / 2).toBeCloseTo(
-          mainBox!.x + mainBox!.width / 2,
-          1,
-        );
-        expect(background!.y + background!.height / 2).toBeCloseTo(
-          mainBox!.y + mainBox!.height / 2,
-          1,
-        );
-        expect(background!.width / background!.height).toBeCloseTo(
-          mainBox!.width / mainBox!.height,
-          2,
-        );
-        expect(background!.x).toBeLessThanOrEqual(box!.x);
-        expect(background!.x + background!.width).toBeGreaterThanOrEqual(
-          box!.x + box!.width,
-        );
-        expect(background!.y).toBeLessThanOrEqual(box!.y);
-        expect(background!.y + background!.height).toBeGreaterThanOrEqual(
-          box!.y + box!.height,
-        );
+        await expectBackdropCovers(banner);
         // Edge media along the right of the content's column: the banner's
         // middle stays within the column, its right side covers the
         // column's edge, never leaving a glow there, and may run past it.
@@ -337,6 +348,24 @@ for (const width of [390, 1280]) {
     }
   });
 }
+
+// In a production build the styles of a page are inlined, and a stylesheet
+// keeps its link only while some of its components did not render: a hero
+// without a banner leaves the hero's linked, and hydration adds the media's
+// after it. The banner a link then opens must still read as on a reload.
+test('a banner opened by a link covers the hero with its blurred copy', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await open(page, '/ambient-regression?banner=none&kind=section');
+  const hero = page.locator('[data-test-hero]');
+  await expect(hero.locator('.hero-banner')).toHaveCount(0);
+  await page.locator('[data-to-banner]').click();
+  await expect(page).toHaveURL(/banner=wide/);
+  const banner = hero.locator('.hero-banner');
+  await expect(banner).toHaveAttribute('data-media-final-state', 'visible');
+  await expectBackdropCovers(banner);
+});
 
 test('slow video keeps the color pulse until ready, then plays with its backdrop drawn from its frames', async ({
   page,
