@@ -524,12 +524,23 @@
 
 /*
  * The place a find of the search led to (`app/composables/search-landing.ts`):
- * lit in the accent for a moment, fading back into the page, with the words
- * found marked in it. While the reader is there, what it cuts short is read
- * in full: a note clamped to two lines, a title cut with an ellipsis.
+ * a light laid over it — tinted, ringed and glowing in the accent — that
+ * stays two seconds as it is and fades over four, as long as `LIT_MS` keeps
+ * it; the words found stay marked in it. The light lets every click through, and stands under the sticky
+ * headers (`z-10`). While the reader is there, what the place cuts short is
+ * read in full: a note clamped to two lines, a title cut with an ellipsis.
  */
-[data-search-landing] {
-  animation: search-landing 2.4s ease-out;
+.search-landing-light {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9;
+  pointer-events: none;
+  background-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+  box-shadow:
+    inset 0 0 0 0.2rem var(--color-accent),
+    0 0 2rem 0.5rem color-mix(in oklab, var(--color-accent) 85%, transparent);
+  animation: search-landing 4s linear 2s both;
 }
 
 ::highlight(search-found) {
@@ -555,21 +566,16 @@
 
 @keyframes search-landing {
   from {
-    background-color: color-mix(in oklab, var(--color-accent) 16%, transparent);
-    box-shadow: 0 0 0 0.4em
-      color-mix(in oklab, var(--color-accent) 16%, transparent);
+    opacity: 1;
   }
   to {
-    background-color: transparent;
-    box-shadow: 0 0 0 0.4em transparent;
+    opacity: 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-search-landing] {
-    animation-duration: 0.01s;
-    outline: 2px solid color-mix(in oklab, var(--color-accent) 40%, transparent);
-    outline-offset: 0.3em;
+  .search-landing-light {
+    animation: none;
   }
 }
 

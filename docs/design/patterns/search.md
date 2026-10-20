@@ -195,9 +195,12 @@ the file, shows a list cut short in full, opens the history of statuses and
 reads it on to the day, turns the relations block to the kind and its pages
 to the entity, shows «About me» and the facts in full, opens the sidebar's
 sheet on a phone, and opens the hint, the link's card or the file's window
-where the words are only there. The place is lit for a moment, the words are
-marked in it, and what it cuts short is read in full while the reader is
-there.
+where the words are only there. The place is lit by a layer laid over it,
+so a picture never hides it: tinted, ringed and glowing in the accent, two
+seconds as it is and four fading, every click going through it. The words
+are marked in it, and what it cuts short is read in full while the reader is
+there. The router looks for no element by such a hash (`app/router.options.ts`):
+another page opens at its top, and the landing brings the place into view.
 
 - A part of a page that hides what a find may lead to takes part: it marks
   its places (`data-block`, `data-file`, `data-relation-href`, `data-link`,

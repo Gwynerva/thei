@@ -62,7 +62,10 @@ export function holdsLandingBlock(
 }
 
 const HIGHLIGHT = 'search-found';
-const LIT_MS = 2400;
+/** As long as the place stays lit: its fading in `app/styles/content.css`. */
+const LIT_MS = 6000;
+/** How far the light reaches past the place, in pixels. */
+const LIGHT_PAD = 6;
 const frame = () =>
   new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 const pause = (ms: number) =>
@@ -191,6 +194,44 @@ function holderOfWords(element: Element, words: string[]) {
   return undefined;
 }
 
+/**
+ * The light over a place: a layer of its own laid over it, so a picture never
+ * hides it, and letting every click through. It is fixed to the window and
+ * follows the place frame by frame while it fades — the page scrolling, a
+ * gallery turning, a sheet sliding up take it along — and it is put in the
+ * place's dialog, if any, over which nothing of the body is drawn. Returns
+ * what puts it out.
+ */
+function light(place: Element): () => void {
+  const layer = document.createElement('div');
+  layer.className = 'search-landing-light';
+  layer.setAttribute('aria-hidden', 'true');
+  const radius = parseFloat(getComputedStyle(place).borderTopLeftRadius) || 0;
+  layer.style.borderRadius = `${radius + LIGHT_PAD}px`;
+  (place.closest('dialog') ?? document.body).append(layer);
+  let x = 0;
+  let y = 0;
+  let next = 0;
+  const follow = () => {
+    const at = place.getBoundingClientRect();
+    layer.style.visibility = shown(place) ? '' : 'hidden';
+    // Moved by how far it stands from the place, whatever its fixed position
+    // is measured from: a dialog sliding in is a frame of its own.
+    const now = layer.getBoundingClientRect();
+    x += at.left - LIGHT_PAD - now.left;
+    y += at.top - LIGHT_PAD - now.top;
+    layer.style.translate = `${x}px ${y}px`;
+    layer.style.width = `${at.width + 2 * LIGHT_PAD}px`;
+    layer.style.height = `${at.height + 2 * LIGHT_PAD}px`;
+    next = requestAnimationFrame(follow);
+  };
+  follow();
+  return () => {
+    cancelAnimationFrame(next);
+    layer.remove();
+  };
+}
+
 /** A pointer coming to rest on it: what shows its hint or its card. */
 function hover(element: Element) {
   element.dispatchEvent(
@@ -201,12 +242,14 @@ function hover(element: Element) {
 export function useSearchLanding() {
   const route = useRoute();
   let unlight: ReturnType<typeof setTimeout> | undefined;
+  let putOut: (() => void) | undefined;
   let found: Element | undefined;
   let run = 0;
 
   function clear() {
     clearTimeout(unlight);
-    found?.removeAttribute('data-search-landing');
+    putOut?.();
+    putOut = undefined;
     found?.removeAttribute('data-search-found');
     found = undefined;
     if (typeof CSS !== 'undefined' && 'highlights' in CSS)
@@ -268,11 +311,11 @@ export function useSearchLanding() {
       });
     found = place;
     place.setAttribute('data-search-found', '');
-    place.setAttribute('data-search-landing', '');
-    unlight = setTimeout(
-      () => place.removeAttribute('data-search-landing'),
-      LIT_MS,
-    );
+    putOut = light(place);
+    unlight = setTimeout(() => {
+      putOut?.();
+      putOut = undefined;
+    }, LIT_MS);
 
     if (!target.words.length) return;
     const marked = ranges(place, target.words);
