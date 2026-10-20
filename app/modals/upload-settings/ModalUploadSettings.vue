@@ -52,6 +52,7 @@ import AssetModalButton from '../asset-modal/AssetModalButton.vue';
 import AssetModalCompareMedia from '../asset-modal/AssetModalCompareMedia.vue';
 import AssetModalPreviewAudio from '../asset-modal/AssetModalPreviewAudio.vue';
 import AssetModalPreviewMedia from '../asset-modal/AssetModalPreviewMedia.vue';
+import AssetPreviewFrameSection from '../asset-modal/AssetPreviewFrameSection.vue';
 import FilePreviewContent from '../../components/file-preview/FilePreviewContent.vue';
 import { useFileInfo } from '../asset-modal/use-file-info';
 import { detectVideoAudio } from '../asset-modal/video-audio';
@@ -351,6 +352,17 @@ const screen = ref<Screen>('root');
 const takenOn = ref<Screen>('root');
 /** The file being handed over, stored, waiting only for its description. */
 const taken = shallowRef<AssetVariantInfo>();
+/** The file taken, when it is a video: its still is chosen under its description. */
+const takenVideo = computed(() =>
+  taken.value?.type === AssetType.Video ? taken.value : undefined,
+);
+/** A still taken: the video handed over is the one that shows it. */
+function takeStill(variants: AssetVariantInfo[]) {
+  const shown = variants.find(
+    (variant) => variant.assetUuid === taken.value?.assetUuid,
+  );
+  if (shown) taken.value = shown;
+}
 /** As it is: the stored file itself, or the picked one as it came. */
 const section = ref<Section>(rootSection());
 
@@ -1352,6 +1364,7 @@ const directHref = computed(() =>
         :extension="previewSource.extension"
         :src="previewSource.src"
         :poster="previewSource.poster"
+        :poster-at="takenVideo?.meta?.previewAt"
         :has-audio="previewSource.hasAudio"
         :display-dimensions="previewDimensions"
         :rotation="previewRotation"
@@ -1616,15 +1629,28 @@ const directHref = computed(() =>
           />
         </div>
 
-        <!-- Last, what the file is: the same for every place it goes. -->
-        <div v-else-if="taken" class="p-sm">
-          <FileDescriptionField
-            ref="descriptionField"
-            :key="taken.assetUuid"
-            :asset-uuid="taken.assetUuid"
-            global
-            embedded
-            required
+        <!-- Last, what the file is: the same for every place it goes; under
+             it a video's still, the family's too. -->
+        <div v-else-if="taken" class="flex flex-col divide-y divide-border-1">
+          <div class="p-sm">
+            <FileDescriptionField
+              ref="descriptionField"
+              :key="taken.assetUuid"
+              :asset-uuid="taken.assetUuid"
+              global
+              embedded
+              required
+            />
+          </div>
+          <AssetPreviewFrameSection
+            v-if="takenVideo"
+            :asset-uuid="takenVideo.assetUuid"
+            :poster="videoPosterOf(takenVideo.media)"
+            :preview-at="takenVideo.meta?.previewAt"
+            :chosen="takenVideo.meta?.previewChosen"
+            :current-time="mediaPreview?.playbackTime"
+            @chosen="takeStill"
+            @seek="mediaPreview?.seek($event)"
           />
         </div>
       </div>

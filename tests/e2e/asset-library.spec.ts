@@ -628,12 +628,18 @@ test('a video takes the frame its player stands at as its still, and gives it ba
   await tile.click();
 
   const section = page.locator('[data-asset-preview-frame]');
-  const state = section.locator('[data-asset-preview-frame-state]');
   const still = section.locator('[data-asset-preview-frame-poster] img');
+  const auto = section.locator('[data-asset-preview-frame-auto]');
   const take = section.locator('[data-asset-preview-frame-take]');
   const mark = page.locator('[data-video-poster-mark]');
-  await expect(state).toHaveAttribute('data-asset-preview-frame-state', 'auto');
-  await expect(state).toHaveText('Picked automatically');
+  // The way the still was taken is the button pressed.
+  await expect(section).toHaveAttribute(
+    'data-asset-preview-frame-state',
+    'auto',
+  );
+  await expect(auto).toHaveAttribute('aria-pressed', 'true');
+  await expect(auto).toContainText('automatically');
+  await expect(take).toHaveAttribute('aria-pressed', 'false');
   await expect(still).toHaveAttribute('src', automatic!);
   await expect(mark).toBeVisible();
   const automaticMark = await mark.evaluate((element) => element.style.left);
@@ -650,11 +656,13 @@ test('a video takes the frame its player stands at as its still, and gives it ba
     });
   await expect(take).toContainText('0:00.5');
   await take.click();
-  await expect(state).toHaveAttribute(
+  await expect(section).toHaveAttribute(
     'data-asset-preview-frame-state',
     'chosen',
   );
-  await expect(state).toContainText('0:00');
+  await expect(take).toHaveAttribute('aria-pressed', 'true');
+  await expect(auto).toHaveAttribute('aria-pressed', 'false');
+  await expect(auto).toBeEnabled();
   await expect(still).not.toHaveAttribute('src', automatic!);
   const chosen = await still.getAttribute('src');
   // At the frame already chosen there is nothing to take.
@@ -688,13 +696,16 @@ test('a video takes the frame its player stands at as its still, and gives it ba
   await page.reload();
   await expect(tileStill).toHaveAttribute('src', chosen!);
   await tile.click();
-  await expect(state).toHaveText('Chosen by hand · 0:00');
+  await expect(take).toHaveAttribute('aria-pressed', 'true');
 
-  await section.locator('[data-asset-preview-frame-auto]').click();
-  await expect(state).toHaveAttribute('data-asset-preview-frame-state', 'auto');
-  await expect(still).toHaveAttribute('src', automatic!);
-  await expect(section.locator('[data-asset-preview-frame-auto]')).toHaveCount(
-    0,
+  await auto.click();
+  await expect(section).toHaveAttribute(
+    'data-asset-preview-frame-state',
+    'auto',
   );
+  await expect(still).toHaveAttribute('src', automatic!);
+  // Chosen automatically already, it has nothing more to do.
+  await expect(auto).toHaveAttribute('aria-pressed', 'true');
+  await expect(auto).toBeDisabled();
   await expect(tileStill).toHaveAttribute('src', automatic!);
 });

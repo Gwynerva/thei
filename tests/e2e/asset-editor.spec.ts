@@ -467,6 +467,14 @@ test('a video variant is made as a job the editor follows', async ({
   await expect(next).toBeEnabled();
   expect(polls.length).toBeGreaterThan(0);
   await next.click();
+  // Under its description, the video's still, chosen automatically.
+  const still = page.locator(
+    '[data-upload-screen="describe"] [data-asset-preview-frame]',
+  );
+  await expect(still).toHaveAttribute('data-asset-preview-frame-state', 'auto');
+  await expect(
+    still.locator('[data-asset-preview-frame-auto]'),
+  ).toHaveAttribute('aria-pressed', 'true');
   await skipDescription(page);
   await expect(page.locator('[data-result]')).toContainText('assetUuid');
   const [stored] = JSON.parse(

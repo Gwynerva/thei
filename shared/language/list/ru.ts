@@ -310,12 +310,10 @@ export default defineI18nModule({
     asset_open_place: (title) => `Открыть «${title}» в новой вкладке`,
     asset_open_variant: 'Открыть этот вариант',
     asset_preview_frame: 'Превью',
-    asset_preview_frame_chosen: (time) => `Выбран вручную · ${time}`,
-    asset_preview_frame_auto: 'Подобран сам',
-    asset_preview_frame_take: (time) => `Взять текущий кадр · ${time}`,
+    asset_preview_frame_auto: 'Выбрать автоматически',
+    asset_preview_frame_take: (time) => `Текущий кадр · ${time}`,
     asset_preview_frame_take_hint:
       'Кадр станет превью этого видео и других его вариантов везде, где они показаны',
-    asset_preview_frame_auto_take: 'Подобрать самому',
     asset_preview_frame_seek: 'Перейти к этому кадру',
     asset_preview_frame_error: 'Не удалось взять кадр.',
     asset_preview_frame_partial: (count) =>

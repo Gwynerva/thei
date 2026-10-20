@@ -53,18 +53,17 @@ The file's description:
 
 A video's still:
 
-- A video's window has a «Превью» ("Preview") section: the still small, at
-  the left, and beside it how it was taken — «Выбран вручную · 0:12» or
-  «Подобран сам» — and, when the owner chose it, «Подобрать самому» to let it
-  be picked by itself again.
-- Under them, one wide button, «Взять текущий кадр · 0:12.4», takes the frame
-  the player stands at; its time follows the player to a tenth of a second,
-  and it is off while the player cannot tell its time or stands at the frame
-  already chosen. Its hint says the frame becomes the still of every variant,
-  wherever they are shown.
-- Pressing the small still puts the player at its moment, so a frame next to
-  it is a step away. A tick in the accent on the player's bar marks that
-  moment too.
+- A video's window has a «Превью» ("Preview") section: the still as wide as
+  the panel, and under it only two buttons, «Выбрать автоматически» and
+  «Текущий кадр · 0:12.4». The way the still was taken is the button
+  pressed.
+- «Текущий кадр» takes the frame the player stands at; its time follows the
+  player to a tenth of a second, and it is off while the player cannot tell
+  its time or stands at the frame already chosen. Its hint says the frame
+  becomes the still of every variant, wherever they are shown.
+- Pressing the still puts the player at its moment, so a frame next to it
+  is a step away. A tick in the accent on the player's bar marks that moment
+  too.
 - The choice is the file's, for every video of its family, like the
   description. Once taken, the window shows the new still, and every other
   place that draws the video — the library's tiles, a text's blocks, the form
@@ -99,8 +98,9 @@ The editor goes one screen at a time:
   video or an archive, makes it first, and goes on once it has been looked
   at. The choice is not repeated in the foot, and no notice says a file was
   uploaded before: the saved variants say it.
-- Last, after an upload or a new variant only, «Файл»: the description field
-  alone, required, with a hint of why it matters. «Готово» is off until it
+- Last, after an upload or a new variant only, «Файл»: the description field,
+  required, with a hint of why it matters, and for a video its «Превью» under
+  it, the still chosen there being the family's at once. «Готово» is off until it
   holds words; to its left a grey square button with a dead face,
   «Продолжить без описания файла», goes on without one. Back returns to the
   screen the file was taken on.
@@ -158,7 +158,12 @@ A visitor's window:
   `app/modals/asset-modal/AssetModalPreviewMedia.vue` with `seek()`); it asks
   `POST /api/admin/assets/<uuid>/preview` and emits the family's videos as
   they now are. `posterAt` on the player draws the tick
-  (`app/modals/asset-modal/AssetModalVideoControls.vue`).
+  (`app/modals/asset-modal/AssetModalVideoControls.vue`). Its two buttons
+  stand one under the other in a group drawn as `FieldOptions`' column is,
+  the pressed one with a tick, the accent's border and pale ground;
+  «Выбрать автоматически» pressed is off, and «Текущий кадр» pressed takes
+  another frame still. `ModalUploadSettings.vue` puts it under the
+  description of a video just made or uploaded.
 - `app/composables/video-stills.ts` keeps the stills taken in the tab by the
   video's address; `app/components/Media.vue` draws a video with the one
   taken since its place read it.

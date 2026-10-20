@@ -191,11 +191,9 @@ export type LanguagePhrases = {
   asset_open_place: (title: string) => string;
   asset_open_variant: string;
   asset_preview_frame: string;
-  asset_preview_frame_chosen: (time: string) => string;
   asset_preview_frame_auto: string;
   asset_preview_frame_take: (time: string) => string;
   asset_preview_frame_take_hint: string;
-  asset_preview_frame_auto_take: string;
   asset_preview_frame_seek: string;
   asset_preview_frame_error: string;
   asset_preview_frame_partial: (count: number) => string;

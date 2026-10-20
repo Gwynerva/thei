@@ -4,16 +4,17 @@ import type {
   AssetPreviewFrameResponse,
   AssetVariantInfo,
 } from '#layers/thei/shared/api/asset';
-import { formatMediaMoment, formatMediaTime } from '#layers/thei/shared/audio';
+import { formatMediaMoment } from '#layers/thei/shared/audio';
 import { errorMessage } from '#layers/thei/app/composables/upload-draft';
 import AssetPanelSection from './AssetPanelSection.vue';
 
 /**
- * A video's still, in its file window: the frame it is shown by until it
- * plays, whether the owner chose it, and the way to choose another — the
- * frame the player stands at — or to let it be picked by itself again. The
- * choice is the file's, for every video of its family; the window takes the
- * answer, and every other place that draws the video takes the new still.
+ * A video's still: the frame it is shown by until it plays, as wide as the
+ * panel, and under it the two ways to take one — chosen automatically, or
+ * the frame the player stands at. The way the still was taken is the button
+ * pressed. The choice is the file's, for every video of its family; the
+ * window takes the answer, and every other place that draws the video takes
+ * the new still.
  */
 const props = defineProps<{
   assetUuid: string;
@@ -39,10 +40,13 @@ const emit = defineEmits<{
 const busy = ref<'take' | 'auto'>();
 const failure = ref('');
 
+const automatic = computed(() => !props.pending && !props.chosen);
+const byHand = computed(() => !props.pending && Boolean(props.chosen));
+
 /** Taking the frame the still already is would change nothing. */
 const sameFrame = computed(
   () =>
-    props.chosen &&
+    byHand.value &&
     props.previewAt !== undefined &&
     props.currentTime !== undefined &&
     Math.round(props.currentTime * 1000) === Math.round(props.previewAt * 1000),
@@ -67,84 +71,91 @@ async function choose(at: number | null) {
     busy.value = undefined;
   }
 }
+
+/** A way pressed stays as clear while there is nothing more it can do. */
+function wayClasses(pressed: boolean) {
+  return pressed
+    ? 'border-accent bg-bg-accent text-accent off:cursor-default'
+    : `border-border-1 bg-bg-1 text-text-2 off:cursor-not-allowed
+      off:text-text-3/80 hocus:not-off:border-border-3
+      hocus:not-off:text-text-1`;
+}
 </script>
 
 <template>
   <AssetPanelSection
     :title="phrase.asset_preview_frame"
     data-asset-preview-frame
+    :data-asset-preview-frame-state="
+      pending ? undefined : chosen ? 'chosen' : 'auto'
+    "
   >
-    <div class="flex items-center gap-sm">
+    <button
+      type="button"
+      class="flex aspect-video w-full cursor-pointer items-center justify-center
+        overflow-hidden rounded-normal border border-border-1 bg-bg-3 text-2xl
+        text-text-3 transition-colors disabled:cursor-default
+        hocus:not-disabled:border-border-3"
+      :disabled="previewAt === undefined || currentTime === undefined"
+      :aria-label="phrase.asset_preview_frame_seek"
+      :data-title-popup="phrase.asset_preview_frame_seek"
+      data-asset-preview-frame-poster
+      @click="previewAt !== undefined && emit('seek', previewAt)"
+    >
+      <img
+        v-if="poster"
+        :src="sitePath(poster)"
+        alt=""
+        draggable="false"
+        class="size-full object-contain"
+      />
+      <Icon v-else name="media" />
+    </button>
+    <div
+      role="group"
+      :aria-label="phrase.asset_preview_frame"
+      class="flex flex-col gap-1 rounded-normal bg-bg-3 p-1 text-sm"
+    >
       <button
         type="button"
-        class="flex aspect-video w-24 shrink-0 cursor-pointer items-center
-          justify-center overflow-hidden rounded-normal border border-border-1
-          bg-bg-3 text-xl text-text-3 transition-colors disabled:cursor-default
-          hocus:not-disabled:border-border-3"
-        :disabled="previewAt === undefined || currentTime === undefined"
-        :aria-label="phrase.asset_preview_frame_seek"
-        :data-title-popup="phrase.asset_preview_frame_seek"
-        data-asset-preview-frame-poster
-        @click="previewAt !== undefined && emit('seek', previewAt)"
+        class="flex h-9 w-full min-w-0 cursor-pointer items-center
+          justify-center gap-xs rounded-normal border-2 px-sm transition"
+        :class="wayClasses(automatic)"
+        :aria-pressed="automatic"
+        :disabled="pending || automatic || Boolean(busy)"
+        data-asset-preview-frame-auto
+        @click="choose(null)"
       >
-        <img
-          v-if="poster"
-          :src="sitePath(poster)"
-          alt=""
-          draggable="false"
-          class="size-full object-contain"
+        <Icon
+          :name="busy === 'auto' ? 'loading' : automatic ? 'check' : 'refresh'"
+          class="shrink-0"
         />
-        <Icon v-else name="media" />
+        <span class="truncate font-semibold">{{
+          phrase.asset_preview_frame_auto
+        }}</span>
       </button>
-      <div class="flex min-w-0 flex-col items-start gap-xs">
-        <span
-          v-if="pending"
-          class="h-lh w-28 animate-pulse rounded-normal bg-bg-3
-            motion-reduce:animate-none"
-          aria-hidden="true"
-        ></span>
-        <span
-          v-else
-          class="text-text-2 tabular-nums"
-          :data-asset-preview-frame-state="chosen ? 'chosen' : 'auto'"
-          >{{
-            chosen
-              ? phrase.asset_preview_frame_chosen(
-                  formatMediaTime(previewAt ?? 0),
-                )
-              : phrase.asset_preview_frame_auto
-          }}</span
-        >
-        <TransitionFade>
-          <Button
-            v-if="chosen && !pending"
-            variant="secondary"
-            class="flex items-center gap-xs"
-            :disabled="Boolean(busy)"
-            data-asset-preview-frame-auto
-            @click="choose(null)"
-          >
-            <Icon v-if="busy === 'auto'" name="loading" class="shrink-0" />
-            <span class="truncate">{{
-              phrase.asset_preview_frame_auto_take
-            }}</span>
-          </Button>
-        </TransitionFade>
-      </div>
+      <button
+        type="button"
+        class="flex h-9 w-full min-w-0 cursor-pointer items-center
+          justify-center gap-xs rounded-normal border-2 px-sm transition"
+        :class="wayClasses(byHand)"
+        :aria-pressed="byHand"
+        :disabled="
+          pending || Boolean(busy) || currentTime === undefined || sameFrame
+        "
+        :data-title-popup="phrase.asset_preview_frame_take_hint"
+        data-asset-preview-frame-take
+        @click="currentTime !== undefined && choose(currentTime)"
+      >
+        <Icon
+          :name="busy === 'take' ? 'loading' : byHand ? 'check' : 'media'"
+          class="shrink-0"
+        />
+        <span class="truncate font-semibold tabular-nums">{{
+          phrase.asset_preview_frame_take(formatMediaMoment(currentTime ?? 0))
+        }}</span>
+      </button>
     </div>
-    <Button
-      variant="secondary"
-      class="flex h-9 w-full min-w-0 items-center justify-center gap-xs"
-      :disabled="Boolean(busy) || currentTime === undefined || sameFrame"
-      :data-title-popup="phrase.asset_preview_frame_take_hint"
-      data-asset-preview-frame-take
-      @click="currentTime !== undefined && choose(currentTime)"
-    >
-      <Icon :name="busy === 'take' ? 'loading' : 'media'" class="shrink-0" />
-      <span class="truncate tabular-nums">{{
-        phrase.asset_preview_frame_take(formatMediaMoment(currentTime ?? 0))
-      }}</span>
-    </Button>
     <p
       v-if="failure"
       role="alert"
