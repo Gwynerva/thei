@@ -31,9 +31,18 @@ export const uploadControls = (page: Page) => {
   };
 };
 
-/** The last step left without a description, on purpose. */
+/**
+ * The last step left without a description, on purpose: chosen under the
+ * field, which only lets «Done» go on.
+ */
 export async function skipDescription(page: Page, timeout = 30_000) {
-  await uploadControls(page).skipDescription.click({ timeout });
+  const controls = uploadControls(page);
+  await controls.skipDescription.click({ timeout });
+  await expect(controls.skipDescription).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await controls.done.click();
 }
 
 /** The last step with a description written. */

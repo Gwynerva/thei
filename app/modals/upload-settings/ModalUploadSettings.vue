@@ -982,9 +982,27 @@ function done() {
 
 const descriptionField =
   useTemplateRef<InstanceType<typeof FileDescriptionField>>('descriptionField');
-/** «Готово»: the description saved, the file handed over. */
+/**
+ * Going on without a description, chosen under the field: it only lets
+ * «Готово» go on, so the rest of the screen — a video's still — stays at hand.
+ */
+const withoutDescription = ref(false);
+watch(taken, () => (withoutDescription.value = false));
+// Words put in the field, typed or taken from a proposal, take it back.
+watch(
+  () => descriptionField.value?.filled,
+  (filled) => {
+    if (filled) withoutDescription.value = false;
+  },
+);
+/** «Готово»: the description saved, or left out on purpose; the file handed over. */
 async function describeAndFinish() {
-  if (await descriptionField.value?.save()) done();
+  const field = descriptionField.value;
+  if (field?.filled) {
+    if (await field.save()) done();
+    return;
+  }
+  if (withoutDescription.value) done();
 }
 
 /** The section a screen works on, as it opens. */
@@ -1632,15 +1650,36 @@ const directHref = computed(() =>
         <!-- Last, what the file is: the same for every place it goes; under
              it a video's still, the family's too. -->
         <div v-else-if="taken" class="flex flex-col divide-y divide-border-1">
-          <div class="p-sm">
+          <!-- Going on without a description is the description's own
+               choice, under it: the screen holds more than the field. -->
+          <div class="flex flex-col items-start gap-1 p-sm">
             <FileDescriptionField
               ref="descriptionField"
               :key="taken.assetUuid"
               :asset-uuid="taken.assetUuid"
+              class="self-stretch"
               global
               embedded
               required
+              @input="withoutDescription = false"
             />
+            <button
+              type="button"
+              class="-ml-xs flex cursor-pointer items-center gap-1
+                rounded-normal px-xs py-0.5 text-xs transition
+                pointer-coarse:min-h-11 pointer-coarse:px-sm hocus:bg-bg-3
+                hocus:text-accent"
+              :class="withoutDescription ? 'text-accent' : 'text-text-3'"
+              :aria-pressed="withoutDescription"
+              data-upload-skip-description
+              @click="withoutDescription = !withoutDescription"
+            >
+              <Icon
+                :name="withoutDescription ? 'check' : 'face-dead'"
+                aria-hidden="true"
+              />
+              <span>{{ phrase.upload_skip_description }}</span>
+            </button>
           </div>
           <AssetPreviewFrameSection
             v-if="takenVideo"
@@ -1658,21 +1697,18 @@ const directHref = computed(() =>
 
     <template #footer>
       <template v-if="screen === 'describe'">
-        <ModalHeaderButton
-          icon="face-dead"
-          :label="phrase.upload_skip_description"
-          data-upload-skip-description
-          @click="done"
-        />
         <Button
           variant="primary"
           class="flex h-9 flex-1 items-center justify-center gap-xs
             font-semibold"
-          :disabled="!descriptionField?.filled || descriptionField?.saving"
+          :disabled="
+            !(descriptionField?.filled || withoutDescription) ||
+            descriptionField?.saving
+          "
           data-upload-done
           @click="describeAndFinish"
         >
-          <Icon v-if="descriptionField?.saving" name="loading" />
+          <Icon :name="descriptionField?.saving ? 'loading' : 'check'" />
           <span>{{ phrase.done }}</span>
         </Button>
       </template>

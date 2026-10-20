@@ -1753,7 +1753,7 @@ export default defineI18nBase({
     upload_other_file_hint: 'Upload or reuse',
     upload_next: 'Next',
     upload_back: 'Back',
-    upload_skip_description: 'Continue without a file description',
+    upload_skip_description: 'Without a file description',
     upload_replace_with_new_file: 'Another file',
     upload_section_family: 'Saved variants',
     upload_section_zip: 'Create ZIP variant',

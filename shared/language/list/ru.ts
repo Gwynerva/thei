@@ -1819,7 +1819,7 @@ export default defineI18nModule({
     upload_other_file_hint: 'Загрузить или переиспользовать',
     upload_next: 'Далее',
     upload_back: 'Назад',
-    upload_skip_description: 'Продолжить без описания файла',
+    upload_skip_description: 'Без описания файла',
     upload_replace_with_new_file: 'Другой файл',
     upload_section_family: 'Сохраненные варианты',
     upload_section_zip: 'Создать ZIP-вариант',

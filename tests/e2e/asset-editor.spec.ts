@@ -475,7 +475,15 @@ test('a video variant is made as a job the editor follows', async ({
   await expect(
     still.locator('[data-asset-preview-frame-auto]'),
   ).toHaveAttribute('aria-pressed', 'true');
-  await skipDescription(page);
+  // Going on without a description only lets «Done» go on: the still stays
+  // at hand until then.
+  const { done, skipDescription: withoutDescription } = uploadControls(page);
+  await expect(done).toBeDisabled();
+  await withoutDescription.click();
+  await expect(withoutDescription).toHaveAttribute('aria-pressed', 'true');
+  await expect(still).toBeVisible();
+  await expect(done).toBeEnabled();
+  await done.click();
   await expect(page.locator('[data-result]')).toContainText('assetUuid');
   const [stored] = JSON.parse(
     (await page.locator('[data-result]').textContent())!,

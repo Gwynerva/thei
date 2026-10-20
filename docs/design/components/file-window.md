@@ -100,10 +100,11 @@ The editor goes one screen at a time:
   uploaded before: the saved variants say it.
 - Last, after an upload or a new variant only, «Файл»: the description field,
   required, with a hint of why it matters, and for a video its «Превью» under
-  it, the still chosen there being the family's at once. «Готово» is off until it
-  holds words; to its left a grey square button with a dead face,
-  «Продолжить без описания файла», goes on without one. Back returns to the
-  screen the file was taken on.
+  it, the still chosen there being the family's at once. «Готово», the foot's
+  one button, full width with a tick, is off until the field holds words or,
+  under it, the pale «Без описания файла» with a dead face is pressed: that
+  only lets «Готово» go on, so the rest of the screen stays at hand. Back
+  returns to the screen the file was taken on.
 - A file already stored, taken as it is — opened by «Изменить», picked in
   the library, found again by its bytes — and a saved variant are handed over
   at once: their foot's button reads «Готово».
