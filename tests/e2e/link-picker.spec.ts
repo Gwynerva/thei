@@ -1043,6 +1043,29 @@ test('the last Delete of an emptied mark at the edge of a block joins no blocks'
   await expect(blocks.nth(1)).toHaveText('Next line');
 });
 
+test('End and Home leave the caret outside the markup the words end or begin with', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openEditor(
+    page,
+    '<b>Bold</b> middle <a href="https://noted.example/">link</a>',
+  );
+  const rings = page.locator(
+    'dialog .content-inline-ring:not(.content-inline-ring--leaving)',
+  );
+  await paragraph(page).click();
+  await page.keyboard.press('End');
+  await expect(rings).toHaveCount(0);
+  await page.keyboard.type('!');
+  await page.keyboard.press('Home');
+  await expect(rings).toHaveCount(0);
+  await page.keyboard.type('>');
+  await expect(paragraph(page).locator('a')).toHaveText('link');
+  await expect(paragraph(page).locator('b')).toHaveText('Bold');
+  await expect(paragraph(page)).toHaveText('>Bold middle link!');
+});
+
 test('the last Backspace of an emptied mark beside a private edge is the mark’s', async ({
   page,
 }) => {
