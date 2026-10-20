@@ -189,9 +189,12 @@ export function useFormNeeds(
   }
 
   /** A press of the Save, or Ctrl+S: the save, or what it still needs. */
-  function submit() {
+  async function submit(): Promise<void> {
     if (options.ready && !options.ready()) return;
-    if (!blocked.value) return options.save?.();
+    if (!blocked.value) {
+      await options.save?.();
+      return;
+    }
     if (options.error) options.error.value = undefined;
     ask();
   }
