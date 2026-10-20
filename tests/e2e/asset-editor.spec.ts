@@ -489,7 +489,6 @@ test('a video variant is made as a job the editor follows', async ({
   await expect(done).toBeEnabled();
   // A still taken meanwhile keeps the choice: it is the same file.
   await page
-    .locator('[data-upload-screen="describe"]')
     .getByRole('slider', { name: 'Playback position' })
     .evaluate((element) => {
       const input = element as HTMLInputElement;
