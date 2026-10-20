@@ -7,7 +7,7 @@ description: Run Thei's lab loop on a study — play its scenarios as personas i
 
 The lab is `tests/lab/` (`tests/lab/README.md`); `bun run lab help` lists its commands and `bun run lab status` says where everything stands. A **study** is played by **personas** on several **variants** (`dd`, `dl`, `pd`, `pl`: desktop or phone, dark or light). A **job** is one scenario for one persona, reviewed whole, every screen at once. Its plays and reviews live in `.lab/runs/<study>/`.
 
-Invoking this skill is the owner's request for the `lab-review` workflow: run it as step 4 says, without asking again.
+**The lab runs only when the owner asks for it or approves it.** Seeding, plays and reviews are long — minutes to hours, and many tokens. Never start one on your own initiative: propose it, with what it covers and roughly how long it takes, and wait for a yes. When the owner invoked this skill, or approved the run, that is the request for the `lab-review` workflow: run it as step 4 says, without asking again.
 
 ## 1. Look
 
