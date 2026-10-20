@@ -58,11 +58,11 @@ async function writeToday(j: ScenarioContext) {
   await j.step(
     'Start a new entry',
     { click: { text: 'New Entry' } },
-    { answer: { role: 'button', name: /What was written/ }, timeoutMs: 15_000 },
+    { answer: { role: 'button', name: /Entry content/ }, timeoutMs: 15_000 },
   );
   await j.step(
     'Open the text of the entry',
-    { click: { role: 'button', name: /What was written/ } },
+    { click: { role: 'button', name: /Entry content/ } },
     { answer: { shown: 'Start writing' }, timeoutMs: 20_000 },
   );
   await j.step('Put the caret into the text', {

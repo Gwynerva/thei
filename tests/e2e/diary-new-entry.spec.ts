@@ -61,13 +61,13 @@ async function openNewEntry(page: Page, date: string) {
 }
 
 const textField = (page: Page) =>
-  page.getByRole('button', { name: 'Edit: What was written' });
+  page.getByRole('button', { name: 'Edit: Entry content' });
 const editor = (page: Page) => page.locator('dialog .content-editor');
 /** The text's first paragraph, found as a reader of the screen finds it. */
 const paragraph = (page: Page) =>
   page
     .locator('dialog[open]')
-    .getByRole('textbox', { name: 'What was written' })
+    .getByRole('textbox', { name: 'Entry content' })
     .first();
 const editorSave = (page: Page) => page.locator('[data-editor-save]');
 const editorFoot = (page: Page) => page.locator('[data-editor-foot]');
@@ -236,7 +236,7 @@ test('opening a stored text changes nothing: its save control stays as it is', a
   await expect(
     page
       .locator('dialog[open]')
-      .getByRole('textbox', { name: 'What was written' }),
+      .getByRole('textbox', { name: 'Entry content' }),
   ).toHaveCount(2);
   const save = editorSave(page);
   await expect(save).toHaveText('Saved');
@@ -353,18 +353,18 @@ test('a Create that cannot create yet says what it still needs (desktop)', async
   const button = create(page);
   await expect(button).toBeDisabled();
   await expect(button).toHaveAccessibleDescription(
-    'Still to fill in: What was written',
+    'Still to fill in: Entry content',
   );
   await button.hover();
   await expect(hint(page)).toBeVisible();
   await expect(hint(page)).toContainText('Create');
-  await expect(hint(page)).toContainText('Still to fill in: What was written');
+  await expect(hint(page)).toContainText('Still to fill in: Entry content');
   await page.mouse.move(10, 400);
 
   // Ctrl+S asks for a save it cannot make: the header says why.
   await page.keyboard.press('ControlOrMeta+s');
   const alert = page.locator('[data-header-error]');
-  await expect(alert).toHaveText('Still to fill in: What was written');
+  await expect(alert).toHaveText('Still to fill in: Entry content');
   await expect(alert).toHaveAttribute('role', 'alert');
   // Closed by hand, it comes back for the next press.
   await alert.getByRole('button', { name: 'Hide the message' }).click();
@@ -398,9 +398,7 @@ test.describe('on a phone', () => {
     const box = (await button.boundingBox())!;
     await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
     await expect(hint(page)).toBeVisible();
-    await expect(hint(page)).toContainText(
-      'Still to fill in: What was written',
-    );
+    await expect(hint(page)).toContainText('Still to fill in: Entry content');
     // The hint stays on the screen.
     const shown = (await hint(page).boundingBox())!;
     expect(shown.x).toBeGreaterThanOrEqual(0);

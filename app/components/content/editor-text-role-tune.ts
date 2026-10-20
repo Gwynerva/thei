@@ -2,7 +2,7 @@ import type { BlockTune } from '@editorjs/editorjs';
 import type { MenuConfig } from '@editorjs/editorjs/types/tools/menu-config';
 
 export interface ContentTextRoleTuneConfig {
-  /** What the text is called, as its field and its editor are: «What was written». */
+  /** What the text is called, as its field and its editor are: «Entry content». */
   label: string;
 }
 

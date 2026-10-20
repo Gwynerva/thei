@@ -1570,7 +1570,7 @@ export default defineI18nBase({
     edit_content_section: 'Edit Section',
     diary_access: 'Entry access',
     diary_date: 'Entry date',
-    diary_content: 'What was written',
+    diary_content: 'Entry content',
     diary_content_hint: 'Tell how your day went.',
     diary_date_already_taken: 'This day already has an entry.',
     diary_date_taken_open: 'Open the entry for this day',
