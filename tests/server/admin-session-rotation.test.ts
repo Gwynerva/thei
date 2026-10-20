@@ -148,10 +148,12 @@ describe('a token rotation whose response never reaches the browser', () => {
     vi.setSystemTime(start + hour + previousTokenGrace - 1);
     expect((await visit('first-token')).sessionUuid).toBe('owner');
 
+    // After that the old token opens nothing, and a request held back that
+    // long leaves the cookie alone: the browser holds the new token by now.
     vi.setSystemTime(start + hour + previousTokenGrace);
     expect(await visit('first-token')).toEqual({
       sessionUuid: undefined,
-      cookie: '',
+      cookie: undefined,
     });
     expect(memorySessions.has('first-token')).toBe(false);
     expect((await visit(newToken)).sessionUuid).toBe('owner');

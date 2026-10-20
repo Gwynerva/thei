@@ -290,10 +290,10 @@ export async function getCurrentAdminSession(event: H3Event) {
   const now = Date.now();
   const session = findSessionByToken(token, now);
 
-  if (!session) {
-    clearTokenCookie(event);
-    return;
-  }
+  // A token no session knows leaves the cookie alone: a request the browser
+  // held back past the grace of a rotation still carries the previous token,
+  // and clearing the cookie would throw away the current one it holds now.
+  if (!session) return;
 
   if (now >= session.expiresAt) {
     expireAdminSession(session, now);
