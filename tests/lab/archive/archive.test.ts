@@ -254,4 +254,15 @@ describe('Lab Markdown into blocks', () => {
       'list-checklist': 1,
     });
   });
+
+  it('reads a colon before a letter or a digit as words', () => {
+    const text = 'At 10:30, a ratio of 3:2. Note:this.';
+    expect(scanText(text).problems).toEqual([]);
+    const { data, problems } = convertText(text, context);
+    expect(problems).toEqual([]);
+    expect(data.blocks).toMatchObject([{ type: 'paragraph', data: { text } }]);
+    expect(scanText('A :note[word]{x="y"} here.').problems).toEqual([
+      expect.stringContaining(':note[…] is not inline markup'),
+    ]);
+  });
 });

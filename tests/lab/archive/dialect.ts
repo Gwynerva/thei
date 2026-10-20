@@ -225,12 +225,19 @@ export function scanText(markdown: string): TextScan {
       }
       case 'textDirective': {
         const directive = node as TextDirective;
-        if (directive.name !== 'hint')
-          problem(
-            node,
-            `:${directive.name} is not inline markup the format knows (escape a colon as \\:)`,
-          );
-        else if (!attribute(directive, 'note'))
+        if (directive.name !== 'hint') {
+          // A colon before a letter or a digit with nothing in brackets or
+          // braces after it — `10:30`, `Note:this` — is only words: Thei
+          // keeps them as typed, and so does the format.
+          const bare =
+            !directive.children.length &&
+            !Object.keys(directive.attributes ?? {}).length;
+          if (!bare)
+            problem(
+              node,
+              `:${directive.name}[…] is not inline markup the format knows (escape its colon as \\:)`,
+            );
+        } else if (!attribute(directive, 'note'))
           problem(node, ':hint needs note="…"');
         else count(scan, 'hint');
         break;
