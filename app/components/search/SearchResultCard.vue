@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { SearchFind, SearchHit } from '#layers/thei/shared/search/api';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
+import { scrollIntoSight } from '#layers/thei/app/modals/layer-motion';
 
 /**
  * One result of the search page, of any kind, in one shape. The head says
@@ -73,7 +74,7 @@ onMounted(async () => {
   if (!props.opened || !props.hit.more) return;
   await toggle();
   await new Promise((resolve) => requestAnimationFrame(resolve));
-  root.value?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  if (root.value) scrollIntoSight(root.value, { block: 'start' });
 });
 
 const finds = computed(() =>

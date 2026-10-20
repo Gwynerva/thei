@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { AiActionItem } from '#layers/thei/shared/ai';
+import { scrollIntoSight } from '#layers/thei/app/modals/layer-motion';
 import {
   AI_ACTION_INFO,
   type AiActionKind,
@@ -82,11 +83,7 @@ function goNext() {
     rows[0];
   if (!target) return;
   cursor = target.dataset.action;
-  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  target.scrollIntoView({
-    block: 'center',
-    behavior: still ? 'auto' : 'smooth',
-  });
+  scrollIntoSight(target);
 }
 
 async function applySure() {

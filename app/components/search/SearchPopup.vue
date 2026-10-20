@@ -165,10 +165,7 @@ function askAi(text: string) {
     {
       presets: [],
       started: async (sessionUuid) => {
-        await navigateTo({
-          path: '/admin/ai/',
-          query: { session: sessionUuid },
-        });
+        await navigateTo(sessionLocation(sessionUuid));
       },
     },
   );

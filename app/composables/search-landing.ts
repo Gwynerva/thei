@@ -1,3 +1,4 @@
+import { scrollIntoSight } from '#layers/thei/app/modals/layer-motion';
 import {
   parseLandingHash,
   type LandingTarget,
@@ -302,13 +303,7 @@ export function useSearchLanding() {
 
     // Opened afresh, the browser has scrolled to the words when it found
     // them; only where it did not is the place brought into view.
-    if (!first || window.scrollY === 0)
-      place.scrollIntoView({
-        block: 'center',
-        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-          ? 'instant'
-          : 'smooth',
-      });
+    if (!first || window.scrollY === 0) scrollIntoSight(place);
     found = place;
     place.setAttribute('data-search-found', '');
     putOut = light(place);
