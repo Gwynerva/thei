@@ -294,6 +294,7 @@ describe('editing markdown: words that look like syntax', () => {
     ':hint[x]{note="y"} literal',
     ':start',
     'a::b and a :b',
+    'at 10:30, a ratio of 3:2',
     '*stars* _under_ `code` ~~no~~ ~one~',
     '&amp;lt;b&amp;gt; not bold &amp;amp; &amp;#91;',
     '&lt;b&gt;not a tag&lt;/b&gt;',
@@ -323,6 +324,7 @@ describe('editing markdown: words that look like syntax', () => {
     'a &lt;b&gt; &amp;lt;',
     `x${BACKSLASH}y`,
     '#1',
+    '1:58, at 10:30, Note:this',
   ];
 
   function readBack(blocks: unknown[]) {

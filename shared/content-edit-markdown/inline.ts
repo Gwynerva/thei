@@ -215,6 +215,10 @@ export function phrasingToPlainText(nodes: readonly PhrasingContent[]): string {
   for (const node of nodes) {
     if (node.type === 'text' || node.type === 'inlineCode') text += node.value;
     else if (node.type === 'break') text += ' ';
+    else if (node.type === 'textDirective' && node.name !== 'hint')
+      // Not something the site knows — `1:58`, `Note:this` — so the words
+      // stay as the writer typed them, as in a paragraph.
+      text += `:${node.name}${phrasingToPlainText(node.children)}`;
     else if ('children' in node)
       text += phrasingToPlainText(node.children as PhrasingContent[]);
   }
