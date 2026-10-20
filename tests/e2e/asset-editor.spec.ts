@@ -516,3 +516,58 @@ test('the quality bar walks its stops from the keyboard and by a tap', async ({
   await expect(bar).toHaveAttribute('aria-valuetext', 'Medium');
   await expect(useResult).toBeEnabled({ timeout: 20_000 });
 });
+
+test('a placed file changed to itself is handed back with no description asked', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const created = await page.request.post('/api/admin/projects', {
+    data: {
+      title: `Placed ${stamp}`,
+      summary: 'A project with a placed file.',
+      access: 'public',
+      humanReadableSlug: 'placed',
+      publicId: `placed${stamp}`,
+      showcase: false,
+      cv: false,
+      descriptionContent: {
+        data: { blocks: [{ type: 'paragraph', data: { text: 'Placed.' } }] },
+      },
+    },
+  });
+  const projectUuid = (await created.json()).projectUuid as string;
+  await page.goto(`/admin/projects/${projectUuid}/edit/`);
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-nuxt-hydrated',
+    'true',
+  );
+
+  // Placed in the showcase: a new upload, so its description is asked for.
+  await page
+    .getByRole('button', { name: 'Add to Showcase', exact: true })
+    .click();
+  await page.locator('dialog[open] input[type=file]').setInputFiles({
+    name: 'placed.png',
+    mimeType: 'image/png',
+    buffer: await photo(320, 240),
+  });
+  const { next } = uploadControls(page);
+  await expect(next).toHaveText('Next');
+  await next.click();
+  await skipDescription(page);
+  const caption = page
+    .locator('dialog[open]')
+    .last()
+    .getByRole('textbox', { name: 'Caption', exact: true });
+  await expect(caption).toBeVisible({ timeout: 20_000 });
+
+  // «Change», then the file as it is: already stored, it is handed back at
+  // once, and the details come back with no editor left over them.
+  await page.locator('dialog[open] [data-asset-replace]').click();
+  await expect(page.locator('[data-upload-screen="root"]')).toBeVisible();
+  await expect(next).toHaveText('Done');
+  await expect(next).toBeEnabled({ timeout: 20_000 });
+  await next.click();
+  await expect(caption).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('[data-upload-screen]')).toHaveCount(0);
+});

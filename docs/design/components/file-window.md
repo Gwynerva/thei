@@ -99,10 +99,14 @@ The editor goes one screen at a time:
   video or an archive, makes it first, and goes on once it has been looked
   at. The choice is not repeated in the foot, and no notice says a file was
   uploaded before: the saved variants say it.
-- Last, «Файл»: the description field alone, required, with a hint of why it
-  matters. «Готово» is off until it holds words; to its left a grey square
-  button with a dead face, «Продолжить без описания файла», goes on without
-  one. Back returns to the screen the file was taken on.
+- Last, after an upload or a new variant only, «Файл»: the description field
+  alone, required, with a hint of why it matters. «Готово» is off until it
+  holds words; to its left a grey square button with a dead face,
+  «Продолжить без описания файла», goes on without one. Back returns to the
+  screen the file was taken on.
+- A file already stored, taken as it is — opened by «Изменить», picked in
+  the library, found again by its bytes — and a saved variant are handed over
+  at once: their foot's button reads «Готово».
 
 A placement's window:
 
@@ -208,7 +212,9 @@ A visitor's window:
   no line repeating the choice.
 - The description comes last and is required because it is what a reader
   gets who cannot see the picture, and what search and an AI read; going on
-  without it stays possible, on purpose and visibly.
+  without it stays possible, on purpose and visibly. It is asked for a file
+  new to the library: the owner found the step only distracted when merely
+  choosing a file already stored, which the library's window describes.
 - The owner asked to choose a video's still by hand: a section of the panel
   with the frame the player stands at, the way back to the automatic pick,
   and a tick on the bar. The choice used to be remade by a button that picked

@@ -15,12 +15,7 @@ import { join } from 'node:path';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import sharp from 'sharp';
 import { screenshot } from './screenshots';
-import {
-  skipDescription,
-  uploadControls,
-  uploadFile,
-  uploadPicture,
-} from './helpers/upload';
+import { uploadControls, uploadFile, uploadPicture } from './helpers/upload';
 
 test.use({
   storageState: fileURLToPath(
@@ -62,15 +57,16 @@ async function choose(page: Page, assetUuid: string) {
   if (!(await assetButton.isVisible())) await unused.click();
   await expect(assetButton).toBeVisible();
   await assetButton.click();
-  // The editor asks how to take the stored file; as it is goes on at once.
+  // The editor asks how to take the stored file; as it is, it is handed over
+  // at once, with no description to ask for.
   const controls = uploadControls(page);
   await expect(controls.newVariant).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Processing source', exact: true }),
   ).toHaveCount(0);
+  await expect(controls.next).toHaveText('Done');
   await expect(controls.next).toBeEnabled();
   await controls.next.click();
-  await skipDescription(page);
 }
 
 /** A picture nothing else has uploaded: the bytes differ on every run. */
@@ -179,11 +175,12 @@ test('hash lookup reuses stored bytes without multipart upload, including rename
   await page
     .locator('input[type=file]')
     .setInputFiles({ name: 'renamed.png', mimeType: 'image/png', buffer });
-  // The same bytes are the stored file: as it is, it is taken again.
+  // The same bytes are the stored file: as it is, it is taken again, with no
+  // description to ask for.
   const { next } = uploadControls(page);
+  await expect(next).toHaveText('Done');
   await expect(next).toBeEnabled();
   await next.click();
-  await skipDescription(page);
   await expect(page.locator('[data-result]')).toContainText(asset.assetUuid);
   expect(uploads).toBe(0);
 });

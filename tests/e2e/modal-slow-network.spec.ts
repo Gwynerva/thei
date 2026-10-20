@@ -202,8 +202,8 @@ test('the picker, the library and the editor each stand in their frame at once',
   await expect(next).toBeEnabled({ timeout: 10_000 });
   await expectNeverEmpty(page);
 
+  // A stored file taken as it is is handed over at once.
   await next.click();
-  await skipDescription(page, 10_000);
   await expect(page.locator('[data-result]')).toContainText(assetUuid, {
     timeout: 10_000,
   });
