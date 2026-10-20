@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "study": "fixture",
+  "job": "find-and-read.guest",
+  "review": "R2",
+  "kind": "recheck",
+  "base": "R1",
+  "lens": "persona",
+  "persona": "guest",
+  "attempts": {
+    "pl": "1020-100000-pl"
+  },
+  "criteria": {
+    "findability": [
+      "pl"
+    ],
+    "proximity": [
+      "pl"
+    ],
+    "feedback": [
+      "pl"
+    ],
+    "control": [
+      "pl"
+    ],
+    "wording": [
+      "pl"
+    ],
+    "trust": [
+      "pl"
+    ],
+    "consistency": [
+      "pl"
+    ],
+    "errors": [
+      "pl"
+    ],
+    "phone": [
+      "pl"
+    ],
+    "tidiness": [
+      "pl"
+    ]
+  },
+  "probe": {
+    "ask": [],
+    "dismissed": {}
+  },
+  "previous": [
+    "R1/F1"
+  ],
+  "allowed": {
+    "run": [
+      "jobs/find-and-read.guest/reviews/R2/brief.md",
+      "jobs/find-and-read.guest/attempts/1020-100000-pl/shots/01-find-seedlings.marked.png",
+      "jobs/find-and-read.guest/attempts/1020-100000-pl/shots/01-find-seedlings.png",
+      "jobs/find-and-read.guest/attempts/1020-100000-pl/shots/02-open-the-project.marked.png",
+      "jobs/find-and-read.guest/attempts/1020-100000-pl/shots/02-open-the-project.png",
+      "jobs/find-and-read.guest/attempts/1019-180000-pl/shots/01-find-seedlings.png",
+      "jobs/find-and-read.guest/attempts/1019-180000-pl/shots/01-find-seedlings.marked.png"
+    ],
+    "repo": []
+  },
+  "preparedAt": "2026-10-20T10:15:00.000Z"
+}

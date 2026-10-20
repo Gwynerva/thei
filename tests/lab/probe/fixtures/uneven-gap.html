@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>uneven-gap</title>
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      .list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: 240px;
+      }
+      .item {
+        height: 32px;
+        padding: 6px;
+        background: #dde;
+      }
+      .chip {
+        width: 64px;
+        height: 28px;
+        background: #def;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- A list whose third item stands 2 px further down. -->
+    <ul class="list">
+      <li class="item">One</li>
+      <li id="g-two" data-expect="uneven-gap" class="item">Two</li>
+      <li
+        id="g-three"
+        data-expect="uneven-gap"
+        class="item"
+        style="margin-top: 2px"
+      >
+        Three
+      </li>
+      <li class="item">Four</li>
+      <li class="item">Five</li>
+    </ul>
+
+    <!-- Decoy: a group set apart on purpose, by far more than 4 px. -->
+    <ul class="list">
+      <li class="item">One</li>
+      <li class="item">Two</li>
+      <li class="item" style="margin-top: 20px">Three</li>
+      <li class="item">Four</li>
+    </ul>
+
+    <!-- Decoy: a row spread with space-between. -->
+    <div style="display: flex; justify-content: space-between; width: 300px">
+      <div class="chip">A</div>
+      <div class="chip" style="margin-right: 2px">B</div>
+      <div class="chip">C</div>
+      <div class="chip">D</div>
+    </div>
+
+    <!-- Decoy: a row that wraps, its rows closer than its columns. -->
+    <div
+      style="
+        display: flex;
+        flex-wrap: wrap;
+        column-gap: 12px;
+        row-gap: 8px;
+        width: 240px;
+      "
+    >
+      <div class="chip">1</div>
+      <div class="chip">2</div>
+      <div class="chip">3</div>
+      <div class="chip">4</div>
+      <div class="chip">5</div>
+      <div class="chip">6</div>
+      <div class="chip">7</div>
+      <div class="chip">8</div>
+      <div class="chip">9</div>
+    </div>
+
+    <!-- Decoy: prose, whose headings keep their own spacing. -->
+    <article style="width: 300px">
+      <h2 style="margin-bottom: 8px">A heading</h2>
+      <p style="margin-bottom: 16px">A paragraph.</p>
+      <p style="margin-bottom: 16px">Another paragraph.</p>
+      <p style="margin-bottom: 18px">A third paragraph.</p>
+      <h3 style="margin-bottom: 6px">A smaller heading</h3>
+      <p style="margin-bottom: 16px">Words.</p>
+      <p>More words.</p>
+    </article>
+
+    <!-- Decoy: gaps a fraction of a pixel apart. -->
+    <ul class="list">
+      <li class="item">One</li>
+      <li class="item" style="margin-top: 0.4px">Two</li>
+      <li class="item">Three</li>
+      <li class="item">Four</li>
+    </ul>
+
+    <!-- Decoy: a transformed item in a list. -->
+    <ul class="list">
+      <li class="item">One</li>
+      <li class="item" style="transform: translateY(2px)">Two</li>
+      <li class="item">Three</li>
+      <li class="item">Four</li>
+      <li class="item">Five</li>
+    </ul>
+  </body>
+</html>

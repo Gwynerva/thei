@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>leaves-viewport</title>
+    <link rel="stylesheet" href="base.css" />
+  </head>
+  <body style="padding-top: 72px">
+    <p style="width: 300px">A page with a few fixed things over it.</p>
+
+    <!-- A popup that runs off the right edge. -->
+    <div
+      id="l-popup"
+      data-expect="leaves-viewport"
+      data-floating-popup
+      style="
+        position: fixed;
+        top: 120px;
+        right: -40px;
+        width: 200px;
+        padding: 8px;
+        border: 1px solid #888;
+        background: #fff;
+      "
+    >
+      A popup past the right edge
+    </div>
+
+    <!-- A toast below the bottom edge. -->
+    <div
+      id="l-toast"
+      data-expect="leaves-viewport"
+      role="status"
+      style="
+        position: fixed;
+        left: 16px;
+        bottom: -18px;
+        width: 240px;
+        padding: 12px;
+        background: #333;
+        color: #fff;
+      "
+    >
+      A toast half below the screen
+    </div>
+
+    <!-- Decoy: a fixed header from edge to edge. -->
+    <header
+      style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 56px;
+        padding: 18px 16px;
+        background: #eef;
+      "
+    >
+      Fixed header
+    </header>
+
+    <!-- Decoy: a drawer parked outside the screen. -->
+    <nav
+      style="
+        position: fixed;
+        top: 0;
+        left: -300px;
+        width: 280px;
+        height: 100%;
+        background: #eee;
+      "
+    >
+      Drawer menu
+    </nav>
+
+    <!-- Decoy: a popup well inside the screen. -->
+    <div
+      data-floating-popup
+      style="
+        position: fixed;
+        top: 200px;
+        left: 16px;
+        width: 200px;
+        padding: 8px;
+        border: 1px solid #888;
+        background: #fff;
+      "
+    >
+      A popup inside the screen
+    </div>
+  </body>
+</html>

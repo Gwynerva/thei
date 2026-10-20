@@ -1,0 +1,12 @@
+{
+  "jobId": "find-and-read.guest",
+  "study": "fixture",
+  "scenario": "find-and-read",
+  "scenarioTitle": "Find and read a project",
+  "persona": "guest",
+  "lens": "persona",
+  "role": "visitor",
+  "required": [
+    "pl"
+  ]
+}

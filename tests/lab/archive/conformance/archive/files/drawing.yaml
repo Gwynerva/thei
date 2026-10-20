@@ -1,0 +1,8 @@
+kind: image
+ext: svg
+title: A mug drawing
+description: A mug drawn from two sides
+origin: generated
+licence: CC0-1.0
+people: none
+truth: a generated test file (image, .svg)

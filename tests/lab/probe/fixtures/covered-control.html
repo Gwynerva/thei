@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>covered-control</title>
+    <link rel="stylesheet" href="base.css" />
+  </head>
+  <body>
+    <!-- Decoy: a sticky header the page has been scrolled under. -->
+    <header
+      style="
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        width: 100%;
+        height: 56px;
+        padding: 18px 12px;
+        background: #eef;
+      "
+    >
+      Sticky header
+    </header>
+    <section>
+      <button id="under-header" class="ctl">Scrolled under the header</button>
+    </section>
+
+    <!-- A box laid over a button that is meant to be pressed. -->
+    <section style="position: relative; width: 320px; height: 44px">
+      <button id="c-hidden" data-expect="covered-control" class="ctl">
+        Hidden action
+      </button>
+      <div
+        id="c-cover"
+        data-expect="covered-control"
+        style="
+          position: absolute;
+          left: 0;
+          top: 0;
+          z-index: 1;
+          width: 200px;
+          height: 44px;
+          padding: 12px;
+          background: rgb(240 200 80 / 0.9);
+        "
+      >
+        A cover laid over it
+      </div>
+    </section>
+
+    <!-- Decoy: an open popup over a button. -->
+    <section style="position: relative; width: 320px">
+      <button class="ctl">Under the popup</button>
+      <div
+        data-floating-popup
+        style="
+          position: absolute;
+          left: 0;
+          top: 0;
+          z-index: 30;
+          width: 220px;
+          padding: 8px;
+          border: 1px solid #999;
+          background: #fff;
+        "
+      >
+        Popup over a button
+      </div>
+    </section>
+
+    <!-- Decoy: a round button, whose corners are its parent's. -->
+    <section>
+      <button
+        class="ctl"
+        style="width: 44px; height: 44px; padding: 0; border-radius: 50%"
+        aria-label="Round"
+      >
+        ●
+      </button>
+    </section>
+
+    <!-- Decoy: a round avatar pulled up over a banner: beyond its curve,
+         its box's corners show the banner. -->
+    <section style="width: 320px">
+      <img
+        alt="Banner"
+        src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        style="display: block; width: 320px; height: 100px"
+      />
+      <button
+        aria-label="Avatar"
+        style="
+          position: relative;
+          display: block;
+          width: 80px;
+          height: 80px;
+          margin: -40px 0 0 16px;
+          padding: 0;
+          overflow: hidden;
+          border: 3px solid #fff;
+          border-radius: 50%;
+        "
+      >
+        <img
+          alt=""
+          src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+          style="display: block; width: 100%; height: 100%"
+        />
+      </button>
+    </section>
+
+    <!-- Decoy: a floating label over its field. -->
+    <label style="position: relative; display: block; width: 300px">
+      <span style="position: absolute; left: 10px; top: 4px; color: #666"
+        >Name</span
+      >
+      <input
+        style="width: 100%; height: 44px; padding: 20px 8px 2px"
+        value="Ada"
+      />
+    </label>
+
+    <!-- Decoy: a search field with its clear button laid into it. -->
+    <form style="position: relative; width: 300px">
+      <input
+        type="search"
+        aria-label="Search"
+        value="words"
+        style="width: 100%; height: 44px; padding: 0 48px 0 8px"
+      />
+      <button
+        type="button"
+        class="ctl"
+        aria-label="Clear"
+        style="position: absolute; top: 0; right: 0; width: 44px; padding: 0"
+      >
+        ×
+      </button>
+    </form>
+
+    <!-- Decoy: an icon inside a button. -->
+    <section>
+      <button class="ctl">
+        <svg width="16" height="16" viewBox="0 0 16 16">
+          <rect width="16" height="16" fill="#48c" />
+        </svg>
+        Save
+      </button>
+    </section>
+
+    <!-- Decoy: a disabled button, covered. -->
+    <section style="position: relative; width: 320px; height: 44px">
+      <button class="ctl" disabled>Disabled</button>
+      <div
+        style="
+          position: absolute;
+          inset: 0;
+          z-index: 1;
+          background: rgb(200 200 200 / 0.6);
+        "
+      ></div>
+    </section>
+
+    <section style="height: 1200px"></section>
+
+    <script>
+      const button = document.getElementById('under-header');
+      window.scrollTo(
+        0,
+        button.getBoundingClientRect().top + window.scrollY - 20,
+      );
+    </script>
+  </body>
+</html>

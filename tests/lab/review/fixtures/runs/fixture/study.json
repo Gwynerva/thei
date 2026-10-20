@@ -1,0 +1,85 @@
+{
+  "id": "fixture",
+  "title": "Today’s entry and search",
+  "question": "Can a newcomer write today’s entry, and can a guest find a project and read it?",
+  "personas": [
+    {
+      "id": "novice",
+      "name": "Novice",
+      "lens": "persona",
+      "role": "owner",
+      "experience": "novice",
+      "devices": [
+        "desktop",
+        "phone"
+      ],
+      "about": "You started your archive a week ago and write in it in the evenings, mostly on your phone. You read every label before you press and fear pressing the wrong thing: what if it gets erased. You do not know the words “relation”, “section” or “entity”, nor what the ✦ sign means. It annoys you when a button hides in a menu or when it is unclear whether what you wrote was saved."
+    },
+    {
+      "id": "expert",
+      "name": "Expert",
+      "lens": "persona",
+      "role": "owner",
+      "experience": "expert",
+      "devices": [
+        "desktop",
+        "phone"
+      ],
+      "about": "You have kept your archive for years and know it by heart. You count clicks, keep your hands on the keyboard and expect shortcuts for frequent things. Needless confirmations, slow answers and focus lost after saving annoy you."
+    },
+    {
+      "id": "guest",
+      "name": "Guest",
+      "lens": "persona",
+      "role": "visitor",
+      "experience": "novice",
+      "devices": [
+        "phone"
+      ],
+      "about": "You came by a link from a friend and see the site for the first time, on your phone, on the go. You do not know how it is built or what is in it. You leave if a page loads slowly or the text is small."
+    },
+    {
+      "id": "designer",
+      "name": "Designer",
+      "lens": "designer",
+      "devices": [
+        "desktop",
+        "phone"
+      ],
+      "reads": [
+        "docs/design/**"
+      ],
+      "about": "You judge only the visual quality of the screens: the grid, spacing, typography, consistency of components and both themes, against the rules in docs/design. You do not read code."
+    }
+  ],
+  "variants": [
+    "dd",
+    "pl"
+  ],
+  "bar": {
+    "minScore": 8,
+    "minMean": 8.5,
+    "forbid": [
+      "blocker",
+      "serious"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "diary-today",
+      "title": "Write today’s entry",
+      "roles": [
+        "owner"
+      ],
+      "task": "Write how today went and mention {event}."
+    },
+    {
+      "id": "find-and-read",
+      "title": "Find and read a project",
+      "roles": [
+        "visitor"
+      ],
+      "task": "Find the project that talks about {word}, open its section and the third picture of its gallery."
+    }
+  ]
+}

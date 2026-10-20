@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "study": "fixture",
+  "job": "diary-today.novice",
+  "review": "R1",
+  "kind": "fresh",
+  "lens": "persona",
+  "persona": "novice",
+  "attempts": {
+    "dd": "1020-090000-dd",
+    "pl": "1020-090500-pl"
+  },
+  "criteria": {
+    "findability": [
+      "dd",
+      "pl"
+    ],
+    "proximity": [
+      "dd",
+      "pl"
+    ],
+    "feedback": [
+      "dd",
+      "pl"
+    ],
+    "control": [
+      "dd",
+      "pl"
+    ],
+    "wording": [
+      "dd",
+      "pl"
+    ],
+    "trust": [
+      "dd",
+      "pl"
+    ],
+    "consistency": [
+      "dd",
+      "pl"
+    ],
+    "errors": [
+      "dd",
+      "pl"
+    ],
+    "phone": [
+      "pl"
+    ],
+    "tidiness": [
+      "dd",
+      "pl"
+    ]
+  },
+  "probe": {
+    "ask": [
+      "overlap:k3f9a2x7qd",
+      "near-miss:b7c2d9e0wf",
+      "small-target:d4e5f6a7b8"
+    ],
+    "dismissed": {}
+  },
+  "previous": [],
+  "allowed": {
+    "run": [
+      "jobs/diary-today.novice/reviews/R1/brief.md",
+      "jobs/diary-today.novice/attempts/1020-090000-dd/shots/01-open-the-dashboard.marked.png",
+      "jobs/diary-today.novice/attempts/1020-090000-dd/shots/01-open-the-dashboard.png",
+      "jobs/diary-today.novice/attempts/1020-090000-dd/shots/02-new-entry.marked.png",
+      "jobs/diary-today.novice/attempts/1020-090000-dd/shots/02-new-entry.png",
+      "jobs/diary-today.novice/attempts/1020-090000-dd/shots/03-write-and-save.marked.png",
+      "jobs/diary-today.novice/attempts/1020-090000-dd/shots/03-write-and-save.png",
+      "jobs/diary-today.novice/attempts/1020-090500-pl/shots/01-open-the-dashboard.marked.png",
+      "jobs/diary-today.novice/attempts/1020-090500-pl/shots/01-open-the-dashboard.png",
+      "jobs/diary-today.novice/attempts/1020-090500-pl/shots/02-find-it-in-the-menu.marked.png",
+      "jobs/diary-today.novice/attempts/1020-090500-pl/shots/02-find-it-in-the-menu.png",
+      "jobs/diary-today.novice/attempts/1020-090500-pl/shots/03-write-and-save.marked.png",
+      "jobs/diary-today.novice/attempts/1020-090500-pl/shots/03-write-and-save.png",
+      "jobs/diary-today.novice/attempts/1020-090000-dd/crops/02-overlap-k3f9a2x7.png",
+      "jobs/diary-today.novice/attempts/1020-090000-dd/crops/02-near-miss-b7c2d9e0.png",
+      "jobs/diary-today.novice/attempts/1020-090500-pl/crops/02-small-target-d4e5f6a7.png"
+    ],
+    "repo": []
+  },
+  "preparedAt": "2026-10-20T09:20:00.000Z"
+}

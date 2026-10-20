@@ -1,0 +1,36 @@
+{
+  "viewport": {
+    "width": 375,
+    "height": 812
+  },
+  "dpr": 2,
+  "scrollY": 0,
+  "root": "page",
+  "ms": 94,
+  "findings": [
+    {
+      "fp": "small-target:d4e5f6a7b8",
+      "rule": "small-target",
+      "hint": "serious",
+      "elements": [
+        {
+          "path": "header > button",
+          "desc": "button “Menu”"
+        }
+      ],
+      "measure": {
+        "smallestSidePx": 28
+      },
+      "message": "The “Menu” button is 28 px, under the 39 px a finger needs.",
+      "boxes": [
+        {
+          "x": 24,
+          "y": 520,
+          "width": 96,
+          "height": 28
+        }
+      ]
+    }
+  ],
+  "suppressed": []
+}

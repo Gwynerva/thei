@@ -1,0 +1,42 @@
+{
+  "attemptId": "1020-111000-dd",
+  "study": "fixture",
+  "jobId": "diary-today.novice",
+  "scenario": "diary-today",
+  "persona": "novice",
+  "variant": {
+    "viewport": "desktop",
+    "theme": "dark"
+  },
+  "role": "owner",
+  "task": "Write how today went and mention “First snow”.",
+  "picked": {
+    "event": "event:first-snow"
+  },
+  "status": "error",
+  "startedAt": "2026-10-20T11:10:00.000Z",
+  "durationMs": 1600,
+  "code": {
+    "commit": "c81a2f1f",
+    "dirty": true,
+    "diffHash": "a1",
+    "diffHashEnd": "a1"
+  },
+  "archive": {
+    "version": "1.0.0"
+  },
+  "snapshotId": "conformance-1020",
+  "target": "lab",
+  "serverMode": "dev",
+  "pageErrors": [
+    "TypeError: Cannot read properties of undefined (reading \"uuid\")"
+  ],
+  "consoleErrors": [],
+  "blockedHosts": [],
+  "labNotes": [],
+  "tidy": {
+    "restored": [],
+    "deleted": [],
+    "leftovers": []
+  }
+}

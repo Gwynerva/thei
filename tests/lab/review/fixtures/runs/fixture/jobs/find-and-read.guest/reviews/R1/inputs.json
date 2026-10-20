@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "study": "fixture",
+  "job": "find-and-read.guest",
+  "review": "R1",
+  "kind": "fresh",
+  "lens": "persona",
+  "persona": "guest",
+  "attempts": {
+    "pl": "1019-180000-pl"
+  },
+  "criteria": {
+    "findability": [
+      "pl"
+    ],
+    "proximity": [
+      "pl"
+    ],
+    "feedback": [
+      "pl"
+    ],
+    "control": [
+      "pl"
+    ],
+    "wording": [
+      "pl"
+    ],
+    "trust": [
+      "pl"
+    ],
+    "consistency": [
+      "pl"
+    ],
+    "errors": [
+      "pl"
+    ],
+    "phone": [
+      "pl"
+    ],
+    "tidiness": [
+      "pl"
+    ]
+  },
+  "probe": {
+    "ask": [
+      "clipped-text:f1e2d3c4b5"
+    ],
+    "dismissed": {}
+  },
+  "previous": [],
+  "allowed": {
+    "run": [
+      "jobs/find-and-read.guest/reviews/R1/brief.md",
+      "jobs/find-and-read.guest/attempts/1019-180000-pl/shots/01-find-seedlings.marked.png",
+      "jobs/find-and-read.guest/attempts/1019-180000-pl/shots/01-find-seedlings.png",
+      "jobs/find-and-read.guest/attempts/1019-180000-pl/shots/02-open-the-project.marked.png",
+      "jobs/find-and-read.guest/attempts/1019-180000-pl/shots/02-open-the-project.png",
+      "jobs/find-and-read.guest/attempts/1019-180000-pl/crops/01-clipped-text-f1e2d3c4.png"
+    ],
+    "repo": []
+  },
+  "preparedAt": "2026-10-19T18:30:00.000Z"
+}

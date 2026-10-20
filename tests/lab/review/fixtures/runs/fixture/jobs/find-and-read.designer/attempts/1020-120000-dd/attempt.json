@@ -1,0 +1,42 @@
+{
+  "attemptId": "1020-120000-dd",
+  "study": "fixture",
+  "jobId": "find-and-read.designer",
+  "scenario": "find-and-read",
+  "persona": "designer",
+  "variant": {
+    "viewport": "desktop",
+    "theme": "dark"
+  },
+  "role": "visitor",
+  "task": "Find the project that talks about “seedlings”, open its section and the third picture of its gallery.",
+  "picked": {
+    "project": "project:greenhouse"
+  },
+  "status": "done",
+  "startedAt": "2026-10-20T12:00:00.000Z",
+  "durationMs": 2400,
+  "code": {
+    "commit": "c81a2f1f",
+    "dirty": true,
+    "diffHash": "a1",
+    "diffHashEnd": "a1"
+  },
+  "archive": {
+    "version": "1.0.0"
+  },
+  "snapshotId": "conformance-1020",
+  "target": "lab",
+  "serverMode": "dev",
+  "pageErrors": [],
+  "consoleErrors": [],
+  "blockedHosts": [
+    "upload.wikimedia.org"
+  ],
+  "labNotes": [],
+  "tidy": {
+    "restored": [],
+    "deleted": [],
+    "leftovers": []
+  }
+}

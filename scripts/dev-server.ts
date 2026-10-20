@@ -8,26 +8,23 @@
 //   bun scripts/dev-server.ts realdata            nuxt dev on 3002, over a
 //                                                 copy of a real backup
 //                                                 (`bun scripts/realdata.ts`)
-//   bun scripts/dev-server.ts lab                 nuxt dev on 3003, the local
-//                                                 AI lab (`.ai-lab/`, never
-//                                                 committed), opened as
-//                                                 http://lab.localhost:3003
-//   bun scripts/dev-server.ts search-lab          nuxt dev on 3004, the search
-//                                                 lab (`.search-lab/`, never
-//                                                 committed), opened as
-//                                                 http://search.localhost:3004
+//   bun scripts/dev-server.ts lab                 nuxt dev on 3003, the lab
+//                                                 site (`.lab/site/`, see
+//                                                 `tests/lab/`), opened as
+//                                                 http://lab.localhost:3003;
+//                                                 a worktree has its own port
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { E2E_PORT } from '../tests/e2e/fixture-url';
+import { labPort } from '../tests/lab/config';
 
 const targets = {
   playground: { dir: '.playground', port: 3000, fork: true },
   fixture: { dir: 'tests/e2e/fixture', port: E2E_PORT, fork: false },
   realdata: { dir: '.realdata', port: 3002, fork: true },
-  lab: { dir: '.ai-lab/site', port: 3003, fork: true },
-  'search-lab': { dir: '.search-lab/site', port: 3004, fork: true },
+  lab: { dir: '.lab/site', port: labPort(), fork: true },
 } as const;
 
 const root = fileURLToPath(new URL('..', import.meta.url));

@@ -1,0 +1,61 @@
+[
+  {
+    "n": 1,
+    "label": "Find “seedlings”",
+    "action": "type",
+    "url": "http://lab.localhost:3003/search/?q=seedlings",
+    "sinceStartMs": 400,
+    "shot": "shots/01-find-seedlings.png",
+    "marked": "shots/01-find-seedlings.marked.png",
+    "answer": {
+      "firstFeedbackMs": 90,
+      "answerMs": 400
+    },
+    "probe": {
+      "counts": {
+        "clipped-text": 1
+      },
+      "fps": [
+        "clipped-text:f1e2d3c4b5"
+      ]
+    }
+  },
+  {
+    "n": 2,
+    "label": "Open the project",
+    "action": "tap",
+    "url": "http://lab.localhost:3003/projects/greenhouse/",
+    "sinceStartMs": 800,
+    "shot": "shots/02-open-the-project.png",
+    "marked": "shots/02-open-the-project.marked.png",
+    "target": {
+      "name": "Open",
+      "box": {
+        "x": 24,
+        "y": 520,
+        "width": 327,
+        "height": 44
+      },
+      "inView": true
+    },
+    "pointer": {
+      "from": [
+        187.5,
+        406
+      ],
+      "to": [
+        187.5,
+        542
+      ],
+      "travelPx": 136
+    },
+    "answer": {
+      "firstFeedbackMs": 90,
+      "answerMs": 400
+    },
+    "probe": {
+      "counts": {},
+      "fps": []
+    }
+  }
+]

@@ -1,0 +1,36 @@
+{
+  "viewport": {
+    "width": 375,
+    "height": 812
+  },
+  "dpr": 2,
+  "scrollY": 0,
+  "root": "page",
+  "ms": 87,
+  "findings": [
+    {
+      "fp": "clipped-text:f1e2d3c4b5",
+      "rule": "clipped-text",
+      "hint": "serious",
+      "elements": [
+        {
+          "path": "main > h1",
+          "desc": "heading “A greenhouse on the balcony…”"
+        }
+      ],
+      "measure": {
+        "visible": 0.62
+      },
+      "message": "The result’s heading is cut off without an ellipsis: 62% is visible.",
+      "boxes": [
+        {
+          "x": 24,
+          "y": 120,
+          "width": 250,
+          "height": 44
+        }
+      ]
+    }
+  ],
+  "suppressed": []
+}

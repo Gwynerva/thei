@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>modal</title>
+    <link rel="stylesheet" href="base.css" />
+  </head>
+  <!-- With a modal open, only the dialog is measured: the page behind it is
+       out of reach, and what overlaps there is not found. -->
+  <body data-expect-root="dialog">
+    <section style="width: 320px">
+      <p>Behind the modal, two lines</p>
+      <p style="margin-top: -12px">overlap where nobody can see them</p>
+    </section>
+
+    <dialog id="dialog" style="width: 300px; padding: 16px">
+      <p id="m-one" data-expect="overlap">Inside the dialog, a line</p>
+      <p id="m-two" data-expect="overlap" style="margin-top: -12px">
+        pulled into the one above
+      </p>
+      <!-- Decoy: a popup inside the dialog, over its text. -->
+      <div style="position: relative; margin-top: 16px">
+        <p>A popup inside the dialog lies over this text</p>
+        <div
+          data-floating-popup
+          style="
+            position: absolute;
+            top: 0;
+            left: 20px;
+            z-index: 2;
+            padding: 4px;
+            border: 1px solid #888;
+            background: #fff;
+          "
+        >
+          Popup in a dialog
+        </div>
+      </div>
+    </dialog>
+
+    <script>
+      document.getElementById('dialog').showModal();
+    </script>
+  </body>
+</html>

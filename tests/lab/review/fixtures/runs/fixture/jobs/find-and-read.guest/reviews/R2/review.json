@@ -1,0 +1,64 @@
+{
+  "schema": 2,
+  "job": "find-and-read.guest",
+  "review": "R2",
+  "kind": "recheck",
+  "attempts": {
+    "pl": "1020-100000-pl"
+  },
+  "overall": "Now the whole title shows; the project was found and opened without doubt.",
+  "scores": {
+    "findability": {
+      "pl": 9
+    },
+    "proximity": {
+      "pl": 9
+    },
+    "feedback": {
+      "pl": 9
+    },
+    "control": {
+      "pl": 9
+    },
+    "wording": {
+      "pl": 9
+    },
+    "trust": {
+      "pl": 9
+    },
+    "consistency": {
+      "pl": 9
+    },
+    "errors": {
+      "pl": null
+    },
+    "phone": {
+      "pl": 8
+    },
+    "tidiness": {
+      "pl": 9
+    }
+  },
+  "probe": {},
+  "findings": [],
+  "previous": [
+    {
+      "id": "R1/F1",
+      "status": "fixed",
+      "why": "The result’s heading now fits whole.",
+      "attempt": "1020-100000-pl",
+      "step": 1,
+      "shot": "shots/01-find-seedlings.marked.png"
+    }
+  ],
+  "liked": [
+    "The project’s large heading.",
+    "The gallery swipes with a finger."
+  ],
+  "filesRead": [
+    "jobs/find-and-read.guest/reviews/R2/brief.md",
+    "jobs/find-and-read.guest/attempts/1020-100000-pl/shots/01-find-seedlings.marked.png",
+    "jobs/find-and-read.guest/attempts/1020-100000-pl/shots/02-open-the-project.marked.png",
+    "jobs/find-and-read.guest/attempts/1019-180000-pl/shots/01-find-seedlings.marked.png"
+  ]
+}

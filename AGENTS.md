@@ -13,6 +13,16 @@ This section takes precedence over any other guidance, default or caution about 
 - Never sign out of or replace a session the user made. Never save a new secret phrase or password in Settings: that ends every other session and drops `password.fallback`.
 - Switch the theme whenever a check needs it, in any browser and without asking: light, dark or the system's, from the gear in the header (kept per browser in `localStorage` as `thei-visuals`). It is the visitor's own setting and changes nothing on the site; an emulated `prefers-color-scheme` alone does not override a theme chosen there.
 - Sign-in attempts are limited to one every 3 seconds per address.
+- The playground's everyday content is the lab's archive: `bun run lab up playground` puts a snapshot of it in place (the playground's own content waits in `.lab/stash/`; its secrets, AI settings and sign-ins stay), `bun run lab down playground` brings the own content back. Both need the playground stopped: ask before stopping a server the owner runs.
+
+## Lab
+
+The lab (`tests/lab/`, its `README.md`; `bun run lab help`) tries a change on a large fictional archive: scenarios played in a browser by personas, a layout probe after every step, and reviewers — one Claude agent per job — who judge what the person saw (`/lab`).
+
+- The archive's data lives in its own repository, `Gwynerva/thei-lab-archive`, in its own format (`FORMAT.md` there); `tests/lab/archive.lock.json` pins the release. Everything of the lab is in English: the archive, personas, tasks, briefs, reviews and reports.
+- The lab site (`.lab/site/`) is throwaway test data, like the playground: build, restore, seed and play on it freely, and sign in with `tests/lab/site/credentials.ts`. Never stop a lab server the lab did not start (`bun run lab stop` stops only its own).
+- A study is kept in `tests/lab/studies/` only with the owner's explicit agreement; any other lives in `.lab/studies/` and is never committed.
+- The adapter (`tests/lab/archive/`) seeds through the admin's own routes and changes with them: a change to a route or a form it uses updates it in the same change. `tests/lab/archive/contract.test.ts` fails when a block type, inline markup or form field has no place in the format: a new one comes with its Lab Markdown construct, its conversion and a use in the conformance archive (`tests/lab/archive/conformance/`), and the archive repository gets a format revision for it.
 
 ## What Thei Is About
 
@@ -49,12 +59,12 @@ Around them:
 
 ## Development Servers
 
-| Server                                    | Open at                                       | Start                                                           |
-| ----------------------------------------- | --------------------------------------------- | --------------------------------------------------------------- |
-| Playground, `.playground/`                | `http://localhost:3000`                       | `bun run dev`                                                   |
-| Browser test fixture, `tests/e2e/fixture` | `http://127.0.0.1:3001`                       | `bun run e2e:dev`; `bun run test:e2e` builds and starts its own |
-| Release bench, `tests/release/`           | `127.0.0.1:3100`–`3105`                       | `bun run test:release`, in Docker                               |
-| Local labs, `.ai-lab/` and `.search-lab/` | `lab.localhost:3003`, `search.localhost:3004` | `bun scripts/dev-server.ts lab` or `search-lab`; not in git     |
+| Server                                    | Open at                                                     | Start                                                           |
+| ----------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------- |
+| Playground, `.playground/`                | `http://localhost:3000`                                     | `bun run dev`                                                   |
+| Browser test fixture, `tests/e2e/fixture` | `http://127.0.0.1:3001`                                     | `bun run e2e:dev`; `bun run test:e2e` builds and starts its own |
+| Release bench, `tests/release/`           | `127.0.0.1:3100`–`3105`                                     | `bun run test:release`, in Docker                               |
+| Lab site, `.lab/site/` (`tests/lab/`)     | `http://lab.localhost:3003`; a worktree's own, `lab status` | `bun scripts/dev-server.ts lab`                                 |
 
 - Start servers only through these scripts (`scripts/dev-server.ts`), never with `nuxt dev` itself: the Nuxt CLI stops a dev server started without a terminal, such as the preview pane's, and takes its place. Each keeps to its own port: when the port is taken it says so and stops, rather than let Nuxt move elsewhere. When it says the server already runs, use that one.
 - A server that was running before you began is the user's: use it, and never restart or stop it. Stop only a server you started for the task, after checking that its PID is still yours (a dev server records it in `.nuxt/nuxt.lock`). Remove bench containers left by `--keep` once done.

@@ -1,0 +1,40 @@
+{
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "dpr": 1,
+  "scrollY": 0,
+  "root": "page",
+  "ms": 101,
+  "findings": [
+    {
+      "fp": "overlap:1b2c3d4e5f",
+      "rule": "overlap",
+      "hint": "serious",
+      "elements": [
+        {
+          "path": "figure > figcaption",
+          "desc": "gallery caption"
+        },
+        {
+          "path": "figure > button",
+          "desc": "button “Gallery”"
+        }
+      ],
+      "measure": {
+        "overlapPx2": 420
+      },
+      "message": "The gallery caption runs over the “Gallery” button.",
+      "boxes": [
+        {
+          "x": 160,
+          "y": 520,
+          "width": 220,
+          "height": 44
+        }
+      ]
+    }
+  ],
+  "suppressed": []
+}

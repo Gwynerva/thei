@@ -1,0 +1,23 @@
+- id: typo-lamp-day
+  ref: diary:2021-03-04
+  traits: [typos]
+  where: body
+  word: prjoect
+  detail: 'prjoect → project'
+- id: untagged-trip
+  ref: event:secret-trip
+  traits: [untagged]
+- id: kintsugi
+  ref: page:about-site
+  traits: [unique-word]
+  where: body
+  word: kintsugi
+- id: hidden-gallery
+  ref: project:lamp
+  traits: [hidden-word]
+  where: body
+  word: mother-of-pearl
+  detail: on the third slide of a gallery
+- id: no-description
+  file: photo-b
+  traits: [no-description]

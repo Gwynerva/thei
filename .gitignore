@@ -5,8 +5,10 @@ dist
 .thei
 .playground/content
 .realdata/content
-/.ai-lab/
-/.search-lab/
+# The lab (tests/lab/): only the site's config is kept.
+/.lab/*
+!/.lab/site/
+/.lab/site/content/
 tests/e2e/fixture/content
 tests/e2e/.artifacts
 tests/.artifacts

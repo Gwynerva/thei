@@ -1,0 +1,14 @@
+[
+  {
+    "step": 2,
+    "severity": "serious",
+    "kind": "missing-control",
+    "text": "The phone header has no search icon."
+  },
+  {
+    "step": 2,
+    "severity": "blocker",
+    "kind": "stopped",
+    "text": "The task stopped at step 2: search not found within 20 seconds"
+  }
+]

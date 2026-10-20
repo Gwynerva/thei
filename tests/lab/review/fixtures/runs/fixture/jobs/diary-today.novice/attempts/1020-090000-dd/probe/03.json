@@ -1,0 +1,36 @@
+{
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "dpr": 1,
+  "scrollY": 0,
+  "root": "page",
+  "ms": 101,
+  "findings": [
+    {
+      "fp": "clipped-text:c0ffee12aa",
+      "rule": "clipped-text",
+      "hint": "info",
+      "elements": [
+        {
+          "path": "header > span",
+          "desc": "date in the header"
+        }
+      ],
+      "measure": {
+        "visible": 0.9
+      },
+      "message": "The date in the header is cut with an ellipsis.",
+      "boxes": [
+        {
+          "x": 160,
+          "y": 520,
+          "width": 220,
+          "height": 44
+        }
+      ]
+    }
+  ],
+  "suppressed": []
+}

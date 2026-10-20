@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>page-overflow</title>
+    <link rel="stylesheet" href="base.css" />
+  </head>
+  <body>
+    <!-- A row wider than the screen, inside boxes that are not: it, and not
+         its wide child, is named. -->
+    <section style="width: 320px">
+      <div>
+        <div
+          id="p-wide"
+          data-expect="page-overflow"
+          style="width: calc(100vw + 24px); background: #fdd"
+        >
+          <div style="width: 150%">A row wider than the screen</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Decoy: a wide strip in a box that scrolls. -->
+    <div style="width: 300px; overflow-x: auto">
+      <div style="width: 1600px">A wide strip inside a scroller</div>
+    </div>
+
+    <!-- Decoy: a wide strip in a box that cuts it. -->
+    <div style="width: 300px; overflow: hidden">
+      <div style="width: 1600px">Cut by its box</div>
+    </div>
+
+    <!-- Decoy: words only for screen readers. -->
+    <span
+      style="
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      "
+      >Only for screen readers, however long they are</span
+    >
+  </body>
+</html>

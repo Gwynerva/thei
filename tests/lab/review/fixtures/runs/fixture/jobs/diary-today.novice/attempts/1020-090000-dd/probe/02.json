@@ -1,0 +1,67 @@
+{
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "dpr": 1,
+  "scrollY": 0,
+  "root": "page",
+  "ms": 94,
+  "findings": [
+    {
+      "fp": "overlap:k3f9a2x7qd",
+      "rule": "overlap",
+      "hint": "serious",
+      "elements": [
+        {
+          "path": "main > label",
+          "desc": "label “Field label”"
+        },
+        {
+          "path": "main > button",
+          "desc": "button “New entry”"
+        }
+      ],
+      "measure": {
+        "overlapPx2": 640
+      },
+      "message": "The field label runs over the “New entry” button.",
+      "boxes": [
+        {
+          "x": 160,
+          "y": 520,
+          "width": 220,
+          "height": 44
+        }
+      ]
+    },
+    {
+      "fp": "near-miss:b7c2d9e0wf",
+      "rule": "near-miss",
+      "hint": "minor",
+      "elements": [
+        {
+          "path": "main > p:nth-child(1)",
+          "desc": "paragraph 1"
+        },
+        {
+          "path": "main > p:nth-child(2)",
+          "desc": "paragraph 2"
+        }
+      ],
+      "measure": {
+        "deltaPx": 1.5
+      },
+      "message": "The left edges of two paragraphs differ by 1.5 px.",
+      "boxes": [
+        {
+          "x": 160,
+          "y": 196,
+          "width": 760,
+          "height": 20
+        }
+      ]
+    }
+  ],
+  "suppressed": []
+}
