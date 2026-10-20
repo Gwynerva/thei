@@ -9,7 +9,7 @@ import type {
 import { placeField } from '#layers/thei/shared/ai-field-ask';
 import {
   RELATION_TYPE_OF_WORD,
-  RELATION_WORD_FROM_OTHER_END,
+  relationFromEnd,
   type RelationEditItem,
   type RelationEntityType,
   type RelationNote,
@@ -218,11 +218,8 @@ function useDeclinedHere(options: {
   async function reject(offer: AiEntityOffer) {
     const id = offer.action.actionUuid;
     options.hide(id, true);
-    try {
-      await aiApi.reject(id);
-    } catch (caught) {
+    if (!(await aiAttempt(() => aiApi.reject(id)))) {
       options.hide(id, false);
-      showToast(errorMessage(caught, phrase.value.ai_error));
       return;
     }
     keep(id, {
@@ -234,24 +231,14 @@ function useDeclinedHere(options: {
   }
   async function restore(offer: AiEntityOffer) {
     const id = offer.action.actionUuid;
-    try {
-      await aiApi.restore(id);
-    } catch (caught) {
-      showToast(errorMessage(caught, phrase.value.ai_error));
-      return;
-    }
+    if (!(await aiAttempt(() => aiApi.restore(id)))) return;
     keep(id, undefined);
     options.hide(id, false);
     await options.refresh();
   }
   async function never(offer: AiEntityOffer) {
     const id = offer.action.actionUuid;
-    try {
-      await aiApi.never(id);
-    } catch (caught) {
-      showToast(errorMessage(caught, phrase.value.ai_error));
-      return;
-    }
+    if (!(await aiAttempt(() => aiApi.never(id)))) return;
     if (declined.value.has(id))
       keep(id, { ...offer, action: { ...offer.action, never: true } });
   }
@@ -348,20 +335,22 @@ export function tellEntitiesChanged(refs: (string | undefined)[]) {
   for (const listener of listeners) listener(changed);
 }
 
-// ---- Laying a proposal into a form ----------------------------------------------------
-
-/** A relation's note as the other end reads it: a split one's sides swap. */
-function noteFromOtherEnd(note: unknown): RelationNote | undefined {
-  if (!note || typeof note !== 'object') return undefined;
-  const value = note as RelationNote;
-  return value.type === 'split'
-    ? {
-        type: 'split',
-        currentText: value.relatedText,
-        relatedText: value.currentText,
-      }
-    : value;
+/**
+ * Hears, while the scope lives, that an AI action changed the entity `ref`
+ * names on the server — applied or undone from a session, in any tab.
+ */
+function onEntitiesChanged(ref: () => string | undefined, heard: () => void) {
+  if (!import.meta.client) return;
+  const listener = (refs: string[]) => {
+    const current = ref();
+    if (current && refs.includes(current)) heard();
+  };
+  entityChannel();
+  listeners.add(listener);
+  onScopeDispose(() => listeners.delete(listener));
 }
+
+// ---- Laying a proposal into a form ----------------------------------------------------
 
 /**
  * What a take did: the fields it changed, how they read after it, and how to
@@ -469,12 +458,10 @@ async function tellTakenWords(
 
 /** The owner's comment on a proposal, sent to its session. */
 async function sendComment(offer: AiEntityOffer, text: string) {
-  try {
+  await aiAttempt(async () => {
     await aiApi.comment(offer.action.actionUuid, text);
     showToast(phrase.value.ai_toast_comment_sent);
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  }
+  });
 }
 
 /** The fields as a take compares them. */
@@ -557,18 +544,15 @@ function takeRelation(
     op: 'add' | 'change' | 'remove';
     other: string;
     relation: RelationWord;
-    note?: unknown;
+    note?: RelationNote;
   };
   // Proposed from the other end, it is read from this one.
-  const fromHere = action.target?.ref === self;
-  const end = fromHere ? action.refs[payload.other] : action.target;
+  const {
+    to: end,
+    word,
+    note,
+  } = relationFromEnd({ ...payload, target: action.target }, action.refs, self);
   if (!end) return undefined;
-  const word = fromHere
-    ? payload.relation
-    : RELATION_WORD_FROM_OTHER_END[payload.relation];
-  const note = fromHere
-    ? (payload.note as RelationNote | undefined)
-    : noteFromOtherEnd(payload.note);
   const others = (form.relations as RelationEditItem[]).filter(
     (item) => !(item.entityType === end.type && item.entityId === end.id),
   );
@@ -585,8 +569,11 @@ function takeRelation(
   return setFields(form, { relations: [...others, item] });
 }
 
-/** Lays a proposal into the form; none when the form cannot take it. */
-function takeInto(
+/**
+ * Lays a proposal into the form; none when the form cannot take it. Which
+ * kinds it takes is held to `tests/server/ai-actions-contract.test.ts`.
+ */
+export function takeInto(
   form: Record<string, unknown>,
   action: AiActionItem,
   self: string,
@@ -629,6 +616,68 @@ function takes(
   return Boolean(takeInto({ ...form }, action, self));
 }
 
+/**
+ * What a form and a file's description field alike keep of the proposals
+ * that wait for them: those laid into their fields and those answered here,
+ * both left out of what is offered; those declined here; the toast that says
+ * to save what was taken.
+ */
+function useOfferCore(options: {
+  form: () => Record<string, unknown> | undefined;
+  /** What waits, as last read. */
+  offers: () => readonly AiEntityOffer[];
+  refresh: () => Promise<void>;
+}) {
+  const laid = useTakes(options.form);
+  const { stillTaken } = laid;
+  /** Proposals answered here, until what waits is read again. */
+  const answered = ref(new Set<string>());
+  /** The toast that says to save what was taken, gone once it is saved. */
+  let takenToast: number | undefined;
+  function answer(id: string, on = true) {
+    const next = new Set(answered.value);
+    if (on) next.add(id);
+    else next.delete(id);
+    answered.value = next;
+  }
+  return {
+    laid,
+    stillTaken,
+    answer,
+    forgetAnswered: () => (answered.value = new Set()),
+    offers: computed(() =>
+      options
+        .offers()
+        .filter(
+          (offer) =>
+            !stillTaken(offer.action.actionUuid) &&
+            !answered.value.has(offer.action.actionUuid),
+        ),
+    ),
+    declined: useDeclinedHere({ hide: answer, refresh: options.refresh }),
+    /**
+     * Lays a proposal into the fields, read from the end `self` names; a
+     * toast says to save them, in the words given, unless `said` is false.
+     */
+    take(offer: AiEntityOffer, self: string, said?: string | false) {
+      const form = options.form();
+      const undo = form && takeInto(form, offer.action, self);
+      if (!undo) return;
+      const id = offer.action.actionUuid;
+      laid.keep(id, undo);
+      if (said !== false) takenToast = showTakenToast(id, laid, said);
+    },
+    /** The proposals taken into the fields, as last read. */
+    taken: () =>
+      [...laid.taken.value.keys()].flatMap(
+        (id) =>
+          options.offers().find((offer) => offer.action.actionUuid === id)
+            ?.action ?? [],
+      ),
+    hideTakenToast: () => hideToast(takenToast),
+  };
+}
+
 // ---- The entity's AI -----------------------------------------------------------------
 
 function createEntityAi(options: EntityAiOptions): EntityAi {
@@ -644,14 +693,12 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
   const canonical = computed(
     () => panel.value?.memory.entity.ref ?? target.value,
   );
-  const laid = useTakes(
-    () => options.form?.() as Record<string, unknown> | undefined,
-  );
-  const { stillTaken } = laid;
-  /** The toast that says to save what was taken, gone once it is saved. */
-  let takenToast: number | undefined;
-  /** Proposals answered here, until the panel is read again. */
-  const answered = ref(new Set<string>());
+  const core = useOfferCore({
+    form: () => options.form?.() as Record<string, unknown> | undefined,
+    offers: () => panel.value?.offers ?? [],
+    refresh,
+  });
+  const { laid, stillTaken, declined } = core;
   /** Text edits taken in an editor, by action: told once the form is saved. */
   const takenInTexts = new Map<string, Record<string, string>>();
 
@@ -678,7 +725,7 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
       const read = await aiApi.entityPanel(current);
       if (ticket !== reading) return;
       panel.value = read;
-      answered.value = new Set();
+      core.forgetAnswered();
     } catch {
       if (ticket === reading) panel.value = null;
     }
@@ -697,14 +744,7 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
           declined.letGo();
           // Saved by the owner — not read again for being outdated — what
           // was taken is told as saved.
-          const took = outdated.value
-            ? []
-            : [...laid.taken.value.keys()].flatMap(
-                (id) =>
-                  panel.value?.offers.find(
-                    (offer) => offer.action.actionUuid === id,
-                  )?.action ?? [],
-              );
+          const took = outdated.value ? [] : core.taken();
           const form = options.form?.() as Record<string, unknown> | undefined;
           // Saved, what was taken waits no more: counted so at once, rather
           // than counted again until the form's AI is read anew.
@@ -714,7 +754,7 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
               waiting: Math.max(0, panel.value.waiting - took.length),
             };
           laid.clear();
-          hideToast(takenToast);
+          core.hideTakenToast();
           outdated.value = false;
           void Promise.all([tellTaken(), tellTakenWords(took, form)]).then(
             refresh,
@@ -743,24 +783,17 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
       },
     );
     onScopeDispose(letGo);
-
-    const heard = (refs: string[]) => {
-      if (!canonical.value || !refs.includes(canonical.value)) return;
-      outdated.value = true;
-      void refresh();
-    };
-    entityChannel();
-    listeners.add(heard);
-    onScopeDispose(() => listeners.delete(heard));
   }
 
-  const offers = computed(() =>
-    (panel.value?.offers ?? []).filter(
-      (offer) =>
-        !stillTaken(offer.action.actionUuid) &&
-        !answered.value.has(offer.action.actionUuid),
-    ),
+  onEntitiesChanged(
+    () => canonical.value,
+    () => {
+      outdated.value = true;
+      void refresh();
+    },
   );
+
+  const offers = core.offers;
 
   // The admin bar's ✦ counts what waits for the owner, as the server read
   // it with this form — less what is taken into the form, which waits only
@@ -797,42 +830,25 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
     if (mode === 'takes') return take(offer);
     if (mode !== 'applies') return;
     const id = offer.action.actionUuid;
-    answer(id);
-    try {
+    core.answer(id);
+    await aiAttempt(async () => {
       const outcome = await aiApi.apply([id]);
       if (outcome.refused || outcome.failed)
         showToast(outcome.refused ?? outcome.failed!.error);
-    } catch (caught) {
-      showToast(errorMessage(caught, phrase.value.ai_error));
-    }
+    });
     await refresh();
   }
 
   function take(offer: AiEntityOffer) {
-    const form = options.form?.() as Record<string, unknown> | undefined;
-    if (!form || !canonical.value) return;
-    const undo = takeInto(form, offer.action, canonical.value);
-    if (!undo) return;
-    const id = offer.action.actionUuid;
-    laid.keep(id, undo);
+    if (!canonical.value) return;
     // At the form's head its row says so itself, where it stood: no toast
     // laid over the form's first fields.
-    if (offer.place !== 'form') takenToast = showTakenToast(id, laid);
+    core.take(
+      offer,
+      canonical.value,
+      offer.place === 'form' ? false : undefined,
+    );
   }
-
-  function answer(id: string) {
-    answered.value = new Set(answered.value).add(id);
-  }
-
-  const declined = useDeclinedHere({
-    hide: (id, on) => {
-      const next = new Set(answered.value);
-      if (on) next.add(id);
-      else next.delete(id);
-      answered.value = next;
-    },
-    refresh,
-  });
 
   async function remember(text: string) {
     if (!target.value) return;
@@ -911,35 +927,16 @@ export interface FileAiOptions {
 export function provideFileAi(options: FileAiOptions): EntityAi {
   const aiEnabled = useAiEnabled();
   const target = computed(() => options.ref());
-  const laid = useTakes(options.form);
-  const { stillTaken } = laid;
-  let takenToast: number | undefined;
-  const answered = ref(new Set<string>());
-  const offers = computed(() =>
-    aiEnabled.value
-      ? options
-          .offers()
-          .filter(
-            (offer) =>
-              !stillTaken(offer.action.actionUuid) &&
-              !answered.value.has(offer.action.actionUuid),
-          )
-      : [],
-  );
-  function answer(id: string, on = true) {
-    const next = new Set(answered.value);
-    if (on) next.add(id);
-    else next.delete(id);
-    answered.value = next;
-  }
-  const declined = useDeclinedHere({
-    hide: (id, on) => answer(id, on),
+  const core = useOfferCore({
+    form: options.form,
+    offers: () => (aiEnabled.value ? options.offers() : []),
     refresh: () => options.reload(),
   });
+  const { offers, declined } = core;
   async function refresh() {
     await options.reload();
-    laid.clear();
-    answered.value = new Set();
+    core.laid.clear();
+    core.forgetAnswered();
   }
 
   const asks = useFieldAsks({
@@ -959,12 +956,8 @@ export function provideFileAi(options: FileAiOptions): EntityAi {
     refresh,
     modeOf: () => 'takes',
     async accept(offer) {
-      const undo = takeInto(options.form(), offer.action, target.value);
-      if (!undo) return;
-      const id = offer.action.actionUuid;
-      laid.keep(id, undo);
       // The file's window has no form: its description field is saved alone.
-      takenToast = showTakenToast(id, laid, phrase.value.ai_offer_taken_file);
+      core.take(offer, target.value, phrase.value.ai_offer_taken_file);
     },
     reject: declined.reject,
     declinedAt: declined.declinedAt,
@@ -983,28 +976,17 @@ export function provideFileAi(options: FileAiOptions): EntityAi {
     ask: (place, text, label) => asks.ask(place, text, label),
     stopAsk: (place) => asks.stop(place),
     async saved() {
-      hideToast(takenToast);
-      await tellTakenWords(
-        [...laid.taken.value.keys()].flatMap(
-          (id) =>
-            options.offers().find((offer) => offer.action.actionUuid === id)
-              ?.action ?? [],
-        ),
-        options.form(),
-      );
+      core.hideTakenToast();
+      await tellTakenWords(core.taken(), options.form());
     },
     remember: async () => {},
   };
   provide(KEY, ai);
 
   // Applied or undone from a session: the field reads the file again.
-  if (import.meta.client) {
-    const heard = (refs: string[]) => {
-      if (refs.includes(target.value)) void refresh();
-    };
-    entityChannel();
-    listeners.add(heard);
-    onScopeDispose(() => listeners.delete(heard));
-  }
+  onEntitiesChanged(
+    () => target.value,
+    () => void refresh(),
+  );
   return ai;
 }

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { IconName } from '#thei/icons';
 import {
-  RELATION_WORD_FROM_OTHER_END,
+  relationFromEnd,
   type RelationWord,
 } from '#layers/thei/shared/relation';
 import { relationWordIcon } from '#layers/thei/shared/relation-display';
@@ -50,11 +50,15 @@ function chipOf(offer: AiEntityOffer): {
     };
   }
   // A relation reads from this end, whichever end proposed it.
-  const fromHere = action.target?.ref === ai?.ref.value;
-  const end = fromHere ? action.refs[payload.other] : action.target;
-  const word: RelationWord = fromHere
-    ? payload.relation
-    : RELATION_WORD_FROM_OTHER_END[payload.relation as RelationWord];
+  const { to: end, word } = relationFromEnd(
+    {
+      target: action.target,
+      other: String(payload.other),
+      relation: payload.relation as RelationWord,
+    },
+    action.refs,
+    ai?.ref.value,
+  );
   return {
     icon: relationWordIcon(word),
     label: end ? aiEntityName(end) : '',

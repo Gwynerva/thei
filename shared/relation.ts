@@ -130,6 +130,45 @@ export type RelationGetItem = RelationEditItem & {
   iconMedia?: MediaDescriptor;
 };
 
+/**
+ * A relation proposed from one end — its `target` — read from the end whose
+ * form shows it, `here`: from the other end its word turns, «depends on»
+ * reading «affects», and a note's two sides swap. From its own end, or from
+ * neither, it reads as proposed. `from` is the end it is read from, `to`
+ * the one it leads to; either is missing while it names nothing found.
+ */
+export function relationFromEnd<End extends { ref: string }>(
+  proposed: {
+    target: End | null | undefined;
+    /** The other end's ref. */
+    other: string;
+    relation: RelationWord;
+    note?: RelationNote;
+  },
+  refs: Record<string, End>,
+  here: string | undefined,
+) {
+  const reversed = here !== undefined && here === proposed.other;
+  const said = proposed.note;
+  const note: RelationNote | undefined =
+    reversed && said?.type === 'split'
+      ? {
+          type: 'split',
+          currentText: said.relatedText,
+          relatedText: said.currentText,
+        }
+      : said;
+  return {
+    reversed,
+    from: reversed ? refs[proposed.other] : (proposed.target ?? undefined),
+    to: reversed ? (proposed.target ?? undefined) : refs[proposed.other],
+    word: reversed
+      ? RELATION_WORD_FROM_OTHER_END[proposed.relation]
+      : proposed.relation,
+    note,
+  };
+}
+
 /** Whether a relation says anything of its own, on either side. */
 export function relationHasNote(note: RelationNote | undefined): boolean {
   if (!note) return false;

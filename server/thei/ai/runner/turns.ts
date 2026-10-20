@@ -38,6 +38,12 @@ export const TURN_LIMITS = {
   silenceMs: 120_000,
 };
 
+/**
+ * How much of a tool's answer the model is handed: every answer is reread
+ * on every later call, so one huge answer costs many times over.
+ */
+export const TOOL_ANSWER_MAX = 30_000;
+
 /** Why a turn's signal was aborted: the owner stopped it, or its time ran out. */
 export type TurnHalt = 'stopped' | 'timeout';
 

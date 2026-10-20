@@ -19,10 +19,7 @@ export function useUndoableForget() {
     const run = pending.get(key);
     if (!run) return;
     pending.delete(key);
-    void run().catch((caught) => {
-      unhide(key);
-      showToast(errorMessage(caught, phrase.value.ai_error));
-    });
+    void aiAttempt(run).then((done) => done || unhide(key));
   }
 
   function forget(key: string, run: () => Promise<unknown>) {

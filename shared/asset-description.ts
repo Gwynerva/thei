@@ -1,4 +1,4 @@
-import type { AiEntityOffer, AiFieldAsk } from './ai-entity';
+import type { AiEntityPanel } from './ai-entity';
 
 /**
  * A file's description — «Описание файла», "File description" — the `alt`
@@ -23,16 +23,15 @@ export interface AssetDescription {
 
 /**
  * What the description field reads: the description, and — with AI on —
- * what an AI proposes for it, waiting at its label.
+ * what an AI proposes for it, waiting at its label, and its ✦'s state as an
+ * entity's field has it.
  */
-export interface AssetDescriptionResponse extends AssetDescription {
-  /** With AI on: what is proposed for it, what its ✦ is answering, and whether a model answers. */
-  offers?: AiEntityOffer[];
-  asking?: AiFieldAsk[];
-  modelReady?: boolean;
-  /** With AI on: what waits for the owner across sessions, for the admin bar's ✦. */
-  waiting?: number;
-}
+export interface AssetDescriptionResponse
+  extends
+    AssetDescription,
+    Partial<
+      Pick<AiEntityPanel, 'offers' | 'asking' | 'modelReady' | 'waiting'>
+    > {}
 
 /** What a save sends: the words, and the version they were written over. */
 export interface AssetDescriptionSave {

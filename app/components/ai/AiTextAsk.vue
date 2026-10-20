@@ -48,9 +48,8 @@ const sending = ref(false);
 
 async function send(text: string) {
   if (sending.value || !text.trim()) return;
-  sending.value = true;
   answered.value = undefined;
-  try {
+  await aiAttempt(async () => {
     const { sessionUuid } = await aiApi.ask({
       ref: props.target,
       place: `text:${props.textSlot}`,
@@ -58,11 +57,7 @@ async function send(text: string) {
       label: props.title,
     });
     asked.value = sessionUuid;
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  } finally {
-    sending.value = false;
-  }
+  }, sending);
 }
 
 async function stop() {
@@ -146,7 +141,7 @@ watch(
       />
       <AiCommentBox
         v-if="!asking"
-        :about="phrase.ai_editor_ask_about(title)"
+        :about="phrase.ai_editor_ask_about(publicText(title))"
         about-icon="sparkles"
         :quick
         :placeholder="phrase.ai_editor_ask_placeholder"

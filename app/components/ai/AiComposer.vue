@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import type { ReferenceElement } from '@floating-ui/vue';
-import type { ContentEntityType } from '#layers/thei/shared/content-link';
 import type { ContentLinkPick } from '#layers/thei/app/components/content/link-picker/types';
 import { typedLines } from '#layers/thei/shared/ai-message-text';
 import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';

@@ -4,11 +4,14 @@ import type { AiRevisePart } from '#layers/thei/shared/ai-actions';
 import type { Period } from '#layers/thei/shared/period';
 import {
   RELATION_WORD_FROM_OTHER_END,
+  relationFromEnd,
+  type RelationNote,
   type RelationWord,
 } from '#layers/thei/shared/relation';
 import { relationWordIcon } from '#layers/thei/shared/relation-display';
 import { libraryAssetDetailsModal } from '#layers/thei/app/modals/asset-library/details-modal';
 import {
+  itemsChange,
   valueChange,
   wordsChange,
   type AiValueChange,
@@ -80,9 +83,10 @@ const lines = computed<{ name: string; change: AiValueChange }[] | null>(() => {
         name: phrase.value.ai_action_term_note,
         change: valueChange(was.note ?? '', payload.value.note ?? ''),
       },
+      // The forms of a word are told apart by their letters: said as stored.
       {
         name: phrase.value.ai_action_term_forms,
-        change: valueChange(was.forms ?? [], payload.value.forms ?? []),
+        change: itemsChange(was.forms ?? [], payload.value.forms ?? []),
       },
     ].filter((line) => !sameChange(line.change));
   }
@@ -150,41 +154,53 @@ const tags = computed(() =>
 const relation = computed(() => {
   if (kind.value !== 'relation') return null;
   const removed = payload.value.op === 'remove';
-  const fromOther = Boolean(props.here) && props.here === payload.value.other;
-  const fromTarget =
-    Boolean(props.here) && props.here === props.action.target?.ref;
   const word = (payload.value.relation ?? 'related') as RelationWord;
-  const read = (said: RelationWord) =>
-    fromOther ? RELATION_WORD_FROM_OTHER_END[said] : said;
+  const read = relationFromEnd(
+    {
+      target: props.action.target,
+      other: String(payload.value.other),
+      relation: word,
+      note: payload.value.note as RelationNote | undefined,
+    },
+    props.action.refs,
+    props.here,
+  );
   const was = (base.value.relation as { relation?: RelationWord } | null)
     ?.relation;
-  const note = payload.value.note as
-    { text?: string; from?: string; to?: string } | undefined;
+  const note = read.note;
   return {
     removed,
-    from: fromOther || fromTarget ? null : props.action.target,
-    to: fromOther
-      ? props.action.target
-      : props.action.refs[payload.value.other],
+    // In the form of either end, that end goes unnamed.
+    from: read.from?.ref === props.here ? null : read.from,
+    to: read.to,
     toRef: String(payload.value.other),
-    word: read(word),
-    was: !removed && was && was !== word ? read(was) : null,
-    note: note
-      ? [note.text, note.from, note.to].filter(Boolean).map(String)
-      : [],
+    word: read.word,
+    was:
+      !removed && was && was !== word
+        ? read.reversed
+          ? RELATION_WORD_FROM_OTHER_END[was]
+          : was
+        : null,
+    // A note for both sides, or this side's and the other's.
+    note: (note?.type === 'split'
+      ? [note.currentText, note.relatedText]
+      : [note?.text]
+    )
+      .filter(Boolean)
+      .map(String),
   };
 });
 
 /** A whole text written, noted or remembered: it is all new. */
 const quote = computed(() => {
   if (kind.value === 'write' || kind.value === 'note')
-    return plainLines(String(payload.value.markdown ?? ''));
+    return publicText(plainLines(String(payload.value.markdown ?? '')));
   if (kind.value === 'remember')
     return publicText(String(payload.value.text ?? ''));
   return '';
 });
 
-/** A word of the dictionary, new. */
+/** A word of the dictionary, new: the word and its forms as stored. */
 const term = computed(() =>
   kind.value === 'term' && !base.value.before
     ? {
@@ -207,6 +223,57 @@ const facts = computed(() => {
   return valueChange(was, next);
 });
 
+/**
+ * A new entity's field in words, as it would read: a text by its words, a
+ * file by its title or caption — the others counted — a link by its name
+ * or note, else its address, a status by its words; a picture of its own
+ * said to be there, its access by name, its address as typed.
+ */
+function createdWords(entity: unknown, field: string, value: unknown): string {
+  const said = phrase.value;
+  if (
+    ['content', 'body', 'notes'].includes(field) ||
+    (field === 'description' && entity === 'project')
+  )
+    return publicText(plainWords(String(value ?? ''), 200));
+  if (field === 'slug' || field === 'publicId') return String(value ?? '');
+  if (field === 'access')
+    return (
+      said.ai_action_access[value as keyof typeof said.ai_action_access] ??
+      String(value ?? '')
+    );
+  if (field === 'icon' || field === 'banner')
+    return value ? said.ai_action_flag.on : '';
+  if (!Array.isArray(value)) return fieldValueWords(value);
+  const items = value as unknown[];
+  const words = (item: unknown, keys: string[]) => {
+    if (typeof item === 'string') return publicText(item);
+    const record = (item ?? {}) as Record<string, unknown>;
+    const text = keys
+      .map((key) => record[key])
+      .find((word) => typeof word === 'string' && word.trim());
+    return text ? publicText(String(text)) : '';
+  };
+  if (field === 'files' || field === 'showcaseFiles') {
+    const named = items
+      .map((item) => words(item, ['title', 'caption']))
+      .filter(Boolean);
+    const unnamed = items.length - named.length;
+    return [
+      ...named,
+      ...(unnamed ? [said.content_file_count(unnamed)] : []),
+    ].join(', ');
+  }
+  return items
+    .map(
+      (item) =>
+        words(item, ['name', 'note', 'text']) ||
+        String((item as { url?: unknown } | null)?.url ?? ''),
+    )
+    .filter(Boolean)
+    .join(', ');
+}
+
 /** A new entity's fields, every one new; its parts are listed apart. */
 const created = computed(() => {
   if (kind.value !== 'create') return null;
@@ -226,10 +293,7 @@ const created = computed(() => {
         said.push({ name: fieldName(field), periods: value as Period[] });
       continue;
     }
-    const text =
-      field === 'content' || field === 'body' || field === 'notes'
-        ? plainWords(String(value ?? ''), 200)
-        : fieldValueWords(value);
+    const text = createdWords(payload.value.entity, field, value);
     // A diary entry's text is its body, as every other text is.
     if (text)
       said.push({

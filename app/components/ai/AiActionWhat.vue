@@ -99,6 +99,7 @@ const of = computed<{ entity?: AiEntityRef; words?: string }[]>(() => {
   // says whose it is.
   if (action.kind === 'create')
     return payload.value.entity === 'project-section' ? named(target) : [];
+  // A word of the dictionary is told apart by its letters: said as stored.
   if (action.kind === 'term') return [{ words: String(payload.value.word) }];
   // A relation names both its ends under it.
   if (action.kind === 'relation') return [];
@@ -149,9 +150,7 @@ function pathOf(entity: AiEntityRef) {
         v-else
         :class="leads ? 'font-semibold' : 'text-text-2'"
         data-action-of
-        >{{
-          item.entity ? aiEntityName(item.entity) : publicText(item.words ?? '')
-        }}</span
+        >{{ item.entity ? aiEntityName(item.entity) : item.words }}</span
       >
     </template>
   </p>

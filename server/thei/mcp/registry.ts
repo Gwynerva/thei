@@ -5,6 +5,7 @@ import type {
 } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { lostLettersProblem } from '../lost-letters';
+import { zodProblem } from '../ai/refusals';
 import type { McpCallContext } from './context';
 import { toolError } from './result';
 import { mayEdit } from './scope';
@@ -142,13 +143,7 @@ export function directTools(context: McpCallContext): DirectTool[] {
               content: [
                 {
                   type: 'text',
-                  text: `The arguments do not fit ${name}: ${parsed.error.issues
-                    .map((issue) =>
-                      issue.path.length
-                        ? `${issue.path.map(String).join('.')}: ${issue.message}`
-                        : issue.message,
-                    )
-                    .join('; ')}`,
+                  text: `The arguments do not fit ${name}: ${zodProblem(parsed.error)}`,
                 },
               ],
               isError: true,

@@ -1,6 +1,7 @@
 import type { AiEntityType, AiMessagePart } from '#layers/thei/shared/ai';
 import type { AiTemplateRunResponse } from '#layers/thei/shared/ai-template';
 import { plainMarkdown } from '#layers/thei/shared/ai-message-text';
+import { searchKey } from '#layers/thei/shared/search/match';
 import { refuse as fail } from '../../entity-patch/text';
 import { entityFace } from '../../entity-kinds';
 import {
@@ -45,9 +46,9 @@ import { postOwnerMessage } from '../sessions/owner';
 
 /** A request's words alone, to compare: mentions, marks and spacing aside. */
 function plainWords(markdown: string) {
-  return plainMarkdown(
-    markdown.replace(/\[([^\]]*)\]\(thei:[^)]*\)/g, ' '),
-  ).toLocaleLowerCase();
+  return searchKey(
+    plainMarkdown(markdown.replace(/\[([^\]]*)\]\(thei:[^)]*\)/g, ' ')),
+  );
 }
 
 function shortDate(at: number) {

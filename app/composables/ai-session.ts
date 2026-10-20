@@ -265,6 +265,11 @@ export function newSessionLocation(
   };
 }
 
+/** The page of a session. */
+export function sessionLocation(sessionUuid: string) {
+  return { path: '/admin/ai/', query: { session: sessionUuid } };
+}
+
 const ARCHIVED: InjectionKey<Readonly<Ref<boolean>>> = Symbol('ai-archived');
 
 /**
@@ -486,6 +491,28 @@ export const aiApi = {
 };
 
 /**
+ * Does something of the AI's and says why in a toast when it fails, in the
+ * words the server gave. With `busy`, it is done once at a time: a press
+ * while it runs does nothing. Whether it went.
+ */
+export async function aiAttempt(
+  work: () => Promise<unknown>,
+  busy?: Ref<boolean>,
+): Promise<boolean> {
+  if (busy?.value) return false;
+  if (busy) busy.value = true;
+  try {
+    await work();
+    return true;
+  } catch (caught) {
+    showToast(errorMessage(caught, phrase.value.ai_error));
+    return false;
+  } finally {
+    if (busy) busy.value = false;
+  }
+}
+
+/**
  * Applies proposals and says how it went: why not, when it did not, else
  * how many — with a way back when `undoable`. Every entity whose version
  * moved is told, a relation's other end too. Whether all of it went.
@@ -536,7 +563,8 @@ export async function undoAndTell(actionUuids: string[]) {
 
 /**
  * What a session asked at a ✦ answered: what it proposed, and its model's
- * last words as a line — why, when it proposed nothing. None when unread.
+ * last words as a line — why, when it proposed nothing — formatted as the
+ * thread shows them. None when unread.
  */
 export async function askAnswer(
   sessionUuid: string,
@@ -548,6 +576,6 @@ export async function askAnswer(
     .at(-1);
   return {
     actions: detail.actions,
-    said: last ? plainWords(last.text, 280) : '',
+    said: last ? publicText(plainWords(last.text, 280)) : '',
   };
 }

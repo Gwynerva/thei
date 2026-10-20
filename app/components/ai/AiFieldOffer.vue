@@ -4,6 +4,7 @@ import {
   askablePlace,
   FIELD_ASK_MAX,
   placeField,
+  placeLabel,
 } from '#layers/thei/shared/ai-field-ask';
 import type { AiFieldAskKind } from '#layers/thei/shared/language/types';
 
@@ -85,9 +86,10 @@ const listed = computed(
  */
 const labelWords = ref('');
 const fieldWords = computed(() => {
-  if (ai?.ref.value?.startsWith('asset:'))
-    return phrase.value.asset_description;
-  return labelWords.value || props.label || fieldName(placeField(props.place));
+  const named = placeLabel(props.place, ai?.ref.value, phrase.value);
+  return ai?.ref.value?.startsWith('asset:')
+    ? named
+    : labelWords.value || props.label || named;
 });
 /**
  * The field holds something to work on: as a text says of itself, else as
@@ -257,23 +259,12 @@ watch(
 onBeforeUnmount(() => clearTimeout(timer));
 
 async function send(text: string) {
-  if (!ai || sending.value) return;
-  sending.value = true;
-  try {
-    await ai.ask(props.place, text, fieldWords.value);
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  } finally {
-    sending.value = false;
-  }
+  if (!ai) return;
+  await aiAttempt(() => ai.ask(props.place, text, fieldWords.value), sending);
 }
 
 async function stop() {
-  try {
-    await ai?.stopAsk(props.place);
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  }
+  await aiAttempt(async () => ai?.stopAsk(props.place));
 }
 
 /** Parts are decided on the screen a text edit opens on, never here. */

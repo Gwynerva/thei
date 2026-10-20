@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import {
   startFakeModel,
@@ -347,6 +347,14 @@ const star = (page: Page, place: string) =>
     `[data-ai-field-offer="${place}"][data-ai-field-state="offers"]`,
   );
 
+/**
+ * A row's undo or way back takes no press in its first half second, so a
+ * double click never applies and undoes at once: waited out, as the row
+ * says it.
+ */
+const settled = (scope: Locator) =>
+  expect(scope.locator('[data-action-settling]')).toHaveCount(0);
+
 /** Opens what waits at a field from the ✦ at its label. */
 async function fieldOffer(page: Page, place: string) {
   await star(page, place).click();
@@ -466,11 +474,11 @@ test('a proposal changed back by hand is offered again', async ({ page }) => {
   await expect(card.locator('[data-action-restore]')).toBeVisible();
   await expect(page.locator('[data-toast]')).toBeHidden();
   // The way back takes no press in its first half second.
-  await page.waitForTimeout(600);
+  await settled(card);
   await card.locator('[data-action-restore]').click();
   await expect(star(page, 'field:summary')).toBeVisible();
   await expect(card.locator('[data-action-apply]')).toBeVisible();
-  await page.waitForTimeout(600);
+  await settled(card);
   await card.locator('[data-action-reject]').click();
   await card.locator('[data-action-never]').click();
   await expect
@@ -984,12 +992,12 @@ test('a change taken at the form’s head stays there until the form is saved', 
   // from there: the form under it never moves.
   await expect(head.locator('[data-action-taken]')).toBeVisible();
   await expect(page.locator('[data-toast]')).toBeHidden();
-  await page.waitForTimeout(600);
+  await settled(head);
   await head.locator('[data-action-take-back]').click();
   await expect(title).toHaveValue(before);
   await expect(head.locator('[data-action-apply]')).toBeVisible();
   // Declined, it stays too, to be brought back.
-  await page.waitForTimeout(600);
+  await settled(head);
   await head.locator('[data-action-reject]').click();
   await expect(head.locator('[data-action-restore]')).toBeVisible();
 });

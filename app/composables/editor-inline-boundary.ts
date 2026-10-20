@@ -4,36 +4,12 @@ import {
   caretIn,
   edgeInside,
   edgeOutside,
-  isMarkup,
-  oneGrapheme,
+  oneLetterFromEdge,
   type InlineSide,
 } from './editor-inline-dom';
 
 /** A tap or a click this recent placed the caret, and may have meant beside. */
 const POINTER_WINDOW = 400;
-
-/**
- * One letter from the edge of a text where markup begins or ends: the
- * browser would carry the caret over the edge to the other side of it,
- * past the place on this side. The caret goes to that place instead.
- */
-function besideEdge(range: Range, side: InlineSide): Range | undefined {
-  const node = range.startContainer;
-  if (node.nodeType !== Node.TEXT_NODE) return undefined;
-  const text = node as Text;
-  const step =
-    side === 'before'
-      ? text.data.slice(0, range.startOffset)
-      : text.data.slice(range.startOffset);
-  if (!oneGrapheme(step)) return undefined;
-  const sibling = side === 'before' ? text.previousSibling : text.nextSibling;
-  if (sibling ? !isMarkup(sibling) : !isMarkup(text.parentElement))
-    return undefined;
-  const caret = document.createRange();
-  caret.setStart(text, side === 'before' ? 0 : text.length);
-  caret.collapse(true);
-  return caret;
-}
 
 /**
  * The caret stepping in and out of the markup of words — a link, a hint,
@@ -79,7 +55,9 @@ export function bindEditorInlineBoundary(root: HTMLElement) {
     const leaving = edgeInside(range, side);
     const entering =
       !leaving && edgeOutside(range, side === 'after' ? 'before' : 'after');
-    const near = !leaving && !entering && besideEdge(range, side);
+    // One letter from the edge, the caret goes to the place on this side of
+    // it, where the browser would carry it over.
+    const near = !leaving && !entering && oneLetterFromEdge(range, side);
     if (!leaving && !entering && !near) return;
     event.preventDefault();
     // Editor.js would take the key on to the next block.

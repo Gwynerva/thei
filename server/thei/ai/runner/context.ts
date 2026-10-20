@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { AiTranscriptTurn } from '#layers/thei/shared/ai';
+import { utcDayOf } from '#layers/thei/shared/date-range';
+import { fingerprintOf } from '../actions/declined';
 import {
   turnFiles,
   type StreamFile,
@@ -47,19 +49,14 @@ export interface AiSessionContext {
   sent?: { turns: number; digest: string };
 }
 
-/** A value's sha256, read as JSON. */
-export function digestOf(value: unknown): string {
-  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
-}
-
 /** The day it is on the server's clock, as the overview says it. */
 export function serverDay(now = Date.now()): string {
-  return new Date(now).toISOString().slice(0, 10);
+  return utcDayOf(now);
 }
 
 /** What the offered tools say, in the order they are offered. */
 export function toolsDigest(tools: readonly StreamTool[]): string {
-  return digestOf(
+  return fingerprintOf(
     tools.map(({ name, description, inputSchema }) => [
       name,
       description,

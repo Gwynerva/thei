@@ -32,7 +32,7 @@ const marked = (part: string) => ({ [`data-${props.mark}-${part}`]: '' });
     <AiRunningDots />
     <span class="min-w-0 flex-1">{{ phrase.ai_field_asking }}</span>
     <TheiLink
-      :to="{ path: '/admin/ai/', query: { session: asking } }"
+      :to="sessionLocation(asking)"
       class="shrink-0 text-xs text-text-2 underline decoration-text-2/35
         underline-offset-2 hocus:text-accent"
       >{{ phrase.ai_field_ask_open }}</TheiLink
@@ -48,7 +48,7 @@ const marked = (part: string) => ({ [`data-${props.mark}-${part}`]: '' });
       <Icon name="ai-chat" class="shrink-0" />
       <span class="min-w-0 flex-1">{{ nothing }}</span>
       <TheiLink
-        :to="{ path: '/admin/ai/', query: { session: answered } }"
+        :to="sessionLocation(answered)"
         class="-my-3 inline-flex shrink-0 items-center py-3 underline
           decoration-text-2/35 underline-offset-2 hocus:text-accent"
         >{{ phrase.ai_field_ask_open }}</TheiLink

@@ -30,5 +30,20 @@ export function placeField(place: string): string {
   return place;
 }
 
+/**
+ * A place's ✦ named as the page names its field, in the words of a language
+ * (`asset_description`, `ai_action_fields`): a file's description by `ref`,
+ * else the field the place stands for.
+ */
+export function placeLabel(
+  place: string,
+  ref: string | undefined,
+  said: { asset_description: string; ai_action_fields: object },
+): string {
+  if (ref?.startsWith('asset:')) return said.asset_description;
+  const field = placeField(place);
+  return (said.ai_action_fields as Record<string, string>)[field] ?? field;
+}
+
 /** How long the owner's words to a field's ✦ may be. */
 export const FIELD_ASK_MAX = 2000;

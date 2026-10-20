@@ -12,7 +12,7 @@ import {
 } from '../../ai/templates/coverage';
 import { TEMPLATE_SOURCES, type CheckItem } from '../../ai/templates/sources';
 import { findTemplate } from '../../ai/templates/store';
-import { TOOL_ANSWER_MAX } from '../../ai/runner/loop';
+import { TOOL_ANSWER_MAX } from '../../ai/runner/turns';
 import { READS } from '../annotations';
 import type { McpCallContext } from '../context';
 import { guardTool, McpToolError, toolResult } from '../result';

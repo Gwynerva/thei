@@ -7,6 +7,7 @@ import {
   askablePlace,
   FIELD_ASK_MAX,
   placeField,
+  placeLabel,
 } from '#layers/thei/shared/ai-field-ask';
 import { readPlacements } from '../assets/library';
 import { refuse as fail } from '../entity-patch/text';
@@ -124,14 +125,12 @@ export function askAtField(input: {
     typeof input.current === 'string'
       ? input.current.trim().slice(0, CURRENT_MAX)
       : '';
-  const fields = THEI_SERVER.phrase.ai_action_fields as Record<string, string>;
   const named =
     typeof input.label === 'string'
       ? input.label.replace(/\s+/g, ' ').trim().slice(0, 80)
       : '';
-  const label = file
-    ? THEI_SERVER.phrase.asset_description
-    : named || (fields[placeField(place)] ?? placeField(place));
+  // A file's ✦ is its description's, whatever the page called it.
+  const label = (!file && named) || placeLabel(place, ref, THEI_SERVER.phrase);
   const brief = [
     `The owner asks at ${placeName(target.kind, place, file)} of ${ref} — ${which} — in their own words:`,
     words,

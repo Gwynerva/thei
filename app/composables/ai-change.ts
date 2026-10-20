@@ -1,7 +1,7 @@
 import { diffContentText } from '#layers/thei/shared/content-diff';
 
 /** One piece of a change said word by word: kept, gone or come. */
-export interface AiChangePiece {
+interface AiChangePiece {
   kind: 'same' | 'removed' | 'added';
   text: string;
 }
@@ -44,22 +44,7 @@ const sayable = (value: unknown) =>
 export function valueChange(was: unknown, next: unknown): AiValueChange {
   const before = listWords(was ?? (Array.isArray(next) ? [] : null));
   const after = listWords(next ?? (Array.isArray(was) ? [] : null));
-  if (before && after) {
-    const kept = new Set(after);
-    const had = new Set(before);
-    return {
-      type: 'items',
-      items: [
-        ...before.map((text): AiChangePiece => ({
-          kind: kept.has(text) ? 'same' : 'removed',
-          text,
-        })),
-        ...after
-          .filter((text) => !had.has(text))
-          .map((text): AiChangePiece => ({ kind: 'added', text })),
-      ],
-    };
-  }
+  if (before && after) return itemsChange(before, after);
   if (!sayable(was) || !sayable(next)) return { type: 'none' };
   const old = fieldValueWords(was);
   const now = fieldValueWords(next);
@@ -73,6 +58,27 @@ export function valueChange(was: unknown, next: unknown): AiValueChange {
       pieces: parts.map((part) => ({ kind: part.kind, text: part.text })),
     };
   return { type: 'whole', before: old, after: now };
+}
+
+/**
+ * A list item by item, its words as given: what stays, what goes, what
+ * comes. The forms of a word of the dictionary go so, unformatted.
+ */
+export function itemsChange(before: string[], after: string[]): AiValueChange {
+  const kept = new Set(after);
+  const had = new Set(before);
+  return {
+    type: 'items',
+    items: [
+      ...before.map((text): AiChangePiece => ({
+        kind: kept.has(text) ? 'same' : 'removed',
+        text,
+      })),
+      ...after
+        .filter((text) => !had.has(text))
+        .map((text): AiChangePiece => ({ kind: 'added', text })),
+    ],
+  };
 }
 
 /** Old words and new, word by word whatever their share: a description. */

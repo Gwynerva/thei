@@ -1,5 +1,4 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import type { z } from 'zod';
 import {
   AI_EDITABLE_KINDS,
   withActionTexts,
@@ -8,6 +7,7 @@ import type { AiActionKind } from '#layers/thei/shared/ai-actions';
 import type { RelationNote } from '#layers/thei/shared/relation';
 import { refuse as fail } from '../../entity-patch/text';
 import { lostLettersProblem } from '../../lost-letters';
+import { zodProblem } from '../refusals';
 import { publishActions } from '../sessions/bus';
 import { refreshSessionCounts } from '../sessions/store';
 import { coverApplied } from '../templates/coverage';
@@ -54,16 +54,6 @@ export function proposalInputOf(
     else if (note) input.note = note.text ?? null;
   }
   return input;
-}
-
-function zodProblem(error: z.ZodError) {
-  return error.issues
-    .map((issue) =>
-      issue.path.length
-        ? `${issue.path.map(String).join('.')}: ${issue.message}`
-        : issue.message,
-    )
-    .join('; ');
 }
 
 /**

@@ -38,12 +38,7 @@ export async function runAiCheck(
       else
         showToast(phrase.value.ai_template_started(title), {
           label: phrase.value.ai_action_open,
-          run: () => {
-            void navigateTo({
-              path: '/admin/ai/',
-              query: { session: sessionUuid },
-            });
-          },
+          run: () => void navigateTo(sessionLocation(sessionUuid)),
         });
       return sessionUuid;
     }
@@ -61,12 +56,7 @@ export async function runAiCheck(
       last
         ? {
             label: phrase.value.ai_template_last_open,
-            run: () => {
-              void navigateTo({
-                path: '/admin/ai/',
-                query: { session: last },
-              });
-            },
+            run: () => void navigateTo(sessionLocation(last)),
           }
         : looked
           ? {

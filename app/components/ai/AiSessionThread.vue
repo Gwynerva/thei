@@ -1,10 +1,6 @@
 <script lang="ts" setup>
 import ModalWaiting from '#layers/thei/app/modals/ModalWaiting.vue';
-import type {
-  AiActionItem,
-  AiMessagePart,
-  AiSessionItem,
-} from '#layers/thei/shared/ai';
+import type { AiActionItem, AiMessagePart } from '#layers/thei/shared/ai';
 import type { AiComposerFile } from '#layers/thei/app/composables/ai-session';
 import { builtinKeyOf } from '#layers/thei/shared/ai-template';
 import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';
@@ -110,10 +106,6 @@ const writingUuid = computed(() => {
   return last?.role === 'model' ? last.messageUuid : undefined;
 });
 
-/**
- * Where the owner last wrote: a question asked before it was passed over,
- * as the server counts it, and is no longer offered to answer.
- */
 /** The last message: a check's «go on» stands only under it. */
 const lastSeq = computed(() => detail.value?.messages.at(-1)?.seq ?? 0);
 /**
@@ -134,6 +126,10 @@ const more = computed(() => {
     : undefined;
 });
 const goingOn = ref(false);
+/**
+ * Where the owner last wrote: a question asked before it was passed over,
+ * as the server counts it, and is no longer offered to answer.
+ */
 const ownerSpokeAt = computed(
   () =>
     detail.value?.messages.filter((message) => message.role === 'owner').at(-1)
@@ -171,55 +167,45 @@ async function send(
   files: AiComposerFile[],
   restore: () => void,
 ) {
-  if (!session.value) return;
+  const current = session.value;
+  if (!current) return;
   busy.value = true;
   stuck = true;
-  try {
-    await aiApi.post(session.value.sessionUuid, { text, about, files });
+  const sent = await aiAttempt(async () => {
+    await aiApi.post(current.sessionUuid, { text, about, files });
     await refresh();
-  } catch (caught) {
-    restore();
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  } finally {
-    busy.value = false;
-  }
+  });
+  // Not sent, the words go back where they were written.
+  if (!sent) restore();
+  busy.value = false;
 }
 
 async function answer(question: string, text: string) {
-  if (!session.value) return;
-  try {
+  const current = session.value;
+  if (!current) return;
+  await aiAttempt(async () => {
     // The answer shows in the thread at once, and the model goes on there.
-    await aiApi.post(session.value.sessionUuid, { text, answers: question });
+    await aiApi.post(current.sessionUuid, { text, answers: question });
     await refresh();
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  }
+  });
 }
 
 /** A check goes on: its next batch, or word that nothing is left. */
 async function goOn() {
-  if (!session.value || goingOn.value) return;
-  goingOn.value = true;
+  const current = session.value;
+  if (!current || goingOn.value) return;
   // The thread follows the next batch down, wherever the owner was reading.
   stuck = true;
-  try {
-    const { messageUuid } = await aiApi.continueRun(session.value.sessionUuid);
+  await aiAttempt(async () => {
+    const { messageUuid } = await aiApi.continueRun(current.sessionUuid);
     if (!messageUuid) showToast(phrase.value.ai_continue_nothing);
     await refresh();
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  } finally {
-    goingOn.value = false;
-  }
+  }, goingOn);
 }
 
 async function stop() {
-  if (!session.value) return;
-  try {
-    await aiApi.stop(session.value.sessionUuid);
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  }
+  const current = session.value;
+  if (current) await aiAttempt(() => aiApi.stop(current.sessionUuid));
 }
 
 const placeholder = computed(() =>
@@ -241,15 +227,14 @@ async function change(
   body: Parameters<typeof aiApi.change>[1],
   toast?: string,
 ) {
-  if (!session.value) return;
+  const current = session.value;
+  if (!current) return;
   menuOpen.value = false;
-  try {
-    await aiApi.change(session.value.sessionUuid, body);
+  await aiAttempt(async () => {
+    await aiApi.change(current.sessionUuid, body);
     if (toast) showToast(toast);
     await refresh();
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  }
+  });
 }
 
 function startRename() {
@@ -264,16 +249,15 @@ async function rename() {
 }
 
 async function remove() {
-  if (!session.value) return;
+  const current = session.value;
+  if (!current) return;
   menuOpen.value = false;
   if (!window.confirm(phrase.value.ai_session_delete_confirm(title.value)))
     return;
-  try {
-    await aiApi.remove(session.value.sessionUuid);
+  await aiAttempt(async () => {
+    await aiApi.remove(current.sessionUuid);
     emit('deleted');
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  }
+  });
 }
 </script>
 

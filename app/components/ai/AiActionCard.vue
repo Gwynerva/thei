@@ -92,16 +92,9 @@ const title = computed(() => {
 });
 // ---- Answers ------------------------------------------------------------------
 
-async function run(work: () => Promise<void>) {
-  if (busy.value) return;
-  busy.value = true;
-  try {
-    await work();
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  } finally {
-    busy.value = false;
-  }
+/** One answer at a time; one that fails says why. */
+function run(work: () => Promise<unknown>) {
+  return aiAttempt(work, busy);
 }
 
 /** Applies these; says why not, when it did not. */
@@ -132,12 +125,10 @@ function offerNever(actions: AiActionItem[]) {
   showToast(phrase.value.ai_toast_declined(actions.length), {
     label: phrase.value.ai_action_never,
     run: async () => {
-      try {
+      await aiAttempt(async () => {
         for (const action of actions) await aiApi.never(action.actionUuid);
         showToast(phrase.value.ai_toast_never);
-      } catch (caught) {
-        showToast(errorMessage(caught, phrase.value.ai_error));
-      }
+      });
     },
   });
 }

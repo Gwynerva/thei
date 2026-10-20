@@ -144,10 +144,7 @@ async function save() {
       <p class="col-start-2 text-xs leading-snug text-text-2">
         <TheiLink
           v-if="item.session"
-          :to="{
-            path: '/admin/ai/',
-            query: { session: item.session.sessionUuid },
-          }"
+          :to="sessionLocation(item.session.sessionUuid)"
           class="underline decoration-text-2/35 underline-offset-2
             transition-colors hocus:text-accent"
           >{{ sessionTitle(item.session) }}</TheiLink

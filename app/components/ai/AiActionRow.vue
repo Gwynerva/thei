@@ -246,17 +246,25 @@ const restoreLabel = computed(() =>
 /**
  * The undo and the way back stand where the button just pressed stood: a
  * double click would apply and undo at once. For a moment after the state
- * changes, a press there is taken as the end of the last one.
+ * changes, a press there is taken as the end of the last one — the row says
+ * so as `data-action-settling`, for whoever presses on purpose.
  */
-let changedAt = 0;
+const SETTLE_MS = 500;
+const settling = ref(false);
+let settle: ReturnType<typeof setTimeout> | undefined;
 watch(
   () => [props.action.state, props.taken],
-  () => (changedAt = Date.now()),
+  () => {
+    settling.value = true;
+    clearTimeout(settle);
+    settle = setTimeout(() => (settling.value = false), SETTLE_MS);
+  },
 );
+onBeforeUnmount(() => clearTimeout(settle));
 function settled(run: () => void) {
   // A row of a bundle says its undo on its own line, away from the foot's
   // apply: nothing to guard there.
-  if (!props.inBundle && Date.now() - changedAt < 500) return;
+  if (!props.inBundle && settling.value) return;
   run();
 }
 
@@ -279,12 +287,10 @@ watch(editable, (now) => now || (editing.value = false));
  * on its own — applied as they stand; a row of a bundle waits for its foot.
  */
 async function saveEdit() {
-  if (saving.value) return;
   const changed = texts.value.filter(
     (text) => (drafts[text.key] ?? text.value) !== text.value,
   );
-  saving.value = true;
-  try {
+  await aiAttempt(async () => {
     if (changed.length)
       await aiApi.editAction(
         props.action.actionUuid,
@@ -294,11 +300,7 @@ async function saveEdit() {
       );
     editing.value = false;
     if (!props.inBundle) emit('apply');
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  } finally {
-    saving.value = false;
-  }
+  }, saving);
 }
 
 /** What a text is, when a proposal carries several. */
@@ -370,14 +372,44 @@ const applyLabel = computed(() => {
     : phrase.value.ai_action_apply;
 });
 const sessionPath = computed(() =>
-  props.from ? `/admin/ai/?session=${props.from.sessionUuid}` : '',
+  props.from ? sessionLocation(props.from.sessionUuid) : '',
 );
+
+// ---- Tools ---------------------------------------------------------------------
+
+/**
+ * What its tools are told, and what they do: the same wherever they stand —
+ * on a bundle row's first line, or in the card's footer.
+ */
+const tools = computed(() => ({
+  editable: editable.value,
+  opens: revisable.value && !props.from,
+  saving: saving.value,
+  busy: props.busy,
+  applyWord: applyWord.value,
+  undoable: undoable.value,
+  restorable: restorable.value,
+  restoreLabel: restoreLabel.value,
+}));
+const toolEvents = {
+  edit: startEdit,
+  open: openParts,
+  comment: () => (commenting.value = !commenting.value),
+  cancel: cancelEdit,
+  save: saveEdit,
+  undo: () => settled(() => emit('undo')),
+  restore: () => settled(() => emit('restore')),
+};
 
 // ---- Comment -------------------------------------------------------------------
 
 /** The comment button itself, which its popup points at and marks open. */
-const commentTrigger = useTemplateRef<{ $el: HTMLElement }>('commentTrigger');
-const commentButton = computed(() => commentTrigger.value?.$el);
+type Tools = { commentButton?: HTMLElement };
+const rowTools = useTemplateRef<Tools>('rowTools');
+const footTools = useTemplateRef<Tools>('footTools');
+const commentButton = computed(
+  () => (rowTools.value ?? footTools.value)?.commentButton,
+);
 const commenting = ref(false);
 /**
  * The comment's popup, mounted once first asked for: a list of proposals
@@ -405,6 +437,7 @@ function sendComment(text: string) {
     :data-action="action.actionUuid"
     :data-action-kind="action.kind"
     :data-action-state="action.state"
+    :data-action-settling="settling && !inBundle ? '' : undefined"
   >
     <div
       class="flex min-w-0 items-start gap-2.5 px-3"
@@ -416,34 +449,14 @@ function sendComment(text: string) {
       data-action-head
     >
       <!-- In a bundle: a checkbox, or a mark once decided -->
-      <button
+      <AiCheckbox
         v-if="inBundle && pending && !fixed && !archived"
-        type="button"
-        role="checkbox"
-        :aria-checked="picked"
-        :aria-label="phrase.ai_action_pick"
-        class="-m-1.5 flex shrink-0 cursor-pointer items-center justify-center
-          rounded-sm bg-transparent p-1.5 focus-visible:ring-2
-          focus-visible:ring-accent pointer-coarse:-m-2.5 pointer-coarse:p-2.5"
+        :checked="Boolean(picked)"
+        :label="phrase.ai_action_pick"
+        :tone="info.final ? 'error' : unsure ? 'warning' : undefined"
         data-action-pick
-        @click="emit('pick')"
-      >
-        <span
-          class="flex size-4.5 items-center justify-center rounded-sm
-            border-[1.5px] transition"
-          :class="
-            picked
-              ? 'border-accent bg-accent text-white dark:text-bg-1'
-              : info.final
-                ? 'border-text-error bg-bg-1'
-                : unsure
-                  ? 'border-text-warning bg-bg-1'
-                  : 'border-border-2 bg-bg-1'
-          "
-        >
-          <Icon v-if="picked" name="check" class="text-xs" />
-        </span>
-      </button>
+        @toggle="emit('pick')"
+      />
       <span
         v-else-if="inBundle"
         class="flex size-4.5 shrink-0 items-center justify-center text-text-3"
@@ -485,93 +498,14 @@ function sendComment(text: string) {
         class="-my-1 flex shrink-0 items-center gap-0.5"
         data-action-tools
       >
-        <template v-if="pending && editing">
-          <Button
-            variant="secondary"
-            size="icon-sm"
-            class="pointer-coarse:size-11"
-            :aria-label="phrase.ai_action_edit_cancel"
-            :data-title-popup="phrase.ai_action_edit_cancel"
-            data-action-edit-cancel
-            @click="cancelEdit"
-          >
-            <Icon name="undo" />
-          </Button>
-          <Button
-            size="icon-sm"
-            class="pointer-coarse:size-11"
-            :disabled="saving || busy"
-            :aria-label="phrase.ai_action_edit_save"
-            :data-title-popup="phrase.ai_action_edit_save"
-            data-action-edit-apply
-            @click="saveEdit"
-          >
-            <Icon :name="saving ? 'loading' : 'check'" />
-          </Button>
-        </template>
-        <template v-else-if="pending">
-          <Button
-            v-if="editable"
-            variant="secondary"
-            size="icon-sm"
-            class="pointer-coarse:size-11"
-            :aria-label="phrase.ai_action_edit"
-            :data-title-popup="phrase.ai_action_edit"
-            data-action-edit
-            @click="startEdit"
-          >
-            <Icon name="edit" />
-          </Button>
-          <Button
-            v-if="revisable && !from"
-            variant="secondary"
-            size="icon-sm"
-            class="pointer-coarse:size-11"
-            :aria-label="phrase.ai_action_open"
-            :data-title-popup="phrase.ai_action_open"
-            data-action-open
-            @click="openParts"
-          >
-            <Icon name="chevron-right" />
-          </Button>
-          <span v-else class="inline-flex">
-            <Button
-              ref="commentTrigger"
-              variant="secondary"
-              size="icon-sm"
-              class="pointer-coarse:size-11"
-              :aria-label="phrase.ai_action_comment"
-              :data-title-popup="phrase.ai_action_comment"
-              data-action-comment
-              @click="commenting = !commenting"
-            >
-              <Icon name="comment" />
-            </Button>
-          </span>
-        </template>
-        <Button
-          v-else-if="undoable"
+        <AiActionTools
+          ref="rowTools"
+          :group="pending ? (editing ? 'editing' : 'lead') : 'back'"
           variant="secondary"
-          class="flex h-8 items-center gap-1 px-2 text-sm pointer-coarse:h-11"
-          :disabled="busy"
-          :data-title-popup="phrase.ai_action_undo"
-          data-action-undo
-          @click="settled(() => emit('undo'))"
-        >
-          <Icon name="history" />{{ phrase.ai_action_undo }}
-        </Button>
-        <Button
-          v-else-if="restorable"
-          variant="secondary"
-          class="flex h-8 items-center gap-1 px-2 text-sm pointer-coarse:h-11"
-          :disabled="busy"
-          :aria-label="restoreLabel"
-          :data-title-popup="restoreLabel"
-          data-action-restore
-          @click="settled(() => emit('restore'))"
-        >
-          <Icon name="undo" />{{ phrase.ai_action_restore_short }}
-        </Button>
+          in-row
+          v-bind="tools"
+          v-on="toolEvents"
+        />
       </div>
     </div>
 
@@ -640,35 +574,18 @@ function sendComment(text: string) {
           :data-part="part.id"
           :data-part-state="part.state ?? 'pending'"
         >
-          <button
+          <AiCheckbox
             v-if="
               pending && !archived && (!part.state || part.state === 'pending')
             "
-            type="button"
-            role="checkbox"
-            :aria-checked="partOn(part)"
-            :aria-label="part.label"
-            class="-m-1 flex shrink-0 cursor-pointer items-center justify-center
-              rounded-sm bg-transparent p-1 focus-visible:ring-2
-              focus-visible:ring-accent pointer-coarse:-m-2 pointer-coarse:p-2"
+            :checked="partOn(part)"
+            :label="part.label"
+            small
+            :tone="part.certainty === 'unsure' ? 'warning' : undefined"
             :disabled="partsOff"
             data-part-pick
-            @click="togglePart(part)"
-          >
-            <span
-              class="flex size-4 items-center justify-center rounded-sm
-                border-[1.5px] transition"
-              :class="
-                partOn(part)
-                  ? 'border-accent bg-accent text-white dark:text-bg-1'
-                  : part.certainty === 'unsure'
-                    ? 'border-text-warning bg-bg-1'
-                    : 'border-border-2 bg-bg-1'
-              "
-            >
-              <Icon v-if="partOn(part)" name="check" class="text-2xs" />
-            </span>
-          </button>
+            @toggle="togglePart(part)"
+          />
           <Icon
             v-else
             :name="
@@ -810,73 +727,23 @@ function sendComment(text: string) {
       data-action-decisions
     >
       <slot name="actions-start" />
-      <template v-if="deciding && !editing">
-        <Button
-          v-if="editable"
-          :variant="footerButtons"
-          size="icon-sm"
-          class="pointer-coarse:size-11"
-          :aria-label="phrase.ai_action_edit"
-          :data-title-popup="phrase.ai_action_edit"
-          data-action-edit
-          @click="startEdit"
-        >
-          <Icon name="edit" />
-        </Button>
-        <Button
-          v-if="revisable && !from"
-          :variant="footerButtons"
-          size="icon-sm"
-          class="pointer-coarse:size-11"
-          :aria-label="phrase.ai_action_open"
-          :data-title-popup="phrase.ai_action_open"
-          data-action-open
-          @click="openParts"
-        >
-          <Icon name="chevron-right" />
-        </Button>
-        <span v-if="!(revisable && !from)" class="inline-flex">
-          <Button
-            ref="commentTrigger"
-            :variant="footerButtons"
-            size="icon-sm"
-            class="pointer-coarse:size-11"
-            :aria-label="phrase.ai_action_comment"
-            :data-title-popup="phrase.ai_action_comment"
-            data-action-comment
-            @click="commenting = !commenting"
-          >
-            <Icon name="comment" />
-          </Button>
-        </span>
-      </template>
+      <AiActionTools
+        v-if="deciding && !editing"
+        ref="footTools"
+        group="lead"
+        :variant="footerButtons"
+        v-bind="tools"
+        v-on="toolEvents"
+      />
       <!-- Together, and at the end, however they wrap. -->
       <span class="ml-auto flex gap-1.5">
-        <!-- Correcting its words: back as it was, or applied as corrected. -->
-        <template v-if="pending && editing">
-          <Button
-            :variant="footerButtons"
-            size="icon-sm"
-            class="pointer-coarse:size-11"
-            :aria-label="phrase.ai_action_edit_cancel"
-            :data-title-popup="phrase.ai_action_edit_cancel"
-            data-action-edit-cancel
-            @click="cancelEdit"
-          >
-            <Icon name="undo" />
-          </Button>
-          <Button
-            class="flex h-8 items-center gap-1 px-2.5 text-sm font-semibold
-              pointer-coarse:h-11"
-            :disabled="saving || busy"
-            :aria-label="phrase.ai_action_edit_apply"
-            :data-title-popup="phrase.ai_action_edit_apply"
-            data-action-edit-apply
-            @click="saveEdit"
-          >
-            <Icon :name="saving ? 'loading' : 'check'" />{{ applyWord }}
-          </Button>
-        </template>
+        <AiActionTools
+          v-if="pending && editing"
+          group="editing"
+          :variant="footerButtons"
+          v-bind="tools"
+          v-on="toolEvents"
+        />
         <!-- Taken into the form: taken back from where it stood. -->
         <Button
           v-else-if="taken"
@@ -944,29 +811,13 @@ function sendComment(text: string) {
             />{{ applyWord }}
           </Button>
         </template>
-        <Button
-          v-else-if="undoable"
+        <AiActionTools
+          v-else
+          group="back"
           :variant="footerButtons"
-          class="flex h-8 items-center gap-1 px-2.5 text-sm pointer-coarse:h-11"
-          :disabled="busy"
-          :data-title-popup="phrase.ai_action_undo"
-          data-action-undo
-          @click="settled(() => emit('undo'))"
-        >
-          <Icon name="history" />{{ phrase.ai_action_undo }}
-        </Button>
-        <Button
-          v-else-if="restorable"
-          :variant="footerButtons"
-          class="flex h-8 items-center gap-1 px-2.5 text-sm pointer-coarse:h-11"
-          :disabled="busy"
-          :aria-label="restoreLabel"
-          :data-title-popup="restoreLabel"
-          data-action-restore
-          @click="settled(() => emit('restore'))"
-        >
-          <Icon name="undo" />{{ phrase.ai_action_restore_short }}
-        </Button>
+          v-bind="tools"
+          v-on="toolEvents"
+        />
       </span>
     </div>
 

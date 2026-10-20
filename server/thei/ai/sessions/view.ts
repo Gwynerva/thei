@@ -34,14 +34,14 @@ import { neverOffered } from '../actions/declined';
 import { findActions, sessionActions } from '../actions/rows';
 import { fileRef, isFileKey, type ActionTarget } from '../actions/target';
 import { fileOfFamily } from '../../assets/descriptions';
-import { AssetType } from '#layers/thei/shared/asset';
+import { assetKindName } from '#layers/thei/shared/asset-format-label';
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
 import type { ActionRow } from '../actions/types';
 import { undoState } from '../actions/undo';
 import { findTemplate } from '../templates/store';
 import { messageFromMarkdown } from '../../mcp/text-input';
 import { writingOf } from './bus';
-import { libraryFile, messageFiles } from './files';
+import { libraryFile, megabytes, messageFiles } from './files';
 import { sessionModel } from '../model/settings';
 import {
   findMessage,
@@ -173,18 +173,8 @@ export function messageItem(row: MessageRow): AiMessageItem {
 
 /** A file as a chip names it: what it is, its format and its size. */
 function fileTitle(file: AssetVariantInfo): string {
-  const said = THEI_SERVER.phrase;
-  const kind = {
-    [AssetType.Image]: said.image,
-    [AssetType.Video]: said.video,
-    [AssetType.Audio]: said.audio,
-    [AssetType.Other]: said.asset,
-  }[file.type];
-  const size =
-    file.size < 1024 * 1024
-      ? `${Math.max(1, Math.round(file.size / 1024))} KB`
-      : `${(file.size / 1024 / 1024).toFixed(1)} MB`;
-  return `${kind} · ${file.extension.toUpperCase()} · ${size}`;
+  const kind = assetKindName(THEI_SERVER.phrase, file.type);
+  return `${kind} · ${file.extension.toUpperCase()} · ${megabytes(file.size)}`;
 }
 
 /**
@@ -291,12 +281,7 @@ export function listSessions(
   const about = filter.about
     ? sessionsAbout([{ type: filter.about.kind as never, id: filter.about.id }])
     : undefined;
-  if (about && !about.length)
-    return {
-      sessions: [],
-      modelReady: Boolean(sessionModel()),
-      waiting: aiWaiting(),
-    };
+  if (about && !about.length) return { sessions: [], ...aiReadiness() };
   if (words) useWordsSql(rawDb);
   const found = (value: SQL) =>
     sql`${sql.raw(WORDS_SQL)}(${value}, ${words}) = 1`;
@@ -360,8 +345,7 @@ export function listSessions(
       sessionItem(row, named.get(row.sessionUuid) ?? []),
     ),
     ...(next === undefined ? {} : { next }),
-    modelReady: Boolean(sessionModel()),
-    waiting: aiWaiting(),
+    ...aiReadiness(),
   };
 }
 
@@ -442,6 +426,14 @@ export function aiWaiting(): number {
       .where(isNull(schema.aiSessions.archivedAt))
       .get()?.total ?? 0,
   );
+}
+
+/**
+ * What every place that starts a session reads with it: whether a model is
+ * set to answer one, and what waits for the owner, for the admin bar's ✦.
+ */
+export function aiReadiness() {
+  return { modelReady: Boolean(sessionModel()), waiting: aiWaiting() };
 }
 
 export function sessionHead(sessionUuid: string): AiSessionItem | undefined {

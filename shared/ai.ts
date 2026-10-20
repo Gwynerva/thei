@@ -80,6 +80,16 @@ export const AI_NOTICE_KINDS = [
 export type AiNoticeKind = (typeof AI_NOTICE_KINDS)[number];
 
 /**
+ * How a turn may end short and still be gone on with — stopped by the owner,
+ * out of time or of steps: a pause, said quietly, not a failure.
+ */
+export const AI_PAUSES: ReadonlySet<string> = new Set<AiNoticeKind>([
+  'stopped',
+  'timeout',
+  'turns',
+]);
+
+/**
  * What a message carries beside its words. A question waits for the owner;
  * steps say what the model read on the way; a comment ties the owner's words
  * to an action; a notice is the session's own word — stopped, the monthly

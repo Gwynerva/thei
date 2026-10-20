@@ -115,12 +115,10 @@ async function send(
 
 /** Stops a session answering; the list says so once it has stopped. */
 async function stop(sessionUuid: string) {
-  try {
+  await aiAttempt(async () => {
     await aiApi.stop(sessionUuid);
     void ai?.refresh();
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  }
+  });
 }
 
 /**
@@ -273,10 +271,7 @@ function openFull() {
           data-ai-entity-sent
         >
           <TheiLink
-            :to="{
-              path: '/admin/ai/',
-              query: { session: sentSession.sessionUuid },
-            }"
+            :to="sessionLocation(sentSession.sessionUuid)"
             class="flex min-h-9 min-w-0 flex-1 items-center gap-xs px-2 py-1.5
               text-sm pointer-coarse:min-h-11"
             :data-title-popup="sessionTitle(sentSession)"

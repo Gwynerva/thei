@@ -113,11 +113,12 @@ async function load(options: { fresh?: boolean } = {}) {
 }
 
 async function more() {
-  if (next.value === undefined) return;
+  const after = next.value;
+  if (after === undefined) return;
   const ticket = reading;
-  try {
+  await aiAttempt(async () => {
     const page = await $fetch<AiSessionListResponse>('/api/admin/ai/sessions', {
-      query: params(next.value),
+      query: params(after),
     });
     if (ticket !== reading) return;
     const known = new Set(sessions.value.map((item) => item.sessionUuid));
@@ -127,9 +128,7 @@ async function more() {
     ];
     next.value = page.next;
     readMore = true;
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  }
+  });
 }
 
 let typing: ReturnType<typeof setTimeout> | undefined;

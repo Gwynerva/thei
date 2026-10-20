@@ -242,6 +242,32 @@ export function edgeOutside(range: Range, side: InlineSide) {
 }
 
 /**
+ * The place one letter from the edge of a text where markup begins or ends,
+ * on the side given: the browser would carry the caret over the edge to the
+ * other side of it, past this place. None when the caret is not there.
+ */
+export function oneLetterFromEdge(
+  range: Range,
+  side: InlineSide,
+): Range | undefined {
+  const node = range.startContainer;
+  if (node.nodeType !== Node.TEXT_NODE) return undefined;
+  const text = node as Text;
+  const step =
+    side === 'before'
+      ? text.data.slice(0, range.startOffset)
+      : text.data.slice(range.startOffset);
+  if (!oneGrapheme(step)) return undefined;
+  const sibling = side === 'before' ? text.previousSibling : text.nextSibling;
+  if (sibling ? !isMarkup(sibling) : !isMarkup(text.parentElement))
+    return undefined;
+  const caret = document.createRange();
+  caret.setStart(text, side === 'before' ? 0 : text.length);
+  caret.collapse(true);
+  return caret;
+}
+
+/**
  * Markup the caret stands right beside, outside it, where the browser would
  * type into it all the same: after it — a hint or bold takes even the first
  * letter of the words that follow — or before it from a place between two

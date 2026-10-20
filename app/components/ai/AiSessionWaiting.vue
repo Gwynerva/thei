@@ -90,19 +90,16 @@ function goNext() {
 }
 
 async function applySure() {
-  if (busy.value || !sure.value.length) return;
+  if (!sure.value.length) return;
   if (Date.now() - shownAt < SETTLE_MS) return;
-  busy.value = true;
-  try {
-    await applyAndTell(
-      sure.value.map((action) => action.actionUuid),
-      { undoable: true },
-    );
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  } finally {
-    busy.value = false;
-  }
+  await aiAttempt(
+    () =>
+      applyAndTell(
+        sure.value.map((action) => action.actionUuid),
+        { undoable: true },
+      ),
+    busy,
+  );
 }
 </script>
 

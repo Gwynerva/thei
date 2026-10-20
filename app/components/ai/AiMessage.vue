@@ -1,12 +1,13 @@
 <script lang="ts" setup>
-import type {
-  AiActionItem,
-  AiMessageItem,
-  AiMessagePart,
-  AiStep,
+import {
+  AI_PAUSES,
+  type AiActionItem,
+  type AiMessageItem,
+  type AiMessagePart,
+  type AiStep,
 } from '#layers/thei/shared/ai';
 import { messageBody } from '#layers/thei/shared/ai-message-text';
-import { placeField } from '#layers/thei/shared/ai-field-ask';
+import { placeLabel } from '#layers/thei/shared/ai-field-ask';
 
 /**
  * One message of a session. The owner's is a bubble on the right — what it
@@ -94,9 +95,7 @@ const fieldAbout = computed(() => {
   const part = partsOf('field')[0];
   if (!part) return '';
   return phrase.value.ai_message_field(
-    part.ref.startsWith('asset:')
-      ? phrase.value.asset_description
-      : fieldName(placeField(part.place)),
+    placeLabel(part.place, part.ref, phrase.value),
   );
 });
 
@@ -193,8 +192,6 @@ const NOTICE_ICONS = {
   turns: 'pause-circle',
   error: 'warning',
 } as const;
-/** How a turn may end short and be gone on with: a pause, said quietly. */
-const PAUSES = new Set(['stopped', 'timeout', 'turns']);
 
 // ---- The question --------------------------------------------------------------
 
@@ -386,7 +383,7 @@ function answer(text: string) {
       class="flex items-start gap-2.5 rounded-normal border px-3 py-2.5 text-sm
         leading-snug"
       :class="
-        PAUSES.has(notice.kind)
+        AI_PAUSES.has(notice.kind)
           ? 'border-border-1 bg-bg-2'
           : 'border-border-warning bg-bg-warning'
       "
@@ -395,7 +392,9 @@ function answer(text: string) {
       <Icon
         :name="NOTICE_ICONS[notice.kind] ?? 'warning'"
         class="mt-0.5 shrink-0"
-        :class="PAUSES.has(notice.kind) ? 'text-text-2' : 'text-text-warning'"
+        :class="
+          AI_PAUSES.has(notice.kind) ? 'text-text-2' : 'text-text-warning'
+        "
       />
       <div class="flex min-w-0 flex-col gap-1.5">
         <span>{{ phrase.ai_notices[notice.kind] }}</span>

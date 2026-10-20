@@ -13,6 +13,7 @@ import { EntityPrefix } from '../../entity-id';
 import { EntityPatchError, refuse as fail } from '../../entity-patch/text';
 import { findEntity } from '../../entity-kinds';
 import { lostLettersProblem } from '../../lost-letters';
+import { zodProblem } from '../refusals';
 import { findTarget, targetRef, type ActionTarget } from './target';
 import {
   linkSessionEntities,
@@ -93,18 +94,6 @@ const changingOf = (item: Checked): Changing => ({
   target: item.target,
   payload: item.prepared.payload,
 });
-
-function zodProblem(error: {
-  issues: { path: PropertyKey[]; message: string }[];
-}) {
-  return error.issues
-    .map((issue) =>
-      issue.path.length
-        ? `${issue.path.map(String).join('.')}: ${issue.message}`
-        : issue.message,
-    )
-    .join('; ');
-}
 
 async function check(
   proposal: ActionProposal,

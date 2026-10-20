@@ -1,8 +1,9 @@
-import type {
-  AiMessagePart,
-  AiNoticeKind,
-  AiStep,
-  AiTranscriptTurn,
+import {
+  AI_PAUSES,
+  type AiMessagePart,
+  type AiNoticeKind,
+  type AiStep,
+  type AiTranscriptTurn,
 } from '#layers/thei/shared/ai';
 import type { ApiTokenPrincipal } from '../../api-tokens';
 import { entityFace, findEntity, refOf } from '../../entity-kinds';
@@ -24,7 +25,6 @@ import {
 } from '../model/stream';
 import { lifeArrivalCutoff } from '#layers/thei/shared/life';
 import {
-  digestOf,
   hasThinking,
   promptDigest,
   serverDay,
@@ -32,6 +32,7 @@ import {
   withoutThinking,
   type AiSessionContext,
 } from './context';
+import { fingerprintOf } from '../actions/declined';
 import { sessionModel } from '../model/settings';
 import {
   countedTokens,
@@ -55,6 +56,7 @@ import {
   endTurn,
   haltOf,
   TookTooLong,
+  TOOL_ANSWER_MAX,
   TURN_LIMITS,
   turnLive,
   within,
@@ -93,14 +95,7 @@ const MODEL_CALLS = 40;
  * so only a model going round in circles meets it.
  */
 const TURN_TOKEN_CAP = 3_000_000;
-/** How a turn may end short and still be gone on with: a pause, not a failure. */
-const PAUSES = new Set(['turns', 'timeout', 'stopped']);
 
-/**
- * How much of a tool's answer the model is handed: every answer is reread
- * on every later call, so one huge answer costs many times over.
- */
-export const TOOL_ANSWER_MAX = 30_000;
 /** How often the words written so far are saved while they stream. */
 const SAVE_EVERY_MS = 800;
 
@@ -515,7 +510,7 @@ export async function runSessionTurn(
     // first words, rather than written into what came before.
     if (kept && kept.day !== today)
       transcript.push({ role: 'user', text: dayNote(today) });
-    if (kept && kept.instructionsDigest !== digestOf(instructions))
+    if (kept && kept.instructionsDigest !== fingerprintOf(instructions))
       transcript.push({ role: 'user', text: instructionsNote(instructions) });
     /** The last request answered in this turn: its turns, the kinds unshown. */
     let answered: { turns: number; unshown: StreamFileKind[] } | undefined;
@@ -526,7 +521,7 @@ export async function runSessionTurn(
       provider: settings.provider,
       model: settings.model,
       day: today,
-      instructionsDigest: digestOf(instructions),
+      instructionsDigest: fingerprintOf(instructions),
       unshown: answered?.unshown ?? [...unshown],
       ...(thinkingFrom !== undefined ? { thinkingFrom } : {}),
       ...(answered
@@ -825,7 +820,7 @@ export async function runSessionTurn(
     }
     // A check cut short by a turn's own limits, or by the owner, has more to
     // go on with: the same offer as after a turn that went through.
-    if (stop && PAUSES.has(stop.kind)) await afterwards?.();
+    if (stop && AI_PAUSES.has(stop.kind)) await afterwards?.();
     return;
   }
   close?.();

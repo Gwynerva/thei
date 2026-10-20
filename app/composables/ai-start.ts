@@ -41,7 +41,7 @@ export async function startAiSession(
     });
     return;
   }
-  try {
+  const started = await aiAttempt(async () => {
     const { sessionUuid } = await aiApi.start({
       text: message.text,
       files: message.files,
@@ -50,8 +50,6 @@ export async function startAiSession(
       ...(message.model ? { model: message.model } : {}),
     });
     await options.started(sessionUuid);
-  } catch (caught) {
-    message.restore();
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  }
+  });
+  if (!started) message.restore();
 }
