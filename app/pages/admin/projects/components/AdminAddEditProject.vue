@@ -301,9 +301,10 @@ async function handleSave() {
       applySavedAction(result.action);
       markProjectSaved();
       await refreshNuxtData('admin-bar');
-      await navigateTo(`/admin/projects/${result.projectUuid}/edit/`, {
-        external: true,
-      });
+      await navigateTo(
+        sitePath(`/admin/projects/${result.projectUuid}/edit/`),
+        { external: true },
+      );
     }
   } finally {
     saving.value = false;

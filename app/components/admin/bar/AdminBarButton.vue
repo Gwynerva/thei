@@ -2,6 +2,10 @@
 import { type IconName } from '#thei/icons';
 
 export interface AdminBarButtonProps {
+  /**
+   * A path in data. `external` loads the page in full, and takes the path as
+   * it is: the base path is added here.
+   */
   to: string | { href: string; target?: string; external?: boolean };
   title: string;
   icon?: IconName;
@@ -16,7 +20,9 @@ defineProps<AdminBarButtonProps>();
 
 <template>
   <TheiLink
-    :to="typeof to === 'string' ? to : to.href"
+    :to="
+      typeof to === 'string' ? to : to.external ? sitePath(to.href) : to.href
+    "
     :target="typeof to === 'object' ? to.target : undefined"
     :external="typeof to === 'object' ? to.external : undefined"
     :data-title-popup="title"

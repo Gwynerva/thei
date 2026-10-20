@@ -154,7 +154,7 @@ async function save() {
       isEdit.value && refreshTakenDates(),
     ]);
     if (!isEdit.value)
-      await navigateTo(`/admin/diary/${result.diaryUuid}/edit/`, {
+      await navigateTo(sitePath(`/admin/diary/${result.diaryUuid}/edit/`), {
         external: true,
       });
   } finally {

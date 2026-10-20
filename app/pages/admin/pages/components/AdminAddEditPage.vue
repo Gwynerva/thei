@@ -248,7 +248,7 @@ async function save() {
     markSaved();
     await refreshNuxtData('admin-bar');
     if (!isEdit.value)
-      await navigateTo(`/admin/pages/${result.pageUuid}/edit/`, {
+      await navigateTo(sitePath(`/admin/pages/${result.pageUuid}/edit/`), {
         external: true,
       });
   } catch (caught) {

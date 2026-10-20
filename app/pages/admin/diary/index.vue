@@ -116,7 +116,7 @@ function dayOf(item: DiaryListItem) {
         <template #size>{{ humanSize(item.totalSize) }}</template>
         <template #action>
           <TheiLink
-            :to="buildDiaryUrl(item.date)"
+            :to="sitePath(buildDiaryUrl(item.date))"
             external
             :data-title-popup="phrase.diary_entry"
             :aria-label="phrase.diary_entry"

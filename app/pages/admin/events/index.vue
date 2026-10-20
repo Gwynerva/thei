@@ -116,7 +116,7 @@ const list = computed<EventListResponse | undefined>(() => data.value);
         <template #size>{{ humanSize(item.totalSize) }}</template>
         <template #action>
           <TheiLink
-            :to="buildEventUrl(item.humanReadableSlug, item.publicId)"
+            :to="sitePath(buildEventUrl(item.humanReadableSlug, item.publicId))"
             external
             :data-title-popup="phrase.view_event"
             :aria-label="phrase.view_event"
