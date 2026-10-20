@@ -160,7 +160,8 @@ Around them:
 ## Design
 
 - The design rules live in `docs/design/`, and bind like this file. Before changing anything a person sees — a page, a form, a modal, a popup, a style — read `docs/design/README.md` and the pages of what you touch.
-- A change to a shared component or to a rule updates its page in the same commit. Tokens, colours, shadows, radii, spacing, type sizes and breakpoints change only with the owner's explicit permission, asked for first.
+- A change to a shared component updates its page in the same commit. Tokens, colours, shadows, radii, spacing, type sizes and breakpoints change only with the owner's explicit permission, asked for first.
+- A design rule — a line of a page's Rules or Why in `docs/design/`, or anything written to bind how other screens look or behave — is added, changed or removed only with the owner's explicit permission. Propose one, as a question in the report; write it once the owner has said yes to that rule in so many words. A task, a fix or the owner's choice for one screen is not permission for a rule. Describing what the code of a change does stays part of the change.
 - `tests/docs/design-docs.test.ts` keeps the pages honest: every path in backticks exists, links between pages resolve, and every page is in the README's index.
 - Every popup — a menu, a picker, a small form, a card, a proposal — is a `FloatingPopup`, and every hint is `data-title-popup`. Nothing places, teleports or stacks a surface of its own; `tests/app/components/popup-usage.test.ts` fails when something does.
 
