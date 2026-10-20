@@ -519,6 +519,8 @@ test('video previews play on hover and keyboard focus in both library views', as
   }
 
   await page.goto('/admin/assets/');
+  // A click before the page is hydrated opens nothing.
+  await page.waitForLoadState('networkidle');
   await page.getByRole('button', { name: /^Used in: / }).click();
   await page
     .getByRole('listbox', { name: 'Used in' })

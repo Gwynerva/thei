@@ -64,6 +64,8 @@ test('every kind of page previews as its own card', async ({
   page,
   request,
 }) => {
+  // It draws a card of every kind, one after another.
+  test.slow();
   const owner = await admin();
   const child = {
     title: 'A part',
