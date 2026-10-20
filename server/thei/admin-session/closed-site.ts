@@ -13,8 +13,9 @@ import { tokenName } from './const';
  * the admin's alone, and a visitor sees only that the site is unavailable.
  * So the tokens of the active sessions are read first, raw and read-only,
  * from the table as it stands before any migration. It has kept one shape
- * since 0.0.1; a table that cannot be read that way only means nobody is
- * recognised until the sessions are loaded as usual.
+ * since 0.0.1, which 0.0.7 only added the previous token to; a table that
+ * cannot be read that way only means nobody is recognised until the sessions
+ * are loaded as usual.
  */
 const closedSiteTokens = new Map<string, number>();
 
@@ -34,12 +35,21 @@ export function rememberClosedSiteAdmins(rawDb: Database) {
       const session =
         typeof row.data === 'string' ? JSON.parse(row.data) : undefined;
       if (
-        session?.state === 'active' &&
-        typeof session.token === 'string' &&
-        typeof session.expiresAt === 'number' &&
-        session.expiresAt > now
+        session?.state !== 'active' ||
+        typeof session.token !== 'string' ||
+        typeof session.expiresAt !== 'number' ||
+        session.expiresAt <= now
       )
-        closedSiteTokens.set(session.token, session.expiresAt);
+        continue;
+      closedSiteTokens.set(session.token, session.expiresAt);
+      // A browser that missed the cookie of the last rotation still holds the
+      // token it replaced (`rotateAdminSessionTokenIfNeeded`).
+      if (
+        typeof session.previousToken === 'string' &&
+        (typeof session.previousTokenExpiresAt !== 'number' ||
+          session.previousTokenExpiresAt > now)
+      )
+        closedSiteTokens.set(session.previousToken, session.expiresAt);
     } catch {
       // A row that cannot be read signs nobody in.
     }

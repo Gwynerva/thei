@@ -9,6 +9,7 @@ import {
   destroyOtherAdminSessions,
   getCurrentAdminSession,
   memorySessions,
+  rememberSessionInMemory,
   toSnapshotSessions,
   type AdminSessionData,
 } from '../../server/thei/admin-session';
@@ -16,7 +17,6 @@ import {
   isClosedSiteAdmin,
   rememberClosedSiteAdmins,
 } from '../../server/thei/admin-session/closed-site';
-import { tokenAliases } from '../../server/thei/admin-session/token';
 import { getPublicAdminSessions } from '../../server/thei/admin-session/repository/public';
 
 let rawDb: Database.Database | undefined;
@@ -26,7 +26,6 @@ afterEach(() => {
   rawDb = undefined;
   memorySessions.clear();
   toSnapshotSessions.clear();
-  tokenAliases.clear();
   vi.unstubAllGlobals();
 });
 
@@ -97,6 +96,36 @@ describe('admin sessions before they are loaded', () => {
     expect(isClosedSiteAdmin(withToken())).toBe(false);
   });
 
+  it('are recognised by a closed site by a token whose replacement never arrived', () => {
+    createDb();
+    const now = Date.now();
+    const missed = {
+      ...session('missed', 'active', now + 60_000),
+      previousToken: 'missed-old-token',
+    };
+    const seen = {
+      ...session('seen', 'active', now + 60_000),
+      previousToken: 'seen-old-token',
+      previousTokenExpiresAt: now - 1,
+    };
+    const insert = rawDb!.prepare(
+      'INSERT INTO "admin-sessions" (sessionUuid, data) VALUES (?, ?)',
+    );
+    for (const row of [missed, seen])
+      insert.run(row.sessionUuid, JSON.stringify(row));
+    rememberClosedSiteAdmins(rawDb!);
+
+    const withToken = (token: string) => {
+      const request = new IncomingMessage(new Socket());
+      request.headers.cookie = `thei-admin-session-token=${token}`;
+      return createEvent(request, new ServerResponse(request));
+    };
+    expect(isClosedSiteAdmin(withToken('missed-token'))).toBe(true);
+    expect(isClosedSiteAdmin(withToken('missed-old-token'))).toBe(true);
+    expect(isClosedSiteAdmin(withToken('seen-token'))).toBe(true);
+    expect(isClosedSiteAdmin(withToken('seen-old-token'))).toBe(false);
+  });
+
   it('recognise nobody early when the table cannot be read', () => {
     const empty = new Database(':memory:');
     rememberClosedSiteAdmins(empty);
@@ -123,12 +152,9 @@ describe('admin session expiration', () => {
         { sessionUuid: destroyed.sessionUuid, data: destroyed },
       ])
       .run();
-    memorySessions.set(expiredMemory.token, expiredMemory);
-    memorySessions.set(active.token, active);
-    tokenAliases.set('old-expired-token', {
-      token: expiredMemory.token,
-      expiresAt: now + 10_000,
-    });
+    expiredMemory.previousToken = 'old-expired-token';
+    rememberSessionInMemory(expiredMemory);
+    rememberSessionInMemory(active);
 
     const result = await getPublicAdminSessions();
 
@@ -152,7 +178,7 @@ describe('admin session expiration', () => {
     );
     expect(memorySessions.has(expiredMemory.token)).toBe(false);
     expect(memorySessions.has(active.token)).toBe(true);
-    expect(tokenAliases.has('old-expired-token')).toBe(false);
+    expect(memorySessions.has('old-expired-token')).toBe(false);
     expect(
       db
         .select()
@@ -162,7 +188,7 @@ describe('admin session expiration', () => {
     ).toMatchObject({ state: 'destroyed', lastUsedAt: 200 });
   });
 
-  it('revokes other sessions and token aliases while preserving the current one', async () => {
+  it('revokes other sessions and their previous tokens while preserving the current one', async () => {
     const db = createDb();
     const current = session('current', 'active', Date.now() + 60_000);
     const other = session('other', 'active', Date.now() + 60_000);
@@ -172,17 +198,14 @@ describe('admin session expiration', () => {
         { sessionUuid: other.sessionUuid, data: other },
       ])
       .run();
-    memorySessions.set(current.token, current);
-    memorySessions.set(other.token, other);
-    tokenAliases.set('old-other-token', {
-      token: other.token,
-      expiresAt: Date.now() + 60_000,
-    });
+    other.previousToken = 'old-other-token';
+    rememberSessionInMemory(current);
+    rememberSessionInMemory(other);
 
     expect(await destroyOtherAdminSessions(current.sessionUuid)).toBe(true);
     expect(memorySessions.get(current.token)).toBe(current);
     expect(memorySessions.has(other.token)).toBe(false);
-    expect(tokenAliases.has('old-other-token')).toBe(false);
+    expect(memorySessions.has('old-other-token')).toBe(false);
     expect(
       db
         .select()

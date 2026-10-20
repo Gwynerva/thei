@@ -1,3 +1,4 @@
+import { flushSessionsBeforeExit } from './admin-session';
 import { bootTheiServer } from './boot/process';
 import { invalidateOgCardInfo } from './og/cache';
 import { invalidateMcpDocuments } from './mcp/documents';
@@ -29,5 +30,11 @@ export default defineNitroPlugin(async (nitroApp) => {
     invalidateOgCardInfo();
     invalidateMcpDocuments();
   });
+  // Admin sessions are written every 30 s. What the last seconds changed is
+  // written as the server stops: on Nitro's close, after a stop signal or in a
+  // dev reload, and on exit, which an update and the panel's restart reach
+  // through `process.exit`.
+  nitroApp.hooks.hook('close', flushSessionsBeforeExit);
+  process.once('exit', flushSessionsBeforeExit);
   await bootTheiServer();
 });
