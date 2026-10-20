@@ -3,7 +3,9 @@ import type { MediaDescriptor } from '#layers/thei/shared/media';
 import type { PublicTagSummary } from '#layers/thei/shared/api/public';
 import type { ContentFieldModelValue } from '#layers/thei/shared/content';
 
-definePageMeta({ layout: 'public' });
+// Every scenario is a page of its own, as two entities are: a link from one
+// to another mounts the page afresh, the way a client navigation does.
+definePageMeta({ layout: 'public', key: (route) => route.fullPath });
 const route = useRoute();
 const scenario = ref(String(route.query.banner || 'wide'));
 const kind = String(route.query.kind || 'project');
@@ -124,6 +126,13 @@ const fieldValue = computed<ContentFieldModelValue>(() => ({
       :is-cv="true"
       data-test-hero
     />
+    <TheiLink
+      to="/ambient-regression?banner=wide&kind=section"
+      style="display: inline-block; margin: 8px; padding: 8px"
+      data-to-banner
+    >
+      Open a section with a banner
+    </TheiLink>
     <button class="m-sm p-sm" data-switch-source @click="scenario = 'portrait'">
       Change source
     </button>
