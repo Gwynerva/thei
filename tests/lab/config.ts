@@ -4,9 +4,10 @@
 // at import: `scripts/dev-server.ts` and the lab site's `nuxt.config.ts`
 // import this file too.
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fnv1a } from './util';
 
 /** This checkout: the main one or a worktree. */
 export const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
@@ -33,32 +34,70 @@ export function mainCheckout(): string {
   return mainRoot;
 }
 
-/** The worktree's folder name, or undefined in the main checkout. */
+/**
+ * The worktree's folder name, or undefined in the main checkout. Compared
+ * as paths, not as words: git and Node may spell a Windows drive letter in
+ * different cases.
+ */
 export function worktreeName(): string | undefined {
   const main = resolve(mainCheckout());
   const here = resolve(repoRoot);
-  return main === here ? undefined : basename(here);
+  return relative(main, here) === '' ? undefined : basename(here);
 }
 
-function fnv1a(text: string): number {
-  let hash = 0x811c9dc5;
-  for (const char of text) {
-    hash ^= char.codePointAt(0)!;
-    hash = Math.imul(hash, 0x01000193) >>> 0;
+/** Every checkout of this repository: the main one first, then each worktree. */
+export function checkouts(): string[] {
+  try {
+    const list = execFileSync('git', ['worktree', 'list', '--porcelain'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const found = list
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith('worktree '))
+      .map((line) => resolve(line.slice('worktree '.length).trim()));
+    return found.length ? found : [resolve(repoRoot)];
+  } catch {
+    return [resolve(repoRoot)];
   }
-  return hash;
+}
+
+/** The ports a worktree's lab site may take. */
+export const WORKTREE_PORTS = { first: 3200, count: 100 } as const;
+
+/** A port a worktree took because its own was another's (`lab up --start`). */
+export function portFile(checkout = repoRoot): string {
+  return join(checkout, '.lab', 'port.json');
+}
+
+/** The port written in a checkout's `port.json`, if any. */
+export function claimedPort(checkout = repoRoot): number | undefined {
+  try {
+    const port = Number(
+      JSON.parse(readFileSync(portFile(checkout), 'utf8')).port,
+    );
+    return Number.isInteger(port) && port > 0 ? port : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
  * 3003 in the main checkout; in a worktree a port of its own between 3200
  * and 3299, away from the fixture's, the release bench's and the fake
- * models' ports. `THEI_LAB_PORT` overrides both.
+ * models' ports — derived from its name, or the one it took when two names
+ * met on one port (`.lab/port.json`). `THEI_LAB_PORT` overrides both.
  */
 export function labPort(): number {
   const fromEnv = Number(process.env.THEI_LAB_PORT);
   if (fromEnv) return fromEnv;
   const worktree = worktreeName();
-  return worktree ? 3200 + (fnv1a(worktree) % 100) : 3003;
+  if (!worktree) return 3003;
+  return (
+    claimedPort() ??
+    WORKTREE_PORTS.first + (fnv1a(worktree) % WORKTREE_PORTS.count)
+  );
 }
 
 /**
@@ -100,6 +139,11 @@ export const paths = {
   studies: join(labDir, 'studies'),
   /** Which snapshot the playground holds, written by `lab up playground`. */
   playgroundState: join(labDir, 'playground.json'),
+  /**
+   * The lab site's server as `scripts/dev-server.ts` started it — its PID,
+   * port and mode — while it runs, however it was started.
+   */
+  serverRun: join(labDir, 'site-run.json'),
   /** Kept studies, in git only with the owner's agreement. */
   keptStudies: join(repoRoot, 'tests', 'lab', 'studies'),
   personas: join(repoRoot, 'tests', 'lab', 'personas'),

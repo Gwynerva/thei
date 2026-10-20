@@ -9,7 +9,7 @@
 //   jobs/…/reviews/R<n>/{inputs.json, brief.md, review.json, validation.json}
 //   report/{index.html, summary.json}
 //   changes.json (optional)
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import { paths } from '../config';
 import type {
@@ -23,11 +23,13 @@ import type {
   StudyBar,
   VariantCode,
 } from '../types';
-import type { JobFile } from '../run/store';
-import { variantCode } from './criteria';
+import { studyDir, type JobFile } from '../run/store';
+import { readJson, readJsonIf } from '../util';
+import { variantCode } from '../variants';
 import { cropName } from './crops';
 
 export type { JobFile };
+export { studyDir };
 
 /** `study.json`: the study as the runner wrote it (`writeStudyFile`). */
 export interface StudyFile {
@@ -90,18 +92,6 @@ export function runsRoot(runs?: string): string {
   return runs ? resolve(runs) : paths.runs;
 }
 
-export function studyDir(runs: string, study: string): string {
-  return join(runs, study);
-}
-
-export function readJson<T>(file: string): T {
-  return JSON.parse(readFileSync(file, 'utf8')) as T;
-}
-
-function readJsonIf<T>(file: string, fallback: T): T {
-  return existsSync(file) ? readJson<T>(file) : fallback;
-}
-
 function subdirs(dir: string): string[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir, { withFileTypes: true })
@@ -118,7 +108,7 @@ export function listStudies(runs: string): string[] {
 }
 
 export function readStudy(runs: string, study: string): StudyFile {
-  const file = join(studyDir(runs, study), 'study.json');
+  const file = join(studyDir(study, runs), 'study.json');
   if (!existsSync(file))
     throw new Error(
       `No study "${study}" in ${runs}: play it first (bun run lab play ${study}).`,
@@ -131,6 +121,10 @@ export function stepKey(n: number): string {
   return String(n).padStart(2, '0');
 }
 
+/**
+ * An attempt, once done: the runner writes its `attempt.json` last, so a
+ * play still running, or one that broke off, is not read as complete.
+ */
 export function loadAttempt(dir: string, id: string): Attempt | undefined {
   const metaFile = join(dir, 'attempt.json');
   if (!existsSync(metaFile)) return undefined;
@@ -210,7 +204,7 @@ export function loadJob(
 
 export function loadJobs(runs: string, study: string): LoadedJob[] {
   const studyFile = readStudy(runs, study);
-  const folder = studyDir(runs, study);
+  const folder = studyDir(study, runs);
   const jobsDir = join(folder, 'jobs');
   return subdirs(jobsDir)
     .filter((name) => existsSync(join(jobsDir, name, 'job.json')))
@@ -218,7 +212,7 @@ export function loadJobs(runs: string, study: string): LoadedJob[] {
 }
 
 export function readChanges(runs: string, study: string): ChangeEntry[] {
-  const file = join(studyDir(runs, study), 'changes.json');
+  const file = join(studyDir(study, runs), 'changes.json');
   if (!existsSync(file)) return [];
   const raw = readJson<unknown>(file);
   const list = Array.isArray(raw)

@@ -5,8 +5,8 @@ import {
   DEFAULT_BAR,
   resolveBar,
   SEVERITIES,
-  variantCode,
 } from './criteria';
+import { variantCode } from '../variants';
 
 const ids = (list: ReturnType<typeof criteriaFor>) =>
   Object.fromEntries(

@@ -16,8 +16,10 @@ import type {
   StepRecord,
   Target,
 } from '../types';
+import { transliterateCyrillic } from '../../../shared/language/slugify';
+import { writeJson } from '../util';
+import { settle } from '../variants';
 import { drawStep, probe } from './marks';
-import { writeJson } from './store';
 
 /** Thrown when a play cannot go on: the step that stopped it is recorded. */
 export class PlayStopped extends Error {}
@@ -138,82 +140,12 @@ export function describeTarget(target: Target): string {
 }
 
 function slug(label: string) {
-  const translit: Record<string, string> = {
-    а: 'a',
-    б: 'b',
-    в: 'v',
-    г: 'g',
-    д: 'd',
-    е: 'e',
-    ё: 'e',
-    ж: 'zh',
-    з: 'z',
-    и: 'i',
-    й: 'y',
-    к: 'k',
-    л: 'l',
-    м: 'm',
-    н: 'n',
-    о: 'o',
-    п: 'p',
-    р: 'r',
-    с: 's',
-    т: 't',
-    у: 'u',
-    ф: 'f',
-    х: 'h',
-    ц: 'c',
-    ч: 'ch',
-    ш: 'sh',
-    щ: 'sch',
-    ъ: '',
-    ы: 'y',
-    ь: '',
-    э: 'e',
-    ю: 'yu',
-    я: 'ya',
-  };
   return (
-    [...label.toLowerCase()]
-      .map((char) => translit[char] ?? char)
-      .join('')
+    transliterateCyrillic(label)
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '')
       .slice(0, 32) || 'step'
   );
-}
-
-/** Waits for what a person waits for: the page loaded, fonts, motion stopped. */
-export async function settle(page: Page) {
-  // A field that searches as one types waits a moment before it asks: the
-  // network is quiet until then, and a shot taken at once shows nothing yet.
-  await page.waitForTimeout(250);
-  await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
-  await page
-    .evaluate(async () => {
-      await document.fonts?.ready;
-      const deadline = Date.now() + 1500;
-      for (;;) {
-        const running = document
-          .getAnimations()
-          .filter(
-            (animation) =>
-              animation.playState === 'running' &&
-              animation.effect?.getTiming().iterations !== Infinity,
-          );
-        if (!running.length || Date.now() > deadline) break;
-        await Promise.race([
-          Promise.all(
-            running.map((animation) => animation.finished.catch(() => {})),
-          ),
-          new Promise((r) => setTimeout(r, 200)),
-        ]);
-      }
-      await new Promise((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(resolve)),
-      );
-    })
-    .catch(() => {});
 }
 
 /** The whole tree hydrated, as the fixture's plugin marks it. */
@@ -536,7 +468,10 @@ export function record(input: RecorderInput): Recording {
         SHOWN_MARK,
       )
       .catch(() => {});
-    await settle(page);
+    // A field that searches as one types waits a moment before it asks:
+    // the network is quiet until then, and a shot taken at once shows
+    // nothing yet. The probe measures the page as it then stands.
+    await settle(page, { pauseMs: 250, networkIdleMs: 3000 });
     entry.url = page.url().replace(input.origin, '');
     await page.screenshot({ path: join(dir, entry.shot) });
     let result: ProbeResult | undefined;

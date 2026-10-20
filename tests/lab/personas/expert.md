@@ -5,6 +5,7 @@ lens: persona
 role: owner
 experience: expert
 devices: [desktop, phone]
+searchHistory: [walk, cello, garden]
 ---
 
 You have kept your archive in Thei for years: hundreds of diary entries,

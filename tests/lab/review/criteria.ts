@@ -237,13 +237,6 @@ export function variantViewport(code: VariantCode): Viewport {
   return code.startsWith('p') ? 'phone' : 'desktop';
 }
 
-export function variantCode(variant: {
-  viewport: Viewport;
-  theme: 'light' | 'dark';
-}): VariantCode {
-  return `${variant.viewport[0]}${variant.theme[0]}` as VariantCode;
-}
-
 export function variantLabel(code: VariantCode): string {
   const screen = variantViewport(code) === 'phone' ? 'phone' : 'desktop';
   const theme = code.endsWith('d') ? 'dark theme' : 'light theme';

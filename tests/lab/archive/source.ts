@@ -33,7 +33,11 @@ export function adapterFingerprint(): string {
     for (const name of readdirSync(folder).sort()) {
       const path = join(folder, name);
       if (statSync(path).isDirectory()) visit(path);
-      else if (name.endsWith('.ts') && !name.endsWith('.test.ts'))
+      else if (
+        name.endsWith('.ts') &&
+        !name.endsWith('.test.ts') &&
+        !name.endsWith('.test-d.ts')
+      )
         hash.update(name).update(readFileSync(path));
     }
   };

@@ -7,6 +7,7 @@ import type {
   SiteIndex,
   StudyDefinition,
 } from '../types';
+import { fnv1a } from '../util';
 
 export function defineStudy(study: StudyDefinition): StudyDefinition {
   return study;
@@ -21,12 +22,7 @@ export function defineScenario(
 /** The same choice for the same salt, a different one for another. */
 export function choose<T>(candidates: T[], salt: string): T | undefined {
   if (!candidates.length) return undefined;
-  let hash = 0x811c9dc5;
-  for (const char of salt) {
-    hash ^= char.codePointAt(0)!;
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return candidates[hash % candidates.length];
+  return candidates[fnv1a(salt) % candidates.length];
 }
 
 /** Entities of the index that answer a test, by kind. */

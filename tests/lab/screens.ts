@@ -1,8 +1,27 @@
 // Every screen of Thei worth looking at, and how to reach it on a seeded
 // site: chosen by what an entity is (a project with the most sections, an
-// event with a banner), never by an id. The sweep study plays each of them,
-// and `lab warm` opens each once so a dev server has compiled them.
-import type { Role, SiteEntity, SiteIndex } from './types';
+// event with a banner), never by an id. A screen that is not an address of
+// its own — a modal, a popup — is reached by the steps a person takes from
+// one. The sweep study plays each of them, and `lab warm` opens each address
+// once so a dev server has compiled them.
+import type {
+  Role,
+  SiteEntity,
+  SiteIndex,
+  StepAction,
+  StepOptions,
+} from './types';
+
+/**
+ * A step from the address to the screen, found the way a person finds it:
+ * by role and name, by visible words or by label, never by `data-*` or a
+ * class (`README.md`, "Studies").
+ */
+export interface ScreenStep {
+  label: string;
+  action: StepAction;
+  options?: StepOptions;
+}
 
 export interface Screen {
   id: string;
@@ -10,6 +29,24 @@ export interface Screen {
   role: Role;
   /** The base-relative address of the screen on this site, or why there is none. */
   path(index: SiteIndex): string;
+  /** What a person does after opening the address to reach the screen. */
+  steps?(index: SiteIndex): ScreenStep[];
+  /** Recent searches the browser holds before the screen opens. */
+  searchHistory?(index: SiteIndex): string[];
+}
+
+function escapeRegExp(text: string) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * The first words of a title, as a name starts with them: up to the first
+ * mark the site may set otherwise (a quote, a dash), which a typed title
+ * and a shown one need not share.
+ */
+function startOf(title: string) {
+  const words = /^[\p{L}\p{N} ]+/u.exec(title)?.[0]?.trim() || title;
+  return new RegExp(`^${escapeRegExp(words)}`);
 }
 
 function richest(
@@ -57,8 +94,24 @@ const diary = (index: SiteIndex) =>
     index,
     'diary',
     (e) => n(e, 'pictures') * 2 + n(e, 'words') / 100 + n(e, 'relations'),
-    (e) => e.access === 'public',
+    // A day still to come waits: a stranger cannot open it yet.
+    (e) => e.access === 'public' && !e.facts.future,
   );
+/** A general section, open in the tab a project's form shows first. */
+const generalSection = (index: SiteIndex) =>
+  richest(
+    index,
+    'section',
+    (e) => n(e, 'words') / 50 + n(e, 'pictures'),
+    (e) => !e.facts.dated && !e.facts.private,
+  );
+/** The library's videos are listed by a filter of its own: one must be there. */
+const requireVideo = (index: SiteIndex) => {
+  const found = Object.values(index.files).some(
+    (file) => file.kind === 'video',
+  );
+  if (!found) throw new Error('The archive has no video for this screen.');
+};
 const page = (index: SiteIndex) =>
   richest(
     index,
@@ -129,6 +182,29 @@ export const SCREENS: Screen[] = [
     path: (index) =>
       `/search/?q=${encodeURIComponent((project(index).title ?? '').split(/\s+/)[0] ?? '')}`,
   },
+  {
+    id: 'quick-search',
+    title: 'Quick search with recent searches',
+    role: 'visitor',
+    path: () => '/',
+    searchHistory: (index) =>
+      [project(index), event(index), tag(index)].map((entity) =>
+        (entity.title ?? '').split(/\s+/).slice(0, 2).join(' '),
+      ),
+    steps: () => [
+      {
+        label: 'Open search',
+        action: { click: { role: 'link', name: 'Search' } },
+        options: { answer: { role: 'group', name: /searched for/i } },
+      },
+    ],
+  },
+  {
+    id: 'rewind',
+    title: 'This day in other years',
+    role: 'visitor',
+    path: () => '/rewind/',
+  },
   // What the owner sees.
   { id: 'dashboard', title: 'Dashboard', role: 'owner', path: () => '/admin/' },
   {
@@ -142,6 +218,24 @@ export const SCREENS: Screen[] = [
     title: 'A project form',
     role: 'owner',
     path: (index) => project(index).adminUrl,
+  },
+  {
+    id: 'admin-section',
+    title: "A project's section",
+    role: 'owner',
+    path: (index) => generalSection(index).adminUrl,
+    steps: (index) => [
+      {
+        label: 'Open the section',
+        action: {
+          click: {
+            role: 'button',
+            name: startOf(generalSection(index).title ?? ''),
+          },
+        },
+        options: { answer: { role: 'dialog' }, timeoutMs: 15_000 },
+      },
+    ],
   },
   {
     id: 'admin-events',
@@ -166,6 +260,19 @@ export const SCREENS: Screen[] = [
     title: 'A diary form',
     role: 'owner',
     path: (index) => diary(index).adminUrl,
+  },
+  {
+    id: 'admin-diary-text',
+    title: "A diary entry's text",
+    role: 'owner',
+    path: (index) => diary(index).adminUrl,
+    steps: () => [
+      {
+        label: 'Open the text of the entry',
+        action: { click: { role: 'button', name: /Entry content/ } },
+        options: { answer: { role: 'dialog' }, timeoutMs: 20_000 },
+      },
+    ],
   },
   {
     id: 'admin-pages',
@@ -202,6 +309,32 @@ export const SCREENS: Screen[] = [
     title: 'File library',
     role: 'owner',
     path: () => '/admin/assets/',
+  },
+  {
+    id: 'admin-video',
+    title: "A video's window",
+    role: 'owner',
+    path: (index) => {
+      requireVideo(index);
+      return '/admin/assets/?type=video';
+    },
+    steps: () => [
+      {
+        label: 'Open a video',
+        action: { click: { role: 'button', name: /^Video · / } },
+        options: { answer: { role: 'dialog' }, timeoutMs: 15_000 },
+      },
+      {
+        label: 'Look at its preview frame',
+        action: { look: { role: 'group', name: 'Preview' } },
+        options: { optional: true },
+      },
+      {
+        label: 'Look at its description',
+        action: { look: { label: 'File description' } },
+        options: { optional: true },
+      },
+    ],
   },
   {
     id: 'admin-settings',

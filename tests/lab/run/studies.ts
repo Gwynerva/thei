@@ -30,6 +30,9 @@ export function loadPersonas(): Map<string, Persona> {
         : {}),
       devices: (data.devices as Viewport[] | undefined) ?? ['desktop', 'phone'],
       ...(data.reads ? { reads: data.reads as string[] } : {}),
+      ...(Array.isArray(data.searchHistory)
+        ? { searchHistory: data.searchHistory.map(String) }
+        : {}),
       about: match[2]!.trim(),
     };
     if (persona.id !== name.replace(/\.md$/, ''))

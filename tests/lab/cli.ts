@@ -1,7 +1,7 @@
 // `bun run lab <command>`: the one door into the lab. Each part registers its
 // commands in its own `commands.ts`; this file only routes, and adds the few
 // commands that span every part.
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import {
   cacheDir,
@@ -13,9 +13,17 @@ import {
   repoRoot,
   worktreeName,
 } from './config';
-import type { Commands, StatusLine } from './types';
-import { ownServer, startServer, stopOwnServer } from './site/server';
-import { output, parse, portAnswers } from './util';
+import type { Commands, SiteIndex, StatusLine } from './types';
+import { staleSeed } from './archive/dates';
+import { playgroundIndex } from './site/playground';
+import {
+  claimPort,
+  ownServer,
+  siteIsOurs,
+  startServer,
+  stopOwnServer,
+} from './site/server';
+import { output, parse, portAnswers, readJson, readJsonIf } from './util';
 
 interface Part {
   commands: Commands;
@@ -43,10 +51,14 @@ const parts = { archive, site, run, review, probe };
 const own: Commands = {
   status: {
     summary: 'Where everything is and what state it is in',
-    usage: 'status [--json]',
+    usage: 'status [--stale-ok] [--json]',
     async run(args) {
-      const { values } = parse(args, { json: { type: 'boolean' } });
+      const { values } = parse(args, {
+        json: { type: 'boolean' },
+        'stale-ok': { type: 'boolean' },
+      });
       const running = await portAnswers(labPort());
+      const ours = running && (await siteIsOurs());
       const lines: StatusLine[] = [
         {
           part: 'lab',
@@ -58,19 +70,39 @@ const own: Commands = {
         { part: 'lab', ok: true, text: `cache ${cacheDir()}` },
         {
           part: 'site',
-          ok: running ? true : 'warn',
-          text: `${labOrigin()} ${running ? 'answers' : 'is not running'}; content ${
-            existsSync(paths.content) ? 'present' : 'absent'
-          }`,
+          ok: ours ? true : running ? false : 'warn',
+          text: `${labOrigin()} ${
+            ours
+              ? 'answers'
+              : running
+                ? "answers, but not with this checkout's lab site"
+                : 'is not running'
+          }; content ${existsSync(paths.content) ? 'present' : 'absent'}`,
         },
         {
           part: 'archive',
           ok: existsSync(paths.lock) ? true : 'warn',
           text: existsSync(paths.lock)
-            ? `pinned to ${JSON.parse(readFileSync(paths.lock, 'utf8')).version}`
+            ? `pinned to ${readJson<{ version: string }>(paths.lock).version}`
             : 'no release pinned yet (tests/lab/archive.lock.json)',
         },
       ];
+      // A site seeded on another day says "today" of that day.
+      for (const [name, index] of [
+        [
+          'the lab site',
+          readJsonIf<SiteIndex | undefined>(paths.siteIndex, undefined),
+        ],
+        ['the playground', playgroundIndex()],
+      ] as const) {
+        const stale = index && staleSeed(index.seedDay);
+        if (stale)
+          lines.push({
+            part: 'site',
+            ok: values['stale-ok'] ? 'warn' : false,
+            text: `${name}: ${stale}`,
+          });
+      }
       for (const part of Object.values(parts))
         lines.push(...(await part.status()));
       output(values.json ?? false, lines, () =>
@@ -92,13 +124,15 @@ const own: Commands = {
         fresh: { type: 'boolean' },
         today: { type: 'string' },
       });
-      const running = await portAnswers(labPort());
-      if (running && !ownServer())
+      const log = (message: string) => console.log(message);
+      let own = await ownServer();
+      if ((await claimPort(log)) === 'ours' && !own)
         throw new Error(
           `The lab site runs at ${labOrigin()}, and the lab did not start it: stop it, or run seed and snapshot save yourself.`,
         );
       if (values.fresh) {
-        if (running) await stopOwnServer();
+        if (own) await stopOwnServer();
+        own = undefined;
         rmSync(paths.content, {
           recursive: true,
           force: true,
@@ -107,12 +141,15 @@ const own: Commands = {
         });
         rmSync(paths.siteIndex, { force: true });
       }
-      const started = !(await portAnswers(labPort()));
-      if (started) {
-        console.log('Starting the lab site');
-        await startServer();
-      }
+      // Started inside the try: whatever stops the build stops the server
+      // it started too, and a start that fails stops what it started.
+      let started = false;
       try {
+        if (!own) {
+          console.log('Starting the lab site');
+          await startServer('dev', undefined, log);
+          started = true;
+        }
         const seedArgs = [
           ...(values.archive ? ['--archive', values.archive] : []),
           ...(values.today ? ['--today', values.today] : []),
@@ -131,6 +168,21 @@ const own: Commands = {
     async run() {
       const steps: [string, string[]][] = [
         ['bun', ['x', 'vitest', 'run', 'tests/lab']],
+        // The type tests (`*.test-d.ts`), and the lab's own code with them,
+        // against the lab's tsconfig: the root one names no files.
+        [
+          'bun',
+          [
+            'x',
+            'vitest',
+            'run',
+            'tests/lab',
+            '--typecheck.enabled',
+            '--typecheck.only',
+            '--typecheck.tsconfig',
+            'tests/lab/tsconfig.json',
+          ],
+        ],
       ];
       if (existsSync(`${repoRoot}/tests/lab/probe/playwright.config.ts`))
         steps.push([

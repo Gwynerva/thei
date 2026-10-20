@@ -1,12 +1,13 @@
 // What an archive uses of what Thei can show (FORMAT.md, "What an archive
 // covers"): every construct of the texts, every access level, every kind of
-// period, status, relation and file, tags with an icon and without, icons
-// that are pictures and videos — counted, and held against a minimum.
+// period, status, relation and file, files described and not, the banners
+// of events and sections, tags with an icon and without, icons that are
+// pictures and videos — counted, and held against a minimum. What the format
+// cannot say at all is in `fields.ts`.
 import { resolveDay } from './dates';
 import type { TextScan } from './dialect';
 import type { Archive } from './model';
 import { archiveEntities } from './texts';
-import { kindOfExtension } from './validate';
 
 /** Constructs of Lab Markdown a release must use, by the names `scanText` counts. */
 export const TEXT_CONSTRUCTS = [
@@ -164,8 +165,16 @@ export function archiveUsage(
     );
   }
 
-  // Files: extensions, and files standing in more than one place.
-  for (const file of archive.files) add(`file: .${file.ext}`);
+  // Files: extensions, a description or none, and files standing in more
+  // than one place.
+  for (const file of archive.files) {
+    add(`file: .${file.ext}`);
+    add(
+      file.description.trim()
+        ? 'file: with a description'
+        : 'file: without a description',
+    );
+  }
   const places = new Map<string, number>();
   const place = (id: string | undefined) =>
     id && places.set(id, (places.get(id) ?? 0) + 1);
@@ -182,6 +191,11 @@ export function archiveUsage(
   }
   for (const event of archive.events)
     [event.banner, ...event.files.map((f) => f.file)].forEach(place);
+  // Banners: an event's or a section's stands for it on every card too.
+  for (const event of archive.events) if (event.banner) add('banner: an event');
+  for (const project of archive.projects)
+    for (const section of project.sections)
+      if (section.banner) add('banner: a section');
   for (const tag of archive.tags) place(tag.icon);
   add(
     'file: in more than one place',
@@ -239,6 +253,10 @@ export function archiveUsage(
     need(name, 1);
   for (const ext of FILE_EXTENSIONS) need(`file: .${ext}`, 1);
   need('file: in more than one place', 1);
+  need('file: with a description', 1);
+  need('file: without a description', 1);
+  need('banner: an event', 1);
+  need('banner: a section', 1);
   need('hidden: a third slide of a gallery', 1);
   need('hidden: a second file of a group', 1);
   // Whatever else the archive uses, for the record.
@@ -246,11 +264,4 @@ export function archiveUsage(
     if (!lines.some((line) => line.name === name))
       lines.push({ name, count, min: 0 });
   return lines;
-}
-
-/** Thei's kind of each extension the format lists, for the record. */
-export function extensionKinds() {
-  return Object.fromEntries(
-    FILE_EXTENSIONS.map((ext) => [ext, kindOfExtension(ext)]),
-  );
 }

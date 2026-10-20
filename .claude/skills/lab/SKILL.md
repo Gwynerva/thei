@@ -20,10 +20,12 @@ It names the lab site, its content and snapshot, the snapshot the playground hol
 ## 2. Put the site in place
 
 ```bash
-bun run lab up lab
+bun run lab up lab --start
 ```
 
-It restores a snapshot for the lab site; `bun run lab serve` starts the lab's own server if none answers. `lab up playground` replaces the playground's content and is done only when the owner asks for it.
+It restores a snapshot of the release `tests/lab/archive.lock.json` pins and starts the lab's own server in the background, recorded so that `bun run lab stop` stops it and nothing else. Without `--start` it only restores. `lab up playground` replaces the playground's content and is done only when the owner asks for it. A site seeded on another day refuses to play (its "today" is that day's): `bun run lab build` seeds it again.
+
+The preview "thei-lab" of `.claude/launch.json` is the main checkout's lab site (`lab.localhost:3003`); a worktree's has a host name and a port of its own, which `bun run lab status` names.
 
 ## 3. Play
 

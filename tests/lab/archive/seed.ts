@@ -6,7 +6,9 @@
 // only when the archive or the site changed since the index was written. A
 // second run over an unchanged site saves nothing.
 import { createHash } from 'node:crypto';
-import { createReadStream, statSync } from 'node:fs';
+import { statSync } from 'node:fs';
+import { buildUploadHeaders } from '../../../shared/api/asset-upload-headers';
+import { createOriginalAssetSettings } from '../../../shared/asset-upload-settings';
 import {
   RELATION_TYPE_OF_WORD,
   RELATION_WORD_FROM_OTHER_END,
@@ -28,12 +30,13 @@ import { normalizeCaptionText } from '../../../shared/terminal-punctuation';
 import { DEFAULT_PROJECT_ACTION } from '../../../shared/project-action';
 import { LAB_CREDENTIALS } from '../site/credentials';
 import type { SiteEntity, SiteFile, SiteIndex } from '../types';
+import { sha256File } from '../util';
 import { checkArchive } from './check';
 import { makeConformanceMedia } from './conformance/media';
 import { resolveDay } from './dates';
 import { convertText, stableBlockId } from './dialect';
 import { archiveFacts, archiveTraits } from './facts';
-import { FORM_KEYS } from './fields';
+import { FORM_KEYS, isDerivedFormKey } from './fields';
 import type {
   ArchiveAction,
   ArchiveFilePlacement,
@@ -67,12 +70,6 @@ function stableId(seed: string) {
 
 function sha256(value: string) {
   return createHash('sha256').update(value).digest('hex');
-}
-
-async function sha256File(path: string) {
-  const hash = createHash('sha256');
-  for await (const chunk of createReadStream(path)) hash.update(chunk);
-  return hash.digest('hex');
 }
 
 /** The form with the archive's fields laid over it; undefined removes a key. */
@@ -208,12 +205,10 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
     } else {
       const answer = await site.request('POST', '/api/admin/assets', {
         file: path,
-        headers: {
-          'x-upload-extension': file.ext,
-          'x-upload-settings': encodeURIComponent(
-            JSON.stringify({ type: 'original' }),
-          ),
-        },
+        headers: buildUploadHeaders({
+          settings: createOriginalAssetSettings(),
+          extension: file.ext,
+        }),
         timeoutMs: 15 * 60 * 1000,
       });
       site.ok(
@@ -381,9 +376,7 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
       if (
         !keys.written.includes(key) &&
         !keys.kept.includes(key) &&
-        !key.endsWith('Media') &&
-        !key.endsWith('Size') &&
-        !key.startsWith('action')
+        !isDerivedFormKey(key)
       )
         unknownKeys.add(`${formKind}.${key}`);
   };

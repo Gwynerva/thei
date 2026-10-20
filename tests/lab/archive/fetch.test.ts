@@ -123,19 +123,26 @@ afterAll(() => {
 });
 
 describe('fetching a release', () => {
-  it('unpacks the texts and stores every file by its hash, once', async () => {
-    const result = await fetchRelease(lock, { packs: 'all', log: () => {} });
-    expect(result.blobs).toBe(2);
-    expect(
-      existsSync(join(cache, 'archive', '9.9.9', 'text', 'archive.yaml')),
-    ).toBe(true);
-    for (const file of Object.values(result.release.files))
+  // Packing and hashing the conformance archive takes a while on Windows.
+  it(
+    'unpacks the texts and stores every file by its hash, once',
+    { timeout: 30_000 },
+    async () => {
+      const result = await fetchRelease(lock, { packs: 'all', log: () => {} });
+      expect(result.blobs).toBe(2);
       expect(
-        existsSync(join(cache, 'blobs', file.sha256.slice(0, 2), file.sha256)),
+        existsSync(join(cache, 'archive', '9.9.9', 'text', 'archive.yaml')),
       ).toBe(true);
-    const again = await fetchRelease(lock, { packs: 'all', log: () => {} });
-    expect(again.downloaded).toEqual([]);
-  });
+      for (const file of Object.values(result.release.files))
+        expect(
+          existsSync(
+            join(cache, 'blobs', file.sha256.slice(0, 2), file.sha256),
+          ),
+        ).toBe(true);
+      const again = await fetchRelease(lock, { packs: 'all', log: () => {} });
+      expect(again.downloaded).toEqual([]);
+    },
+  );
 
   it('refuses a release.json other than the one the lock pins', async () => {
     await expect(

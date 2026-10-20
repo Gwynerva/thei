@@ -14,6 +14,7 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { repoRoot } from '../../config';
+import { VIEWPORTS } from '../../variants';
 import type {
   AttemptMeta,
   Box,
@@ -105,8 +106,8 @@ const study: StudyFile = {
 /** Desktop shots are drawn at half size; a phone's at 1×, as reviewers get them. */
 const SCALE: Record<'desktop' | 'phone', number> = { desktop: 0.5, phone: 1 };
 const VIEWPORT = {
-  desktop: { width: 1280, height: 800 },
-  phone: { width: 375, height: 812 },
+  desktop: VIEWPORTS.desktop.viewport,
+  phone: VIEWPORTS.phone.viewport,
 };
 
 interface Screen {

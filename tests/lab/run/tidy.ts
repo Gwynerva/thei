@@ -2,6 +2,11 @@
 // the play made is deleted, forms it may have changed are saved back as they
 // were read, and whatever cannot be put back is named. `lab up lab` is the
 // real reset; this keeps plays from leaking into one another between resets.
+//
+// Only what the play made goes: what it said it made, and what was made
+// while it ran. On the playground the site holds the owner's and other
+// agents' things too, which the index does not know and which are never
+// swept for that alone.
 import type { Ref, SiteIndex } from '../types';
 import type { SiteClient } from '../archive/site-client';
 
@@ -11,6 +16,16 @@ const KINDS = {
   diary: { route: '/api/admin/diary', uuidKey: 'diaryUuid' },
   page: { route: '/api/admin/pages', uuidKey: 'pageUuid' },
 } as const;
+
+export type MadeKind = keyof typeof KINDS | 'tag';
+
+export interface Made {
+  kind: MadeKind;
+  uuid: string;
+}
+
+/** What tidying asks of a site: the admin's routes. */
+export type TidySite = Pick<SiteClient, 'request' | 'ok'>;
 
 type FormRoute = { path: string; ref: Ref };
 
@@ -31,7 +46,7 @@ export interface TidyBefore {
 
 /** Reads the forms a play may change, before it starts. */
 export async function readTouched(
-  site: SiteClient,
+  site: TidySite,
   index: SiteIndex,
   refs: Ref[],
 ): Promise<TidyBefore> {
@@ -50,48 +65,79 @@ export async function readTouched(
   return { forms };
 }
 
-/** Uuids of every entity the index knows, by kind. */
+/** Uuids of every entity the index knows: what the site was seeded with. */
 function knownUuids(index: SiteIndex) {
   const known = new Set<string>();
   for (const entity of Object.values(index.entities)) known.add(entity.uuid);
   return known;
 }
 
+export interface TidySelection {
+  /** What the play said it made. */
+  created: Made[];
+  /** The newest of each list, as the admin lists them. */
+  lists: Partial<Record<keyof typeof KINDS, Record<string, unknown>[]>>;
+  known: Set<string>;
+  /** When the play started, in ms: what was made since is the play's. */
+  since: number;
+}
+
+/**
+ * What a play leaves to be deleted: what it said it made, and each entity
+ * of the lists made at or after its start. Never anything the index knows,
+ * and never a tag the play did not name: a tag list says nothing of when.
+ */
+export function selectMade(selection: TidySelection): Made[] {
+  const doomed = new Map<string, Made>();
+  for (const item of selection.created)
+    if (!selection.known.has(item.uuid)) doomed.set(item.uuid, item);
+  for (const [kind, { uuidKey }] of Object.entries(KINDS) as [
+    keyof typeof KINDS,
+    (typeof KINDS)[keyof typeof KINDS],
+  ][])
+    for (const item of selection.lists[kind] ?? []) {
+      const uuid = item[uuidKey];
+      const createdAt = Number(item.createdAt);
+      if (
+        typeof uuid === 'string' &&
+        !selection.known.has(uuid) &&
+        Number.isFinite(createdAt) &&
+        createdAt >= selection.since
+      )
+        doomed.set(uuid, { kind, uuid });
+    }
+  return [...doomed.values()];
+}
+
 export async function tidy(
-  site: SiteClient,
+  site: TidySite,
   index: SiteIndex,
   before: TidyBefore,
-  created: { kind: keyof typeof KINDS | 'tag'; uuid: string }[],
+  made: { created: Made[]; since: number },
 ) {
   const deleted: string[] = [];
   const restored: string[] = [];
   const leftovers: string[] = [];
-  const known = knownUuids(index);
 
-  // What the play said it made, and anything else the index does not know:
-  // the newest of each list is where a play's leftovers stand.
-  const doomed = new Map<string, { kind: string; uuid: string }>();
-  for (const item of created) doomed.set(item.uuid, item);
-  for (const [kind, { route, uuidKey }] of Object.entries(KINDS)) {
+  const lists: TidySelection['lists'] = {};
+  for (const [kind, { route }] of Object.entries(KINDS) as [
+    keyof typeof KINDS,
+    (typeof KINDS)[keyof typeof KINDS],
+  ][]) {
     const answer = await site.request(
       'GET',
       `${route}?order=newest&pageSize=50`,
     );
-    if (answer.status !== 200) continue;
-    for (const item of answer.body.items ?? [])
-      if (!known.has(item[uuidKey]))
-        doomed.set(item[uuidKey], { kind, uuid: item[uuidKey] });
+    if (answer.status === 200) lists[kind] = answer.body?.items ?? [];
   }
-  const tags = await site.request('GET', '/api/admin/tags');
-  if (tags.status === 200)
-    for (const tag of tags.body ?? [])
-      if (!known.has(tag.tagUuid))
-        doomed.set(tag.tagUuid, { kind: 'tag', uuid: tag.tagUuid });
-  for (const item of doomed.values()) {
+  for (const item of selectMade({
+    created: made.created,
+    lists,
+    known: knownUuids(index),
+    since: made.since,
+  })) {
     const route =
-      item.kind === 'tag'
-        ? '/api/admin/tags'
-        : KINDS[item.kind as keyof typeof KINDS].route;
+      item.kind === 'tag' ? '/api/admin/tags' : KINDS[item.kind].route;
     const answer = await site.request('DELETE', `${route}/${item.uuid}`);
     if (answer.status < 300) deleted.push(`${item.kind} ${item.uuid}`);
     else

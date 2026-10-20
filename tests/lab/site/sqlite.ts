@@ -1,6 +1,6 @@
 // The few things the lab does to a site's database itself, always with the
 // server stopped or through a consistent copy: copy it, read its ledger,
-// touch its files, carry admin sessions and access keys across.
+// touch its files, carry admin sessions, sign-in links and access keys across.
 import { existsSync, rmSync } from 'node:fs';
 import Database from 'better-sqlite3';
 
@@ -92,15 +92,11 @@ export function carrySessions(from: string, to: string): number {
   }
 }
 
-/** The tables of what lets an app in: its access keys and the apps known. */
-const ACCESS_TABLES = ['api-tokens', 'oauth-clients'];
-
 /**
- * Access keys and the apps they were given to, written into another
- * database over the columns both have: an app connected to a site keeps its
- * key when the site's content is replaced.
+ * Rows of some tables of one database written into another, over the
+ * columns both have: what one replaces, the other's row of the same key.
  */
-export function carryAccessKeys(from: string, to: string): number {
+function carryRows(from: string, to: string, tables: string[]): number {
   if (!existsSync(from) || !existsSync(to)) return 0;
   const source = new Database(from, { readonly: true, fileMustExist: true });
   const target = new Database(to, { fileMustExist: true });
@@ -111,7 +107,7 @@ export function carryAccessKeys(from: string, to: string): number {
   try {
     let carried = 0;
     target.transaction(() => {
-      for (const table of ACCESS_TABLES) {
+      for (const table of tables) {
         const theirs = new Set(columnsOf(target, table));
         const columns = columnsOf(source, table).filter((name) =>
           theirs.has(name),
@@ -135,6 +131,22 @@ export function carryAccessKeys(from: string, to: string): number {
     source.close();
     target.close();
   }
+}
+
+/**
+ * Access keys and the apps they were given to: an app connected to a site
+ * keeps its key when the site's content is replaced.
+ */
+export function carryAccessKeys(from: string, to: string): number {
+  return carryRows(from, to, ['api-tokens', 'oauth-clients']);
+}
+
+/**
+ * One-time sign-in links not used yet: a sign-in the owner (or an agent,
+ * as AGENTS.md says) has made ready still works on the new content.
+ */
+export function carrySignInLinks(from: string, to: string): number {
+  return carryRows(from, to, ['sign-in-links']);
 }
 
 /**

@@ -155,7 +155,7 @@ export const commands: Commands = {
       if (!study) return 2;
       const runs = runsRoot(values.runs);
       const summary = summarize(runs, study);
-      const page = await writeReport(studyDir(runs, study), summary);
+      const page = await writeReport(studyDir(study, runs), summary);
       output(values.json ?? false, summary, () => [
         `${summary.bar.met ? '✓ The bar is met' : '✗ The bar is not met'} — ${summary.counts.reviewed}/${summary.counts.jobs} jobs reviewed`,
         ...summary.jobs.flatMap((job) =>

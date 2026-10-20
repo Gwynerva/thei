@@ -177,6 +177,11 @@ export interface Persona {
   devices: Viewport[];
   /** Files beyond the play the reviewer may read (`docs/design/**`). */
   reads?: string[];
+  /**
+   * What they searched for before, newest first: the browser of every play
+   * holds it, so the quick search offers it again as it would them.
+   */
+  searchHistory?: string[];
   /** Who they are, what they know and do not, what they want and fear. */
   about: string;
 }
@@ -222,6 +227,8 @@ export interface ScenarioDefinition {
   pick(index: SiteIndex, salt: string): Record<string, Ref>;
   /** Entities whose forms the play may change: read before, put back after. */
   touches?(picked: Record<string, Ref>): Ref[];
+  /** Recent searches the browser holds, in place of the persona's own. */
+  searchHistory?(picked: Record<string, Ref>, index: SiteIndex): string[];
   run(j: ScenarioContext): Promise<void>;
 }
 
@@ -277,7 +284,10 @@ export interface ScenarioContext {
   note(text: string): void;
   /** A finding the play itself noticed: a control not found, an answer late. */
   finding(finding: Omit<PlayFinding, 'step'>): void;
-  /** Something the play made, to be removed afterwards. */
+  /**
+   * Something the play made, to be removed afterwards. What a play makes and
+   * does not name here is found only by the time it was made at.
+   */
   created(item: {
     kind: 'project' | 'event' | 'diary' | 'page' | 'tag';
     uuid: string;

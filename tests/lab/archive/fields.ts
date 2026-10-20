@@ -99,116 +99,153 @@ export const FIELD_MAP: Record<string, Record<string, string>> = {
 export const NOT_IN_FORMAT: Record<string, Record<string, string>> = {};
 
 /**
+ * What Thei keeps of a file beyond the file itself that the format cannot
+ * say, and why. These are seeded as Thei makes them on its own, and a
+ * scenario cannot pick a file by them.
+ */
+export const FILE_PROPERTIES_NOT_IN_FORMAT: Record<string, string> = {
+  still:
+    "A video's chosen still (its preview frame): the owner chooses it by eye among the frames, and it has no AI action (AGENTS.md). " +
+    'Seeded videos keep the frame Thei picks itself; seeding a chosen one needs a format revision of Gwynerva/thei-lab-archive.',
+};
+
+/**
+ * Keys of a form that are drawn from others for the form to show — a
+ * file's media and size, the action button's own fields — and neither
+ * written nor kept by name.
+ */
+export type DerivedFormKey =
+  `${string}Media` | `${string}Size` | `action${string}`;
+
+export function isDerivedFormKey(key: string): boolean {
+  return (
+    key.endsWith('Media') || key.endsWith('Size') || key.startsWith('action')
+  );
+}
+
+/**
  * Keys of the admin's forms as the routes read them back, which the seeder
  * either writes from the archive or keeps as the site has them. A key the
- * seeder meets and finds in neither is reported, so a new field is noticed.
+ * seeder meets and finds in neither is reported, so a new field is noticed;
+ * `fields.test-d.ts` holds them against the forms' types before any seeding.
  */
-export const FORM_KEYS: Record<string, { written: string[]; kept: string[] }> =
-  {
-    project: {
-      written: [
-        'title',
-        'summary',
-        'humanReadableSlug',
-        'publicId',
-        'access',
-        'showcase',
-        'cv',
-        'iconAssetUuid',
-        'bannerAssetUuid',
-        'descriptionContent',
-        'sections',
-        'showcaseAssets',
-        'otherAssets',
-        'relations',
-        'externalLinks',
-        'tags',
-        'action',
-        'reminder',
-        'synonyms',
-        'notes',
-        'newStatuses',
-        'updatedStatuses',
-        'deletedStatusIds',
-      ],
-      kept: [
-        'projectUuid',
-        'version',
-        'statuses',
-        'iconMedia',
-        'bannerMedia',
-        'createdAt',
-        'updatedAt',
-      ],
-    },
-    event: {
-      written: [
-        'title',
-        'summary',
-        'access',
-        'humanReadableSlug',
-        'publicId',
-        'periods',
-        'content',
-        'bannerAssetUuid',
-        'otherAssets',
-        'externalLinks',
-        'tags',
-        'relations',
-        'action',
-        'reminder',
-        'synonyms',
-        'notes',
-      ],
-      kept: ['eventUuid', 'version', 'bannerMedia', 'createdAt', 'updatedAt'],
-    },
-    diary: {
-      written: ['date', 'access', 'content', 'relations', 'reminder', 'notes'],
-      kept: ['diaryUuid', 'version', 'createdAt', 'updatedAt'],
-    },
-    page: {
-      written: [
-        'title',
-        'summary',
-        'slug',
-        'access',
-        'iconAssetUuid',
-        'content',
-        'reminder',
-        'synonyms',
-        'notes',
-      ],
-      kept: ['pageUuid', 'version', 'iconMedia', 'createdAt', 'updatedAt'],
-    },
-    tag: {
-      written: [
-        'title',
-        'slug',
-        'publicId',
-        'description',
-        'synonyms',
-        'iconAssetUuid',
-      ],
-      kept: ['tagUuid', 'version', 'iconMedia', 'usageStats'],
-    },
-    profile: {
-      written: [
-        'displayName',
-        'slogan',
-        'nickname',
-        'birthDate',
-        'avatarAssetUuid',
-        'avatarChangeId',
-        'bannerAssetUuid',
-        'faviconAssetUuid',
-        'aboutContent',
-        'facts',
-        'pinnedPageUuids',
-        'externalLinks',
-        'newStatuses',
-        'updatedStatuses',
-        'deletedStatusIds',
-      ],
-      kept: ['version', 'deletedAvatarIds'],
-    },
-  };
+const FORM_KEY_LISTS = {
+  project: {
+    written: [
+      'title',
+      'summary',
+      'humanReadableSlug',
+      'publicId',
+      'access',
+      'showcase',
+      'cv',
+      'iconAssetUuid',
+      'bannerAssetUuid',
+      'descriptionContent',
+      'sections',
+      'showcaseAssets',
+      'otherAssets',
+      'relations',
+      'externalLinks',
+      'tags',
+      'action',
+      'reminder',
+      'synonyms',
+      'notes',
+      'newStatuses',
+      'updatedStatuses',
+      'deletedStatusIds',
+    ],
+    kept: [
+      'projectUuid',
+      'version',
+      'statuses',
+      'iconMedia',
+      'bannerMedia',
+      'createdAt',
+      'updatedAt',
+    ],
+  },
+  event: {
+    written: [
+      'title',
+      'summary',
+      'access',
+      'humanReadableSlug',
+      'publicId',
+      'periods',
+      'content',
+      'bannerAssetUuid',
+      'otherAssets',
+      'externalLinks',
+      'tags',
+      'relations',
+      'action',
+      'reminder',
+      'synonyms',
+      'notes',
+    ],
+    kept: ['eventUuid', 'version', 'bannerMedia', 'createdAt', 'updatedAt'],
+  },
+  diary: {
+    written: ['date', 'access', 'content', 'relations', 'reminder', 'notes'],
+    kept: ['diaryUuid', 'version', 'createdAt', 'updatedAt'],
+  },
+  page: {
+    written: [
+      'title',
+      'summary',
+      'slug',
+      'access',
+      'iconAssetUuid',
+      'content',
+      'reminder',
+      'synonyms',
+      'notes',
+    ],
+    kept: ['pageUuid', 'version', 'iconMedia', 'createdAt', 'updatedAt'],
+  },
+  tag: {
+    written: [
+      'title',
+      'slug',
+      'publicId',
+      'description',
+      'synonyms',
+      'iconAssetUuid',
+    ],
+    kept: ['tagUuid', 'version', 'iconMedia', 'usageStats'],
+  },
+  profile: {
+    written: [
+      'displayName',
+      'slogan',
+      'nickname',
+      'birthDate',
+      'avatarAssetUuid',
+      'avatarChangeId',
+      'bannerAssetUuid',
+      'faviconAssetUuid',
+      'aboutContent',
+      'facts',
+      'pinnedPageUuids',
+      'externalLinks',
+      'newStatuses',
+      'updatedStatuses',
+      'deletedStatusIds',
+    ],
+    kept: ['version', 'deletedAvatarIds'],
+  },
+} as const;
+
+export type FormKeyKind = keyof typeof FORM_KEY_LISTS;
+
+/** The keys a form of this kind is known by: written or kept. */
+export type KnownFormKey<Kind extends FormKeyKind> =
+  | (typeof FORM_KEY_LISTS)[Kind]['written'][number]
+  | (typeof FORM_KEY_LISTS)[Kind]['kept'][number];
+
+export const FORM_KEYS: Record<
+  string,
+  { written: readonly string[]; kept: readonly string[] }
+> = FORM_KEY_LISTS;

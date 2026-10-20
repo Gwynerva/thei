@@ -2,6 +2,27 @@
 // patience with a dev server that restarts, and sign-in that respects the
 // limit of one attempt every three seconds.
 import { openAsBlob } from 'node:fs';
+import en from '../../../shared/language/list/en';
+import ru from '../../../shared/language/list/ru';
+
+/**
+ * Whether a refused sign-in says to wait: the server's own phrase, as each
+ * language it may speak words it (the lab site speaks English; the
+ * playground, whatever its owner chose). Compared with spaces made plain,
+ * since a phrase binds short words to the next with a no-break space.
+ */
+function isRateLimited(message: string) {
+  const plain = (text: string) => text.replace(/\s+/g, ' ').trim();
+  return [en, ru].some(
+    (language) =>
+      plain(
+        (language.normalize ?? ((text: string) => text))(
+          language.phrases.sign_in_too_many_attempts ??
+            en.phrases.sign_in_too_many_attempts,
+        ),
+      ) === plain(message),
+  );
+}
 
 const RESTART_WINDOW_MS = 3 * 60 * 1000;
 
@@ -246,11 +267,7 @@ export class SiteClient {
       if (answer.status === 200 && answer.body?.type === 'success') return;
       if (answer.status === 302 && this.cookies.size) return;
       const message = String(answer.body?.message ?? answer.text).slice(0, 200);
-      if (
-        answer.status === 200 &&
-        attempt < 9 &&
-        /попыт|attempt|too many|часто|wait/i.test(message)
-      ) {
+      if (answer.status === 200 && attempt < 9 && isRateLimited(message)) {
         await sleep(3500);
         continue;
       }

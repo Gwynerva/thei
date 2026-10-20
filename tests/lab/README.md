@@ -37,23 +37,37 @@ uuid or a table, so Thei can change under it.
 
 The lab site is `.lab/site/` (like `.playground/`), at
 `http://lab.localhost:3003`; a worktree gets a host name and a port of its
-own (`bun run lab status` says which). Its content is restored from a
-snapshot in seconds: the database is copied, the files are hard links into
-the shared cache `<main checkout>/.lab/cache/` (`THEI_LAB_CACHE`), which
-every worktree of the checkout uses.
+own (`bun run lab status` says which) — the preview "thei-lab" of
+`.claude/launch.json` is the main checkout's. Two worktrees whose names
+meet on one port are parted: the one that starts second takes a free port
+and keeps it in `.lab/port.json`. Its content is restored from a snapshot
+in seconds: the database is copied, the files are hard links into the
+shared cache `<main checkout>/.lab/cache/` (`THEI_LAB_CACHE`), which every
+worktree of the checkout uses.
 
 - `bun run lab build` seeds the lab site and saves a snapshot, starting and
   stopping a server of its own.
-- `bun run lab up lab [--start]` puts a snapshot in place for the lab site;
+- `bun run lab up lab [--start]` puts a snapshot in place for the lab site —
+  the newest of the release the lock pins, or the one `--snapshot` names;
   `bun run lab stop` stops a server the lab started.
 - `bun run lab up playground` makes the archive the playground's content —
   its everyday data, not only for studies — or puts it back as it was
   seeded. What the playground held goes; its secrets, AI settings, access
-  keys and sign-ins stay. A checkout's playground starts empty: in git it
-  installs an empty site, and the first `up` lets it sign in with the words
-  of `site/credentials.ts`.
+  keys and sign-ins (its sessions and unused sign-in links) stay. A
+  checkout's playground starts empty: in git it installs an empty site, and
+  the first `up` lets it sign in with the words of `site/credentials.ts`.
+- `bun run lab snapshot gc [--keep <n>]` removes all but the newest `n`
+  snapshots and the files only they held; a snapshot a checkout's lab site
+  or playground holds always stays.
 
-The lab never stops a server it did not start: stop it first.
+The lab never stops a server it did not start: stop it first. One it
+started is known by its processes' start times as well as their numbers,
+so a number the system gave to another process after a restart is never
+stopped.
+
+A site is seeded for a day: its relative days, "today" and the days to come
+were resolved then. On another day `play` refuses it and `status` says so,
+until `bun run lab build` seeds it again (`--stale-ok` plays it anyway).
 
 ## Studies
 
@@ -64,7 +78,9 @@ computer, in light and dark.
 - `personas/*.md` — presets: the **Novice** and the **Expert** owner, the
   **Guest** and the **Regular reader** visitor, and the **Designer**, a lens
   that judges only how the screens look against `docs/design/`. A new preset
-  is a new file.
+  is a new file. A persona's `searchHistory` is what their browser holds of
+  their earlier searches, which the quick search offers again; a scenario
+  may give its own.
 - `studies/<id>/` — studies kept in git, **only with the owner's agreement**.
   Studies of the moment live in `.lab/studies/<id>/`, never committed
   (`bun run lab new-study <id>`).
@@ -107,4 +123,6 @@ findings by severity, and a verdict on each of the probe's suspicions.
 | `.lab/runs/<study>/`       | plays, reviews, reports                        | no     |
 | `.lab/studies/<id>/`       | studies of the moment                          | no     |
 | `.lab/playground.json`     | the snapshot the playground holds              | no     |
+| `.lab/port.json`           | a worktree's port, when its own was taken      | no     |
+| `.lab/site-run.json`       | the lab site's server while it runs            | no     |
 | `<main>/.lab/cache/`       | releases, files by hash, snapshots             | no     |

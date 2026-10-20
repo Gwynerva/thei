@@ -1,15 +1,16 @@
 // Plays: scenarios of a study, by persona and variant, recorded step by step
 // with the probe after every step.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SiteClient } from '../archive/site-client';
-import { labLoopbackOrigin, labPort, paths } from '../config';
+import { labLoopbackOrigin, paths } from '../config';
 import { SCREENS } from '../screens';
 import { LAB_CREDENTIALS } from '../site/credentials';
+import { requireOwnSite } from '../site/server';
 import type { Commands, SiteIndex, StatusLine, VariantCode } from '../types';
-import { output, parse, portAnswers } from '../util';
+import { output, parse, readJson } from '../util';
+import { VARIANTS } from '../variants';
 import { play } from './play';
-import { VARIANTS } from './store';
 import { loadPersonas, studyPlaces } from './studies';
 
 function variantsOf(values: string[] | undefined): VariantCode[] | undefined {
@@ -80,7 +81,7 @@ export const commands: Commands = {
   play: {
     summary: 'Play scenarios of a study and record them',
     usage:
-      'play <study> [--scenario <id>]... [--persona <id>]... [--variant dd|dl|pd|pl]... [--pending] [--target lab|playground] [--allow-network] [--headed]',
+      'play <study> [--scenario <id>]... [--persona <id>]... [--variant dd|dl|pd|pl]... [--pending] [--target lab|playground] [--stale-ok] [--allow-network] [--headed]',
     async run(args) {
       const { values, positionals } = parse(args, {
         scenario: { type: 'string', multiple: true },
@@ -89,15 +90,13 @@ export const commands: Commands = {
         pending: { type: 'boolean' },
         target: { type: 'string' },
         'allow-network': { type: 'boolean' },
+        'stale-ok': { type: 'boolean' },
         headed: { type: 'boolean' },
       });
       const study = positionals[0];
       if (!study) throw new Error('Name the study: bun run lab play <study>');
       const target = values.target === 'playground' ? 'playground' : 'lab';
-      if (target === 'lab' && !(await portAnswers(labPort())))
-        throw new Error(
-          'The lab site is not running: bun run lab up lab --start',
-        );
+      if (target === 'lab') await requireOwnSite();
       const results = await play({
         study,
         scenarios: values.scenario,
@@ -106,6 +105,7 @@ export const commands: Commands = {
         pending: values.pending,
         target,
         allowNetwork: values['allow-network'],
+        staleOk: values['stale-ok'],
         headed: values.headed,
       });
       const failed = results.filter((attempt) => attempt.status === 'error');
@@ -117,13 +117,8 @@ export const commands: Commands = {
       'Open every screen once, so a dev server has compiled them before a play',
     usage: 'warm',
     async run() {
-      if (!(await portAnswers(labPort())))
-        throw new Error(
-          'The lab site is not running: bun run lab up lab --start',
-        );
-      const index = JSON.parse(
-        readFileSync(paths.siteIndex, 'utf8'),
-      ) as SiteIndex;
+      await requireOwnSite();
+      const index = readJson<SiteIndex>(paths.siteIndex);
       const owner = new SiteClient(labLoopbackOrigin());
       owner.credentials = { ...LAB_CREDENTIALS };
       await owner.signIn();

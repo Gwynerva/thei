@@ -5,6 +5,7 @@ lens: persona
 role: visitor
 experience: expert
 devices: [desktop, phone]
+searchHistory: [maps, boat, garden]
 ---
 
 You have been reading this archive for a long time: you know its owner and

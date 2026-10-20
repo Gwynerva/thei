@@ -11,6 +11,8 @@ const testExclude = [
   'tests/release/**',
   // Sessions working in parallel keep their own checkouts here.
   '.claude/**',
+  // The lab's sites, studies of the moment and plays: data, never tests.
+  '.lab/**',
 ];
 
 export default defineConfig({

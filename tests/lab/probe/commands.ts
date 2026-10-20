@@ -4,46 +4,12 @@ import { mkdir, rm } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { chromium } from '@playwright/test';
 import { labDir, repoRoot } from '../config';
-import type {
-  Commands,
-  StatusLine,
-  Theme,
-  Variant,
-  VariantCode,
-} from '../types';
+import type { Commands, StatusLine, VariantCode } from '../types';
 import { output, parse } from '../util';
+import { settle, VARIANTS, VIEWPORTS, visualsScript } from '../variants';
 import { ALLOW } from './allow';
 import { drawCrops, drawMarked } from './draw';
-import { probePage, settle } from './index';
-
-const VARIANTS: Record<VariantCode, Variant> = {
-  dd: { viewport: 'desktop', theme: 'dark' },
-  dl: { viewport: 'desktop', theme: 'light' },
-  pd: { viewport: 'phone', theme: 'dark' },
-  pl: { viewport: 'phone', theme: 'light' },
-};
-
-/** The screens every part of the lab plays on. */
-export const SCREENS = {
-  desktop: { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 },
-  phone: {
-    viewport: { width: 375, height: 812 },
-    deviceScaleFactor: 2,
-    isMobile: true,
-    hasTouch: true,
-  },
-} as const;
-
-/**
- * What a page reads before it loads, so it opens in the variant's theme:
- * the visitor's own setting (`app/scripts/visuals.ts`), with the lab's
- * accent and font.
- */
-export function visualsScript(theme: Theme) {
-  return `try { localStorage.setItem('thei-visuals', ${JSON.stringify(
-    JSON.stringify({ theme, accentHue: 200, fontStyle: 'sans' }),
-  )}); } catch {}`;
-}
+import { probePage } from './index';
 
 const probeDir = join(labDir, 'probe');
 
@@ -76,7 +42,7 @@ export const commands: Commands = {
       const browser = await chromium.launch();
       try {
         const context = await browser.newContext({
-          ...SCREENS[variant.viewport],
+          ...VIEWPORTS[variant.viewport],
           colorScheme: variant.theme,
         });
         await context.addInitScript(visualsScript(variant.theme));

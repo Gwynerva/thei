@@ -119,6 +119,12 @@ async function writeToday(j: ScenarioContext) {
       optional: true,
     },
   );
+  // A made entry opens at its own address: named, it goes after the play.
+  await j.page
+    .waitForURL(/\/admin\/diary\/[^/]+\/edit\//, { timeout: 5000 })
+    .catch(() => {});
+  const made = /\/admin\/diary\/([^/]+)\/edit\//.exec(j.page.url());
+  if (made) j.created({ kind: 'diary', uuid: made[1]! });
   await j.step(
     'Look at the result',
     { look: { text: event.title! } },

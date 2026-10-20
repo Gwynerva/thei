@@ -21,7 +21,10 @@ export interface MarkInput {
 }
 
 interface ProbeModule {
-  probePage?: (page: Page, options: { theme: string }) => Promise<ProbeResult>;
+  probePage?: (
+    page: Page,
+    options: { theme: string; settle?: boolean },
+  ) => Promise<ProbeResult>;
 }
 interface DrawModule {
   drawMarked?: (input: {
@@ -48,7 +51,10 @@ async function optional<T>(name: string): Promise<T | null> {
   return (await import(file.href)) as T;
 }
 
-/** The probe's findings for the page as it is, or none while there is no probe. */
+/**
+ * The probe's findings for the page as it is — the recorder has let it
+ * settle already — or none while there is no probe.
+ */
 export async function probe(
   page: Page,
   theme: string,
@@ -56,7 +62,7 @@ export async function probe(
   if (probeModule === undefined)
     probeModule = await optional<ProbeModule>('index.ts');
   return probeModule?.probePage
-    ? probeModule.probePage(page, { theme })
+    ? probeModule.probePage(page, { theme, settle: false })
     : undefined;
 }
 

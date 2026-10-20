@@ -3,9 +3,10 @@
 // admin's own routes.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { labLoopbackOrigin, labOrigin, labPort, paths } from '../config';
+import { labLoopbackOrigin, labOrigin, paths } from '../config';
+import { requireOwnSite } from '../site/server';
 import type { Commands, SiteIndex, StatusLine } from '../types';
-import { output, parse, portAnswers } from '../util';
+import { output, parse } from '../util';
 import { fetchRelease } from './fetch';
 import { checkArchive } from './check';
 import { localDay } from './dates';
@@ -102,10 +103,8 @@ export const commands: Commands = {
         today: { type: 'string' },
         json: { type: 'boolean' },
       });
-      if (!(await portAnswers(labPort())))
-        throw new Error(
-          `The lab site does not answer at ${labOrigin()}: start it with bun run lab serve, or the preview "thei-lab".`,
-        );
+      // Only this checkout's own site: a worktree's port may be another's.
+      await requireOwnSite();
       const source = archiveSource(values.archive);
       const previous: SiteIndex | undefined = existsSync(paths.siteIndex)
         ? JSON.parse(readFileSync(paths.siteIndex, 'utf8'))

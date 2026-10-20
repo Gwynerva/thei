@@ -3,13 +3,10 @@
 // downloaded with resume, checked against its sha256, the texts unpacked
 // into `archive/<version>/text/`, every media file into `blobs/` by its own
 // hash. Safe to run again, and from two checkouts at once.
-import { createHash } from 'node:crypto';
 import {
-  createReadStream,
   createWriteStream,
   existsSync,
   mkdirSync,
-  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -22,6 +19,7 @@ import { pipeline } from 'node:stream/promises';
 import * as tar from 'tar';
 import { cachePaths } from '../config';
 import type { ArchiveLock, ArchiveRelease } from '../types';
+import { alive, sha256File } from '../util';
 import { blobPath } from './source';
 
 export function releaseBase(lock: ArchiveLock): string {
@@ -31,37 +29,43 @@ export function releaseBase(lock: ArchiveLock): string {
   );
 }
 
-export async function sha256Of(path: string): Promise<string> {
-  const hash = createHash('sha256');
-  for await (const chunk of createReadStream(path)) hash.update(chunk);
-  return hash.digest('hex');
-}
-
-function alive(pid: number) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** One fetch of a version at a time, across checkouts; a dead holder's lock is taken over. */
-async function withLock<T>(name: string, work: () => Promise<T>): Promise<T> {
+/**
+ * One fetch of a version at a time, across checkouts; a dead holder's lock
+ * is taken over, and one that lets go between two looks is looked at again.
+ * A holder that keeps it past `timeoutMs` is named, not waited for forever.
+ */
+async function withLock<T>(
+  name: string,
+  work: () => Promise<T>,
+  timeoutMs = 60 * 60 * 1000,
+): Promise<T> {
   const path = join(cachePaths().locks, `${name}.lock`);
   mkdirSync(dirname(path), { recursive: true });
+  const deadline = Date.now() + timeoutMs;
   for (;;) {
     try {
       writeFileSync(path, String(process.pid), { flag: 'wx' });
       break;
-    } catch {
-      const holder = Number(readFileSync(path, 'utf8'));
-      if (!holder || !alive(holder)) {
-        rmSync(path, { force: true });
-        continue;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
     }
+    let holder: number;
+    try {
+      holder = Number(readFileSync(path, 'utf8'));
+    } catch (error) {
+      // Let go between the two looks: try to take it again.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+      throw error;
+    }
+    if (!holder || !alive(holder)) {
+      rmSync(path, { force: true });
+      continue;
+    }
+    if (Date.now() > deadline)
+      throw new Error(
+        `${path} is held by PID ${holder} for longer than ${Math.round(timeoutMs / 60000)} minutes: is another fetch stuck?`,
+      );
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
   try {
     return await work();
@@ -77,7 +81,7 @@ export async function download(
   expected: { sha256: string; bytes?: number },
   log: (message: string) => void,
 ) {
-  if (existsSync(target) && (await sha256Of(target)) === expected.sha256)
+  if (existsSync(target) && (await sha256File(target)) === expected.sha256)
     return;
   mkdirSync(dirname(target), { recursive: true });
   const part = `${target}.part`;
@@ -115,7 +119,7 @@ export async function download(
       }
     }
     if (!existsSync(part)) continue;
-    const sha = await sha256Of(part);
+    const sha = await sha256File(part);
     if (sha === expected.sha256) {
       renameSync(part, target);
       return;
@@ -207,7 +211,7 @@ export async function fetchRelease(
           const extracted = join(work, file.path);
           if (!existsSync(extracted))
             throw new Error(`${pack.asset} lacks ${file.path} (file ${id}).`);
-          if ((await sha256Of(extracted)) !== file.sha256)
+          if ((await sha256File(extracted)) !== file.sha256)
             throw new Error(
               `${file.path} in ${pack.asset} does not match its hash.`,
             );
@@ -223,14 +227,4 @@ export async function fetchRelease(
       }
     return { release, downloaded, blobs };
   });
-}
-
-/** Archive versions the cache holds, for status. */
-export function fetchedVersions(): string[] {
-  const dir = cachePaths().archive;
-  return existsSync(dir)
-    ? readdirSync(dir).filter((name) =>
-        existsSync(join(dir, name, 'release.json')),
-      )
-    : [];
 }

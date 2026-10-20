@@ -42,3 +42,16 @@ export function isCalendarDay(value: string): boolean {
   const moment = new Date(Date.UTC(year, month - 1, date));
   return moment.getUTCMonth() === month - 1 && moment.getUTCDate() === date;
 }
+
+/**
+ * Why a site seeded on `seedDay` cannot be played today, or undefined: its
+ * relative days were resolved against that day, so what the index calls
+ * today, the future and a period still running is of another day.
+ */
+export function staleSeed(
+  seedDay: string,
+  today = localDay(),
+): string | undefined {
+  if (seedDay === today) return undefined;
+  return `seeded for ${seedDay || 'an unknown day'}, and today is ${today}: what it says of today and the days to come is stale. Seed it again (bun run lab build), or pass --stale-ok.`;
+}

@@ -1,8 +1,9 @@
 import { defineConfig } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
+import { VIEWPORTS } from '../variants';
 
-// The probe's own tests: its fixtures on a computer at 1× and on a phone at
-// 2× with a finger, opened from disk — no server.
+// The probe's own tests: its fixtures on the lab's two screens (a computer
+// at 1×, a phone at 2× with a finger), opened from disk — no server.
 export default defineConfig({
   testDir: '.',
   testMatch: '*.browser.ts',
@@ -15,18 +16,7 @@ export default defineConfig({
   reporter: [['list']],
   use: { browserName: 'chromium' },
   projects: [
-    {
-      name: 'desktop',
-      use: { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 },
-    },
-    {
-      name: 'phone',
-      use: {
-        viewport: { width: 375, height: 812 },
-        deviceScaleFactor: 2,
-        isMobile: true,
-        hasTouch: true,
-      },
-    },
+    { name: 'desktop', use: { ...VIEWPORTS.desktop } },
+    { name: 'phone', use: { ...VIEWPORTS.phone } },
   ],
 });

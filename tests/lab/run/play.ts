@@ -4,58 +4,43 @@
 // again without touching the rest.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium, type BrowserContext } from '@playwright/test';
 import { labLoopbackOrigin, labOrigin, paths, repoRoot } from '../config';
+import { staleSeed } from '../archive/dates';
 import { SiteClient } from '../archive/site-client';
+import { resolveBar } from '../review/criteria';
 import { LAB_CREDENTIALS } from '../site/credentials';
-import { playgroundState } from '../site/playground';
+import { playgroundIndex, playgroundState } from '../site/playground';
 import { serverMode, waitUntilReady } from '../site/server';
-import { snapshotPaths } from '../site/snapshot';
 import type {
   AttemptMeta,
   Persona,
   Ref,
   ScenarioDefinition,
   SiteIndex,
-  StudyBar,
   VariantCode,
 } from '../types';
+import { readJson, writeJson } from '../util';
+import {
+  searchHistoryEntry,
+  VARIANTS,
+  variantCode,
+  VIEWPORTS,
+  visualsScript,
+} from '../variants';
 import { PlayStopped, record } from './recorder';
 import {
   attemptStamp,
   jobDir,
   jobId,
   listAttempts,
-  VARIANTS,
-  writeJson,
   writeStudyFile,
   type JobFile,
 } from './store';
 import { loadPersonas, loadStudy } from './studies';
 import { readTouched, tidy } from './tidy';
-
-export const DEFAULT_BAR: StudyBar = {
-  minScore: 8,
-  minMean: 8.5,
-  forbid: ['blocker', 'serious'],
-};
-
-const VIEWPORTS = {
-  desktop: {
-    viewport: { width: 1280, height: 800 },
-    deviceScaleFactor: 1,
-    isMobile: false,
-    hasTouch: false,
-  },
-  phone: {
-    viewport: { width: 375, height: 812 },
-    deviceScaleFactor: 2,
-    isMobile: true,
-    hasTouch: true,
-  },
-} as const;
 
 const PLAY_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -67,6 +52,8 @@ export interface PlayOptions {
   /** Only variants a job has never been played on. */
   pending?: boolean;
   target?: 'lab' | 'playground';
+  /** Play a site seeded on another day, its facts of today stale. */
+  staleOk?: boolean;
   allowNetwork?: boolean;
   headed?: boolean;
   log?: (message: string) => void;
@@ -136,16 +123,16 @@ function siteIndexFor(target: 'lab' | 'playground'): SiteIndex {
       throw new Error(
         'The playground does not hold the archive: bun run lab up playground.',
       );
-    const path = snapshotPaths(playground.snapshot).index;
-    if (!existsSync(path))
+    const index = playgroundIndex();
+    if (!index)
       throw new Error(`Snapshot ${playground.snapshot} has no site index.`);
-    return JSON.parse(readFileSync(path, 'utf8'));
+    return index;
   }
   if (!existsSync(paths.siteIndex))
     throw new Error(
       'The lab site has no index: bun run lab up lab, or bun run lab build.',
     );
-  return JSON.parse(readFileSync(paths.siteIndex, 'utf8'));
+  return readJson<SiteIndex>(paths.siteIndex);
 }
 
 /** The browser's locale for the archive's language. */
@@ -184,7 +171,15 @@ export async function play(options: PlayOptions) {
         `Study ${study.id} names persona "${id}", which tests/lab/personas/ lacks.`,
       );
   const index = siteIndexFor(target);
-  const bar = { ...DEFAULT_BAR, ...study.bar };
+  // What the index calls today, the future and a period still running was
+  // resolved on the day it was seeded: on another day a scenario picks by
+  // facts that no longer hold.
+  const stale = staleSeed(index.seedDay);
+  if (stale && !options.staleOk)
+    throw new Error(
+      `The ${target === 'lab' ? 'lab site' : 'playground'} was ${stale}`,
+    );
+  const bar = resolveBar(study.bar);
   writeStudyFile(study, personas, bar);
 
   // ---------------------------------------------------------------- the plan
@@ -219,9 +214,8 @@ export async function play(options: PlayOptions) {
       };
       writeJson(join(jobDir(study.id, job), 'job.json'), file);
       const played = new Set(
-        listAttempts(study.id, job).map(
-          (attempt) =>
-            `${attempt.variant.viewport[0]}${attempt.variant.theme[0]}`,
+        listAttempts(study.id, job).map((attempt) =>
+          variantCode(attempt.variant),
         ),
       );
       for (const variant of variants) {
@@ -248,17 +242,16 @@ export async function play(options: PlayOptions) {
   const site = new SiteClient(apiOrigin, log);
   if (target === 'lab') site.credentials = { ...LAB_CREDENTIALS };
   else {
-    const config = JSON.parse(
-      readFileSync(join(paths.playgroundContent, 'thei.config.json'), 'utf8'),
-    );
-    site.credentials = {
-      secretPhrase: config.secretPhrase,
-      password: config.password?.fallback,
-    };
-    if (!site.credentials.password)
+    const config = readJson<{
+      secretPhrase: string;
+      password?: { fallback?: string };
+    }>(join(paths.playgroundContent, 'thei.config.json'));
+    const password = config.password?.fallback;
+    if (!password)
       throw new Error(
         'The playground config has no password.fallback to sign in with.',
       );
+    site.credentials = { secretPhrase: config.secretPhrase, password };
   }
   await site.waitOpen();
   await waitUntilReady(apiOrigin, log);
@@ -284,22 +277,38 @@ export async function play(options: PlayOptions) {
       const dir = join(jobDir(study.id, item.job), 'attempts', attemptId);
       const code = codeState();
       const started = Date.now();
+      const picked = item.scenario.pick(
+        index,
+        `${item.scenario.id}:${item.variant}`,
+      );
+      // What the person searched for before, kept by their browser: put
+      // there once, so what the play searches for joins it as it would.
+      const history =
+        item.scenario.searchHistory?.(picked, index) ??
+        item.persona.searchHistory ??
+        [];
       const context: BrowserContext = await browser.newContext({
         ...VIEWPORTS[variant.viewport],
         colorScheme: variant.theme,
         locale: localeOf(index),
         // The machine's own zone: the day the site was seeded on is its day.
         timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        ...(history.length
+          ? {
+              storageState: {
+                cookies: [],
+                origins: [
+                  {
+                    origin: browserOrigin,
+                    localStorage: [searchHistoryEntry(item.role, history)],
+                  },
+                ],
+              },
+            }
+          : {}),
       });
-      // The visitor's own setting of the theme; a pinned accent keeps shots comparable.
-      await context.addInitScript((theme) => {
-        try {
-          localStorage.setItem(
-            'thei-visuals',
-            JSON.stringify({ theme, accentHue: 200, fontStyle: 'sans' }),
-          );
-        } catch {}
-      }, variant.theme);
+      // The visitor's own setting of the theme, read before every page.
+      await context.addInitScript(visualsScript(variant.theme));
       if (item.role === 'owner') await context.addCookies(ownerCookies);
       const blockedHosts = new Set<string>();
       if (!options.allowNetwork)
@@ -330,10 +339,6 @@ export async function play(options: PlayOptions) {
           consoleErrors.push(message.text().slice(0, 300)),
       );
 
-      const picked = item.scenario.pick(
-        index,
-        `${item.scenario.id}:${item.variant}`,
-      );
       const task = taskText(item.scenario.task, picked, index);
       const before = await readTouched(
         site,
@@ -380,7 +385,10 @@ export async function play(options: PlayOptions) {
         clearTimeout(timer);
       }
       await context.close();
-      const tidied = await tidy(site, index, before, recording.created);
+      const tidied = await tidy(site, index, before, {
+        created: recording.created,
+        since: started,
+      });
       const end = codeState();
       if (status !== 'error' && end.diffHash !== code.diffHash) {
         status = 'disturbed';
@@ -410,16 +418,17 @@ export async function play(options: PlayOptions) {
         archive: { version: index.archive.version },
         ...(index.snapshotId ? { snapshotId: index.snapshotId } : {}),
         target,
-        serverMode: target === 'lab' ? serverMode() : 'dev',
+        serverMode: target === 'lab' ? await serverMode() : 'dev',
         pageErrors,
         consoleErrors,
         blockedHosts: [...blockedHosts],
         labNotes: [...labNotes, ...recording.notes],
         tidy: tidied,
       };
-      writeJson(join(dir, 'attempt.json'), meta);
       writeJson(join(dir, 'steps.json'), recording.steps);
       writeJson(join(dir, 'findings.json'), recording.findings);
+      // Last, and whole: an attempt is read as done once this is there.
+      writeJson(join(dir, 'attempt.json'), meta, { atomic: true });
       results.push(meta);
       log(
         `    ${status}: ${recording.steps.length} steps, ${recording.findings.length} finding(s)` +
