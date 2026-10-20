@@ -281,6 +281,27 @@ watch(
 );
 
 /**
+ * Before a layer is hidden — covered by another, or leaving — the focus
+ * leaves it for the dialog itself: a layer is made `inert` and
+ * `aria-hidden` as it stops being the top one, and the browser refuses to
+ * hide the element a reader is on. The watcher below hands the focus on.
+ */
+watch(
+  topKey,
+  (top) => {
+    if (!import.meta.client) return;
+    const dialog = dialogElement.value;
+    const focused = document.activeElement;
+    if (!dialog?.open || !(focused instanceof HTMLElement)) return;
+    const layer = focused.closest<HTMLElement>('[data-modal-layer]');
+    if (!layer || !dialog.contains(layer) || layer.dataset.modalLayer === top)
+      return;
+    dialog.focus({ preventScroll: true });
+  },
+  { flush: 'pre' },
+);
+
+/**
  * The focus follows the top layer: a step that replaced another, or a modal
  * that came in over the one holding the focus, leaves it on nothing that is
  * still in use. A modal that focused something of its own keeps it.

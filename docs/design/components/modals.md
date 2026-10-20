@@ -124,8 +124,11 @@ Motion:
 - `app/components/Modal.vue` holds one `<dialog>`, opened with `showModal()`
   so it is in the top layer, and its layers: one per open modal, and the wait
   of a flow between two steps. Only the top one is shown, except while one
-  fades in over another; the ones beneath are `inert`. The dialog closes
-  once the last layer has faded out.
+  fades in over another; the ones beneath are `inert` and `aria-hidden`.
+  Before a layer is hidden so — covered, or leaving — the focus it holds goes
+  to the dialog, and from there to the new top layer or, once the dialog
+  closes, back to what opened it. The dialog closes once the last layer has
+  faded out.
 - `app/composables/modal.ts` opens them — `openModal(descriptor, data)` puts
   the modal on the stack at once and resolves with its result — keeps the
   stack, ties it to browser history, and keeps the dismiss layers: an open
@@ -226,7 +229,8 @@ Popups opened inside a modal join its `<dialog>` by themselves; see
   answers down and checks that each frame shows its title at once and that,
   frame by frame, the dialog never closes or lets the page through mid-flow.
 - `tests/e2e/modal-history.spec.ts` checks in a browser that Back closes one
-  nested modal per press and that Escape undoes the same single step.
+  nested modal per press, that Escape undoes the same single step, and that
+  no layer covered or closed is hidden while it holds the focus.
 - `tests/e2e/popups.spec.ts` checks that pickers open inside their modal.
 - A new modal is looked at in the browser at 375 px and on a desktop, in both
   themes.
