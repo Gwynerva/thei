@@ -134,6 +134,9 @@ async function openEditor(page: Page, html: string, blocks: object[] = []) {
       reminder: '',
       notes: null,
     },
+    // Making the page is the test's setting, not what it tests: a server busy
+    // after the specs before may take longer than an action's 5 s.
+    timeout: 30_000,
   });
   const result = await response.json();
   expect(result.type, JSON.stringify(result)).toBe('success');
