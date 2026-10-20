@@ -21,13 +21,17 @@ export function isMacPlatform(): boolean {
 }
 
 /** A physical key pressed with the primary modifier, and Shift or not. */
-export interface Chord {
+interface Chord {
   code: string;
   shift?: boolean;
 }
 
-/** A key that belongs to an input method putting a character together. */
-function composing(event: KeyboardEvent) {
+/**
+ * A key that belongs to an input method putting a character together. Safari
+ * reports the Enter that commits a composition as not composing; its
+ * `keyCode` still tells.
+ */
+export function isImeKey(event: KeyboardEvent) {
   return event.isComposing || event.keyCode === 229;
 }
 
@@ -37,7 +41,7 @@ function alternate(event: KeyboardEvent) {
 }
 
 export function matchChord(event: KeyboardEvent, chord: Chord): boolean {
-  if (composing(event) || alternate(event)) return false;
+  if (isImeKey(event) || alternate(event)) return false;
   const mac = isMacPlatform();
   const primary = mac ? event.metaKey : event.ctrlKey;
   const other = mac ? event.ctrlKey : event.metaKey;
@@ -68,7 +72,7 @@ export function historyKey(event: KeyboardEvent): 'undo' | 'redo' | undefined {
  * a French one — and those are not "/".
  */
 export function matchSlash(event: KeyboardEvent): boolean {
-  if (composing(event) || alternate(event)) return false;
+  if (isImeKey(event) || alternate(event)) return false;
   if (event.ctrlKey || event.metaKey) return false;
   return event.key === '/' || (event.code === 'Slash' && event.key === '.');
 }

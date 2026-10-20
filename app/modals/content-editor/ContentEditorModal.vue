@@ -106,10 +106,10 @@ import {
 } from '#layers/thei/app/composables/editor-block-toolbox';
 import ContentBlockToolbox from '#layers/thei/app/components/content/ContentBlockToolbox.vue';
 import {
-  editableFieldOf,
   flattenToPlainText,
   selectRange,
 } from '#layers/thei/app/components/content/editor-edit-commands';
+import { editableFieldOf } from '#layers/thei/app/composables/editor-inline-dom';
 import { bindEditorGutterClick } from '#layers/thei/app/composables/editor-gutter-click';
 import { bindEditorCurrentBlock } from '#layers/thei/app/composables/editor-current-block';
 import { bindEditorLinkPaste } from '#layers/thei/app/composables/editor-link-paste';
@@ -1280,6 +1280,9 @@ async function startEditor() {
       },
       config: {
         labels: contentToolLabels(),
+        // Asked once the editor is up, when the private sections are bound.
+        removeSection: (sectionId: string) =>
+          editorPrivateSections?.removeSection(sectionId),
       },
     },
   };

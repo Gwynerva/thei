@@ -1,3 +1,5 @@
+import { PRIVATE_SECTION_EDGE_SELECTOR } from './editor-private-sections';
+
 interface PrivateSectionBrackets {
   start: HTMLElement;
   end: HTMLElement;
@@ -64,7 +66,7 @@ export function createEditorPrivatePattern(root: HTMLElement) {
     );
     for (const block of edges) {
       const bracket = block.querySelector<HTMLElement>(
-        '[data-private-section-id]',
+        PRIVATE_SECTION_EDGE_SELECTOR,
       );
       const sectionId = bracket?.dataset.privateSectionId;
       if (!bracket || !sectionId) continue;

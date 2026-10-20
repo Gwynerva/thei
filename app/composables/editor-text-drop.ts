@@ -1,13 +1,15 @@
 import { normalizeContentInlineHtml } from '#layers/thei/shared/content-link';
 import {
-  editableFieldOf,
+  deleteRange,
   insertHtmlAt,
-  runEditCommand,
+  replaceFieldHtml,
+  replaceRangeText,
   selectRange,
 } from '#layers/thei/app/components/content/editor-edit-commands';
 import {
   caretAfterLetters,
   caretAtPoint,
+  editableFieldOf,
   isMarkup,
   lettersBefore,
   markupAround,
@@ -63,11 +65,6 @@ export function bindEditorTextDrop(
   /** The selection being dragged out of a field of this editor. */
   let source: { field: HTMLElement; range: Range } | undefined;
 
-  function fieldIn(node: Node | null) {
-    const field = editableFieldOf(node);
-    return field && root.contains(field) ? field : undefined;
-  }
-
   function isBlockDrag(event: DragEvent) {
     return Boolean(event.dataTransfer?.types.includes(BLOCK_DRAG_MIME));
   }
@@ -79,7 +76,7 @@ export function bindEditorTextDrop(
   function onDragStart(event: DragEvent) {
     source = undefined;
     const target = event.target instanceof Node ? event.target : null;
-    const field = fieldIn(target);
+    const field = editableFieldOf(target, root);
     if (!field) return;
     const selection = window.getSelection();
     const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
@@ -116,7 +113,10 @@ export function bindEditorTextDrop(
     event.stopImmediatePropagation();
     const dragged = source;
     source = undefined;
-    const target = fieldIn(event.target instanceof Node ? event.target : null);
+    const target = editableFieldOf(
+      event.target instanceof Node ? event.target : null,
+      root,
+    );
     const point = target && dropPoint(event, target);
     if (!target || !point) {
       event.preventDefault();
@@ -146,9 +146,7 @@ export function bindEditorTextDrop(
           : undefined,
         text,
       };
-      dragged.field.focus({ preventScroll: true });
-      if (!selectRange(dragged.range) || !runEditCommand('delete'))
-        dragged.range.deleteContents();
+      deleteRange(dragged.range);
     } else {
       const html = event.dataTransfer?.getData('text/html') ?? '';
       const text = event.dataTransfer?.getData('text/plain') ?? '';
@@ -188,19 +186,10 @@ function insertAt(
     insertion.html === undefined
       ? undefined
       : cleanHtml(insertion.html, insertion.text);
-  if (html !== undefined) {
-    // Into the markup it lands in, which the browser would split round it.
-    if (html && insertHtmlAt(point, html)) return;
-  } else if (
-    selectRange(point) &&
-    insertion.text &&
-    runEditCommand('insertText', plainText(insertion.text))
-  ) {
-    return;
-  }
-  // Refused: the same text by hand.
-  const node = document.createTextNode(plainText(insertion.text));
-  point.insertNode(node);
+  // Into the markup it lands in, which the browser would split round it.
+  if (html && insertHtmlAt(point, html)) return;
+  // Words alone, or the words of what the browser refused.
+  if (insertion.text) replaceRangeText(point, plainText(insertion.text));
 }
 
 /**
@@ -229,8 +218,6 @@ function moveWithinField(
   // Where the piece ends once moved, to leave the caret there.
   const caretAt = where > 0 ? pointAt : pointAt + pieceLength;
 
-  const whole = document.createRange();
-  whole.selectNodeContents(field);
   field.focus({ preventScroll: true });
   if (rich) {
     const copy = field.cloneNode(true) as HTMLElement;
@@ -248,10 +235,7 @@ function moveWithinField(
       landing.startContainer,
     );
     landing.insertNode(carried);
-    const html = normalizeContentInlineHtml(copy.innerHTML);
-    // Refused: the same words by hand, which Ctrl+Z then does not cross.
-    if (!selectRange(whole) || !runEditCommand('insertHTML', html))
-      field.innerHTML = html;
+    replaceFieldHtml(field, normalizeContentInlineHtml(copy.innerHTML));
   } else {
     const moved =
       where > 0
@@ -263,8 +247,9 @@ function moveWithinField(
           text.slice(sourceStart, sourceEnd) +
           text.slice(pointAt, sourceStart) +
           text.slice(sourceEnd);
-    if (!selectRange(whole) || !runEditCommand('insertText', plainText(moved)))
-      field.textContent = plainText(moved);
+    const whole = document.createRange();
+    whole.selectNodeContents(field);
+    replaceRangeText(whole, plainText(moved));
   }
   selectRange(
     caretAfterLetters(

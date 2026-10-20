@@ -11,11 +11,16 @@ import { CONTENT_INLINE_MARKUP_SELECTOR as INLINE_MARKUP } from '#layers/thei/sh
 export type InlineSide = 'before' | 'after';
 type InlineEdge = 'start' | 'end';
 
-/** The editable field a node is in. */
-export function editableFieldOf(node: Node | null | undefined) {
+/** The editable field a node is in; with `within`, only one under it. */
+export function editableFieldOf(
+  node: Node | null | undefined,
+  within?: HTMLElement,
+) {
   if (!node) return undefined;
   const element = node instanceof Element ? node : node.parentElement;
-  return element?.closest<HTMLElement>('[contenteditable="true"]') ?? undefined;
+  const field =
+    element?.closest<HTMLElement>('[contenteditable="true"]') ?? undefined;
+  return field && (!within || within.contains(field)) ? field : undefined;
 }
 
 /** The caret in a text under `root`; with `collapsed`, only a caret. */
@@ -42,6 +47,18 @@ export function rangeOf(target: StaticRange): Range {
 export function typedText(event: InputEvent) {
   return event.data ?? event.dataTransfer?.getData('text/plain') ?? '';
 }
+
+/** The deletions a key makes, one way or the other: a letter, a word, a line. */
+export const KEY_DELETION_INPUTS = [
+  'deleteContentBackward',
+  'deleteContentForward',
+  'deleteWordBackward',
+  'deleteWordForward',
+  'deleteSoftLineBackward',
+  'deleteSoftLineForward',
+  'deleteHardLineBackward',
+  'deleteHardLineForward',
+] as const;
 
 /**
  * Whether an input types words: a key, or a word a spelling suggestion puts

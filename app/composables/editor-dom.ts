@@ -4,7 +4,8 @@
  * editor a node is in.
  */
 export const EDITOR_BLOCK_SELECTOR = '.ce-block';
-export const EDITOR_SELECTED_BLOCK_SELECTOR = '.ce-block--selected';
+export const EDITOR_SELECTED_BLOCK_CLASS = 'ce-block--selected';
+export const EDITOR_SELECTED_BLOCK_SELECTOR = `.${EDITOR_SELECTED_BLOCK_CLASS}`;
 
 /** The block of the editor under `root` that `target` is in, if any. */
 export function editorBlockOf(

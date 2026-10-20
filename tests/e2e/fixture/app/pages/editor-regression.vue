@@ -234,7 +234,13 @@ onMounted(async () => {
     holder: holder.value!,
     data: initial as any,
     tools: {
-      privateSectionBoundary: PrivateSectionBoundaryTool as any,
+      privateSectionBoundary: {
+        class: PrivateSectionBoundaryTool as any,
+        config: {
+          removeSection: (sectionId: string) =>
+            sections.removeSection(sectionId),
+        },
+      },
       contentMedia: {
         class: ContentMediaTool as any,
         inlineToolbar: true,

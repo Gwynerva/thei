@@ -1,5 +1,8 @@
-import { editableFieldOf } from '../components/content/editor-edit-commands';
-import { markupAround, placeInRoot } from './editor-inline-dom';
+import {
+  editableFieldOf,
+  markupAround,
+  placeInRoot,
+} from './editor-inline-dom';
 
 /** One ring round one line of an element. */
 const RING_CLASS = 'content-inline-ring';

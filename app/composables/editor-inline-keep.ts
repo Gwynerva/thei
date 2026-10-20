@@ -1,10 +1,12 @@
 import {
   announceTyped,
-  editableFieldOf,
+  deleteRange,
+  insertHtmlAt,
   insertInlineElement,
   placeCaretAfter,
-  runEditCommand,
+  replaceRangeText,
   selectRange,
+  textAsHtml,
   writeBesideElement,
 } from '../components/content/editor-edit-commands';
 import {
@@ -12,7 +14,9 @@ import {
   caretAfterLetters,
   caretAtEdge,
   caretIn,
+  editableFieldOf,
   insideEdgeAt,
+  KEY_DELETION_INPUTS,
   markupHeldBy,
   nodeAt,
   pathTo,
@@ -29,16 +33,9 @@ import {
 const KEPT_CLASS = 'content-inline-kept';
 
 /** The deletions a key makes; a cut or a drag takes words away on purpose. */
-const KEY_DELETIONS = new Set([
+const KEY_DELETIONS = new Set<string>([
   'deleteContent',
-  'deleteContentBackward',
-  'deleteContentForward',
-  'deleteWordBackward',
-  'deleteWordForward',
-  'deleteSoftLineBackward',
-  'deleteSoftLineForward',
-  'deleteHardLineBackward',
-  'deleteHardLineForward',
+  ...KEY_DELETION_INPUTS,
 ]);
 
 /** Keys that move the caret, or end what is typed: whatever was held goes. */
@@ -56,7 +53,7 @@ const LEAVING_KEYS = new Set([
   'Escape',
 ]);
 
-export interface WordsOffer {
+interface WordsOffer {
   /**
    * Typed over the offered words, text that starts with one of these goes
    * after the element instead: the words are accepted, not replaced.
@@ -120,10 +117,7 @@ function fragmentOf(html: string) {
  */
 function forgetTypingStyle() {
   const selection = window.getSelection();
-  if (!selection?.rangeCount) return;
-  const caret = selection.getRangeAt(0).cloneRange();
-  selection.removeAllRanges();
-  selection.addRange(caret);
+  if (selection?.rangeCount) selectRange(selection.getRangeAt(0).cloneRange());
 }
 
 /** A place in an element, by its children's places, to find again later. */
@@ -255,36 +249,29 @@ export function bindEditorInlineKeep(root: HTMLElement): EditorInlineKeep {
   }
 
   /**
-   * Words written inside an element at a place in it, as one step of
-   * Ctrl+Z: the element is put back with them, whatever markup it holds, and
-   * the caret after them. `replacing` is what it all takes the place of when
-   * more than the element: a word the browser wrote beside it.
+   * A word the browser wrote beside an element, written inside it at a
+   * place in it instead, as one step of Ctrl+Z: the element is put back with
+   * the word, whatever markup it holds, in place of `replacing` — the
+   * element and the word beside it — and the caret after the word.
    */
   function writeAt(
     element: HTMLElement,
     at: InlinePlace,
-    words: string | DocumentFragment,
-    replacing?: Range,
+    words: string,
+    replacing: Range,
   ) {
     const here = nodeAt(element, at.path);
     if (!here) return;
     const before = wordsBeside(element, here, at.offset, 'before').length;
-    const added =
-      typeof words === 'string'
-        ? words.length
-        : (words.textContent?.length ?? 0);
     const copy = element.cloneNode(true) as HTMLElement;
     const there = nodeAt(copy, at.path)!;
-    const nodes =
-      typeof words === 'string' ? document.createTextNode(words) : words;
+    const nodes = document.createTextNode(words);
     if (there.nodeType === Node.TEXT_NODE) {
       const after = (there as Text).splitText(at.offset);
       after.before(nodes);
     } else there.insertBefore(nodes, there.childNodes[at.offset] ?? null);
-    const whole = replacing ?? document.createRange();
-    if (!replacing) whole.selectNode(element);
-    const placed = insertInlineElement(whole, copy);
-    if (placed) selectRange(caretAfterLetters(placed, before + added));
+    const placed = insertInlineElement(replacing, copy);
+    if (placed) selectRange(caretAfterLetters(placed, before + words.length));
   }
 
   /** The place of a caret in an element it stands in. */
@@ -311,11 +298,11 @@ export function bindEditorInlineKeep(root: HTMLElement): EditorInlineKeep {
     letGo();
 
     if (at.collapsed) {
-      // Inside markup at an edge, where the browser would write outside.
-      const inside = insideEdgeAt(at);
-      const place = inside && placeOf(inside, at);
-      if (inside && place) {
-        writeAt(inside, place, words());
+      // Inside markup at an edge, where the browser would write outside: the
+      // markup is put back with them in it. Refused, the words go in alone.
+      if (insideEdgeAt(at)) {
+        if (!insertHtmlAt(at, html ?? textAsHtml(text)))
+          replaceRangeText(at, text);
         return true;
       }
       // Outside markup right beside it, where the browser would write in.
@@ -491,13 +478,7 @@ export function bindEditorInlineKeep(root: HTMLElement): EditorInlineKeep {
     const templates = copies(chain);
     const whole = document.createRange();
     whole.selectNode(outer);
-    editableFieldOf(outer)?.focus({ preventScroll: true });
-    selectRange(whole);
-    // Refused: the same change by hand, outside the browser's history.
-    if (!runEditCommand('delete')) {
-      whole.deleteContents();
-      selectRange(whole);
-    }
+    deleteRange(whole);
     forgetTypingStyle();
     keep(templates);
   }

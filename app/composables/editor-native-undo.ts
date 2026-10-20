@@ -1,8 +1,9 @@
+import { editCommandRunning } from '#layers/thei/app/components/content/editor-edit-commands';
 import {
   editableFieldOf,
-  editCommandRunning,
-} from '#layers/thei/app/components/content/editor-edit-commands';
-import { lettersBefore } from './editor-inline-dom';
+  KEY_DELETION_INPUTS,
+  lettersBefore,
+} from './editor-inline-dom';
 import { historyKey } from './shortcut';
 /**
  * Ctrl+Z in the editor undoes what is safe to undo, and nothing else.
@@ -29,17 +30,10 @@ import { historyKey } from './shortcut';
 export type NativeEditKind =
   'typing' | 'drag-delete' | 'drop-insert' | 'command-text' | 'other';
 
-const TYPING_INPUTS = new Set([
+const TYPING_INPUTS = new Set<string>([
   'insertText',
   'insertCompositionText',
-  'deleteContentBackward',
-  'deleteContentForward',
-  'deleteWordBackward',
-  'deleteWordForward',
-  'deleteSoftLineBackward',
-  'deleteSoftLineForward',
-  'deleteHardLineBackward',
-  'deleteHardLineForward',
+  ...KEY_DELETION_INPUTS,
 ]);
 
 export function nativeEditKind(
@@ -143,14 +137,9 @@ export function bindEditorNativeUndo(
   let caretBefore: number | undefined;
   let announced = false;
 
-  function fieldOf(node: Node | null) {
-    const field = editableFieldOf(node);
-    return field && root.contains(field) ? field : undefined;
-  }
-
   /** A change inside a field still in the text: one the history may meet. */
   function touchesField(record: MutationRecord) {
-    const field = fieldOf(record.target);
+    const field = editableFieldOf(record.target, root);
     return Boolean(field?.isConnected);
   }
 
@@ -213,7 +202,7 @@ export function bindEditorNativeUndo(
     }
     announced = true;
     caretBefore = inEditor(event.target)
-      ? lettersToCaret(fieldOf(event.target as Node))
+      ? lettersToCaret(editableFieldOf(event.target as Node, root))
       : undefined;
   }
 
@@ -242,7 +231,7 @@ export function bindEditorNativeUndo(
     if (inputType === 'historyUndo') ledger.undone();
     else if (inputType === 'historyRedo') ledger.redone();
     else {
-      const field = fieldOf(event.target as Node);
+      const field = editableFieldOf(event.target as Node, root);
       ledger.edit(nativeEditKind(inputType, wasAnnounced), field, {
         before,
         after: lettersToCaret(field),

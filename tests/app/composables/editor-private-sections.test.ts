@@ -83,9 +83,16 @@ function createEditor(initial: MockBlock[] = []) {
   }> = [];
   const moves: Array<[toIndex: number, fromIndex: number]> = [];
   const deletions: string[] = [];
+  /** Where the caret was put, by block and place. */
+  const carets: Array<[id: string, position?: string]> = [];
   let nextId = 0;
   const editor = {
-    caret: { setToBlock: () => true },
+    caret: {
+      setToBlock(target: MockBlock, position?: string) {
+        carets.push([target.id, position]);
+        return true;
+      },
+    },
     blocks: {
       getBlocksCount: () => blocks.length,
       getBlockByIndex: (index: number) => blocks[index],
@@ -132,6 +139,7 @@ function createEditor(initial: MockBlock[] = []) {
     insertions,
     moves,
     deletions,
+    carets,
     order: () => blocks.map((block) => block.id),
     /** The text as the stored edges read it: `[id`, `]id`, or the block's id. */
     outline: () =>
@@ -411,6 +419,25 @@ describe('Editor.js private section edges', () => {
     expect(privateSections.handleChange(removed(s2!))).toBe(true);
     expect(order()).toEqual(['p0', 's1', 'p1', 'e1', 'p2', 'p3']);
     expect(members()).toEqual(['p1']);
+  });
+
+  it('makes a section public from its menu: both edges go, as a change, and the caret goes inside', () => {
+    const { editor, blocks, order, members, carets } =
+      createEditor(twoSections());
+    const privateSections = createEditorPrivateSections(editor as never);
+    const [s2, e2] = [blocks[5]!, blocks[7]!];
+
+    privateSections.removeSection('two');
+    expect(order()).toEqual(['p0', 's1', 'p1', 'e1', 'p2', 'p3']);
+    expect(carets).toEqual([['p3', 'start']]);
+    // The owner's removals: a change, and nothing else goes with them.
+    expect(privateSections.handleChange([removed(s2), removed(e2)])).toBe(true);
+    expect(order()).toEqual(['p0', 's1', 'p1', 'e1', 'p2', 'p3']);
+    expect(members()).toEqual(['p1']);
+
+    // A section gone already is left alone.
+    privateSections.removeSection('two');
+    expect(order()).toEqual(['p0', 's1', 'p1', 'e1', 'p2', 'p3']);
   });
 });
 

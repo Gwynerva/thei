@@ -9,11 +9,8 @@ import {
   type InternalUrlSite,
 } from '#layers/thei/shared/internal-url';
 import { trimInlineRange } from '#layers/thei/app/components/content/editor-inline-selection';
-import {
-  editableFieldOf,
-  replaceRangeText,
-} from '#layers/thei/app/components/content/editor-edit-commands';
-import { rangeOf, typedText } from './editor-inline-dom';
+import { replaceRangeText } from '#layers/thei/app/components/content/editor-edit-commands';
+import { editableFieldOf, rangeOf, typedText } from './editor-inline-dom';
 import {
   applyLinkAttributes,
   entityLinkAttributes,

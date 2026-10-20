@@ -23,8 +23,6 @@ import {
   wordsBeside,
 } from '../../composables/editor-inline-dom';
 
-export { editableFieldOf };
-
 let commandsRunning = 0;
 
 /**
@@ -223,7 +221,7 @@ export function writeMarkup<T extends HTMLElement>(
  * of what is put in would be collapsed away. The text's own normalization
  * reads both as one space.
  */
-function textAsHtml(text: string) {
+export function textAsHtml(text: string) {
   return text
     .replace(
       /[&<>]/g,
@@ -310,6 +308,35 @@ export function replaceRangeText(range: Range, text: string) {
     range.insertNode(node);
     placeCaretAfter(node);
   }
+  return false;
+}
+
+/**
+ * Deletes a range's words, as one undoable step — the step Backspace makes
+ * over a selection. The caret ends where they were.
+ */
+export function deleteRange(range: Range) {
+  editableFieldOf(range.commonAncestorContainer)?.focus({
+    preventScroll: true,
+  });
+  if (selectRange(range) && runEditCommand('delete')) return true;
+  // Refused: the same change by hand, outside the browser's history.
+  range.deleteContents();
+  selectRange(range);
+  return false;
+}
+
+/**
+ * A field's words written anew as HTML, as one undoable step: the whole of
+ * them is replaced, whatever markup they are in.
+ */
+export function replaceFieldHtml(field: HTMLElement, html: string) {
+  field.focus({ preventScroll: true });
+  const whole = document.createRange();
+  whole.selectNodeContents(field);
+  if (selectRange(whole) && runEditCommand('insertHTML', html)) return true;
+  // Refused: the same words by hand, which Ctrl+Z then does not cross.
+  field.innerHTML = html;
   return false;
 }
 

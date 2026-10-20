@@ -1,8 +1,8 @@
 import {
-  editableFieldOf,
   insertHtmlAt,
   runEditCommand,
 } from '#layers/thei/app/components/content/editor-edit-commands';
+import { editableFieldOf } from './editor-inline-dom';
 import type { EditorInlineKeep } from './editor-inline-keep';
 import {
   cleanHtml,
@@ -42,10 +42,9 @@ export function bindEditorTextPaste(
     const text = data.getData('text/plain');
     if (/^https?:\/\/\S+$/i.test(text.trim())) return;
     const selection = window.getSelection();
-    const field = editableFieldOf(selection?.anchorNode);
+    const field = editableFieldOf(selection?.anchorNode, root);
     if (
       !field ||
-      !root.contains(field) ||
       field !== editableFieldOf(selection?.focusNode) ||
       !selection?.rangeCount
     )

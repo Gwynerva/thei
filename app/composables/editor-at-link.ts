@@ -1,6 +1,5 @@
 import type EditorJS from '@editorjs/editorjs';
 import {
-  editableFieldOf,
   insertInlineElement,
   runEditCommand,
   selectRange,
@@ -12,6 +11,7 @@ import {
 } from '../components/content/editor-inline-link-dom';
 import type { ContentInlineLinkRequest } from '../components/content/editor-inline-links';
 import { typedAt } from './at-trigger';
+import { editableFieldOf } from './editor-inline-dom';
 import type { EditorInlineKeep } from './editor-inline-keep';
 import { guardInlineToolbar } from './editor-plain-fields';
 import { rangeAnchor } from './popup-placement';

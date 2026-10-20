@@ -1,7 +1,13 @@
 import type EditorJS from '@editorjs/editorjs';
 import type { BlockMutationEvent } from '@editorjs/editorjs';
-import { EDITOR_SELECTED_BLOCK_SELECTOR, editorBlockOf } from './editor-dom';
+import {
+  pairPrivateSectionEdges,
+  privateSectionsOverlap,
+} from '#layers/thei/shared/content';
+import { selectRange } from '#layers/thei/app/components/content/editor-edit-commands';
+import { EDITOR_SELECTED_BLOCK_CLASS, editorBlockOf } from './editor-dom';
 import { wordsBeside } from './editor-inline-dom';
+import { isImeKey } from './shortcut';
 
 /**
  * The private sections of a text in the editor.
@@ -27,7 +33,10 @@ import { wordsBeside } from './editor-inline-dom';
  * partly cover (`root`). A section's privacy goes from its edge's own menu.
  */
 
-export type EditorPrivateSectionEdge = 'start' | 'end';
+type EditorPrivateSectionEdge = 'start' | 'end';
+
+/** The element of an edge's block that names its section and its edge. */
+export const PRIVATE_SECTION_EDGE_SELECTOR = '[data-private-section-id]';
 
 export interface EditorPrivateSectionBlock {
   id: string;
@@ -39,7 +48,7 @@ export interface EditorPrivateSectionBlock {
   edge?: EditorPrivateSectionEdge;
 }
 
-export interface EditorPrivateSectionRange {
+interface EditorPrivateSectionRange {
   sectionId: string;
   /** Index of the opening edge. */
   start: number;
@@ -59,21 +68,18 @@ export interface EditorPrivateSectionRange {
 export function editorPrivateSectionRanges(
   blocks: readonly EditorPrivateSectionBlock[],
 ): EditorPrivateSectionRange[] {
-  const boundaries = new Map<string, number[]>();
-  blocks.forEach((block, index) => {
-    if (!block.sectionId) return;
-    const indices = boundaries.get(block.sectionId) ?? [];
-    indices.push(index);
-    boundaries.set(block.sectionId, indices);
-  });
-  return Array.from(boundaries)
-    .filter(([, indices]) => indices.length === 2)
-    .map(([sectionId, [start, end]]) => ({
-      sectionId,
-      start: start!,
-      end: end!,
-    }))
-    .sort((left, right) => left.start - right.start);
+  return wholeSections(blocks).map(({ sectionId, indices: [start, end] }) => ({
+    sectionId,
+    start: start!,
+    end: end!,
+  }));
+}
+
+/** The edges of a layout's sections that have both of theirs, in order. */
+function wholeSections(blocks: readonly EditorPrivateSectionBlock[]) {
+  return pairPrivateSectionEdges(blocks, (block) => block.sectionId).filter(
+    ({ indices }) => indices.length === 2,
+  );
 }
 
 /**
@@ -85,14 +91,14 @@ export function editorPrivateSectionRanges(
 export function editorPrivateSectionLayoutIsValid(
   blocks: readonly EditorPrivateSectionBlock[],
 ) {
-  let previousEnd = -1;
-  for (const range of editorPrivateSectionRanges(blocks)) {
-    if (range.start <= previousEnd) return false;
-    if (blocks[range.start]!.edge === 'end') return false;
-    if (blocks[range.end]!.edge === 'start') return false;
-    previousEnd = range.end;
-  }
-  return true;
+  const sections = wholeSections(blocks);
+  return (
+    !privateSectionsOverlap(sections) &&
+    sections.every(
+      ({ indices: [start, end] }) =>
+        blocks[start!]!.edge !== 'end' && blocks[end!]!.edge !== 'start',
+    )
+  );
 }
 
 export function editorPrivateSectionMoveIsValid(
@@ -132,20 +138,13 @@ export function editorPrivateSectionArrivals(
   const taken = editorPrivateSectionRanges(
     blocks.map((block) => (arrived.has(block.id) ? { id: block.id } : block)),
   );
-  const groups = new Map<string, number[]>();
-  blocks.forEach((block, index) => {
-    if (!block.sectionId || !arrived.has(block.id)) return;
-    const indices = groups.get(block.sectionId) ?? [];
-    indices.push(index);
-    groups.set(block.sectionId, indices);
-  });
+  const candidates = pairPrivateSectionEdges(blocks, (block) =>
+    arrived.has(block.id) ? block.sectionId : undefined,
+  );
 
   const pairs: [string, string][] = [];
   const dropped: string[] = [];
-  const candidates = Array.from(groups.values()).sort(
-    (left, right) => left[0]! - right[0]!,
-  );
-  for (const indices of candidates) {
+  for (const { indices } of candidates) {
     const [start, end] = indices;
     const clear =
       indices.length === 2 &&
@@ -224,7 +223,7 @@ const FIELD_SELECTOR = [
   ),
 ].join(', ');
 
-export interface EditorPrivateSectionsOptions {
+interface EditorPrivateSectionsOptions {
   suppressionDuration?: number;
   /**
    * The editor's holder. Given, the keyboard is kept off the edges of
@@ -291,7 +290,7 @@ export function createEditorPrivateSections(
   function boundaryFromBlock(block: ReturnType<typeof blockAt>) {
     if (!block) return undefined;
     const element = block.holder.querySelector<HTMLElement>(
-      '[data-private-section-id]',
+      PRIVATE_SECTION_EDGE_SELECTOR,
     );
     const sectionId = element?.dataset.privateSectionId;
     if (sectionId) {
@@ -349,7 +348,7 @@ export function createEditorPrivateSections(
   }
 
   function selectedHolder(holder: HTMLElement) {
-    return holder.classList?.contains(EDITOR_SELECTED_BLOCK_SELECTOR.slice(1));
+    return holder.classList?.contains(EDITOR_SELECTED_BLOCK_CLASS);
   }
 
   /**
@@ -375,16 +374,15 @@ export function createEditorPrivateSections(
       if (selectedBefore.has(block.id) || !selectedHolder(block.holder))
         continue;
       if (boundaryFromBlock(block))
-        block.holder.classList.remove(EDITOR_SELECTED_BLOCK_SELECTOR.slice(1));
+        block.holder.classList.remove(EDITOR_SELECTED_BLOCK_CLASS);
     }
-    if (!range || !selection || !range.startContainer.isConnected) return;
+    if (!range || !range.startContainer.isConnected) return;
     const holder = holderOf(range.startContainer);
     const block = holder ? editor.blocks.getBlockByElement(holder) : undefined;
     if (!block || !holder!.querySelector(FIELD_SELECTOR)) return;
     // The block is made current again, then the caret put back to the letter.
     editor.caret.setToBlock(block, 'start');
-    selection.removeAllRanges();
-    selection.addRange(range);
+    selectRange(range);
   }
 
   function deleteBlocks(ids: readonly string[]) {
@@ -400,6 +398,26 @@ export function createEditorPrivateSections(
         editor.blocks.delete(index);
       }
     });
+  }
+
+  /**
+   * A section made public again, from its edge's own menu: both its edges go
+   * at once, and the blocks between them stay where they are. The removals
+   * are the owner's, a change of the text, and `handleChange` hears them as
+   * one, unlike `deleteBlocks`'. Editor.js leaves the caret at the end of the
+   * block before each one deleted, selecting it when it has no text; the
+   * caret goes to the first block that was inside instead.
+   */
+  function removeSection(sectionId: string) {
+    const edges: number[] = [];
+    for (let index = 0; index < editor.blocks.getBlocksCount(); index++)
+      if (boundaryFromBlock(blockAt(index))?.sectionId === sectionId)
+        edges.push(index);
+    if (!edges.length) return;
+    for (const index of [...edges].reverse()) editor.blocks.delete(index);
+    const first = blockAt(edges[0]!);
+    if (first && !first.holder.querySelector(PRIVATE_SECTION_EDGE_SELECTOR))
+      editor.caret.setToBlock(first, 'start');
   }
 
   function refresh() {
@@ -429,7 +447,7 @@ export function createEditorPrivateSections(
         });
         desired.get(block.id)!.privateSectionEdge = edge;
         const element = block.holder.querySelector<HTMLElement>(
-          '[data-private-section-id]',
+          PRIVATE_SECTION_EDGE_SELECTOR,
         );
         if (!element) continue;
         // The tool saves the edge it is told here: the one its place makes.
@@ -523,14 +541,14 @@ export function createEditorPrivateSections(
       for (const id of pair) {
         const element = editor.blocks
           .getById(id)
-          ?.holder.querySelector<HTMLElement>('[data-private-section-id]');
+          ?.holder.querySelector<HTMLElement>(PRIVATE_SECTION_EDGE_SELECTOR);
         if (element) element.dataset.privateSectionId = sectionId;
       }
     }
     deleteBlocks(dropped);
     for (const block of blocks())
       if (arrived.has(block.id) && selectedHolder(block.holder))
-        block.holder.classList.remove(EDITOR_SELECTED_BLOCK_SELECTOR.slice(1));
+        block.holder.classList.remove(EDITOR_SELECTED_BLOCK_CLASS);
   }
 
   /** Each removed edge takes its settled partner along, if that is still there. */
@@ -722,7 +740,7 @@ export function createEditorPrivateSections(
     if (keep.size === selected.length) return true;
     for (const block of selected)
       if (keep.has(block.id))
-        block.holder.classList.remove(EDITOR_SELECTED_BLOCK_SELECTOR.slice(1));
+        block.holder.classList.remove(EDITOR_SELECTED_BLOCK_CLASS);
     return false;
   }
 
@@ -738,8 +756,7 @@ export function createEditorPrivateSections(
   }
 
   function onKeydown(event: KeyboardEvent) {
-    if (event.defaultPrevented || event.isComposing || event.keyCode === 229)
-      return;
+    if (event.defaultPrevented || isImeKey(event)) return;
     if (!reachesEditor(event.target)) return;
     const selected = selectedBlocks();
     if (selected.length && removesSelection(event) && letGoOfEdges(selected)) {
@@ -864,6 +881,7 @@ export function createEditorPrivateSections(
   return {
     canMove,
     refresh,
+    removeSection,
     handleChange,
     holdMoves,
     releaseMoves,

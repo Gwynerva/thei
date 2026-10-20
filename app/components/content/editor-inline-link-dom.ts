@@ -3,8 +3,11 @@ import {
   type ContentEntityType,
 } from '#layers/thei/shared/content-link';
 import type EditorJS from '@editorjs/editorjs';
-import { markupAround } from '#layers/thei/app/composables/editor-inline-dom';
-import { editableFieldOf, writeMarkup } from './editor-edit-commands';
+import {
+  editableFieldOf,
+  markupAround,
+} from '#layers/thei/app/composables/editor-inline-dom';
+import { writeMarkup } from './editor-edit-commands';
 
 /**
  * Marks words of the text with a highlight of `editor.css`, or takes the
@@ -27,13 +30,8 @@ export function linkableFieldOf(
   linkBlocks: ReadonlySet<string>,
   node: Node | null | undefined,
 ): HTMLElement | undefined {
-  const field = editableFieldOf(node);
-  if (
-    !field ||
-    !root.contains(field) ||
-    field.closest('[data-mutation-free="true"]')
-  )
-    return undefined;
+  const field = editableFieldOf(node, root);
+  if (!field || field.closest('[data-mutation-free="true"]')) return undefined;
   const block = editor.blocks.getBlockByElement(field);
   return block && linkBlocks.has(block.name) ? field : undefined;
 }

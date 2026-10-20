@@ -179,6 +179,11 @@ interface EntityLinkToolConfig {
 
 interface PrivateSectionBoundaryToolConfig {
   labels: ContentToolLabels;
+  /**
+   * Makes a section public again, both its edges gone and its blocks kept:
+   * the editor's private sections do it (`editor-private-sections.ts`).
+   */
+  removeSection: (sectionId: string) => void;
 }
 
 interface ExternalLinkToolConfig {
@@ -1714,33 +1719,13 @@ export class PrivateSectionBoundaryTool implements BlockTool {
         // Editor.js's own Delete is hidden beside it (`editor.css`).
         name: 'private-section-remove',
         closeOnActivate: true,
-        onActivate: () => this.removeSection(),
+        // The section stops being private; its blocks stay where they are.
+        onActivate: () =>
+          contentToolConfig(this.options.config).removeSection(
+            this.save().sectionId,
+          ),
       },
     ];
-  }
-
-  /**
-   * The section stops being private: both its edges go at once, and the
-   * blocks between them stay where they are.
-   */
-  private removeSection() {
-    const { blocks } = this.options.api;
-    const sectionId = this.save().sectionId;
-    const edges: number[] = [];
-    for (let index = 0; index < blocks.getBlocksCount(); index++) {
-      const bracket = blocks
-        .getBlockByIndex(index)
-        ?.holder.querySelector<HTMLElement>('[data-private-section-id]');
-      if (bracket?.dataset.privateSectionId === sectionId) edges.push(index);
-    }
-    if (!edges.length) return;
-    for (const index of [...edges].reverse()) blocks.delete(index);
-    // Editor.js leaves the caret at the end of the block before each one
-    // deleted, selecting it when it has no text; it goes to the first block
-    // that was inside instead.
-    const first = blocks.getBlockByIndex(edges[0]!);
-    if (first && !first.holder.querySelector('[data-private-section-id]'))
-      this.options.api.caret.setToBlock(first, 'start');
   }
 
   private get labels() {
