@@ -256,6 +256,8 @@ export type LanguagePhrases = {
   profile_facts: string;
   profile_facts_hint: string;
   profile_custom_facts: string;
+  /** What is wrong with a fact left half written, said after the facts' name. */
+  profile_fact_incomplete: string;
   profile_nickname: string;
   profile_birth_date: string;
   profile_field: string;
@@ -510,12 +512,16 @@ export type LanguagePhrases = {
   site_url: string;
   site_url_hint: string;
   site_url_invalid: string;
+  /** The same, shortly, after the field's label in a form's line. */
+  site_url_invalid_short: string;
   site_url_rebuild_pending: (base: string) => string;
   site_url_robots_title: string;
   site_url_robots_hint: string;
   analytics: string;
   analytics_description: string;
   analytics_invalid: string;
+  /** The same, shortly, after the field's label in a form's line. */
+  analytics_invalid_short: string;
   analytics_google_tag: string;
   analytics_google_tag_hint: string;
   analytics_google_verification: string;
@@ -888,6 +894,16 @@ export type LanguagePhrases = {
   tag_public_id_taken: string;
   tag_icon_not_found: string;
   create: string;
+  /** Why a form cannot be saved yet: the required fields left empty, by their labels. */
+  form_required_missing: (fields: string[]) => string;
+  /** The same, the first fields named and the others counted. */
+  form_required_missing_more: (fields: string[], more: number) => string;
+  /** The cross that hides a form's error line under its header. */
+  form_error_dismiss: string;
+  /** Two fields either of which will do, by their labels. */
+  form_either: (first: string, second: string) => string;
+  /** The fields filled in a way that cannot be saved, by their labels. */
+  form_fields_to_correct: (fields: string[]) => string;
   edit_project: string;
   view_project: string;
   unsaved_changes_confirm: string;
@@ -947,6 +963,8 @@ export type LanguagePhrases = {
   project_action_background_repeat_y: string;
   project_action_background_repeat_both: string;
   project_action_issues: string;
+  /** What the button still needs, after its section's name: «provide …». */
+  project_action_needs: (issues: string) => string;
   project_action_issue_text: string;
   project_action_issue_text_length: (max: number) => string;
   project_action_issue_url: string;
@@ -1111,6 +1129,8 @@ export type LanguagePhrases = {
   diary_content_hint: string;
   diary_date_already_taken: string;
   diary_date_taken_open: string;
+  /** What is wrong with a day that already holds an entry, said after its label. */
+  diary_date_taken: string;
   diary_seo_title: string;
   diary_seo_description: string;
   diary_entry_seo_description: (date: string) => string;

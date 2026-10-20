@@ -369,7 +369,7 @@ function sectionList(event: H3Event, sections: PublicProjectSection[]) {
 /**
  * Relations as the page lists them: one list per kind of entity, in the
  * order of its tabs, the directed relations first. A directed one says its
- * word for the other end — "Influences", "Depends" — run into the owner's
+ * word for the other end — "Affects", "Depends on" — run into the owner's
  * reason; a plain one says no word, and each falls back on what the entity
  * says of itself. A diary entry is called by its day, since it has no title.
  * A codename is left out: a copy for machines lists only what it can link.

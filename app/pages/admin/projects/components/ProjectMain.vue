@@ -31,7 +31,7 @@ const saveAfterContentEdit = inject(saveAfterContentEditKey, undefined);
 <template>
   <Box class="flex flex-col gap-md p-sm sm:p-md">
     <div class="flex flex-wrap gap-md">
-      <Field ai="field:title" class="min-w-50 flex-1">
+      <Field ai="field:title" need="title" class="min-w-50 flex-1">
         <FieldLabel required>{{ phrase.project_title }}</FieldLabel>
         <FieldInput
           v-model="projectData.title"
@@ -43,7 +43,7 @@ const saveAfterContentEdit = inject(saveAfterContentEditKey, undefined);
         <FieldHint>{{ phrase.project_title_hint }}</FieldHint>
       </Field>
 
-      <Field ai="access" class="min-w-50">
+      <Field ai="access" need="access" class="min-w-50">
         <FieldLabel required>{{ phrase.project_access }}</FieldLabel>
         <FieldOptions
           v-model="projectData.access"
@@ -74,7 +74,7 @@ const saveAfterContentEdit = inject(saveAfterContentEditKey, undefined);
       </Field>
     </div>
 
-    <Field ai="field:summary">
+    <Field ai="field:summary" need="summary">
       <FieldLabel required>{{ phrase.project_summary }}</FieldLabel>
       <FieldTextarea
         v-model="projectData.summary"
@@ -86,6 +86,7 @@ const saveAfterContentEdit = inject(saveAfterContentEditKey, undefined);
     </Field>
 
     <LinkField
+      need="link"
       v-model:title="projectData.title"
       v-model:human-readable-slug="projectData.humanReadableSlug"
       v-model:public-id="projectData.publicId"

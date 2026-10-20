@@ -1054,10 +1054,14 @@ export async function runProbe(options: InPageOptions): Promise<InPageResult> {
 
   // ─── covered-control ──────────────────────────────────────────────────────
 
+  /**
+   * A control no press reaches. One that is only `aria-disabled` still takes
+   * a press — a form's Save that cannot save yet answers it by saying why —
+   * so it must be as easy to hit as any other.
+   */
   function disabled(el: Element) {
     return (
       (el as HTMLButtonElement).disabled === true ||
-      el.getAttribute('aria-disabled') === 'true' ||
       !!el.closest('fieldset:disabled, [inert]')
     );
   }

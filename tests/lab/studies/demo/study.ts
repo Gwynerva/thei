@@ -71,23 +71,21 @@ async function writeToday(j: ScenarioContext) {
   await j.step('Write about the day', {
     type: `Today I kept thinking about ${event.title}. A good day.`,
   });
+  // The text of an entry not made yet is never called saved: the window
+  // takes it into the form without a word, its Save going quiet. That it
+  // did shows next, as the window closes without asking about lost words
+  // and the form behind it is in reach again.
   if (expert) {
-    await j.step(
-      'Save from the keyboard',
-      { press: 'Control+s' },
-      { answer: { text: 'Saved', exact: true }, optional: true },
-    );
+    await j.step('Save from the keyboard', { press: 'Control+s' });
     await j.step(
       'Close the window with Esc',
       { press: 'Escape' },
       { answer: { role: 'button', name: 'Add a relation' } },
     );
   } else {
-    await j.step(
-      'Save the text',
-      { click: { role: 'button', name: 'Save' } },
-      { answer: { text: 'Saved', exact: true }, optional: true },
-    );
+    await j.step('Save the text', {
+      click: { role: 'button', name: 'Save' },
+    });
     await j.step(
       'Close the text window',
       { click: { role: 'button', name: 'Close dialog' } },

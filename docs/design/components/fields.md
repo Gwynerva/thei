@@ -29,6 +29,13 @@ names itself with an `aria-label`.
   `border-border-error`.
 - Suggestions of the site's own — recommended tags, candidates — wait next to
   the field they are about, never in the form's header.
+- A field the form cannot be saved without names its place: the `need` of
+  its `Field`, the key of its need in the form's `useFormNeeds`
+  (`app/composables/form-needs.ts`). Once a save was asked for and refused
+  for it, its label and asterisk turn to the error colour, its ✦ keeping its
+  own, and the form may bring it into view; filled, it turns back. A need
+  with no `Field` of its own — a section, a list — marks its place with
+  `data-need`.
 
 ## The ✦ at a label
 
@@ -92,6 +99,17 @@ The other controls in `app/components/field/`: `FieldInput`, `FieldTextarea`,
 `FieldSelect` ([Select](select.md)), `FieldToggle`, `FieldOptions`,
 `FieldDiscreteBar`, the date pickers, `FieldSynonyms` and
 `FieldContentEditor`.
+
+`FieldOptions` is a row of buttons, the chosen one pressed (`aria-pressed`),
+each named by its words; given its field's `label`, the row is a group of
+that name. A button holds only what a button may — `span`s, never a `div` —
+so its name reads the same to anything that reads the page.
+
+A text's editor is a column of Editor.js blocks; each paragraph is a text
+box of several lines named by the text's title, as its field is
+(`app/components/content/editor-text-role-tune.ts`). The name is set while
+the block is composed, before it is in the page, so Editor.js never takes it
+for a change of the text.
 
 ## Why
 

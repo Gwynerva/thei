@@ -14,7 +14,7 @@ import {
 import {
   relationEntityIcon,
   relationLabel,
-  relationSentenceParts,
+  relationSentencePartsFromOther,
   relationTypeIcon,
 } from '#layers/thei/shared/relation-display';
 import type {
@@ -134,12 +134,18 @@ const ends = computed<Record<'current' | 'other', Side | undefined>>(() => ({
   },
 }));
 
+/**
+ * Each kind by the word its chip will wear under the other end's name, and
+ * the sentence that says the same of the other end: "Affects" — "B affects
+ * A". The radio is called by the word and described by the sentence.
+ */
 const types = computed(() =>
   RELATION_TYPES.map((type) => ({
     type,
     icon: relationTypeIcon(type),
     label: relationLabel(phrase.value, type),
-    sentence: relationSentenceParts(phrase.value, type),
+    sentence: relationSentencePartsFromOther(phrase.value, type),
+    sentenceId: `${typeGroup}-${type}`,
   })),
 );
 
@@ -337,6 +343,8 @@ function remove() {
             :name="typeGroup"
             :value="option.type"
             :checked="relation.type === option.type"
+            :aria-label="option.label"
+            :aria-describedby="option.sentenceId"
             class="sr-only"
             @change="setType(option.type)"
           />
@@ -350,7 +358,11 @@ function remove() {
           </span>
           <!-- The sentence with both names, each with its picture; the other
                end waits as a blank until it is chosen. -->
-          <span class="text-xs leading-relaxed text-text-3">
+          <span
+            :id="option.sentenceId"
+            class="text-xs leading-relaxed text-text-3"
+            data-relation-sentence
+          >
             <template v-for="(part, index) in option.sentence" :key="index">
               <template v-if="typeof part === 'string'">{{ part }}</template>
               <span

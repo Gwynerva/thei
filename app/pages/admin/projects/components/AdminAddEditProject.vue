@@ -33,10 +33,8 @@ import ProjectExternalLinks from './ProjectExternalLinks.vue';
 import { projectDeleteModal } from './project-delete-modal';
 import ProjectContentItems from './ProjectContentItems.vue';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
-import {
-  DEFAULT_PROJECT_ACTION,
-  projectActionValidationError,
-} from '#layers/thei/shared/project-action';
+import { DEFAULT_PROJECT_ACTION } from '#layers/thei/shared/project-action';
+import type { FormNeed } from '#layers/thei/app/composables/form-needs';
 import {
   addStatusUsageDelta,
   emptyStatusEditData,
@@ -154,26 +152,33 @@ provideEntityAi({
   form: () => projectData.value,
   version: () => formVersion.value,
 });
-const actionError = computed(() =>
-  projectActionValidationError(projectData.value.action),
-);
 
 const isDirty = computed(
   () => JSON.stringify(projectData.value) !== savedSnapshot.value,
 );
 
-const isFormValid = computed(
-  () =>
-    projectData.value.title.trim() !== '' &&
-    projectData.value.summary.trim() !== '' &&
-    projectData.value.publicId.trim() !== '' &&
-    !!projectData.value.access &&
-    !actionError.value,
-);
+/** What the project still needs before it can be saved, in the form's order. */
+const needs = useFormNeeds(() => {
+  const data = projectData.value;
+  const list: FormNeed[] = [];
+  if (!data.title.trim())
+    list.push({ key: 'title', label: phrase.value.project_title });
+  if (!data.access)
+    list.push({ key: 'access', label: phrase.value.project_access });
+  if (!data.summary.trim())
+    list.push({ key: 'summary', label: phrase.value.project_summary });
+  if (!data.publicId.trim())
+    list.push({ key: 'link', label: phrase.value.public_id });
+  const action = actionNeed(data.action, phrase.value.project_action);
+  if (action) list.push(action);
+  return list;
+});
+const isFormValid = computed(() => !needs.blocked.value);
 
 const canSave = computed(() => isDirty.value && isFormValid.value);
+// Ctrl+S on a project not ready to save says what it still needs.
 const canUseSaveShortcut = computed(
-  () => !saving.value && (isEdit.value ? canSave.value : isFormValid.value),
+  () => !saving.value && (!isEdit.value || isDirty.value),
 );
 
 const requestFetch = useRequestFetch();
@@ -248,6 +253,8 @@ if (isEdit.value) {
 
 async function handleSave() {
   if (saving.value) return;
+  // Asked by a press or Ctrl+S, a save it cannot make says why.
+  if (needs.blocked.value) return needs.ask();
   saving.value = true;
   headerError.value = undefined;
   try {
@@ -454,7 +461,11 @@ async function openDeleteProjectModal() {
 </script>
 
 <template>
-  <StickyGlassHeader width="var(--width-wide)" :error="headerError">
+  <StickyGlassHeader
+    width="var(--width-wide)"
+    :error="headerError ?? needs.line.value"
+    :error-again="needs.asks.value"
+  >
     <div class="flex items-center justify-between gap-xs py-xs">
       <div
         class="flex min-w-0 items-center gap-xs text-lg font-bold sm:text-xl"
@@ -484,7 +495,8 @@ async function openDeleteProjectModal() {
           "
           :saving
           :done="isEdit && !isDirty"
-          :disabled="saving || (isEdit ? !canSave : !isFormValid)"
+          :disabled="saving || (isEdit && !isDirty)"
+          :reason="needs.reason.value"
           @click="handleSave"
         />
       </div>

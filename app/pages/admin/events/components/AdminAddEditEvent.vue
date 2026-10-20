@@ -13,10 +13,8 @@ import type {
 } from '#layers/thei/shared/api/event';
 import type { ProjectEditData } from '#layers/thei/shared/admin/project';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
-import {
-  DEFAULT_PROJECT_ACTION,
-  projectActionValidationError,
-} from '#layers/thei/shared/project-action';
+import { DEFAULT_PROJECT_ACTION } from '#layers/thei/shared/project-action';
+import type { FormNeed } from '#layers/thei/app/composables/form-needs';
 import { eventDataInjectionKey } from '../composables';
 import {
   projectDataInjectionKey,
@@ -115,17 +113,27 @@ useLeaveGuard({
   dirty: () => isDirty.value,
   pendingUploads: () => pendingUploads.value,
 });
-const isValid = computed(() =>
-  Boolean(
-    eventData.value.title.trim() &&
-    eventData.value.summary.trim() &&
-    eventData.value.publicId.trim() &&
-    eventData.value.access &&
-    eventData.value.periods.length &&
-    !isContentEmpty(eventData.value.content?.data) &&
-    !projectActionValidationError(eventData.value.action),
-  ),
-);
+/** What the event still needs before it can be saved, in the form's order. */
+const needs = useFormNeeds(() => {
+  const data = eventData.value;
+  const list: FormNeed[] = [];
+  if (!data.title.trim())
+    list.push({ key: 'title', label: phrase.value.event_title });
+  if (!data.access)
+    list.push({ key: 'access', label: phrase.value.event_access });
+  if (!data.summary.trim())
+    list.push({ key: 'summary', label: phrase.value.event_summary });
+  if (!data.periods.length)
+    list.push({ key: 'periods', label: phrase.value.event_periods });
+  if (isContentEmpty(data.content?.data))
+    list.push({ key: 'content', label: phrase.value.event_content });
+  if (!data.publicId.trim())
+    list.push({ key: 'link', label: phrase.value.public_id });
+  const action = actionNeed(data.action, phrase.value.event_action);
+  if (action) list.push(action);
+  return list;
+});
+const isValid = computed(() => !needs.blocked.value);
 
 if (isEdit.value) {
   const data = await useRequestFetch()<EventGetResponse>(
@@ -191,7 +199,9 @@ watch(
 );
 
 async function save() {
-  if (saving.value || !isValid.value) return;
+  if (saving.value) return;
+  // Asked by a press or Ctrl+S, a save it cannot make says why.
+  if (needs.blocked.value) return needs.ask();
   saving.value = true;
   headerError.value = undefined;
   try {
@@ -227,8 +237,7 @@ async function save() {
 }
 
 useSaveShortcut(save, {
-  canSave: () =>
-    !saving.value && isValid.value && (!isEdit.value || isDirty.value),
+  canSave: () => !saving.value && (!isEdit.value || isDirty.value),
 });
 await useAdminTabTitle(
   computed(() =>
@@ -358,7 +367,11 @@ function clone<T>(value: T): T {
 </script>
 
 <template>
-  <StickyGlassHeader width="var(--width-wide)" :error="headerError">
+  <StickyGlassHeader
+    width="var(--width-wide)"
+    :error="headerError ?? needs.line.value"
+    :error-again="needs.asks.value"
+  >
     <div class="flex items-center justify-between gap-xs py-xs">
       <div
         class="flex min-w-0 items-center gap-xs text-lg font-bold sm:text-xl"
@@ -387,7 +400,8 @@ function clone<T>(value: T): T {
           "
           :saving
           :done="isEdit && !isDirty"
-          :disabled="saving || !isValid || (isEdit && !isDirty)"
+          :disabled="saving || (isEdit && !isDirty)"
+          :reason="needs.reason.value"
           @click="save"
         />
       </div>
@@ -398,7 +412,7 @@ function clone<T>(value: T): T {
     <AiFormOffers />
     <Box class="flex flex-col gap-md p-sm sm:p-md">
       <div class="flex flex-wrap gap-md">
-        <Field ai="field:title" class="min-w-50 flex-1">
+        <Field ai="field:title" need="title" class="min-w-50 flex-1">
           <FieldLabel required>{{ phrase.event_title }}</FieldLabel>
           <FieldInput
             v-model="eventData.title"
@@ -409,7 +423,7 @@ function clone<T>(value: T): T {
           />
           <FieldHint>{{ phrase.event_title_hint }}</FieldHint>
         </Field>
-        <Field ai="access" class="min-w-50">
+        <Field ai="access" need="access" class="min-w-50">
           <FieldLabel required>{{ phrase.event_access }}</FieldLabel>
           <FieldOptions
             v-model="eventData.access"
@@ -431,12 +445,12 @@ function clone<T>(value: T): T {
           />
         </Field>
       </div>
-      <Field ai="field:summary">
+      <Field ai="field:summary" need="summary">
         <FieldLabel required>{{ phrase.event_summary }}</FieldLabel>
         <FieldTextarea v-model="eventData.summary" required />
         <FieldHint>{{ phrase.event_summary_hint }}</FieldHint>
       </Field>
-      <Field ai="periods">
+      <Field ai="periods" need="periods">
         <FieldLabel required>{{ phrase.event_periods }}</FieldLabel>
         <FieldDateRanges v-model="eventData.periods" />
         <FieldHint>{{ phrase.event_periods_hint }}</FieldHint>
@@ -444,7 +458,7 @@ function clone<T>(value: T): T {
           phrase.event_periods_empty
         }}</FieldHint>
       </Field>
-      <Field>
+      <Field need="content">
         <FieldLabel required>{{ phrase.event_content }}</FieldLabel>
         <FieldContentEditor
           v-model="eventData.content"
@@ -455,6 +469,7 @@ function clone<T>(value: T): T {
         <FieldHint>{{ phrase.event_content_hint }}</FieldHint>
       </Field>
       <LinkField
+        need="link"
         v-model:title="eventData.title"
         v-model:human-readable-slug="eventData.humanReadableSlug"
         v-model:public-id="eventData.publicId"

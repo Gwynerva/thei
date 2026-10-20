@@ -1,4 +1,5 @@
 import type { ImageAccent } from '#layers/thei/shared/accent-color';
+import type { LanguagePhrases } from '#layers/thei/shared/language/types';
 import { normalizeExternalLinkUrl } from './external-link';
 
 export const PROJECT_ACTION_TEXT_MAX_LENGTH = 30;
@@ -97,6 +98,25 @@ const ISSUE_MESSAGES: Record<ProjectActionIssue, string> = {
   background: 'Action button background is missing',
   color: 'Invalid action button color',
 };
+
+/** What an issue of the button is called: what the owner still has to give. */
+export function projectActionIssueWords(
+  phrase: LanguagePhrases,
+  issue: ProjectActionIssue,
+): string {
+  if (issue === 'text-length')
+    return phrase.project_action_issue_text_length(
+      PROJECT_ACTION_TEXT_MAX_LENGTH,
+    );
+  return {
+    text: phrase.project_action_issue_text,
+    url: phrase.project_action_issue_url,
+    file: phrase.project_action_issue_file,
+    icon: phrase.project_action_issue_icon,
+    background: phrase.project_action_issue_background,
+    color: phrase.project_action_issue_color,
+  }[issue];
+}
 
 /** Unfilled or invalid settings of an enabled button, in display order. */
 export function projectActionIssues(

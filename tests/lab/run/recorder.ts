@@ -447,10 +447,16 @@ export function record(input: RecorderInput): Recording {
           } else look = after;
           const actionStarted = Date.now();
           try {
+            // A control that cannot act yet but answers a press by saying
+            // why — a form's Save, aria-disabled — is pressed as a person
+            // would press it; Playwright alone would wait for it to act.
+            const force =
+              kind === 'click' &&
+              (await locator.getAttribute('aria-disabled')) === 'true';
             if (kind === 'click')
               await (input.phone
-                ? locator.tap({ timeout: 10_000 })
-                : locator.click({ timeout: 10_000 }));
+                ? locator.tap({ timeout: 10_000, force })
+                : locator.click({ timeout: 10_000, force }));
             if (kind === 'fill')
               await locator.fill((action as { text: string }).text, {
                 timeout: 10_000,

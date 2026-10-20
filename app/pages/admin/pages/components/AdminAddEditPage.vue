@@ -3,6 +3,7 @@ import { normalizeHeadingText } from '#layers/thei/shared/terminal-punctuation';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { isContentEmpty } from '#layers/thei/shared/content';
 import type { PageEditData } from '#layers/thei/shared/page';
+import type { FormNeed } from '#layers/thei/app/composables/form-needs';
 import type {
   PageGetResponse,
   PageSaveResponse,
@@ -139,19 +140,36 @@ const slugTaken = computed(() =>
     initialSlug.value || undefined,
   ),
 );
+/** What the page still needs before it can be saved, in the form's order. */
+const needs = useFormNeeds(() => {
+  const page = data.value;
+  const list: FormNeed[] = [];
+  if (!page.title.trim())
+    list.push({ key: 'title', label: phrase.value.page_title });
+  if (!page.access)
+    list.push({ key: 'access', label: phrase.value.page_access });
+  if (!page.summary.trim())
+    list.push({ key: 'summary', label: phrase.value.page_summary });
+  const slug = phrase.value.page_slug;
+  if (!page.slug.trim()) list.push({ key: 'slug', label: slug });
+  else if (slugInvalid.value)
+    list.push({
+      key: 'slug',
+      label: slug,
+      problem: phrase.value.page_slug_invalid,
+    });
+  else if (slugTaken.value)
+    list.push({
+      key: 'slug',
+      label: slug,
+      problem: phrase.value.page_slug_already_taken,
+    });
+  if (isContentEmpty(page.content?.data))
+    list.push({ key: 'content', label: phrase.value.page_content });
+  return list;
+});
 const canSave = computed(
-  () =>
-    !saving.value &&
-    Boolean(
-      data.value.title.trim() &&
-      data.value.summary.trim() &&
-      data.value.slug.trim() &&
-      data.value.access &&
-      !isContentEmpty(data.value.content?.data) &&
-      !slugInvalid.value &&
-      !slugTaken.value,
-    ) &&
-    (!isEdit.value || dirty.value),
+  () => !saving.value && !needs.blocked.value && (!isEdit.value || dirty.value),
 );
 
 // The public page lives at the saved address, not at whatever is being typed.
@@ -195,7 +213,9 @@ watch(
 );
 
 async function save() {
-  if (!canSave.value) return;
+  if (saving.value || (isEdit.value && !dirty.value)) return;
+  // Asked by a press or Ctrl+S, a save it cannot make says why.
+  if (needs.blocked.value) return needs.ask();
   saving.value = true;
   error.value = undefined;
   serverSlugError.value = undefined;
@@ -284,7 +304,10 @@ function emptyData(): PageEditData {
   };
 }
 
-useSaveShortcut(save, { canSave });
+// Ctrl+S on a page not ready to save says what it still needs.
+useSaveShortcut(save, {
+  canSave: () => !saving.value && (!isEdit.value || dirty.value),
+});
 await useAdminTabTitle(
   computed(() =>
     isEdit.value ? phrase.value.edit_page : phrase.value.new_page,
@@ -293,7 +316,11 @@ await useAdminTabTitle(
 </script>
 
 <template>
-  <StickyGlassHeader width="var(--width-wide)" :error="error">
+  <StickyGlassHeader
+    width="var(--width-wide)"
+    :error="error ?? needs.line.value"
+    :error-again="needs.asks.value"
+  >
     <div class="flex items-center justify-between gap-xs py-xs">
       <div
         class="flex min-w-0 items-center gap-xs text-lg font-bold sm:text-xl"
@@ -320,7 +347,8 @@ await useAdminTabTitle(
           :label="isEdit ? (dirty ? phrase.save : phrase.saved) : phrase.create"
           :saving
           :done="isEdit && !dirty"
-          :disabled="!canSave"
+          :disabled="saving || (isEdit && !dirty)"
+          :reason="needs.reason.value"
           @click="save"
         />
       </div>
@@ -331,7 +359,7 @@ await useAdminTabTitle(
     <AiFormOffers />
     <Box class="flex flex-col gap-md p-sm sm:p-md">
       <div class="flex flex-col gap-md sm:flex-row">
-        <Field ai="field:title" class="min-w-0 flex-1">
+        <Field ai="field:title" need="title" class="min-w-0 flex-1">
           <FieldLabel required>{{ phrase.page_title }}</FieldLabel>
           <FieldInput
             v-model="data.title"
@@ -343,7 +371,7 @@ await useAdminTabTitle(
           <FieldHint>{{ phrase.page_title_hint }}</FieldHint>
         </Field>
 
-        <Field ai="access" class="min-w-50">
+        <Field ai="access" need="access" class="min-w-50">
           <FieldLabel required>{{ phrase.page_access }}</FieldLabel>
           <FieldOptions
             v-model="data.access"
@@ -366,7 +394,7 @@ await useAdminTabTitle(
         </Field>
       </div>
 
-      <Field ai="field:summary">
+      <Field ai="field:summary" need="summary">
         <FieldLabel required>{{ phrase.page_summary }}</FieldLabel>
         <FieldTextarea
           v-model="data.summary"
@@ -378,7 +406,7 @@ await useAdminTabTitle(
       </Field>
 
       <div class="flex flex-col gap-md sm:flex-row">
-        <Field class="min-w-0 flex-1">
+        <Field need="slug" class="min-w-0 flex-1">
           <FieldLabel required>{{ phrase.page_slug }}</FieldLabel>
           <SlugInput
             v-model="data.slug"
@@ -421,7 +449,7 @@ await useAdminTabTitle(
         </Field>
       </div>
 
-      <Field>
+      <Field need="content">
         <FieldLabel required>{{ phrase.page_content }}</FieldLabel>
         <FieldContentEditor
           v-model="data.content"

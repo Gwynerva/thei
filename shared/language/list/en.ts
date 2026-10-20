@@ -340,6 +340,7 @@ export default defineI18nBase({
     profile_facts_hint:
       'Short “name — value” pairs: city, occupation, languages and so on.',
     profile_custom_facts: 'Custom facts',
+    profile_fact_incomplete: 'each needs both a name and a value',
     profile_nickname: 'Nickname',
     profile_birth_date: 'Date of birth',
     profile_field: 'Field',
@@ -681,6 +682,7 @@ export default defineI18nBase({
     site_url: 'Site Address',
     site_url_hint:
       'Leave empty and the address is taken from each request, which is right for a single domain behind a normal proxy. Set it when the site answers on several hostnames, or when it lives in a subfolder. Example: https://example.com/diary',
+    site_url_invalid_short: 'not a full address with a scheme and a host',
     site_url_invalid:
       'Enter a full address with a scheme and a host, optionally with a folder path, but without a query or an anchor. Example: https://example.com/diary',
     site_url_rebuild_pending: (base) =>
@@ -691,6 +693,7 @@ export default defineI18nBase({
     analytics: 'Analytics and search engines',
     analytics_description:
       'Counters and ownership codes are pasted straight from the provider and go into the page head. Your own visits as a signed-in owner are never counted.',
+    analytics_invalid_short: 'not an identifier this provider gives',
     analytics_invalid:
       'Check the identifiers: paste the value or the whole snippet from the provider.',
     analytics_google_tag: 'Google Analytics (Measurement ID)',
@@ -1252,6 +1255,12 @@ export default defineI18nBase({
     tag_public_id_taken: 'This public ID is already in use.',
     tag_icon_not_found: 'The selected icon no longer exists.',
     create: 'Create',
+    form_required_missing: (fields) => `Still to fill in: ${fields.join(', ')}`,
+    form_required_missing_more: (fields, more) =>
+      `Still to fill in: ${fields.join(', ')} and ${more} more`,
+    form_fields_to_correct: (fields) => `To correct: ${fields.join(', ')}`,
+    form_either: (first, second) => `${first} or ${second}`,
+    form_error_dismiss: 'Hide the message',
     edit_project: 'Edit Project',
     view_project: 'View on Site',
     unsaved_changes_confirm: 'You have unsaved changes. Leave anyway?',
@@ -1319,6 +1328,7 @@ export default defineI18nBase({
     project_action_background_repeat_y: 'Vertically',
     project_action_background_repeat_both: 'Both directions',
     project_action_issues: 'To save, provide:',
+    project_action_needs: (issues) => `provide ${issues}`,
     project_action_issue_text: 'button text',
     project_action_issue_text_length: (max) =>
       `text no longer than ${max} characters`,
@@ -1338,8 +1348,8 @@ export default defineI18nBase({
     related_entity_add: 'Add a relation',
     relation_direction: 'Kind of relation',
     relation_label_related: 'Related',
-    relation_label_influencing: 'Influences',
-    relation_label_dependent: 'Depends',
+    relation_label_influencing: 'Affects',
+    relation_label_dependent: 'Depends on',
     relation_popup_related: (current, other) =>
       `“${current}” and “${other}” are related`,
     relation_popup_depends_on: (current, other) =>
@@ -1563,6 +1573,7 @@ export default defineI18nBase({
     diary_content_hint: 'Tell how your day went.',
     diary_date_already_taken: 'This day already has an entry.',
     diary_date_taken_open: 'Open the entry for this day',
+    diary_date_taken: 'this day already has an entry',
     diary_seo_title: 'Diary',
     diary_seo_description:
       'Short dated entries: thoughts, observations and small things that became neither an event nor a project.',

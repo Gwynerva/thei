@@ -19,6 +19,7 @@ import {
   normalizeProjectActionBackgroundRepeat,
   projectActionIconMode,
   projectActionIssues,
+  projectActionIssueWords,
   type ProjectActionEditData,
   type ProjectActionIssue,
   type ProjectActionTarget,
@@ -66,17 +67,6 @@ const isLink = computed(() => action.value.target === 'external-link');
 const textLength = computed(() => Array.from(action.value.text).length);
 const issues = computed(() => projectActionIssues(action.value));
 const hasIssue = (issue: ProjectActionIssue) => issues.value.includes(issue);
-const issueLabels = computed<Record<ProjectActionIssue, string>>(() => ({
-  text: phrase.value.project_action_issue_text,
-  'text-length': phrase.value.project_action_issue_text_length(
-    PROJECT_ACTION_TEXT_MAX_LENGTH,
-  ),
-  url: phrase.value.project_action_issue_url,
-  file: phrase.value.project_action_issue_file,
-  icon: phrase.value.project_action_issue_icon,
-  background: phrase.value.project_action_issue_background,
-  color: phrase.value.project_action_issue_color,
-}));
 
 const targetOptions = computed<FieldOptions>(() => ({
   'external-link': {
@@ -268,7 +258,7 @@ function openFileAsset() {
 </script>
 
 <template>
-  <div>
+  <div data-need="action">
     <SectionHeader
       icon="action-click"
       :title="props.sectionTitle ?? phrase.project_action"
@@ -596,7 +586,11 @@ function openFileAsset() {
             <span class="font-semibold">{{
               phrase.project_action_issues
             }}</span>
-            {{ issues.map((issue) => issueLabels[issue]).join(', ') }}
+            {{
+              issues
+                .map((issue) => projectActionIssueWords(phrase, issue))
+                .join(', ')
+            }}
           </p>
         </div>
       </template>

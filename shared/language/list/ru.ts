@@ -383,6 +383,7 @@ export default defineI18nModule({
     profile_facts_hint:
       'Короткие пары «название — значение»: город, профессия, языки и тому подобное.',
     profile_custom_facts: 'Кастомные факты',
+    profile_fact_incomplete: 'у каждого нужны и название, и значение',
     profile_nickname: 'Псевдоним',
     profile_birth_date: 'Дата рождения',
     profile_field: 'Поле',
@@ -740,6 +741,7 @@ export default defineI18nModule({
     site_url: 'Адрес сайта',
     site_url_hint:
       'Если оставить пустым, адрес берётся из каждого запроса — этого достаточно для одного домена за обычным прокси. Заполните, если сайт отвечает на нескольких адресах или живёт в подпапке. Пример: https://example.com/diary',
+    site_url_invalid_short: 'не полный адрес со схемой и хостом',
     site_url_invalid:
       'Введите полный адрес со схемой и хостом, при желании с путём до папки, но без параметров и якоря. Пример: https://example.com/diary',
     site_url_rebuild_pending: (base) =>
@@ -750,6 +752,7 @@ export default defineI18nModule({
     analytics: 'Аналитика и поисковые системы',
     analytics_description:
       'Счётчики и коды подтверждения вставляются как есть и попадают в head страницы. Ваши собственные визиты под админом не учитываются.',
+    analytics_invalid_short: 'не похоже на идентификатор этого сервиса',
     analytics_invalid:
       'Проверьте идентификаторы: вставьте значение или целиком фрагмент от сервиса.',
     analytics_google_tag: 'Google Analytics (идентификатор измерения)',
@@ -1314,6 +1317,13 @@ export default defineI18nModule({
     tag_public_id_taken: 'Такой публичный идентификатор уже используется.',
     tag_icon_not_found: 'Выбранная иконка больше не существует.',
     create: 'Создать',
+    form_required_missing: (fields) =>
+      `Осталось заполнить: ${fields.join(', ')}`,
+    form_required_missing_more: (fields, more) =>
+      `Осталось заполнить: ${fields.join(', ')} и ещё ${more}`,
+    form_fields_to_correct: (fields) => `Исправить: ${fields.join(', ')}`,
+    form_either: (first, second) => `${first} или ${second}`,
+    form_error_dismiss: 'Скрыть сообщение',
     edit_project: 'Изменить проект',
     view_project: 'Смотреть на сайте',
     unsaved_changes_confirm: 'Есть несохранённые изменения. Покинуть страницу?',
@@ -1381,6 +1391,7 @@ export default defineI18nModule({
     project_action_background_repeat_y: 'По вертикали',
     project_action_background_repeat_both: 'По обеим',
     project_action_issues: 'Чтобы сохранить, укажите:',
+    project_action_needs: (issues) => `укажите ${issues}`,
     project_action_issue_text: 'текст кнопки',
     project_action_issue_text_length: (max) =>
       `текст не длиннее ${max} ${plural(max, 'символа', 'символов', 'символов')}`,
@@ -1626,6 +1637,7 @@ export default defineI18nModule({
     diary_content_hint: 'Расскажите, как прошел ваш день.',
     diary_date_already_taken: 'На эту дату уже есть запись.',
     diary_date_taken_open: 'Открыть запись за этот день',
+    diary_date_taken: 'на этот день уже есть запись',
     diary_seo_title: 'Дневник',
     diary_seo_description:
       'Короткие датированные записи: мысли, наблюдения и мелочи дня, которые не стали ни событием, ни проектом.',

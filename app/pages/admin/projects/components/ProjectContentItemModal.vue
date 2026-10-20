@@ -18,6 +18,7 @@ import { buildProjectSectionUrl } from '#layers/thei/shared/project-url';
 import LinkField from '../../components/LinkField.vue';
 import { projectContentItemDeleteModal } from './project-content-item-delete-modal';
 import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
+import type { FormNeed } from '#layers/thei/app/composables/form-needs';
 
 type ModalData = {
   projectHumanReadableSlug: string;
@@ -83,12 +84,26 @@ const bannerAssetUuid = computed({
 function bannerUsageDelta() {
   return props.modalData.usageDelta(buildItem());
 }
-/** A section says something with a body, its dates, or both. */
-const canSave = computed(
-  () =>
-    isDirty.value &&
-    Boolean(item.value.title.trim()) &&
-    (item.value.periods.length > 0 || hasBody.value),
+/**
+ * What the section still needs before it can be saved: its title, and
+ * something to say — a body, its dates, or both.
+ */
+const needs = useFormNeeds(
+  () => {
+    const list: FormNeed[] = [];
+    if (!item.value.title.trim())
+      list.push({ key: 'title', label: phrase.value.content_section_title });
+    if (!item.value.periods.length && !hasBody.value)
+      list.push({
+        key: 'body-or-periods',
+        label: phrase.value.form_either(
+          phrase.value.section_periods,
+          phrase.value.content_section_content,
+        ),
+      });
+    return list;
+  },
+  { root: () => modalContainer.value?.root },
 );
 
 useModalCloseGuard(
@@ -185,11 +200,14 @@ function buildItem(): ProjectSectionItem {
 }
 
 function save() {
-  if (canSave.value) handOver();
+  if (exists.value && !isDirty.value) return;
+  // Asked by a press or Ctrl+S, a save it cannot make says why.
+  if (needs.blocked.value) return needs.ask();
+  handOver();
 }
 
 useSaveShortcut(save, {
-  canSave,
+  canSave: () => !exists.value || isDirty.value,
   root: () => modalContainer.value?.root,
   exclusive: true,
 });
@@ -278,20 +296,27 @@ async function deleteItem() {
           />
           <ModalHeaderButton
             variant="accent"
-            :phone-icon="isDirty || !exists ? 'save' : 'check'"
+            phone-icon="save"
+            :phone-done="exists && !isDirty"
             :label="phrase.save"
-            :disabled="!canSave"
+            :disabled="exists && !isDirty"
+            :reason="needs.reason.value"
             @click="save"
           >
             {{ isDirty || !exists ? phrase.save : phrase.saved }}
           </ModalHeaderButton>
         </div>
       </div>
+      <HeaderErrorLine
+        inset
+        :message="needs.line.value"
+        :again="needs.asks.value"
+      />
     </template>
 
     <div class="flex flex-col gap-md p-sm">
       <AiFormOffers />
-      <Field ai="field:title">
+      <Field ai="field:title" need="title">
         <div class="flex items-center justify-between gap-sm">
           <FieldLabel required>{{ phrase.content_section_title }}</FieldLabel>
           <span :data-title-popup="phrase.content_section_private_hint">
@@ -318,7 +343,7 @@ async function deleteItem() {
         <FieldLabel>{{ phrase.content_section_summary }}</FieldLabel>
         <FieldTextarea v-model="item.summary" />
       </Field>
-      <Field ai="periods">
+      <Field ai="periods" need="body-or-periods">
         <div class="flex items-center justify-between gap-sm">
           <FieldLabel>{{ phrase.section_periods }}</FieldLabel>
           <div ref="periodPopupAnchor">
@@ -367,7 +392,7 @@ async function deleteItem() {
         </div>
       </Field>
 
-      <Field>
+      <Field need="body-or-periods">
         <FieldLabel>{{ phrase.content_section_content }}</FieldLabel>
         <FieldContentEditor
           v-model="item.content"

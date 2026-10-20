@@ -1,5 +1,7 @@
 import {
   RELATION_TYPE_OF_WORD,
+  RELATION_WORD_FROM_OTHER_END,
+  RELATION_WORD_OF_TYPE,
   type RelationEntityType,
   type RelationType,
   type RelationWord,
@@ -69,9 +71,8 @@ export const RELATION_GROUP_ORDER: readonly RelationType[] = [
 ];
 
 /**
- * What the other end is to this entity, in one word under its name:
- * "Influences" when this one depends on it, "Depends" when this one affects
- * it.
+ * What the other end is to this entity, in a word under its name: "Affects"
+ * when this one depends on it, "Depends on" when this one affects it.
  */
 export function relationLabel(
   phrase: LanguagePhrases,
@@ -116,6 +117,27 @@ export function relationSentenceParts(
           ? { side: 'other' as const }
           : part,
     );
+}
+
+/**
+ * A relation's sentence said of its other end, as the word under the other
+ * end's name says it: "Affects" — "B affects A". Each kind on offer is
+ * named by that word and explained by this sentence, so the two never read
+ * the other way round.
+ */
+export function relationSentencePartsFromOther(
+  phrase: LanguagePhrases,
+  type: RelationType,
+): RelationSentencePart[] {
+  const converse =
+    RELATION_TYPE_OF_WORD[
+      RELATION_WORD_FROM_OTHER_END[RELATION_WORD_OF_TYPE[type]]
+    ];
+  return relationSentenceParts(phrase, converse).map((part) =>
+    typeof part === 'string'
+      ? part
+      : { side: part.side === 'current' ? 'other' : 'current' },
+  );
 }
 
 /** The icon for the kind of thing on the other end of a relation. */

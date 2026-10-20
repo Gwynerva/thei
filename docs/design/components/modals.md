@@ -56,7 +56,10 @@ Closing:
   nothing more. A card standing in another's place, as the review of a text
   does in its editor's, is left by that click instead (`ModalContainer`'s
   `dismiss`).
-- A modal holding unsaved work asks before it closes.
+- A modal holding unsaved work asks before it closes. Unsaved work is what
+  is on the screen: a text's editor reads its text before it decides, so a
+  word typed a moment ago — before Editor.js has told of it — asks too, and
+  Ctrl+S then Escape saves it and closes without asking.
 - Deleting an entity is confirmed against its name in
   `app/modals/DeleteConfirmationPane.vue`.
 

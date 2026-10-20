@@ -132,13 +132,11 @@ for (const width of [375, 1280]) {
     await expect(first.locator('[data-relation-title]')).toHaveText(
       `Harbour meeting 1 ${stamp}`,
     );
-    await expect(first.locator('[data-relation-label]')).toHaveText(
-      'Influences',
-    );
+    await expect(first.locator('[data-relation-label]')).toHaveText('Affects');
     await expect(first.locator('[data-relation-note]')).toHaveText(NOTE);
     // The word and the reason are one line under the name.
     await expect(first.locator('[data-relation-line]')).toContainText(
-      `Influences · ${NOTE}`,
+      `Affects · ${NOTE}`,
     );
     await expect(first).toHaveAttribute('href', /\/events\/harbour-meeting-1-/);
     // What a stranger may not see is a codename, never a link.
@@ -182,7 +180,7 @@ test('the Markdown copy lists the relations as the page does: by kind, with the 
     related.split('\n').find((text) => text.startsWith(`- [${title}](`));
   // A directed relation says its word, run into the reason.
   expect(line(`Harbour meeting 1 ${stamp}`)).toMatch(
-    new RegExp(`\\) — Influences · ${NOTE}$`),
+    new RegExp(`\\) — Affects · ${NOTE}$`),
   );
   // A plain one says no word: only what the entity says of itself.
   expect(line(`Sibling project ${stamp}`)).toMatch(

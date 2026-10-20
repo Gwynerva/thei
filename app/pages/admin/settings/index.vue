@@ -11,6 +11,7 @@ import {
   normalizeAnalyticsValue,
   type SiteAnalyticsSettings,
 } from '#layers/thei/shared/analytics';
+import type { FormNeed } from '#layers/thei/app/composables/form-needs';
 definePageMeta({ layout: 'admin' });
 await useAdminTabTitle(computed(() => phrase.value.site_settings));
 const initial = await useRequestFetch()<SiteSettingsData>(
@@ -80,25 +81,50 @@ const analyticsErrors = computed(() =>
     ]),
   ),
 );
-const analyticsValid = computed(() =>
-  Object.values(analyticsErrors.value).every((error) => !error),
-);
 const siteUrlError = computed(() =>
   normalizeSiteUrl(data.value.siteUrl) === undefined
     ? phrase.value.site_url_invalid
     : undefined,
 );
+/** What the settings still need before they can be saved, in the page's order. */
+const needs = useFormNeeds(() => {
+  const list: FormNeed[] = [];
+  if (siteUrlError.value)
+    list.push({
+      key: 'site-url',
+      label: phrase.value.site_url,
+      problem: phrase.value.site_url_invalid_short,
+    });
+  for (const field of analyticsFields)
+    if (analyticsErrors.value[field.key])
+      list.push({
+        key: `analytics-${field.key}`,
+        label: field.label(),
+        problem: phrase.value.analytics_invalid_short,
+      });
+  if (!data.value.secretPhrase.trim())
+    list.push({ key: 'secret-phrase', label: phrase.value.secret_phrase });
+  if (data.value.password !== confirmPassword.value)
+    list.push(
+      confirmPassword.value
+        ? {
+            key: 'repeat-password',
+            label: phrase.value.repeat_password,
+            problem: phrase.value.profile_password_mismatch,
+          }
+        : { key: 'repeat-password', label: phrase.value.repeat_password },
+    );
+  return list;
+});
 const canSave = computed(
-  () =>
-    isDirty.value &&
-    !saving.value &&
-    Boolean(data.value.secretPhrase.trim()) &&
-    !siteUrlError.value &&
-    analyticsValid.value &&
-    data.value.password === confirmPassword.value,
+  () => isDirty.value && !saving.value && !needs.blocked.value,
 );
+// Ctrl+S on changes not ready to save says what they still need.
+const canAsk = computed(() => isDirty.value && !saving.value);
 async function save() {
-  if (!canSave.value) return;
+  if (!canAsk.value) return;
+  // Asked by a press or Ctrl+S, a save it cannot make says why.
+  if (needs.blocked.value) return needs.ask();
   saving.value = true;
   error.value = undefined;
   try {
@@ -117,7 +143,7 @@ async function save() {
     saving.value = false;
   }
 }
-useSavedForm(isDirty, save, canSave);
+useSavedForm(isDirty, save, canAsk);
 </script>
 <template>
   <div>
@@ -127,7 +153,9 @@ useSavedForm(isDirty, save, canSave);
       :dirty="isDirty"
       :saving="saving"
       :can-save="canSave"
-      :error="error"
+      :reason="isDirty ? needs.reason.value : undefined"
+      :error="error ?? needs.line.value"
+      :error-again="needs.asks.value"
       @save="save"
     />
     <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
@@ -185,7 +213,7 @@ useSavedForm(isDirty, save, canSave);
                   },
                 }"
             /></Field>
-            <Field
+            <Field need="site-url"
               ><FieldLabel>{{ phrase.site_url }}</FieldLabel
               ><FieldInput
                 v-model="data.siteUrl"
@@ -220,7 +248,10 @@ useSavedForm(isDirty, save, canSave);
             :description="phrase.analytics_description"
             class="mb-md"
           /><Box class="grid gap-md p-sm sm:grid-cols-2 sm:p-md">
-            <Field v-for="field in analyticsFields" :key="field.key"
+            <Field
+              v-for="field in analyticsFields"
+              :key="field.key"
+              :need="`analytics-${field.key}`"
               ><FieldLabel>{{ field.label() }}</FieldLabel
               ><FieldInput
                 v-model="data.analytics[field.key]"
@@ -238,7 +269,7 @@ useSavedForm(isDirty, save, canSave);
             :title="phrase.admin_data"
             class="mb-md"
           /><Box class="flex flex-col gap-md p-sm sm:p-md">
-            <Field
+            <Field need="secret-phrase"
               ><FieldLabel required>{{ phrase.secret_phrase }}</FieldLabel
               ><FieldInput
                 v-model="data.secretPhrase"
@@ -256,7 +287,7 @@ useSavedForm(isDirty, save, canSave);
                   phrase.profile_password_hint
                 }}</FieldHint></Field
               >
-              <Field
+              <Field need="repeat-password"
                 ><FieldLabel>{{ phrase.repeat_password }}</FieldLabel
                 ><FieldInput
                   v-model="confirmPassword"

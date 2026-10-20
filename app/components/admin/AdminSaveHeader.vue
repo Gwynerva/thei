@@ -6,11 +6,22 @@ defineProps<{
   saving: boolean;
   canSave: boolean;
   error?: string;
+  /** Counts the times the same error is said again: see `HeaderErrorLine`. */
+  errorAgain?: number;
+  /**
+   * Why the changes cannot be saved yet (`useFormNeeds`): the button stays
+   * pressable to say so, and the page answers a press.
+   */
+  reason?: string;
 }>();
 defineEmits<{ save: [] }>();
 </script>
 <template>
-  <StickyGlassHeader width="var(--width-wide)" :error="error">
+  <StickyGlassHeader
+    width="var(--width-wide)"
+    :error="error"
+    :error-again="errorAgain"
+  >
     <div class="flex items-center justify-between gap-xs py-xs">
       <h1 class="flex min-w-0 items-center gap-xs text-lg font-bold sm:text-xl">
         <Icon :name="icon" class="shrink-0" /><span class="truncate">{{
@@ -23,7 +34,8 @@ defineEmits<{ save: [] }>();
           :label="dirty ? phrase.save : phrase.saved"
           :saving
           :done="!dirty"
-          :disabled="saving || !canSave"
+          :disabled="saving || (!canSave && !reason)"
+          :reason
           @click="$emit('save')"
         />
       </div>

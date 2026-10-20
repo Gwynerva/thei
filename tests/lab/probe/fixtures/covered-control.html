@@ -161,6 +161,29 @@
       ></div>
     </section>
 
+    <!-- Covered, though it cannot act yet: it answers a press by saying
+         why (aria-disabled), so what covers it takes that press. -->
+    <section style="position: relative; width: 320px; height: 44px">
+      <button
+        id="c-blocked"
+        data-expect="covered-control"
+        class="ctl"
+        aria-disabled="true"
+      >
+        Create
+      </button>
+      <div
+        id="c-blocked-cover"
+        data-expect="covered-control"
+        style="
+          position: absolute;
+          inset: 0;
+          z-index: 1;
+          background: rgb(200 200 200 / 0.6);
+        "
+      ></div>
+    </section>
+
     <section style="height: 1200px"></section>
 
     <script>

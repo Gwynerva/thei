@@ -5,6 +5,7 @@ import { toDateString } from '#layers/thei/shared/date-range';
 import { normalizeCaptionText } from '#layers/thei/shared/terminal-punctuation';
 import ModalContainer from '../ModalContainer.vue';
 import ModalTitle from '../ModalTitle.vue';
+import type { FormNeed } from '#layers/thei/app/composables/form-needs';
 const { modalData } = defineProps<{
   modalData: {
     usageDelta: Record<string, number>;
@@ -48,15 +49,25 @@ const text = ref(initial?.text ?? '');
 const date = ref(initial?.date ?? toDateString(today));
 const assetUuid = ref<string | null>(initial?.assetUuid ?? null);
 const media = ref<MediaDescriptor | undefined>(initial?.media);
+const modalContainer =
+  useTemplateRef<InstanceType<typeof ModalContainer>>('modalContainer');
 // A regular status keeps something to say; a blank one is empty, which only
 // a new or an already empty status may be, and only where the order allows.
-const valid = computed(
-  () =>
-    Boolean(date.value) &&
-    (Boolean(text.value.trim()) ||
-      (initial?.kind !== 'regular' &&
-        !assetUuid.value &&
-        modalData.canBeEmptyOn(date.value))),
+const needs = useFormNeeds(
+  () => {
+    const list: FormNeed[] = [];
+    if (!date.value)
+      list.push({ key: 'date', label: phrase.value.profile_status_date });
+    else if (
+      !text.value.trim() &&
+      (initial?.kind === 'regular' ||
+        assetUuid.value ||
+        !modalData.canBeEmptyOn(date.value))
+    )
+      list.push({ key: 'text', label: phrase.value.profile_status });
+    return list;
+  },
+  { root: () => modalContainer.value?.root },
 );
 const dirty = computed(() =>
   initial
@@ -65,9 +76,10 @@ const dirty = computed(() =>
       assetUuid.value !== (initial.assetUuid ?? null)
     : Boolean(text.value || assetUuid.value),
 );
-const canSave = computed(() => valid.value && (!initial || dirty.value));
 function save() {
-  if (!canSave.value) return;
+  if (initial && !dirty.value) return;
+  // Asked by a press or Ctrl+S, a save it cannot make says why.
+  if (needs.blocked.value) return needs.ask();
   const value = normalizeCaptionText(text.value.trim());
   const id = initial?.id ?? crypto.randomUUID();
   emit(
@@ -85,10 +97,8 @@ function save() {
       : { type: 'save', id, kind: 'empty', date: date.value },
   );
 }
-const modalContainer =
-  useTemplateRef<InstanceType<typeof ModalContainer>>('modalContainer');
 useSaveShortcut(save, {
-  canSave,
+  canSave: () => !initial || dirty.value,
   root: () => modalContainer.value?.root,
   exclusive: true,
 });
@@ -107,10 +117,16 @@ useModalCloseGuard(
           class="min-w-0"
         /><AdminSaveButton
           :label="initial ? phrase.save : phrase.add"
-          :disabled="!canSave"
+          :disabled="Boolean(initial) && !dirty"
+          :reason="needs.reason.value"
           @click="save"
-        /></div
-    ></template>
+        />
+      </div>
+      <HeaderErrorLine
+        inset
+        :message="needs.line.value"
+        :again="needs.asks.value"
+    /></template>
     <div class="flex flex-col gap-md p-md">
       <div class="flex min-w-0 items-start gap-md">
         <ProfileMediaField
@@ -122,7 +138,7 @@ useModalCloseGuard(
           compact
           class="shrink-0"
         />
-        <Field class="min-w-0 flex-1">
+        <Field need="date" class="min-w-0 flex-1">
           <FieldLabel required>{{ phrase.profile_status_date }}</FieldLabel>
           <FieldDatePicker
             v-model="date"
@@ -133,7 +149,7 @@ useModalCloseGuard(
           />
         </Field>
       </div>
-      <Field>
+      <Field need="text">
         <FieldLabel>{{ phrase.profile_status }}</FieldLabel>
         <FieldTextarea
           v-model="text"

@@ -91,6 +91,20 @@
       <button disabled style="width: 24px; height: 24px; padding: 0">-</button>
     </section>
 
+    <!-- A small button that cannot act yet but answers a press by saying
+         why, as a form's Save does (aria-disabled): a finger must hit it. -->
+    <section>
+      <button
+        id="s-blocked"
+        data-expect="small-target@phone"
+        aria-disabled="true"
+        aria-label="Create"
+        style="width: 20px; height: 28px; padding: 0"
+      >
+        +
+      </button>
+    </section>
+
     <!-- Decoy: a small button whose hit area is drawn larger. -->
     <section style="padding: 10px">
       <button class="hit" aria-label="Enlarged">+</button>

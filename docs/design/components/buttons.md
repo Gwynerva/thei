@@ -38,6 +38,31 @@ neutral — and in square icon-only sizes.
   on a page (`done` once all of it is saved), `ModalHeaderButton`'s
   `phoneIcon` in a modal. Once everything is saved the square shows `check`:
   a pale floppy disk alone did not say whether the save had gone through.
+- "Saved" and its `check` say that something is stored, never only that
+  nothing changed. A text's editor says "Saved" only for a text that is
+  stored as it stands there; the text of an entity not created yet never
+  was, so its button says "Save", disabled while there is nothing new to
+  take into the form, its square a floppy disk. The words typed count as a
+  change the moment they are typed, not when Editor.js tells of them.
+- A form's Save that cannot save yet says why, from what the form still
+  needs (`app/composables/form-needs.ts`): a required field left empty, by
+  the label the form shows — "Still to fill in: Event title, Summary" — or
+  a filled field it cannot keep, with what is wrong — "Page address: A page
+  with this slug already exists". `AdminSaveButton`'s and
+  `ModalHeaderButton`'s `reason` makes the button look disabled but stay
+  pressable (`aria-disabled`): it is the button's hint, its label in bold and
+  a line per need under it, and what a screen reader hears with it.
+- A press of such a button — a tap on a phone, where no hint shows and no
+  Ctrl+S exists — and Ctrl+S on such a form say the same on the line under
+  the header (`app/components/HeaderErrorLine.vue`), mark the labels of the
+  fields concerned in the error colour, and bring the first of them into
+  view when it is out of it, gently. The line names three empty fields at
+  most and counts the others ("and 4 more"); the hint names them all. Line
+  and marks go as the fields are filled.
+- A button disabled because there is nothing to do — all of it saved, a
+  save under way — stays `disabled`. Both look the same: `off:` in
+  `app/styles/main.css`, with `not-off:` for what only an acting button
+  does under the pointer.
 - Under a finger, small square buttons grow: `pointer-coarse:size-11`.
 - A row of a list the owner orders by hand — the profile's links, the files
   of a group in a text — has a grip: a square `Button` with `dragHandle` and
@@ -80,10 +105,20 @@ neutral — and in square icon-only sizes.
 the grab cursor. Disabled, it fades its colours and
 shows the not-allowed cursor.
 
+`app/components/admin/AdminSaveButton.vue` takes `label`, `saving`,
+`disabled` (nothing to do), `done` (all of the form saved: the `check`
+square) and `reason` (why it cannot save yet; pressable, the form answering
+the press with `useFormNeeds`'s `ask`).
+
 `app/modals/ModalHeaderButton.vue` takes `label` (required), `icon`,
 `variant` (`default`, `delete`, `accent`), `size` (`default`, `h-9`;
-`compact`, `size-7`) and `disabled`. With an `icon` and no slot it is a square
-of `w-9` with a hint.
+`compact`, `size-7`), `disabled` and `reason`, as `AdminSaveButton`'s. With
+an `icon` and no slot it is a square of `w-9` with a hint. `phoneIcon` is the
+icon its words give way to on a phone, and `phoneDone` swaps it for `check`:
+both icons stay in the page, one hidden, since pointing an icon's `<use>`
+elsewhere while the owner types in a text ends the browser's run of typing,
+and Ctrl+Z would then stop after the first letter. `AdminSaveButton` keeps
+its two squares the same way.
 
 ```vue
 <Button
@@ -119,4 +154,9 @@ of an AI card.
 
 Looked at in the browser at a phone's width, where a label that drops or a
 row that overflows shows first. E2E specs find buttons by their accessible
-name, which an icon-only button must have.
+name, which an icon-only button must have. `tests/e2e/diary-new-entry.spec.ts`
+checks what the save controls of a new diary entry say, before and after its
+text is written and once the entry is made, and the reason its Create gives
+under a mouse, a finger and Ctrl+S; `tests/e2e/form-needs.spec.ts` does the
+same for every other form, at 1280 and 375 px.
+`tests/app/styles/off-variant.test.ts` compiles `off:`.

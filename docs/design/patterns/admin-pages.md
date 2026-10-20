@@ -16,6 +16,12 @@ rather than from a switch.
 - Save stays at the top, at the end of the header, on every screen: on a
   phone it is a square with a floppy disk (`app/components/admin/AdminSaveButton.vue`),
   so the title and the header's squares keep to one row.
+- Under the header, a line says why a save failed or cannot be made
+  (`app/components/HeaderErrorLine.vue`, a modal's too): it fades in, wraps
+  as long as its words need with its cross at the end, and comes back for a
+  new press once closed. What a form still needs is said there after a press
+  of its Save or Ctrl+S (see [Buttons](../components/buttons.md)), shortly
+  enough to stay a line or two on a phone.
 - Every button of a header is one size: the ✦, delete and any other icon
   are `Button`'s `size="icon"` squares, and Save is as tall, a square too on
   a phone. A header's delete is never a padded text-size button. Under a finger

@@ -243,7 +243,7 @@ for (const width of [320, 375, 1280]) {
     await expectChipsInside(page);
     const influencing = chipNamed(page, `Linked meeting 1 ${stamp}`);
     await expect(influencing.locator('[data-relation-label]')).toHaveText(
-      'Influences',
+      'Affects',
     );
     // The reason runs on from the relation's word.
     await expect(influencing.locator('[data-relation-note]')).toHaveText(
@@ -262,7 +262,7 @@ for (const width of [320, 375, 1280]) {
     ]);
     await expect(
       chips(page).first().locator('[data-relation-label]'),
-    ).toHaveText('Depends');
+    ).toHaveText('Depends on');
     await expectChipsInside(page);
 
     await tabs.nth(0).click();
@@ -301,12 +301,22 @@ test('a chip opens its relation: its other end, its kind, its note once or per s
   const entity = modal(page).locator('[data-relation-entity]');
   await expect(entity).toContainText(`Linked meeting 1 ${stamp}`);
 
-  // Each kind is said as a sentence with both names and their pictures.
+  // Each kind is named by the word its chip wears under the other end's
+  // name, and said of the other end in a sentence with both names and their
+  // pictures: the word and the sentence agree.
   const option = (type: string) =>
     modal(page).locator(`[data-relation-option="${type}"]`);
   await expect(option('influencing').getByRole('radio')).toBeChecked();
+  await expect(
+    modal(page).getByRole('radio', { name: 'Affects', exact: true }),
+  ).toBeChecked();
   await expect(option('influencing')).toContainText(
-    `Related things ${stamp} depends on Linked meeting 1 ${stamp}`,
+    `Linked meeting 1 ${stamp} affects Related things ${stamp}`,
+  );
+  await expect(
+    modal(page).getByRole('radio', { name: 'Depends on', exact: true }),
+  ).toHaveAccessibleDescription(
+    `Linked meeting 1 ${stamp} depends on Related things ${stamp}`,
   );
   await expect(
     option('influencing').locator('[data-relation-token]'),
@@ -314,7 +324,7 @@ test('a chip opens its relation: its other end, its kind, its note once or per s
   await option('dependent').click();
   await expect(option('dependent').getByRole('radio')).toBeChecked();
   const chip = chipNamed(page, `Linked meeting 1 ${stamp}`);
-  await expect(chip.locator('[data-relation-label]')).toHaveText('Depends');
+  await expect(chip.locator('[data-relation-label]')).toHaveText('Depends on');
 
   // The other end is chosen anew with the picker; the relation keeps its
   // kind, its note and its place.
@@ -332,7 +342,7 @@ test('a chip opens its relation: its other end, its kind, its note once or per s
     `Linked meeting 2 ${stamp}`,
   ]);
   const moved = chipNamed(page, `Linked meeting 3 ${stamp}`);
-  await expect(moved.locator('[data-relation-label]')).toHaveText('Depends');
+  await expect(moved.locator('[data-relation-label]')).toHaveText('Depends on');
   await expect(moved.locator('[data-relation-note]')).toHaveText(LONG_NOTE);
 
   const shared = modal(page).locator('[data-relation-note="shared"]');
@@ -408,7 +418,7 @@ test('"+" opens a new relation with the picker ready, and it joins once chosen',
   const added = chips(page).first();
   await expect(added.locator('[data-relation-line]')).toHaveCount(0);
   await modal(page).locator('[data-relation-option="influencing"]').click();
-  await expect(added.locator('[data-relation-label]')).toHaveText('Influences');
+  await expect(added.locator('[data-relation-label]')).toHaveText('Affects');
   await modal(page).getByRole('button', { name: 'Done' }).click();
   await expect(modal(page)).toHaveCount(0);
   await expect(block(page).getByRole('tab').nth(1)).toHaveAttribute(

@@ -7,6 +7,7 @@ import type {
   TagUsageStats,
 } from '#layers/thei/shared/tag';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import type { FormNeed } from '#layers/thei/app/composables/form-needs';
 import AssetTile from '#layers/thei/app/components/AssetTile.vue';
 import LinkField from '../../components/LinkField.vue';
 import { useSingleMediaAsset } from '#layers/thei/app/composables/single-media-asset';
@@ -99,16 +100,17 @@ useRegisterAdminBarContextButton(
     };
   }),
 );
-const canSave = computed(
-  () =>
-    !saving.value &&
-    Boolean(
-      data.value.title.trim() &&
-      data.value.slug.trim() &&
-      data.value.publicId.trim(),
-    ) &&
-    (!isEdit.value || dirty.value),
-);
+/** What the tag still needs before it can be saved, in the form's order. */
+const needs = useFormNeeds(() => {
+  const list: FormNeed[] = [];
+  if (!data.value.title.trim())
+    list.push({ key: 'title', label: phrase.value.tag_title });
+  if (!data.value.slug.trim())
+    list.push({ key: 'link', label: phrase.value.human_readable_url });
+  if (!data.value.publicId.trim())
+    list.push({ key: 'link', label: phrase.value.public_id });
+  return list;
+});
 watch(
   () => data.value.publicId,
   () => {
@@ -145,7 +147,9 @@ const iconAsset = useSingleMediaAsset({
 });
 
 async function save() {
-  if (saving.value) return;
+  if (saving.value || (isEdit.value && !dirty.value)) return;
+  // Asked by a press or Ctrl+S, a save it cannot make says why.
+  if (needs.blocked.value) return needs.ask();
   saving.value = true;
   error.value = undefined;
   try {
@@ -185,7 +189,10 @@ async function save() {
   }
 }
 
-useSaveShortcut(save, { canSave });
+// Ctrl+S on a tag not ready to save says what it still needs.
+useSaveShortcut(save, {
+  canSave: () => !saving.value && (!isEdit.value || dirty.value),
+});
 
 async function remove() {
   if (!tagUuid) return;
@@ -225,7 +232,11 @@ await useAdminTabTitle(
 </script>
 
 <template>
-  <StickyGlassHeader width="var(--width-wide)" :error="error">
+  <StickyGlassHeader
+    width="var(--width-wide)"
+    :error="error ?? needs.line.value"
+    :error-again="needs.asks.value"
+  >
     <div class="flex items-center justify-between gap-xs py-xs">
       <div
         class="flex min-w-0 items-center gap-xs text-lg font-bold sm:text-xl"
@@ -252,7 +263,8 @@ await useAdminTabTitle(
           :label="isEdit ? (dirty ? phrase.save : phrase.saved) : phrase.create"
           :saving
           :done="isEdit && !dirty"
-          :disabled="!canSave"
+          :disabled="saving || (isEdit && !dirty)"
+          :reason="needs.reason.value"
           @click="save"
         />
       </div>
@@ -265,7 +277,7 @@ await useAdminTabTitle(
     <AiFormOffers />
     <Box class="flex flex-col gap-md p-sm sm:p-md">
       <div class="flex flex-col gap-md sm:flex-row">
-        <Field class="min-w-0 flex-1">
+        <Field need="title" class="min-w-0 flex-1">
           <FieldLabel required>{{ phrase.tag_title }}</FieldLabel>
           <FieldInput
             v-model="data.title"
@@ -309,6 +321,7 @@ await useAdminTabTitle(
       </Field>
 
       <LinkField
+        need="link"
         v-model:title="data.title"
         v-model:human-readable-slug="data.slug"
         v-model:public-id="data.publicId"

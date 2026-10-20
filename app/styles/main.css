@@ -141,6 +141,13 @@
 @custom-variant popup-open (&[data-popup-open]);
 
 /*
+ * A control that does not act: disabled, or `aria-disabled` — one left
+ * pressable so that a press can say why it cannot act yet, as a form's Save
+ * does. Both look the same.
+ */
+@custom-variant off (&:is(:disabled, [aria-disabled='true']));
+
+/*
  * Pointed at or reached with the keyboard. Pointing needs a pointer that can
  * point, as for Tailwind's own `hover:`: a phone reports the last tap as a
  * hover, and the look would stay on whatever was tapped.

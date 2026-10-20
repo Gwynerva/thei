@@ -88,6 +88,10 @@ import {
   ContentSpoilerTune,
   type ContentSpoilerTuneConfig,
 } from '#layers/thei/app/components/content/editor-spoiler-tune';
+import {
+  ContentTextRoleTune,
+  type ContentTextRoleTuneConfig,
+} from '#layers/thei/app/components/content/editor-text-role-tune';
 import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
 import { createEditorBlockDrag } from '#layers/thei/app/composables/editor-block-drag';
 import {
@@ -301,7 +305,28 @@ let savedValue = props.modalData.value;
  */
 const currentKey = shallowRef(openedKey);
 const savedKey = shallowRef(openedKey);
-const isDirty = computed(() => currentKey.value !== savedKey.value);
+/**
+ * Editor.js tells of a change only once the typing pauses, 400 ms after the
+ * last key; the words are on screen at once. What is typed counts as a
+ * change the moment it is — every `input` in a text is an edit — until the
+ * text has been read after it. Saving and closing read it first, so neither
+ * ever acts on a text older than what is on screen.
+ */
+const unread = ref(false);
+let typedSerial = 0;
+let readFromSerial = 0;
+let unreadCheck: ReturnType<typeof setTimeout> | undefined;
+/** Long after Editor.js should have told of what was typed. */
+const UNREAD_CHECK_MS = 1_000;
+const isDirty = computed(
+  () => unread.value || currentKey.value !== savedKey.value,
+);
+/**
+ * Only a text that is stored, and that the form holds as it is here, is
+ * saved: one whose entity is not made yet has never been, whatever the form
+ * holds.
+ */
+const isSaved = computed(() => !isDirty.value && Boolean(updatedAt.value));
 /**
  * The texts this editor knows as saved by itself: the one it opened with and
  * each one it saved since. The server's text being one of them is no news,
@@ -447,6 +472,41 @@ const editorSession = createEditorHistorySession({
     : undefined,
 });
 const editorChangePending = editorSession.isPending;
+
+/** Words typed, pasted or dropped into the text: a change, before it is read. */
+function noteTyped(event: Event) {
+  if (!editorAcceptsChanges) return;
+  // A file picked is not in the text yet; the block says so once it is.
+  if (event.target instanceof HTMLInputElement && event.target.type === 'file')
+    return;
+  typedSerial += 1;
+  unread.value = true;
+  // Should Editor.js never tell of it, the text is read all the same.
+  clearTimeout(unreadCheck);
+  unreadCheck = setTimeout(() => {
+    if (unread.value && !editorChangePending.value && !disposed)
+      editorSession.recordChange();
+  }, UNREAD_CHECK_MS);
+}
+
+// A read that began after the last words typed has them: they are read.
+watch(
+  editorChangePending,
+  (pending) => {
+    if (pending) readFromSerial = typedSerial;
+    else if (readFromSerial === typedSerial) unread.value = false;
+  },
+  { flush: 'sync' },
+);
+
+/** The text as it is this moment, with the words just typed. */
+async function readEditor() {
+  const serial = typedSerial;
+  const data = await editorSession.synchronize();
+  if (serial === typedSerial) unread.value = false;
+  return data;
+}
+
 const historyStatus = editorSession.status;
 const draftOffer = editorSession.offer;
 const lastRestore = editorSession.lastRestore;
@@ -889,7 +949,19 @@ function reviewComment(partId: string, words: string) {
     .catch(() => showToast(phrase.value.ai_error));
 }
 
+/**
+ * However it is closed — Escape, its ✕, Back, a click around it — the editor
+ * first reads its text, then decides on what it holds: a change Editor.js
+ * has not told of yet is still a change, and asks.
+ */
+const thisModal = activeModal.value;
+let closeRead = false;
+let readingToClose = false;
 useModalCloseGuard(() => {
+  if (editor && !closeRead) {
+    void readThenClose();
+    return false;
+  }
   // A pasted file still on its way has nowhere to land once the editor is
   // gone; unlike the text, it is not kept anywhere.
   if (
@@ -904,6 +976,29 @@ useModalCloseGuard(() => {
   if (confirmed) discardConfirmed = true;
   return confirmed;
 });
+
+async function readThenClose() {
+  if (readingToClose) return;
+  readingToClose = true;
+  try {
+    // Ctrl+S and Escape at once: the save goes first, and what it wrote
+    // into the form is not a change to ask about.
+    await saveInFlight;
+    await readEditor();
+  } catch {
+    // Unread, it is judged by what was read last.
+  } finally {
+    readingToClose = false;
+  }
+  // Something else opened over it meanwhile: that one is not closed for it.
+  if (disposed || activeModal.value !== thisModal) return;
+  closeRead = true;
+  try {
+    closeModal();
+  } finally {
+    closeRead = false;
+  }
+}
 // Everything typed reaches the browser's storage as the tab closes, so the
 // browser only has to ask when that storage is not available.
 useBeforeUnloadGuard(
@@ -1017,6 +1112,12 @@ async function startEditor() {
       config: {
         title: phrase.value.content_spoiler,
       } satisfies ContentSpoilerTuneConfig,
+    },
+    textRole: {
+      class: ContentTextRoleTune as unknown as ToolConstructable,
+      config: {
+        label: props.modalData.title || phrase.value.content_editor_title,
+      } satisfies ContentTextRoleTuneConfig,
     },
     contentBold: {
       class: ContentBoldTool as unknown as InlineToolConstructable,
@@ -1183,8 +1284,8 @@ async function startEditor() {
     },
     minHeight: 240,
     // Every block can be a spoiler, so the tune is registered globally rather
-    // than listed on each tool.
-    tunes: ['spoiler'],
+    // than listed on each tool; so is the one that names a paragraph.
+    tunes: ['spoiler', 'textRole'],
     inlineToolbar: [
       'contentBold',
       'contentItalic',
@@ -1274,6 +1375,7 @@ onMounted(() => startEditor().finally(() => (editorReady.value = true)));
 onBeforeUnmount(() => {
   disposed = true;
   editorAcceptsChanges = false;
+  clearTimeout(unreadCheck);
   editorLayoutQuery?.removeEventListener('change', applyEditorLayout);
   editorLayoutQuery = undefined;
   document.body.removeAttribute('data-content-editor-layout');
@@ -1336,17 +1438,33 @@ onBeforeUnmount(() => {
   holder.value?.replaceChildren(...still);
 });
 
-async function save() {
-  if (!editor || saving.value || !isDirty.value) return;
-  saving.value = true;
+/** The save under way: a close waits for it before it judges the text. */
+let saveInFlight: Promise<void> | undefined;
+
+function save() {
+  if (!editor) return Promise.resolve();
+  saveInFlight ??= writeIntoForm().finally(() => {
+    saveInFlight = undefined;
+  });
+  return saveInFlight;
+}
+
+/**
+ * Writes the text into the form. It is read first, whatever the button says:
+ * a key pressed a moment before Ctrl+S is in what is saved. Nothing changed,
+ * the read is quiet, with no spinner on a button that has nothing to do.
+ */
+async function writeIntoForm() {
+  saving.value = isDirty.value;
   errorMessage.value = undefined;
   try {
-    const data = await editorSession.synchronize();
+    const data = await readEditor();
     if (contentDataIsSemanticallyEqual(data, savedValue?.data)) {
       savedKey.value = editorSession.currentKey();
       ownSavedKeys.add(savedKey.value);
       return;
     }
+    saving.value = true;
     const summary = summarizeContentData(
       data,
       collectContentAssetSizeMap(data),
@@ -1386,8 +1504,10 @@ async function save() {
   }
 }
 
+// Ctrl+S is the Save button: it reads the text, so what was typed a moment
+// ago is never left out for Editor.js not having told of it yet.
 useSaveShortcut(save, {
-  canSave: () => Boolean(editor) && !saving.value && isDirty.value,
+  canSave: () => Boolean(editor) && !saveInFlight,
   root: () => modalContainer.value?.root,
   exclusive: true,
 });
@@ -1796,16 +1916,19 @@ function editorJsI18nMessages() {
             :label="phrase.close_modal"
             @click="closeModal"
           />
+          <!-- «Saved» and its check only for a text that is stored as it
+               is here; a text of an entity not made yet never was. -->
           <ModalHeaderButton
             variant="accent"
-            :phone-icon="isDirty ? 'save' : 'check'"
+            phone-icon="save"
+            :phone-done="isSaved"
             :label="phrase.save"
             :disabled="saving || !isDirty"
-            data-editor-save
+            :data-editor-save="isSaved ? 'saved' : isDirty ? 'dirty' : 'clean'"
             @click="save"
           >
             <Icon v-if="saving" name="loading" />
-            {{ isDirty ? phrase.save : phrase.saved }}
+            {{ isSaved ? phrase.saved : phrase.save }}
           </ModalHeaderButton>
         </div>
         <FloatingPopup
@@ -1851,6 +1974,7 @@ function editorJsI18nMessages() {
         ref="holder"
         class="content-editor content-prose relative w-full px-sm py-md"
         :class="{ invisible: !editorReady }"
+        @input="noteTyped"
         @click.capture="preventEditorLinkNavigation"
         @auxclick.capture="preventEditorLinkNavigation"
       ></div>

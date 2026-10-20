@@ -7,6 +7,7 @@ import {
 import {
   relationLabel,
   relationSentenceParts,
+  relationSentencePartsFromOther,
 } from '../../shared/relation-display';
 import type { LanguagePhrases } from '../../shared/language/types';
 import enModule from '../../shared/language/list/en';
@@ -66,8 +67,43 @@ describe('relationLabel', () => {
     expect(relationLabel(ru, 'related')).toBe('Связан');
     expect(relationLabel(ru, 'influencing')).toBe('Влияет');
     expect(relationLabel(ru, 'dependent')).toBe('Зависит');
-    expect(relationLabel(en, 'influencing')).toBe('Influences');
-    expect(relationLabel(en, 'dependent')).toBe('Depends');
+    expect(relationLabel(en, 'influencing')).toBe('Affects');
+    expect(relationLabel(en, 'dependent')).toBe('Depends on');
+  });
+});
+
+describe('relationSentencePartsFromOther', () => {
+  it('says each kind of the other end, in the word its label wears', () => {
+    expect(relationSentencePartsFromOther(en, 'influencing')).toEqual([
+      { side: 'other' },
+      ' affects ',
+      { side: 'current' },
+    ]);
+    expect(relationLabel(en, 'influencing')).toBe('Affects');
+    expect(relationSentencePartsFromOther(en, 'dependent')).toEqual([
+      { side: 'other' },
+      ' depends on ',
+      { side: 'current' },
+    ]);
+    expect(relationLabel(en, 'dependent')).toBe('Depends on');
+    expect(relationSentencePartsFromOther(ru, 'influencing')).toEqual([
+      { side: 'other' },
+      ' влияет на ',
+      { side: 'current' },
+    ]);
+    expect(relationLabel(ru, 'influencing')).toBe('Влияет');
+    expect(relationSentencePartsFromOther(ru, 'dependent')).toEqual([
+      { side: 'other' },
+      ' зависит от ',
+      { side: 'current' },
+    ]);
+    expect(relationLabel(ru, 'dependent')).toBe('Зависит');
+    expect(relationSentencePartsFromOther(en, 'related')).toEqual([
+      { side: 'other' },
+      ' and ',
+      { side: 'current' },
+      ' are related',
+    ]);
   });
 });
 

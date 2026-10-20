@@ -1,9 +1,11 @@
 <script lang="ts" setup>
 defineOptions({ inheritAttrs: false });
 
-const { error, flushMobile } = defineProps<{
+const { flushMobile } = defineProps<{
   width?: string;
   error?: string;
+  /** Counts the times the same error is said again: see `HeaderErrorLine`. */
+  errorAgain?: number;
   /** Drops the side window padding on mobile for edge-to-edge controls. */
   flushMobile?: boolean;
 }>();
@@ -15,15 +17,7 @@ const stickyTop = computed(() =>
 );
 const headerContent = useTemplateRef<HTMLElement>('headerContent');
 const stickyHeaderContext = useStickyHeaderContext();
-const errorClosed = ref(false);
 let unregisterHeader: (() => void) | undefined;
-
-watch(
-  () => error,
-  () => {
-    errorClosed.value = false;
-  },
-);
 
 onMounted(() => {
   if (headerContent.value) {
@@ -57,26 +51,7 @@ onBeforeUnmount(() => unregisterHeader?.());
         </div>
       </GlassSurface>
 
-      <!-- Header Error -->
-      <div
-        v-if="error && !errorClosed"
-        class="border-b border-border-error bg-bg-error py-xs text-sm
-          text-text-error"
-      >
-        <div
-          class="relative m-auto w-(--_width-sticky-content) max-w-full px-xs
-            sm:px-window"
-        >
-          <button
-            class="float-right cursor-pointer pb-1 pl-1"
-            @click="errorClosed = true"
-          >
-            <Icon name="plus" class="rotate-45" />
-          </button>
-          <Icon name="warning" class="mr-xs" />
-          <span>{{ error }}</span>
-        </div>
-      </div>
+      <HeaderErrorLine :message="error" :again="errorAgain" />
     </div>
   </Sticky>
 </template>
