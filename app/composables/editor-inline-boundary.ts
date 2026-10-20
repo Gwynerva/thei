@@ -4,11 +4,8 @@ import {
   caretIn,
   edgeInside,
   edgeOutside,
-  editableFieldOf,
   isMarkup,
-  markupAround,
   oneGrapheme,
-  wordsBeside,
   type InlineSide,
 } from './editor-inline-dom';
 
@@ -44,10 +41,7 @@ function besideEdge(range: Range, side: InlineSide): Range | undefined {
  * inside, and each takes a press of an arrow of its own: at its last letter,
  * → goes after it, at its first, ← before it; beside it, → or ← goes to its
  * first or last letter before any letter is passed. A tap or a click past
- * its edge steps out too, which is the only way there is on a phone, and
- * so do End and Home at the end or the start of the words: the browser
- * leaves the caret inside the markup they end or begin with or outside it
- * by how the markup is drawn — a link with its site's icon keeps it in.
+ * its edge steps out too, which is the only way there is on a phone.
  *
  * Where the caret stands then decides where the words go, inside or out,
  * as the ring round the markup shows (`editor-inline-caret.ts`,
@@ -58,8 +52,6 @@ export function bindEditorInlineBoundary(root: HTMLElement) {
   let pointer: { x: number; y: number; at: number } | undefined;
   /** The selection change the next step makes, not the writer's. */
   let placing = false;
-  /** End or Home pressed: the side of the words the caret goes to. */
-  let jump: InlineSide | undefined;
 
   function place(caret: Range) {
     placing = true;
@@ -76,36 +68,7 @@ export function bindEditorInlineBoundary(root: HTMLElement) {
     place(caret);
   }
 
-  /** End or Home done: out of the markup the words end or begin with. */
-  function settleJump() {
-    const side = jump;
-    jump = undefined;
-    if (!side) return;
-    const range = caretIn(root, { collapsed: true });
-    const field = range && editableFieldOf(range.startContainer);
-    if (
-      !range ||
-      !field ||
-      wordsBeside(field, range.startContainer, range.startOffset, side)
-    )
-      return;
-    const outermost = markupAround(range.startContainer).at(-1);
-    if (outermost) stepOut(outermost, side);
-  }
-
   function onKeyDown(event: KeyboardEvent) {
-    jump = undefined;
-    if (
-      (event.key === 'End' || event.key === 'Home') &&
-      !event.shiftKey &&
-      !event.altKey &&
-      !event.isComposing
-    ) {
-      jump = event.key === 'End' ? 'after' : 'before';
-      // A caret already there makes no change to report.
-      requestAnimationFrame(settleJump);
-      return;
-    }
     if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
     if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey)
       return;
@@ -152,7 +115,6 @@ export function bindEditorInlineBoundary(root: HTMLElement) {
       placing = false;
       return;
     }
-    settleJump();
     lookAtTap();
   }
 
