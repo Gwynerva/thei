@@ -13,6 +13,7 @@ import { libraryAssetDetailsModal } from '#layers/thei/app/modals/asset-library/
 import {
   fieldChange,
   itemsChange,
+  relationChanges,
   updateFields,
   valueChange,
   wordsChange,
@@ -77,10 +78,19 @@ const lines = computed<{ name: string; change: AiValueChange }[] | null>(() => {
     // One field is named by the first line already; dates are drawn below.
     return fields
       .filter(({ field }) => field !== 'periods')
-      .map(({ field, before, after }) => ({
-        name: fields.length > 1 ? fieldName(field) : '',
-        change: fieldChange(field, before, after, options),
-      }));
+      .flatMap(({ field, before, after }) => {
+        const line = {
+          name: fields.length > 1 ? fieldName(field) : '',
+          change: fieldChange(field, before, after, options),
+        };
+        if (field !== 'relations') return [line];
+        // A relation set otherwise is said by its entity; its ends' line
+        // only while it says what goes or comes.
+        const changed = relationChanges(before, after, options.refs);
+        return changed.length && sameChange(line.change)
+          ? changed
+          : [line, ...changed];
+      });
   }
   if (kind.value === 'term' && base.value.before) {
     const was = base.value.before as Record<string, any>;
@@ -102,7 +112,9 @@ const lines = computed<{ name: string; change: AiValueChange }[] | null>(() => {
 /** A line whose value stays as it is: nothing to say. */
 function sameChange(change: AiValueChange) {
   if (change.type === 'items')
-    return change.items.every((item) => item.kind === 'same');
+    return (
+      !change.reordered && change.items.every((item) => item.kind === 'same')
+    );
   if (change.type === 'words')
     return change.pieces.every((piece) => piece.kind === 'same');
   if (change.type === 'whole') return change.before === change.after;

@@ -1863,7 +1863,6 @@ export type LanguagePhrases = {
   >;
   ai_action_and: string;
   ai_action_term_keep: string;
-  ai_action_facts: (count: number) => string;
   ai_action_card_title: (count: number) => string;
   ai_action_apply: string;
   ai_action_apply_count: (count: number) => string;
@@ -1897,8 +1896,6 @@ export type LanguagePhrases = {
   ai_action_atomic_hint: string;
   ai_action_unticked_hint: string;
   ai_action_final_note: string;
-  ai_action_by_ai: string;
-  ai_action_corrections: (count: number) => string;
   /** Links that lead nowhere, mended: the action, and how many. */
   ai_action_relink: string;
   ai_action_relinks: (count: number) => string;
@@ -1909,9 +1906,7 @@ export type LanguagePhrases = {
   ai_review_link_none: string;
   /** A mended link whose link leads elsewhere since. */
   ai_review_link_changed: string;
-  ai_action_unsure_count: (count: number) => string;
   ai_action_order: string;
-  ai_action_order_parts: (count: number) => string;
   ai_action_relations: Record<'related' | 'depends-on' | 'affects', string>;
   ai_action_relation_removed: string;
   ai_action_write_modes: Record<'new' | 'append' | 'replace', string>;
@@ -1965,7 +1960,6 @@ export type LanguagePhrases = {
   >;
   ai_action_parts: Record<'sections' | 'tags' | 'relations', string>;
   ai_action_access: Record<'public' | 'link-only' | 'private', string>;
-  ai_action_update_fields: (fields: string) => string;
   ai_toast_declined: (count: number) => string;
   ai_toast_never: string;
   ai_toast_comment_sent: string;
@@ -1982,7 +1976,6 @@ export type LanguagePhrases = {
   /** Bringing back what was said never to offer again: that goes too. */
   ai_action_restore_never: string;
   /** Short words on a proposal's buttons; the whole meaning is in the hint. */
-  ai_action_accept_short: string;
   ai_action_restore_short: string;
   /** Said once a request from a form's ✦ menu proposes something in it. */
   ai_entity_offer_at: (field: string) => string;

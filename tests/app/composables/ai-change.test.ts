@@ -1,18 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AiActionItem } from '../../../shared/ai';
 import enModule from '../../../shared/language/list/en';
-import { fieldChange, updateFields } from '../../../app/composables/ai-change';
+import {
+  fieldChange,
+  relationChanges,
+  updateFields,
+} from '../../../app/composables/ai-change';
 import {
   fieldName,
   fieldSaid,
   fieldValueWords,
+  relationWords,
 } from '../../../app/composables/ai-format';
 
 /**
  * A change of an entity's form, as its card says it: the fields by the
  * names a change gives them — never as the form keeps them, `externalLinks`
  * — and every value in words, a list of files, links or relations item by
- * item. The owner's words are formatted; an address is said as typed.
+ * item, a list put in a new order said so, a relation set otherwise said
+ * by its entity. The owner's words are formatted; an address is said as
+ * typed.
  */
 beforeEach(() => {
   vi.stubGlobal('phrase', { value: enModule.phrases });
@@ -22,6 +29,7 @@ beforeEach(() => {
   );
   vi.stubGlobal('fieldSaid', fieldSaid);
   vi.stubGlobal('fieldValueWords', fieldValueWords);
+  vi.stubGlobal('relationWords', relationWords);
   // Named as the lists name an entity: its title formatted.
   vi.stubGlobal(
     'entityListName',
@@ -170,5 +178,85 @@ describe('an update of a form', () => {
     );
     // A value of no words on either side says nothing.
     expect(fieldChange('sectionOrder', {}, {})).toEqual({ type: 'none' });
+  });
+
+  it('says a list put in a new order, but not relations, whose order means nothing', () => {
+    const sections = (...titles: string[]) =>
+      titles.map((title) => ({ title }));
+    expect(
+      fieldChange('sections', sections('One', 'Two'), sections('Two', 'One')),
+    ).toEqual({
+      type: 'items',
+      reordered: true,
+      items: [
+        { kind: 'same', text: 'TWO' },
+        { kind: 'same', text: 'ONE' },
+      ],
+    });
+    // What it keeps stays in its order: only what comes is new.
+    expect(
+      fieldChange('tags', sections('A'), sections('A', 'B')),
+    ).not.toHaveProperty('reordered');
+    const relation = (id: string, title: string) => ({
+      entityType: 'event',
+      entityId: id,
+      type: 'related',
+      title,
+    });
+    expect(
+      fieldChange(
+        'relations',
+        [relation('e-1', 'Walk'), relation('e-2', 'Lake')],
+        [relation('e-2', 'Lake'), relation('e-1', 'Walk')],
+      ),
+    ).not.toHaveProperty('reordered');
+  });
+
+  it('says a relation set otherwise by its entity, old → new', () => {
+    const walk = { entityType: 'event', entityId: 'e-1', title: 'Walk' };
+    const lake = { entityType: 'event', entityId: 'e-2', title: 'Lake' };
+    expect(
+      relationChanges(
+        [
+          { ...walk, type: 'related' },
+          {
+            ...lake,
+            type: 'related',
+            note: { type: 'shared', text: 'Same day' },
+          },
+        ],
+        [
+          { ...walk, type: 'influencing' },
+          {
+            ...lake,
+            type: 'related',
+            note: { type: 'shared', text: 'Same day' },
+          },
+        ],
+      ),
+    ).toEqual([
+      {
+        name: 'WALK',
+        change: { type: 'whole', before: 'Related', after: 'depends on' },
+      },
+    ]);
+    const [noted] = relationChanges(
+      [{ ...lake, type: 'related' }],
+      [
+        {
+          ...lake,
+          type: 'related',
+          note: {
+            type: 'split',
+            currentText: 'Planned',
+            relatedText: 'Walked',
+          },
+        },
+      ],
+    );
+    expect(noted).toMatchObject({ name: 'LAKE', change: { type: 'words' } });
+    expect(JSON.stringify(noted)).toContain('PLANNED / WALKED');
+    // A relation that comes or goes is its ends' line's to say.
+    expect(relationChanges([], [{ ...lake, type: 'related' }])).toEqual([]);
   });
 });

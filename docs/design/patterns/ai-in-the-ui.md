@@ -88,7 +88,11 @@ attention.
     names them as a change does, never as the form keeps them, and says
     their values in words as a new entity's fields are said — files, links,
     relations item by item (`fieldSaid` in `app/composables/ai-format.ts`,
-    `fieldChange` in `app/composables/ai-change.ts`);
+    `fieldChange` in `app/composables/ai-change.ts`); a list whose order
+    means something, put in a new order, is shown in it and says «Новый
+    порядок» after its items, and a relation set otherwise — how it stands,
+    its note — is a line of its own by its entity, old → new
+    (`relationChanges`);
   - the model's reason, and where it came from;
   - the footer, on `bg-bg-3`: «Исправить самому» and comment (or open, for
     a text edit) as squares at its start, after a pager where there is one;

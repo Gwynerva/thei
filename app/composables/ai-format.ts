@@ -116,7 +116,7 @@ function itemWords(item: unknown, keys: readonly string[]): string {
 }
 
 /** A relation by the entity it leads to: as a form keeps it, or by its ref. */
-function relationWords(
+export function relationWords(
   item: unknown,
   refs: Record<string, AiEntityRef>,
 ): string {

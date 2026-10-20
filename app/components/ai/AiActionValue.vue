@@ -3,8 +3,9 @@ import type { AiValueChange } from '#layers/thei/app/composables/ai-change';
 
 /**
  * One value's change in a card (`valueChange`): what goes struck, what comes
- * marked. A change that no longer stands to be made, or made, is told
- * quietly: the colours are for one that waits or holds (`live`).
+ * marked, a list put in a new order said so. A change that no longer stands
+ * to be made, or made, is told quietly: the colours are for one that waits
+ * or holds (`live`).
  */
 const props = defineProps<{ change: AiValueChange; live: boolean }>();
 
@@ -43,6 +44,13 @@ function gapBefore(index: number) {
       "
       :data-change="item.kind"
       >{{ item.text }}</span
+    >
+    <!-- Its items in a new order: said after them, as an empty value is. -->
+    <span
+      v-if="change.reordered"
+      class="leading-6 text-text-3 italic"
+      data-change="reordered"
+      >{{ phrase.ai_action_order }}</span
     >
   </span>
   <span v-else-if="change.type === 'words'"
