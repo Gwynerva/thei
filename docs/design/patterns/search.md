@@ -211,10 +211,6 @@ there.
 - Two searches on one screen confused the owner; a stranger and the owner
   now meet one popup, which only holds more for the owner.
 - The kind's icon is on every result, so a group's name needs none.
-- The busiest tags offered as words to try were dropped: they said little of
-  what a reader wanted. The owner asked for the reader's own queries in their
-  place, each reader's kept apart, and for a search that found nothing to
-  say so and stop there.
 - A find that led to the top of a long page, or to a text under a spoiler,
   made the reader look for it again.
 

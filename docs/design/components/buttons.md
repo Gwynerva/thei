@@ -12,8 +12,7 @@ neutral — and in square icon-only sizes.
 - `ModalHeaderButton` in a modal's header row: close, delete, the main action
   (Save, Done).
 - Where the action is a navigation, `Button` with `to`: a link that looks as
-  the button of its rank does, and `ModalHeaderButton` with `to` in a modal's
-  header. Never a link styled by hand as a button.
+  the button of its rank does. Never a link styled by hand as a button.
 
 ## Rules
 
