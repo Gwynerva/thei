@@ -128,7 +128,7 @@ function tableOf(schema: any, kind: EntityKind) {
  * Where the owner edits an entity: a section, in its project's form, which
  * opens it.
  */
-function adminPath(
+export function adminPath(
   kind: EntityKind,
   id: string,
   project?: string,

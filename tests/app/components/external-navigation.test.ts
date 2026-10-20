@@ -9,7 +9,8 @@ import { describe, expect, it } from 'vitest';
  * `navigateTo` — but not with `external`, which takes the path as it is: a
  * full load is the browser's, not the router's. Nor does anything add it to
  * an address handed to `location`. So each of these takes `sitePath()`, and
- * the sources are read for the ones that do not.
+ * the sources are read for the ones that do not — and for a `sitePath()` the
+ * router is given as well, which would carry the base twice.
  */
 const root = fileURLToPath(new URL('../../..', import.meta.url));
 const app = join(root, 'app');
@@ -66,6 +67,30 @@ describe('a page loaded in full', () => {
     const offenders = sources
       .filter(({ text }) => literal.test(text))
       .map(({ name }) => name);
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('a page the router opens', () => {
+  it('is reached by navigateTo without the base path', () => {
+    const offenders = sources.flatMap(({ name, text }) =>
+      calls(text, 'navigateTo')
+        .filter((args) => /\bsitePath\(/.test(args))
+        .filter((args) => !/\bexternal:\s*true\b/.test(args))
+        .map((args) => `${name}: navigateTo(${args.trim().slice(0, 60)}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it('is reached by a link without the base path', () => {
+    const tag = /<(?:TheiLink|NuxtLink)\b((?:[^>"']|"[^"]*"|'[^']*')*)>/g;
+    const offenders = sources.flatMap(({ name, text }) =>
+      [...text.matchAll(tag)]
+        .map((match) => match[1]!)
+        .filter((attributes) => !/(?:^|\s):?external\b/.test(attributes))
+        .filter((attributes) => /:to="[^"]*\bsitePath\(/.test(attributes))
+        .map((attributes) => `${name}: <TheiLink${attributes.slice(0, 80)}`),
+    );
     expect(offenders).toEqual([]);
   });
 });

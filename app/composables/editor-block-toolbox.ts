@@ -4,6 +4,7 @@ import type { VirtualElement } from '@floating-ui/vue';
 import { editorBlockNextTo } from './editor-dom';
 import { hideKeyFromEditor } from './editor-keyboard-boundary';
 import { matchChord } from './shortcut';
+import { browserStorage } from './browser-storage';
 
 /**
  * The blocks the "+" of the editor offers, as a grid of tiles of our own
@@ -72,7 +73,7 @@ const ORDER_KEY = 'thei-editor-toolbox';
 /** The order the owner gave the tiles, kept in this browser. */
 export function storedToolboxOrder(): string[] {
   try {
-    const value = JSON.parse(localStorage.getItem(ORDER_KEY) ?? '[]');
+    const value = JSON.parse(browserStorage.read(ORDER_KEY) ?? '[]');
     return Array.isArray(value)
       ? value.filter((key): key is string => typeof key === 'string')
       : [];
@@ -81,12 +82,9 @@ export function storedToolboxOrder(): string[] {
   }
 }
 
+/** A browser that keeps nothing shows the tools' own order next time. */
 export function storeToolboxOrder(keys: readonly string[]) {
-  try {
-    localStorage.setItem(ORDER_KEY, JSON.stringify(keys));
-  } catch {
-    // A browser that keeps nothing shows the tools' own order next time.
-  }
+  browserStorage.write(ORDER_KEY, JSON.stringify(keys));
 }
 
 /**

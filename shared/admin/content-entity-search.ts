@@ -2,9 +2,7 @@ import type { ContentEntityType } from '../content-link';
 import { dayQueryRank, parseDayQuery, type DayQuery } from '../day-query';
 import type { MediaDescriptor } from '../media';
 import {
-  keyTier,
-  NAME_RANKS,
-  nameTier,
+  nameRank,
   prepareNameQuery,
   textWords,
   type NameQuery,
@@ -125,19 +123,12 @@ export function rankContentEntities<T extends Rankable>(
 function bestRank(item: Rankable, query: NameQuery, day?: DayQuery) {
   if (item.date)
     return (day && dayQueryRank(item.date, day)) ?? Number.POSITIVE_INFINITY;
-  let best = Number.POSITIVE_INFINITY;
-  const titleTier = nameTier(query, item.title);
-  if (titleTier) best = NAME_RANKS.title[titleTier];
-  for (const synonym of item.synonyms ?? []) {
-    const tier = nameTier(query, synonym);
-    if (tier) best = Math.min(best, NAME_RANKS.synonym[tier]);
-  }
-  const ids = { exact: 0, start: 1, inside: 2 };
-  const publicId = keyTier(query, item.publicId);
-  if (publicId) best = Math.min(best, 10 + ids[publicId]);
-  const slug = keyTier(query, item.humanReadableSlug);
-  if (slug) best = Math.min(best, 20 + ids[slug]);
-  return best;
+  return nameRank(query, {
+    title: item.title,
+    synonyms: item.synonyms,
+    publicId: item.publicId,
+    slug: item.humanReadableSlug,
+  }).rank;
 }
 
 type Suggestible = Rankable & { summary: string };

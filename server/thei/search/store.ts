@@ -22,7 +22,7 @@ import { SEARCH_FIELDS, type SearchUnit } from './units';
  * no migration, and may be deleted at any time: a file of another format, or
  * one made by another reading of words, is emptied and built again.
  */
-const FORMAT = 10;
+const FORMAT = 11;
 
 /** What a term may hold for FTS5 to keep it whole. */
 export function ftsTerm(term: string): string {
@@ -51,6 +51,12 @@ export interface StoredCard {
   access?: SearchDocument['access'];
   showcase?: boolean;
   cv?: boolean;
+  /**
+   * Not shown: when the first words kept out of the matched ones arrive —
+   * those of a place whose day had not come when the document was written
+   * (`SearchUnit.visibleFrom`).
+   */
+  pendingFrom?: number;
 }
 
 /** A file shown at a place of a document: what its own document is built from. */
@@ -165,26 +171,119 @@ export class SearchStore {
     this.setMeta('generation', String(this.generation + 1));
   }
 
-  /** The terms of a document's units, column by column, as FTS5 takes them. */
-  private columns(units: SearchUnit[]): string[] {
+  /**
+   * The terms of a document's units, column by column, as FTS5 takes them,
+   * as of `now`: the words of a place whose day has not come are left out,
+   * so nothing is matched by them before it is, and `pendingFrom` says when
+   * the first of them comes (`admitArrived`).
+   */
+  private columns(
+    units: SearchUnit[],
+    now: number,
+  ): { columns: string[]; pendingFrom?: number } {
     const byField = new Map<string, string[]>();
+    let pendingFrom: number | undefined;
     for (const unit of units) {
       if (unit.placeOnly) continue;
+      if (unit.visibleFrom !== undefined && unit.visibleFrom > now) {
+        pendingFrom = Math.min(pendingFrom ?? Infinity, unit.visibleFrom);
+        continue;
+      }
       const list = byField.get(unit.field) ?? [];
       for (const token of searchTokens(unit.text, this.analyzer, 'index'))
         for (const term of searchIndexTerms(unit.text, token))
           list.push(ftsTerm(term));
       byField.set(unit.field, list);
     }
-    return SEARCH_FIELDS.map((field) => (byField.get(field) ?? []).join(' '));
+    return {
+      columns: SEARCH_FIELDS.map((field) =>
+        (byField.get(field) ?? []).join(' '),
+      ),
+      ...(pendingFrom !== undefined ? { pendingFrom } : {}),
+    };
+  }
+
+  /**
+   * When the first words kept out of the matched ones arrive, of any
+   * document: `null` when none wait, unknown until read after a change.
+   */
+  private arrival: number | null | undefined;
+
+  nextArrival(): number | undefined {
+    // Read once after a change: `null` is known to be none.
+    if (this.arrival === undefined)
+      this.arrival =
+        (
+          this.db
+            .prepare(
+              "SELECT min(json_extract(card, '$.pendingFrom')) AS at FROM docs",
+            )
+            .get() as { at: number | null }
+        ).at ?? null;
+    return this.arrival ?? undefined;
+  }
+
+  /** The documents some of whose words have arrived by `now`. */
+  arrivedDocs(
+    now: number,
+  ): { id: number; audience: SearchAudience; kind: string; ref: string }[] {
+    if ((this.nextArrival() ?? Infinity) > now) return [];
+    return this.db
+      .prepare(
+        "SELECT id, audience, kind, ref FROM docs WHERE json_extract(card, '$.pendingFrom') <= ?",
+      )
+      .all(now) as {
+      id: number;
+      audience: SearchAudience;
+      kind: string;
+      ref: string;
+    }[];
+  }
+
+  /**
+   * Lets the words of a stored document whose places' days have come by
+   * `now` be matched, from the units it keeps: nothing of it needs building
+   * again.
+   */
+  admitArrived(id: number, now: number) {
+    const row = this.db
+      .prepare('SELECT audience, card, fingerprint FROM docs WHERE id = ?')
+      .get(id) as
+      | { audience: SearchAudience; card: string; fingerprint: string }
+      | undefined;
+    if (!row) return;
+    const { columns, pendingFrom } = this.columns(this.units(id), now);
+    const card = JSON.parse(row.card) as StoredCard;
+    delete card.pendingFrom;
+    if (pendingFrom !== undefined) card.pendingFrom = pendingFrom;
+    const fingerprint = withPending(
+      row.fingerprint.slice(0, row.fingerprint.lastIndexOf(':')),
+      pendingFrom,
+    );
+    this.db.transaction(() => {
+      this.db
+        .prepare(`DELETE FROM fts_${row.audience} WHERE rowid = ?`)
+        .run(id);
+      this.db
+        .prepare(
+          `INSERT INTO fts_${row.audience} (rowid, ${SEARCH_FIELDS.join(', ')}) VALUES (?, ${SEARCH_FIELDS.map(() => '?').join(', ')})`,
+        )
+        .run(id, ...columns);
+      this.db
+        .prepare('UPDATE docs SET card = ?, fingerprint = ? WHERE id = ?')
+        .run(JSON.stringify(card), fingerprint, id);
+    })();
+    this.arrival = undefined;
   }
 
   /**
    * Writes a document in place of what was stored for its ref, unless what
-   * it shows is the same. Returns whether anything changed.
+   * it shows, and what of it is matched as of `now`, is the same. Returns
+   * whether anything changed.
    */
-  write(document: SearchDocument): boolean {
-    const fingerprint = documentFingerprint(document);
+  write(document: SearchDocument, now = Date.now()): boolean {
+    const { columns, pendingFrom } = this.columns(document.units, now);
+    const fingerprint = withPending(documentFingerprint(document), pendingFrom);
     const existing = this.db
       .prepare(
         'SELECT id, fingerprint FROM docs WHERE audience = ? AND ref = ?',
@@ -192,7 +291,7 @@ export class SearchStore {
       .get(document.audience, document.ref) as
       { id: number; fingerprint: string } | undefined;
     if (existing?.fingerprint === fingerprint) return false;
-    const columns = this.columns(document.units);
+    this.arrival = undefined;
     const card: StoredCard = {
       href: document.href,
       ...(document.publicRef ? { publicRef: document.publicRef } : {}),
@@ -219,6 +318,7 @@ export class SearchStore {
       ...(document.access ? { access: document.access } : {}),
       ...(document.showcase ? { showcase: true } : {}),
       ...(document.cv ? { cv: true } : {}),
+      ...(pendingFrom !== undefined ? { pendingFrom } : {}),
     };
     this.db.transaction(() => {
       if (existing)
@@ -293,6 +393,7 @@ export class SearchStore {
       .get(audience, ref) as { id: number } | undefined;
     if (!existing) return false;
     this.db.transaction(() => this.removeRow(audience, existing.id, ref))();
+    this.arrival = undefined;
     return true;
   }
 
@@ -365,6 +466,14 @@ export class SearchStore {
 }
 
 /**
+ * A document's fingerprint with when its pending words arrive: a document
+ * written again once they have is written anew, though it shows the same.
+ */
+function withPending(fingerprint: string, pendingFrom: number | undefined) {
+  return `${fingerprint}:${pendingFrom ?? ''}`;
+}
+
+/**
  * The years the days of a life cover, which the years facet counts and a
  * year filters by: a stretch over several years is in each of them.
  */
@@ -397,7 +506,7 @@ function filePlacesOf(document: SearchDocument): StoredFilePlace[] {
           : document.title,
       placeName: unit.place?.section?.title ?? document.title,
       ...(document.sort ? { sort: document.sort } : {}),
-      visibleFrom: document.visibleFrom,
+      visibleFrom: Math.max(document.visibleFrom, unit.visibleFrom ?? 0),
     };
     // The preview of any of its words at the place: a title may come without.
     if (!entry.media && unit.media) entry.media = unit.media;

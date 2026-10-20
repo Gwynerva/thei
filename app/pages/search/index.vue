@@ -9,13 +9,14 @@ import {
   countPublicSearchFilters,
   parsePublicSearchFilters,
   PUBLIC_SEARCH_DEBOUNCE_MS,
-  PUBLIC_SEARCH_QUERY_MAX_LENGTH,
   publicSearchPreset,
   publicSearchPresetHref,
   publicSearchQuery,
   type PublicSearchFilters,
   type PublicSearchPresetId,
 } from '#layers/thei/shared/public-search';
+import { searchKey } from '#layers/thei/shared/search/match';
+import { SEARCH_QUERY_MAX_LENGTH } from '#layers/thei/shared/search/tokens';
 
 /**
  * The search page. Without a query it is the catalogue of projects and
@@ -218,16 +219,38 @@ function clearText() {
   input.value?.focus();
 }
 
-// What was searched for is kept for the quick search to offer again: on
-// Enter, and once a result is opened, as the search read it.
+// What was searched for is kept for the quick search to offer again, as the
+// search read it — on the other keyboard if it was typed there: on Enter,
+// once the answer to what was typed has come, and once a result is opened.
 const history = useSearchHistory();
+function rememberAnswer() {
+  history.remember(search.value.keyboard ?? search.value.query);
+}
+/** What Enter was pressed on, until its answer comes. */
+let submitted = '';
+function rememberSubmitted() {
+  if (
+    !submitted ||
+    pending.value ||
+    searchKey(search.value.query) !== searchKey(submitted)
+  )
+    return;
+  submitted = '';
+  rememberAnswer();
+}
 function submitText() {
   commitText();
-  history.remember(text.value);
+  submitted = text.value.trim();
+  rememberSubmitted();
 }
+watch([search, pending], rememberSubmitted);
+// Typed over before its answer came, it was not what was searched for.
+watch(text, (value) => {
+  if (searchKey(value) !== searchKey(submitted)) submitted = '';
+});
 function rememberOpened(event: MouseEvent) {
   if (!(event.target as Element | null)?.closest('a[href]')) return;
-  history.remember(search.value.keyboard ?? search.value.query);
+  rememberAnswer();
 }
 
 onMounted(() => input.value?.focus({ preventScroll: true }));
@@ -382,7 +405,7 @@ const countLine = computed(() => {
         enterkeyhint="search"
         autocomplete="off"
         data-search-page-field
-        :maxlength="PUBLIC_SEARCH_QUERY_MAX_LENGTH"
+        :maxlength="SEARCH_QUERY_MAX_LENGTH"
         :placeholder="phrase.search_placeholder"
         :aria-label="phrase.search_placeholder"
         class="search-input h-12 w-full rounded-normal border-2 border-border-1

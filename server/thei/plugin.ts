@@ -5,7 +5,7 @@ import { invalidateMcpDocuments } from './mcp/documents';
 import { invalidateLifeIndex } from './public/life';
 import { isContentWriteRequest } from './read-only-request';
 import { rememberRequestClient } from './request';
-import { markSearchStale } from './search/indexer';
+import { closeSearchStore, markSearchStale } from './search/indexer';
 import { invalidateTagRecommendationIndex } from './tag-recommendations';
 
 export default defineNitroPlugin(async (nitroApp) => {
@@ -33,8 +33,9 @@ export default defineNitroPlugin(async (nitroApp) => {
   // Admin sessions are written every 30 s. What the last seconds changed is
   // written as the server stops: on Nitro's close, after a stop signal or in a
   // dev reload, and on exit, which an update and the panel's restart reach
-  // through `process.exit`.
+  // through `process.exit`. The search index is closed then too.
   nitroApp.hooks.hook('close', flushSessionsBeforeExit);
+  nitroApp.hooks.hook('close', closeSearchStore);
   process.once('exit', flushSessionsBeforeExit);
   await bootTheiServer();
 });

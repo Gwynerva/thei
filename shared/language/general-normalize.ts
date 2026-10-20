@@ -19,6 +19,11 @@ export function generalNormalize(text: string): string {
 
 export const NON_BREAKING_SPACE = ' ';
 
+/** A text as a pattern that matches it as it is. */
+export function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * Ties short words to whatever follows them, so a line never ends on a
  * preposition. Which words those are is a language's own business; the
@@ -26,9 +31,7 @@ export const NON_BREAKING_SPACE = ' ';
  */
 export function bindShortWords(text: string, words: readonly string[]): string {
   if (!words.length) return text;
-  const alternatives = words
-    .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .join('|');
+  const alternatives = words.map(escapeRegExp).join('|');
   // A lookbehind rather than a captured separator: consuming the space before
   // a word would hide the next word's own separator, and a run of short words
   // ("in the park") would only ever bind its first pair.

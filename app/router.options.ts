@@ -1,5 +1,9 @@
 import type { RouterConfig } from 'nuxt/schema';
 // Nuxt's own scroll behaviour, which this file would otherwise replace whole.
+// Nuxt offers no supported way to it: the options of `router.options` files
+// are spread over its own key by key, and the exports of `nuxt/package.json`
+// name no path to this file, so it is reached through the `#app` alias. An
+// upgrade of Nuxt checks that it is still there, with `scrollBehavior`.
 import nuxtRouterOptions from '#app/../pages/runtime/router.options';
 import { parseLandingHash } from '#layers/thei/shared/search/landing';
 

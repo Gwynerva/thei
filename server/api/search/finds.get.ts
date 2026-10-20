@@ -1,12 +1,7 @@
 import type { SearchFind } from '#layers/thei/shared/search/api';
 import { SEARCH_QUERY_MAX_LENGTH } from '#layers/thei/shared/search/tokens';
-import {
-  searchBudgetWait,
-  spendSearchTime,
-  takeSearch,
-} from '../../thei/search/limits';
+import { withStrangerSearchLimits } from '../../thei/search/limits';
 import { findsOfResult } from '../../thei/search/query';
-import { requestClient } from '../../thei/request';
 
 /**
  * Every place one result of a search holds the words at: what its card's
@@ -27,30 +22,14 @@ export default defineEventHandler(
         statusMessage: 'A query and a result are needed',
       });
     const isAdmin = await THEI_SERVER.isAdmin(event);
-    if (!isAdmin) {
-      const client = requestClient(event);
-      const wait = takeSearch(client.address ?? 'unknown');
-      const busy = wait ? 0 : searchBudgetWait({ rendering: client.rendering });
-      if (wait || busy) {
-        setResponseHeader(event, 'Retry-After', wait || busy);
-        throw createError({
-          statusCode: wait ? 429 : 503,
-          statusMessage: wait ? 'Too Many Requests' : 'Service Unavailable',
-        });
-      }
-    }
-    const started = performance.now();
-    let found: ReturnType<typeof findsOfResult>;
-    try {
-      found = findsOfResult({
+    const found = await withStrangerSearchLimits(event, isAdmin, () =>
+      findsOfResult({
         q,
         ref,
         audience: isAdmin ? 'owner' : 'public',
         typing: query.typing === '1',
-      });
-    } finally {
-      if (!isAdmin) spendSearchTime(performance.now() - started);
-    }
+      }),
+    );
     if (!found)
       throw createError({ statusCode: 404, statusMessage: 'Not found' });
     return found;

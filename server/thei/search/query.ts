@@ -1,7 +1,7 @@
 import { utcDayOf } from '#layers/thei/shared/date-range';
 import { lifeArrivalCutoff } from '#layers/thei/shared/life';
 import { tagUuidsBySlug } from '../tags';
-import { dayQueryRank, parseDayQuery } from '#layers/thei/shared/day-query';
+import { resolveNamedDay } from '#layers/thei/shared/day-query';
 import { resolvePagination } from '#layers/thei/shared/pagination';
 import {
   SEARCH_KINDS,
@@ -28,13 +28,12 @@ import {
   searchTokens,
   type SearchQuery,
 } from '#layers/thei/shared/search/tokens';
-import { searchKey } from '#layers/thei/shared/search/match';
+import { searchKey, wordProbe } from '#layers/thei/shared/search/match';
 import { normalizeTermText } from '#layers/thei/shared/text-terms';
-import { buildPublicTagRows } from '../public/entities';
-import { runCatalogue } from './catalogue';
+import { runCatalogue, tagFacetRows } from './catalogue';
 import { placeHref, type SearchAudience } from './documents';
 import { searchAnalyzer } from './analyzer';
-import { searchIndexProgress, useSearchStore } from './indexer';
+import { admitArrivals, searchIndexProgress, useSearchStore } from './indexer';
 import { ftsTerm, type SearchStore, type StoredCard } from './store';
 import { SEARCH_FIELD_WEIGHTS, SEARCH_FIELDS, type SearchUnit } from './units';
 
@@ -74,6 +73,8 @@ export interface SearchRequest {
   quick?: boolean;
   /** The query is being typed: its last word is unfinished. */
   typing?: boolean;
+  /** The reader's own day, which «вчера» is read from; else the UTC one. */
+  today?: string;
   now?: number;
 }
 
@@ -89,7 +90,6 @@ interface DocRow {
 const WEIGHTS = SEARCH_FIELDS.map((field) => SEARCH_FIELD_WEIGHTS[field]).join(
   ', ',
 );
-/** The FTS5 query of the words a search insists on, and its phrases. */
 /**
  * The query as FTS5 reads it: every word in one of its forms, and each
  * phrase in a row — or, with `any`, as few as one of them.
@@ -172,20 +172,6 @@ function narrowed(
 const IN_YEAR =
   'EXISTS (SELECT 1 FROM doc_years y WHERE y.doc = d.id AND y.year = ?)';
 
-/** The day a query names, when it names one or a stretch of them. */
-function dayMatcher(
-  q: string,
-  now: number,
-): ((date: string) => number | undefined) | undefined {
-  const shift = searchAnalyzer().relativeDay(normalizeTermText(q.trim()));
-  if (shift !== undefined) {
-    const day = utcDayOf(now + shift * 24 * 60 * 60 * 1000);
-    return (date) => (date === day ? 0 : undefined);
-  }
-  const parsed = parseDayQuery(q);
-  return parsed ? (date) => dayQueryRank(date, parsed) : undefined;
-}
-
 /** Whether a unit holds a phrase: its terms in a row. */
 function phraseSpans(
   tokens: ReturnType<typeof searchTokens>,
@@ -224,12 +210,14 @@ function holdsPhrases(units: SearchUnit[], query: SearchQuery): boolean {
 /**
  * Where in an entity the query's words stand, best first: units holding more
  * of the words, then units in weightier fields. Another name of the entity
- * is said to have matched and never shown.
+ * is said to have matched and never shown, and words of a place whose day
+ * has not come by `now` are not found at all.
  */
 function findsOf(
   units: SearchUnit[],
   query: SearchQuery,
   document: { href: string },
+  now: number,
   limit: number,
   withPlace = false,
   /** How far before the words a snippet opens: less in a single line. */
@@ -245,22 +233,8 @@ function findsOf(
   // a query made of nothing else: «где я была».
   const allStop = words.every((word) => word.stop);
   const counts = (word: (typeof words)[number]) => !word.stop || allStop;
-  // What a unit must hold to be read at all: the start a word and its term
-  // share, a letter short of where they part — a vowel that drops out,
-  // «день», «дня», stands just there — and for a Cyrillic word any Latin
-  // letter too, which a name may be written in («ева», «EVA»).
-  const probes = words.map((word) => {
-    let head = 0;
-    while (
-      head < Math.min(word.term.length, word.word.length) &&
-      word.term[head] === word.word[head]
-    )
-      head++;
-    return {
-      start: word.word.slice(0, Math.max(1, head - 1)),
-      latin: /\p{Script=Cyrillic}/u.test(word.word),
-    };
-  });
+  // What a unit must hold to be read at all (`wordProbe`).
+  const probes = words.map(wordProbe);
   const probed = (text: string) =>
     probes.some(
       (probe) =>
@@ -274,7 +248,7 @@ function findsOf(
     words: string[];
   }[] = [];
   units.forEach((unit, order) => {
-    if (unit.placeOnly) return;
+    if (unit.placeOnly || (unit.visibleFrom ?? 0) > now) return;
     const lower = normalizeTermText(unit.text);
     if (!probed(lower) && !query.phrases.length) return;
     const tokens = searchTokens(unit.text, analyzer, 'index');
@@ -342,7 +316,10 @@ function findsOf(
       ...(unit.place?.section && unit.where !== 'section'
         ? { label: unit.place.section.title }
         : unit.place?.relation
-          ? { label: unit.place.relation.title }
+          ? {
+              label: unit.place.relation.title,
+              ...(unit.place.relation.asIs ? { labelAsIs: true as const } : {}),
+            }
           : unit.place?.status
             ? { label: unit.place.status.date }
             : unit.place?.file?.title
@@ -450,8 +427,8 @@ async function tagFacets(
   request: SearchRequest,
   store: SearchStore,
 ): Promise<SearchFacets['tags']> {
-  const included = new Set(tagUuidsBySlug(request.tags));
-  const excluded = new Set(tagUuidsBySlug(request.exclude));
+  const included = tagUuidsBySlug(request.tags);
+  const excluded = tagUuidsBySlug(request.exclude);
   const counts = new Map(rows.map((row) => [row.tag, row.n]));
   // A tag asked for is told back only to whoever may open its page: a
   // stranger never learns of a tag nothing public carries.
@@ -461,29 +438,7 @@ async function tagFacets(
   for (const tag of [...included, ...excluded])
     if (!counts.has(tag) && findable.get(request.audience, `tag:${tag}`))
       counts.set(tag, 0);
-  if (!counts.size) return [];
-  const { db, schema } = THEI_SERVER.useDb();
-  const tags = db
-    .select()
-    .from(schema.tags)
-    .all()
-    .filter((tag) => counts.has(tag.tagUuid));
-  const summaries = await buildPublicTagRows(tags);
-  return tags
-    .map((tag, at) => ({
-      tag: summaries[at]!,
-      count: counts.get(tag.tagUuid) ?? 0,
-      ...(included.has(tag.tagUuid)
-        ? { state: 'include' as const }
-        : excluded.has(tag.tagUuid)
-          ? { state: 'exclude' as const }
-          : {}),
-    }))
-    .sort(
-      (left, right) =>
-        right.count - left.count ||
-        left.tag.title.localeCompare(right.tag.title),
-    );
+  return tagFacetRows(counts, included, excluded);
 }
 
 /**
@@ -530,6 +485,330 @@ function kindHint(query: SearchQuery): {
   };
 }
 
+/** One search as it reads the index: what is asked, of which table, within what. */
+interface SearchPass {
+  request: SearchRequest;
+  store: SearchStore;
+  query: SearchQuery;
+  /** The FTS5 query of its words, when it has any (`ftsMatch`). */
+  match?: string;
+  now: number;
+  table: string;
+  /** The words' table joined to the documents, as every count reads it. */
+  from: string;
+  /** The conditions every hit meets, but the kind and the year. */
+  base: Filters;
+}
+
+/** The diary of the days a query names, the closest day first. */
+interface NamedDayRows {
+  rows: DocRow[];
+  ids: Set<number>;
+}
+
+/** A query that names a day finds the diary of that day, whatever it says. */
+function dayRowsOf(
+  pass: SearchPass,
+  days: ((date: string) => number | undefined) | undefined,
+): NamedDayRows {
+  const { request, store, base } = pass;
+  const rows = days
+    ? (
+        store.db
+          .prepare(
+            `SELECT d.id, d.kind, d.ref, d.title, d.date, d.card FROM docs d WHERE d.audience = ? AND d.kind = 'diary-entry' AND ${base.sql}`,
+          )
+          .all(request.audience, ...base.params) as DocRow[]
+      )
+        .map((row) => ({ row, rank: days(row.date ?? '') }))
+        .filter(
+          (item): item is { row: DocRow; rank: number } =>
+            item.rank !== undefined,
+        )
+        .sort(
+          (a, b) =>
+            a.rank - b.rank ||
+            (b.row.date ?? '').localeCompare(a.row.date ?? ''),
+        )
+        .map((item) => item.row)
+    : [];
+  return { rows, ids: new Set(rows.map((row) => row.id)) };
+}
+
+/**
+ * What the results hold, counted. Each facet counts across its own choice
+ * and within the other: the kinds in the year chosen, the years in the kind
+ * chosen — so a chip and a bar say how many choosing it shows. A stretch
+ * over several years is in each. The diary counts the days the query names
+ * as well as the entries that say its words; the tags count within both
+ * choices.
+ */
+function facetsOf(
+  pass: SearchPass,
+  days: NamedDayRows,
+): {
+  facets: Omit<SearchFacets, 'tags'>;
+  tagCounts: { tag: string; n: number }[];
+} {
+  const { request, store, match, table, from, base } = pass;
+  const facets: Omit<SearchFacets, 'tags'> = { kinds: {}, years: [] };
+  if (match) {
+    const inYear = narrowed(base, { year: request.year }, undefined);
+    for (const row of store.db
+      .prepare(
+        `SELECT d.kind, count(*) AS n FROM ${from} WHERE ${table} MATCH ? AND ${inYear.sql} GROUP BY d.kind`,
+      )
+      .all(match, ...inYear.params) as { kind: SearchKind; n: number }[])
+      facets.kinds[row.kind] = row.n;
+    const ofKind = narrowed(base, {}, request.kind);
+    facets.years = (
+      store.db
+        .prepare(
+          `SELECT y.year, count(*) AS n FROM ${from} JOIN doc_years y ON y.doc = d.id WHERE ${table} MATCH ? AND ${ofKind.sql} GROUP BY y.year ORDER BY y.year`,
+        )
+        .all(match, ...ofKind.params) as { year: number; n: number }[]
+    ).map((row) => ({ year: row.year, count: row.n }));
+  }
+  if (days.rows.length) {
+    const year = request.year ? ` AND ${IN_YEAR}` : '';
+    const textDiary = match
+      ? (store.db
+          .prepare(
+            `SELECT d.id FROM ${from} WHERE ${table} MATCH ? AND d.kind = 'diary-entry' AND ${base.sql}${year}`,
+          )
+          .pluck()
+          .all(
+            match,
+            ...base.params,
+            ...(request.year ? [request.year] : []),
+          ) as number[])
+      : [];
+    const daysInYear = days.rows
+      .filter(
+        (row) =>
+          !request.year || Number(row.date?.slice(0, 4)) === request.year,
+      )
+      .map((row) => row.id);
+    facets.kinds['diary-entry'] = new Set([...textDiary, ...daysInYear]).size;
+  }
+  const chosen = narrowed(base, request);
+  const tagCounts = match
+    ? (store.db
+        .prepare(
+          `SELECT t.tag, count(*) AS n FROM ${from} JOIN doc_tags t ON t.doc = d.id WHERE ${table} MATCH ? AND ${chosen.sql} GROUP BY t.tag`,
+        )
+        .all(match, ...chosen.params) as { tag: string; n: number }[])
+    : [];
+  return { facets, tagCounts };
+}
+
+/**
+ * The order of a kind read by days. What has days of a life comes first,
+ * by them — newest by where it ends, never past today, so what still runs
+ * is now and its end stays unsaid; oldest by where it begins — then what
+ * has only the day it was made. A tag goes by what carries it: its last
+ * use, or its first.
+ */
+function dayOrdering(pass: SearchPass) {
+  const { request, store, now } = pass;
+  const today = utcDayOf(now);
+  const newest = request.sort !== 'old';
+  // What carries a tag, as this reader finds it: «tag:<uuid>» names it.
+  const tagUse = {
+    sql: `(SELECT ${newest ? 'max(min(c.sortTo, ?))' : 'min(c.sortFrom)'}
+      FROM doc_tags t JOIN docs c ON c.id = t.doc
+      WHERE t.tag = substr(d.ref, 5) AND c.audience = d.audience
+        AND c.sortLife = 1 AND c.visibleFrom <= ?)`,
+    params: newest ? [today, now] : [now],
+  };
+  return {
+    newest,
+    order(kind: SearchKind): { sql: string; params: unknown[] } {
+      if (kind === 'tag')
+        return {
+          sql: `${tagUse.sql} IS NULL, ${tagUse.sql} ${newest ? 'DESC' : 'ASC'}, `,
+          params: [...tagUse.params, ...tagUse.params],
+        };
+      return newest
+        ? {
+            sql: 'd.sortTo IS NULL, d.sortLife DESC, min(d.sortTo, ?) DESC, ',
+            params: [today],
+          }
+        : {
+            sql: 'd.sortFrom IS NULL, d.sortLife DESC, d.sortFrom ASC, ',
+            params: [],
+          };
+    },
+    /** The day a tag was last used, or first, as its card says when sorted. */
+    tagDay(ref: string): string | undefined {
+      return (
+        (
+          store.db
+            .prepare(
+              `SELECT ${tagUse.sql} AS day FROM docs d WHERE d.audience = ? AND d.ref = ?`,
+            )
+            .get(...tagUse.params, request.audience, ref) as
+            { day: string | null } | undefined
+        )?.day ?? undefined
+      );
+    },
+  };
+}
+type DayOrdering = ReturnType<typeof dayOrdering>;
+
+/**
+ * A page of one kind's rows, best first, or by days when the reader asked:
+ * the diary of a day the query names first, then the text's hits.
+ */
+function rankedRows(
+  pass: SearchPass,
+  ordering: DayOrdering,
+  days: NamedDayRows,
+  kind: SearchKind,
+  limit: number,
+  offset: number,
+): DocRow[] {
+  const { request, store, match, table, from, base } = pass;
+  const filters = narrowed(base, request, kind);
+  const order = request.sort ? ordering.order(kind) : { sql: '', params: [] };
+  const mergesDays = kind === 'diary-entry' && days.rows.length > 0;
+  const textHits = match
+    ? (store.db
+        .prepare(
+          `SELECT d.id, d.kind, d.ref, d.title, d.date, d.card FROM ${from}
+           WHERE ${table} MATCH ? AND ${filters.sql}
+           ORDER BY ${order.sql}bm25(${table}, ${WEIGHTS}) LIMIT ? OFFSET ?`,
+        )
+        .all(
+          match,
+          ...filters.params,
+          ...order.params,
+          mergesDays ? offset + limit + days.rows.length : limit,
+          mergesDays ? 0 : offset,
+        ) as DocRow[])
+    : [];
+  if (!mergesDays) return textHits;
+  const merged = [
+    ...days.rows.filter(
+      (row) => !request.year || Number(row.date?.slice(0, 4)) === request.year,
+    ),
+  ];
+  for (const row of textHits) if (!days.ids.has(row.id)) merged.push(row);
+  return merged.slice(offset, offset + limit);
+}
+
+/**
+ * Whether a title is the name typed: the very words, or the same words in
+ * other forms — «бублика» names the tag «Бублик».
+ */
+function namedAsTyped(query: SearchQuery): (title: string) => boolean {
+  const typed = searchKey(query.text);
+  const termsOf = (text: string) =>
+    searchTokens(text, searchAnalyzer(), 'query')
+      .map((token) => token.term)
+      .join(' ');
+  const typedTerms = termsOf(query.text);
+  return (title) =>
+    Boolean(typed) &&
+    (searchKey(title) === typed || termsOf(title) === typedTerms);
+}
+
+/**
+ * The hits of a few rows, those closest to what was typed first: bm25 reads
+ * stems only, so a word as typed and words standing together reorder the
+ * candidates it brought. Read by days, they keep the order they came in.
+ * A result whose name holds every word is added to `fullyNamed`: its kind
+ * comes up.
+ */
+function hydrateHits(
+  pass: SearchPass,
+  rows: DocRow[],
+  keep: number,
+  context: {
+    days: NamedDayRows;
+    ordering: DayOrdering;
+    exact: (title: string) => boolean;
+    fullyNamed: Set<string>;
+  },
+): SearchHit[] {
+  const { request, store, query, now } = pass;
+  const findsLimit = request.quick ? 1 : PAGE_FINDS;
+  const byDate = Boolean(request.sort);
+  return rows
+    .map((row, order) => {
+      const card = JSON.parse(row.card) as StoredCard;
+      const units = store.units(row.id);
+      const { finds, more, closeness } = findsOf(
+        units,
+        query,
+        { href: card.href },
+        now,
+        findsLimit,
+        request.audience === 'owner',
+        request.quick ? QUICK_SNIPPET_LEAD : SEARCH_SNIPPET_LEAD,
+      );
+      const day = context.days.ids.has(row.id);
+      if (day)
+        finds.unshift({
+          where: 'day',
+          label: row.date ?? '',
+          href: card.href,
+          segments: [],
+        });
+      // The very name typed is the one sought, whatever else says the words;
+      // then a name that holds them all, then one that holds some.
+      const named = context.exact(row.title);
+      const hit = hitOf(
+        row,
+        finds.slice(0, findsLimit),
+        more,
+        request.audience,
+      );
+      // A file with no title is called by its description.
+      const shownTitle =
+        row.kind === 'diary-entry'
+          ? ''
+          : row.title || (row.kind === 'file' ? card.summary : '');
+      const inTitle = titleWords(shownTitle, query);
+      const inSummary =
+        row.title && card.summary ? titleWords(card.summary, query) : undefined;
+      const whole = inTitle.held > 0 && inTitle.held === inTitle.of;
+      if (whole) context.fullyNamed.add(hit.ref);
+      const naming = whole ? 12 : inTitle.held * 4;
+      const used =
+        row.kind === 'tag' && byDate && context.ordering.tagDay(row.ref);
+      const dated = !byDate
+        ? undefined
+        : row.kind === 'tag'
+          ? used
+            ? {
+                by: context.ordering.newest
+                  ? ('last-used' as const)
+                  : ('first-used' as const),
+                day: used,
+              }
+            : undefined
+          : card.dated;
+      return {
+        hit: {
+          ...hit,
+          ...(dated ? { dated } : {}),
+          ...(inTitle.segments ? { titleSegments: inTitle.segments } : {}),
+          ...(inSummary?.segments
+            ? { summarySegments: inSummary.segments }
+            : {}),
+        },
+        order,
+        closeness: day || named ? 100 : closeness + naming,
+      };
+    })
+    .sort(
+      (a, b) => (byDate ? 0 : b.closeness - a.closeness) || a.order - b.order,
+    )
+    .slice(0, keep)
+    .map((item) => item.hit);
+}
+
 /** One search, as the index answers it now; with `any`, for some of the words. */
 async function searchOnce(
   request: SearchRequest,
@@ -545,8 +824,11 @@ async function searchOnce(
   const query = hint.query;
   const match = ftsMatch(query, any);
   const now = request.now ?? Date.now();
-  const days = dayMatcher(text, now);
-  if (!match && !days)
+  // Read from the reader's own day, as what the owner is offered to do is.
+  const named = resolveNamedDay(text, request.today ?? utcDayOf(now), (word) =>
+    searchAnalyzer().relativeDay(word),
+  );
+  if (!match && !named)
     return runCatalogue(
       {
         q: '',
@@ -577,258 +859,25 @@ async function searchOnce(
     const apart = near.filter((id) => !holdsPhrases(store.units(id), query));
     if (apart.length) base.sql += ` AND d.id NOT IN (${apart.join(', ')})`;
   }
-  const facetFilter = { sql: base.sql, params: base.params };
-  // Each facet counts across its own choice and within the other: the kinds
-  // in the year chosen, the years in the kind chosen — so a chip and a bar
-  // say how many choosing it shows. A stretch over several years is in each.
-  const facets: Omit<SearchFacets, 'tags'> = { kinds: {}, years: [] };
-  if (match) {
-    const inYear = narrowed(base, { year: request.year }, undefined);
-    for (const row of store.db
-      .prepare(
-        `SELECT d.kind, count(*) AS n FROM ${from} WHERE ${table} MATCH ? AND ${inYear.sql} GROUP BY d.kind`,
-      )
-      .all(match, ...inYear.params) as { kind: SearchKind; n: number }[])
-      facets.kinds[row.kind] = row.n;
-    const ofKind = narrowed(base, {}, request.kind);
-    facets.years = (
-      store.db
-        .prepare(
-          `SELECT y.year, count(*) AS n FROM ${from} JOIN doc_years y ON y.doc = d.id WHERE ${table} MATCH ? AND ${ofKind.sql} GROUP BY y.year ORDER BY y.year`,
-        )
-        .all(match, ...ofKind.params) as { year: number; n: number }[]
-    ).map((row) => ({ year: row.year, count: row.n }));
-  }
-  // A query that names a day finds the diary of that day, whatever it says.
-  const dayRows = days
-    ? (
-        store.db
-          .prepare(
-            `SELECT d.id, d.kind, d.ref, d.title, d.date, d.card FROM docs d WHERE d.audience = ? AND d.kind = 'diary-entry' AND ${base.sql}`,
-          )
-          .all(request.audience, ...base.params) as DocRow[]
-      )
-        .map((row) => ({ row, rank: days(row.date ?? '') }))
-        .filter(
-          (item): item is { row: DocRow; rank: number } =>
-            item.rank !== undefined,
-        )
-        .sort(
-          (a, b) =>
-            a.rank - b.rank ||
-            (b.row.date ?? '').localeCompare(a.row.date ?? ''),
-        )
-        .map((item) => item.row)
-    : [];
-  const dayIds = new Set(dayRows.map((row) => row.id));
-  if (dayRows.length) {
-    const year = request.year ? ` AND ${IN_YEAR}` : '';
-    const textDiary = match
-      ? (store.db
-          .prepare(
-            `SELECT d.id FROM ${from} WHERE ${table} MATCH ? AND d.kind = 'diary-entry' AND ${facetFilter.sql}${year}`,
-          )
-          .pluck()
-          .all(
-            match,
-            ...facetFilter.params,
-            ...(request.year ? [request.year] : []),
-          ) as number[])
-      : [];
-    const daysInYear = dayRows
-      .filter(
-        (row) =>
-          !request.year || Number(row.date?.slice(0, 4)) === request.year,
-      )
-      .map((row) => row.id);
-    const union = new Set([...textDiary, ...daysInYear]);
-    facets.kinds['diary-entry'] = union.size;
-  }
-  const tagRows = match
-    ? (store.db
-        .prepare(
-          `SELECT t.tag, count(*) AS n FROM ${from} JOIN doc_tags t ON t.doc = d.id WHERE ${table} MATCH ? AND ${narrowed(base, request).sql} GROUP BY t.tag`,
-        )
-        .all(match, ...narrowed(base, request).params) as {
-        tag: string;
-        n: number;
-      }[])
-    : [];
-
-  const findsLimit = request.quick ? 1 : PAGE_FINDS;
-  /**
-   * The hits of a few rows, those closest to what was typed first: bm25 reads
-   * stems only, so a word as typed and words standing together reorder the
-   * candidates it brought.
-   */
-  // Named as typed: the very words, or the same words in other forms —
-  // «бублика» names the tag «Бублик».
-  const typed = searchKey(query.text);
-  const termsOf = (text: string) =>
-    searchTokens(text, searchAnalyzer(), 'query')
-      .map((token) => token.term)
-      .join(' ');
-  const typedTerms = termsOf(query.text);
-  const exact = (title: string) =>
-    Boolean(typed) &&
-    (searchKey(title) === typed || termsOf(title) === typedTerms);
-  // Read by days, as the reader asked: each kind's few, or a page of one.
-  const byDate = Boolean(request.sort);
-  // The results whose names hold every word, by ref: their kind comes up.
+  const pass: SearchPass = {
+    request,
+    store,
+    query,
+    ...(match ? { match } : {}),
+    now,
+    table,
+    from,
+    base,
+  };
+  const days = dayRowsOf(pass, named);
+  const { facets, tagCounts } = facetsOf(pass, days);
+  const ordering = dayOrdering(pass);
+  const exact = namedAsTyped(query);
   const fullyNamed = new Set<string>();
-  const hydrate = (rows: DocRow[], keep = rows.length): SearchHit[] =>
-    rows
-      .map((row, order) => {
-        const card = JSON.parse(row.card) as StoredCard;
-        const units = store.units(row.id);
-        const { finds, more, closeness } = findsOf(
-          units,
-          query,
-          { href: card.href },
-          findsLimit,
-          request.audience === 'owner',
-          request.quick ? QUICK_SNIPPET_LEAD : SEARCH_SNIPPET_LEAD,
-        );
-        const day = dayIds.has(row.id);
-        if (day)
-          finds.unshift({
-            where: 'day',
-            label: row.date ?? '',
-            href: card.href,
-            segments: [],
-          });
-        // The very name typed is the one sought, whatever else says the words;
-        // then a name that holds them all, then one that holds some.
-        const named = exact(row.title);
-        const hit = hitOf(
-          row,
-          finds.slice(0, findsLimit),
-          more,
-          request.audience,
-        );
-        // A file with no title is called by its description.
-        const shownTitle =
-          row.kind === 'diary-entry'
-            ? ''
-            : row.title || (row.kind === 'file' ? card.summary : '');
-        const inTitle = titleWords(shownTitle, query);
-        const inSummary =
-          row.title && card.summary
-            ? titleWords(card.summary, query)
-            : undefined;
-        const whole = inTitle.held > 0 && inTitle.held === inTitle.of;
-        if (whole) fullyNamed.add(hit.ref);
-        const naming = whole ? 12 : inTitle.held * 4;
-        const dated = !byDate
-          ? undefined
-          : row.kind === 'tag'
-            ? (() => {
-                const day = tagDay(row.ref);
-                return day
-                  ? {
-                      by: newest
-                        ? ('last-used' as const)
-                        : ('first-used' as const),
-                      day,
-                    }
-                  : undefined;
-              })()
-            : card.dated;
-        return {
-          hit: {
-            ...hit,
-            ...(dated ? { dated } : {}),
-            ...(inTitle.segments ? { titleSegments: inTitle.segments } : {}),
-            ...(inSummary?.segments
-              ? { summarySegments: inSummary.segments }
-              : {}),
-          },
-          order,
-          closeness: day || named ? 100 : closeness + naming,
-        };
-      })
-      .sort(
-        (a, b) => (byDate ? 0 : b.closeness - a.closeness) || a.order - b.order,
-      )
-      .slice(0, keep)
-      .map((item) => item.hit);
-  const today = utcDayOf(now);
-  /**
-   * The order of a kind read by days. What has days of a life comes first,
-   * by them — newest by where it ends, never past today, so what still runs
-   * is now and its end stays unsaid; oldest by where it begins — then what
-   * has only the day it was made. A tag goes by what carries it: its last
-   * use, or its first.
-   */
-  const newest = request.sort !== 'old';
-  // What carries a tag, as this reader finds it: «tag:<uuid>» names it.
-  const tagUse = {
-    sql: `(SELECT ${newest ? 'max(min(c.sortTo, ?))' : 'min(c.sortFrom)'}
-      FROM doc_tags t JOIN docs c ON c.id = t.doc
-      WHERE t.tag = substr(d.ref, 5) AND c.audience = d.audience
-        AND c.sortLife = 1 AND c.visibleFrom <= ?)`,
-    params: newest ? [today, now] : [now],
-  };
-  const dayOrder = (kind: SearchKind): { sql: string; params: unknown[] } => {
-    if (kind === 'tag')
-      return {
-        sql: `${tagUse.sql} IS NULL, ${tagUse.sql} ${newest ? 'DESC' : 'ASC'}, `,
-        params: [...tagUse.params, ...tagUse.params],
-      };
-    return newest
-      ? {
-          sql: 'd.sortTo IS NULL, d.sortLife DESC, min(d.sortTo, ?) DESC, ',
-          params: [today],
-        }
-      : {
-          sql: 'd.sortFrom IS NULL, d.sortLife DESC, d.sortFrom ASC, ',
-          params: [],
-        };
-  };
-  /** The day a tag was last used, or first, as its card says when sorted. */
-  const tagDay = (ref: string): string | undefined =>
-    (
-      store.db
-        .prepare(
-          `SELECT ${tagUse.sql} AS day FROM docs d WHERE d.audience = ? AND d.ref = ?`,
-        )
-        .get(...tagUse.params, request.audience, ref) as
-        { day: string | null } | undefined
-    )?.day ?? undefined;
-  const ranked = (
-    kind: SearchKind,
-    limit: number,
-    offset: number,
-  ): DocRow[] => {
-    const filters = narrowed(base, request, kind);
-    const order = byDate ? dayOrder(kind) : { sql: '', params: [] };
-    // The diary of a day the query names comes first, then the text's hits.
-    const mergesDays = kind === 'diary-entry' && dayRows.length > 0;
-    const textHits = match
-      ? (store.db
-          .prepare(
-            `SELECT d.id, d.kind, d.ref, d.title, d.date, d.card FROM ${from}
-             WHERE ${table} MATCH ? AND ${filters.sql}
-             ORDER BY ${order.sql}bm25(${table}, ${WEIGHTS}) LIMIT ? OFFSET ?`,
-          )
-          .all(
-            match,
-            ...filters.params,
-            ...order.params,
-            mergesDays ? offset + limit + dayRows.length : limit,
-            mergesDays ? 0 : offset,
-          ) as DocRow[])
-      : [];
-    if (!mergesDays) return textHits;
-    const merged = [
-      ...dayRows.filter(
-        (row) =>
-          !request.year || Number(row.date?.slice(0, 4)) === request.year,
-      ),
-    ];
-    for (const row of textHits) if (!dayIds.has(row.id)) merged.push(row);
-    return merged.slice(offset, offset + limit);
-  };
+  const hydrate = (rows: DocRow[], keep = rows.length) =>
+    hydrateHits(pass, rows, keep, { days, ordering, exact, fullyNamed });
+  const ranked = (kind: SearchKind, limit: number, offset: number) =>
+    rankedRows(pass, ordering, days, kind, limit, offset);
 
   const kinds = SEARCH_KINDS.filter((kind) => (facets.kinds[kind] ?? 0) > 0);
   let groups: SearchGroup[];
@@ -886,7 +935,7 @@ async function searchOnce(
     query: query.text,
     total,
     groups,
-    facets: { ...facets, tags: await tagFacets(tagRows, request, store) },
+    facets: { ...facets, tags: await tagFacets(tagCounts, request, store) },
     page,
     pageCount,
   };
@@ -901,6 +950,7 @@ export async function runSearch(
   request: SearchRequest,
 ): Promise<SearchResponse> {
   const store = useSearchStore();
+  admitArrivals(store, request.now);
   const progress = searchIndexProgress();
   // How far, and nothing more: a stranger never counts what there is.
   const building = progress
@@ -963,6 +1013,7 @@ export function findsOfResult(request: {
   now?: number;
 }): { finds: SearchFind[]; more: number } | undefined {
   const store = useSearchStore();
+  admitArrivals(store, request.now);
   type Row = { id: number; card: string; visibleFrom: number };
   // A stranger names it by its public id; the owner by its own, a file by
   // the asset its places show.
@@ -980,7 +1031,8 @@ export function findsOfResult(request: {
           )
           .get(request.audience, request.ref.slice('file:'.length))
       : undefined)) as Row | undefined;
-  if (!row || row.visibleFrom > (request.now ?? Date.now())) return undefined;
+  const now = request.now ?? Date.now();
+  if (!row || row.visibleFrom > now) return undefined;
   const query = parseSearchQuery(request.q, searchAnalyzer(), {
     typing: request.typing,
   });
@@ -989,6 +1041,7 @@ export function findsOfResult(request: {
     store.units(row.id),
     query,
     { href: card.href },
+    now,
     ALL_FINDS,
     request.audience === 'owner',
   );

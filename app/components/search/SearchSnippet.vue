@@ -2,31 +2,24 @@
 import type { SearchSegment } from '#layers/thei/shared/search/snippet';
 
 /**
- * The words around a find, the found ones marked. Each piece is the owner's
- * text and is formatted on its way out; its edges are kept as they are, for
- * the spaces between the pieces belong to the snippet.
+ * The words around a find, the found ones marked. They are the owner's text
+ * and are formatted on their way out, as one text across the marks
+ * (`formatSnippet`).
  */
-defineProps<{ segments: SearchSegment[] }>();
+const props = defineProps<{ segments: SearchSegment[] }>();
 
-function formatted(text: string) {
-  const lead = /^\s*/u.exec(text)![0];
-  if (lead.length === text.length) return text;
-  const tail = /\s*$/u.exec(text)![0];
-  return (
-    lead + publicText(text.slice(lead.length, text.length - tail.length)) + tail
-  );
-}
+const pieces = computed(() => formatSnippet(props.segments));
 </script>
 
 <template>
   <span
-    ><template v-for="(segment, at) in segments" :key="at"
+    ><template v-for="(piece, at) in pieces" :key="at"
       ><mark
-        v-if="segment.mark"
+        v-if="piece.mark"
         class="rounded-xs bg-accent/20 box-decoration-clone px-px font-semibold
           text-text-1"
-        >{{ formatted(segment.text) }}</mark
-      ><template v-else>{{ formatted(segment.text) }}</template></template
+        >{{ piece.text }}</mark
+      ><template v-else>{{ piece.text }}</template></template
     ></span
   >
 </template>

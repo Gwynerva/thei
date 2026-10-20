@@ -48,6 +48,11 @@ export interface SearchFind {
   where: SearchFindWhere;
   /** What the place is called: a section's title, a related entity's, a day. */
   label?: string;
+  /**
+   * The label is not the owner's words — a linked page's own title, or its
+   * address — and is shown as it is, never formatted.
+   */
+  labelAsIs?: true;
   /** Straight to the place: its page, its block, the words. */
   href: string;
   /** The words around the find, those found marked; none for another name. */

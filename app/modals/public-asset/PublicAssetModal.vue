@@ -84,14 +84,7 @@ const places = computed(() =>
  * browser's.
  */
 async function goTo(event: MouseEvent, href: string) {
-  if (
-    event.button !== 0 ||
-    event.metaKey ||
-    event.ctrlKey ||
-    event.shiftKey ||
-    event.altKey
-  )
-    return;
+  if (!isPlainClick(event)) return;
   event.preventDefault();
   while (activeModal.value && (await closeModalAndWait()));
   await modalHistorySettled();

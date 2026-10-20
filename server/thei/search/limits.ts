@@ -1,3 +1,6 @@
+import { createError, setResponseHeader, type H3Event } from 'h3';
+import { requestClient } from '../request';
+
 /**
  * What keeps a public search from taking the site down.
  *
@@ -85,4 +88,40 @@ export function spendSearchTime(ms: number, now = Date.now()) {
 export function resetSearchLimits() {
   buckets.clear();
   budget = { debt: 0, at: 0 };
+}
+
+/**
+ * A stranger's search, or a part of one, within these limits: the bucket of
+ * the visitor — the page's own one while a page is rendered — then what
+ * `free` answers at no cost, an answer remembered, then the time all
+ * strangers share, which `work` spends. The owner's runs as it is.
+ */
+export async function withStrangerSearchLimits<T>(
+  event: H3Event,
+  isAdmin: boolean,
+  work: () => T | Promise<T>,
+  free?: () => T | undefined,
+): Promise<T> {
+  if (isAdmin) return await work();
+  const client = requestClient(event);
+  const wait = takeSearch(client.address ?? 'unknown');
+  if (wait) refuse(event, 429, wait);
+  const known = free?.();
+  if (known !== undefined) return known;
+  const busy = searchBudgetWait({ rendering: client.rendering });
+  if (busy) refuse(event, 503, busy);
+  const started = performance.now();
+  try {
+    return await work();
+  } finally {
+    spendSearchTime(performance.now() - started);
+  }
+}
+
+function refuse(event: H3Event, status: 429 | 503, seconds: number): never {
+  setResponseHeader(event, 'Retry-After', seconds);
+  throw createError({
+    statusCode: status,
+    statusMessage: status === 429 ? 'Too Many Requests' : 'Service Unavailable',
+  });
 }

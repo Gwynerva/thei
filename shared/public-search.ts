@@ -1,13 +1,10 @@
 import { SEARCH_KINDS, type SearchKind } from './search/api';
 import { SEARCH_QUERY_MAX_LENGTH } from './search/tokens';
 
-/** A kind the search narrows to: one of the kinds it finds. */
-export type PublicSearchType = SearchKind;
-
 export interface PublicSearchFilters {
   q: string;
-  /** Every kind when absent. */
-  type?: PublicSearchType;
+  /** One of the kinds the search finds; every kind when absent. */
+  type?: SearchKind;
   /** Project-only filters; they rule every other kind out while active. */
   showcase: boolean;
   cv: boolean;
@@ -21,7 +18,6 @@ export interface PublicSearchFilters {
   sort?: 'new' | 'old';
 }
 
-export const PUBLIC_SEARCH_QUERY_MAX_LENGTH = SEARCH_QUERY_MAX_LENGTH;
 export const PUBLIC_SEARCH_DEBOUNCE_MS = 450;
 
 function queryString(value: unknown): string {
@@ -31,7 +27,7 @@ function queryString(value: unknown): string {
 
 /** The most tags a search narrows by, each way, and the longest slug read. */
 export const PUBLIC_SEARCH_TAGS_MAX = 10;
-export const PUBLIC_SEARCH_SLUG_MAX_LENGTH = 200;
+const PUBLIC_SEARCH_SLUG_MAX_LENGTH = 200;
 
 /**
  * The tags of an address, each once: the same few on the page and on the
@@ -58,8 +54,8 @@ export function parsePublicSearchFilters(
   const page = Number(queryString(query.page));
   const year = Number(queryString(query.year));
   return {
-    q: queryString(query.q).slice(0, PUBLIC_SEARCH_QUERY_MAX_LENGTH),
-    ...(known ? { type: type as PublicSearchType } : {}),
+    q: queryString(query.q).slice(0, SEARCH_QUERY_MAX_LENGTH),
+    ...(known ? { type: type as SearchKind } : {}),
     showcase: projects && queryString(query.showcase) === '1',
     cv: projects && queryString(query.cv) === '1',
     tags,

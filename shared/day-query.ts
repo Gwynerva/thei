@@ -154,6 +154,35 @@ export function dayQueryRank(
   return best;
 }
 
+/** A day so many days on, or back: `2025-03-12` and -1 is `2025-03-11`. */
+export function shiftDay(day: string, by: number): string {
+  return new Date(Date.parse(`${day}T00:00:00Z`) + by * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+/**
+ * The days a query names, as a ranking of a day — lower is closer, nothing
+ * when it is not one of them — read with `today` the reader's own: a word
+ * for a day near it, «вчера», names that one day; anything else that reads
+ * as a day names the days it answers (`dayQueryRank`). The search's results
+ * and what it offers the owner to do read a query by this alone, so «вчера»
+ * is the same day in both.
+ */
+export function resolveNamedDay(
+  q: string,
+  today: string,
+  relativeDay: (word: string) => number | undefined,
+): ((date: string) => number | undefined) | undefined {
+  const shift = relativeDay(normalizeTermText(q.trim()));
+  if (shift !== undefined) {
+    const day = shiftDay(today, shift);
+    return (date) => (date === day ? 0 : undefined);
+  }
+  const query = parseDayQuery(q);
+  return query ? (date) => dayQueryRank(date, query) : undefined;
+}
+
 const MONTH_FORMS: string[][] = Array.from({ length: 12 }, (_, index) =>
   Object.values(dateWords).flatMap(({ months }) => [...(months[index] ?? [])]),
 );

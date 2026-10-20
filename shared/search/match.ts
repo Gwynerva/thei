@@ -1,3 +1,4 @@
+import { escapeRegExp } from '../language/general-normalize';
 import { createSearchAnalyzer, type SearchAnalyzer } from '../language/search';
 import { normalizeTermText, type TextTerms } from '../text-terms';
 import {
@@ -82,6 +83,41 @@ export const NAME_RANKS = {
   /** Another name the owner gave it: whole, just below a whole title. */
   synonym: { exact: 0.5, start: 3, ordered: 3.4, words: 3.7, inside: 4 },
 } as const satisfies Record<string, Record<NameTier, number>>;
+
+const KEY_RANKS = { exact: 0, start: 1, inside: 2 } as const;
+
+/**
+ * How well a thing's names answer a prepared query, lower being better, and
+ * the synonym it was found by when its title was not: its title, then its
+ * synonyms (`NAME_RANKS`), then its public ID, 10 to 12, then its address,
+ * 20 to 22 — an ID and an address found by any part of them. Infinite when
+ * none answers.
+ */
+export function nameRank(
+  query: NameQuery,
+  names: {
+    title: string;
+    synonyms?: readonly string[];
+    publicId?: string;
+    slug?: string;
+  },
+): { rank: number; synonym?: string } {
+  let rank = Number.POSITIVE_INFINITY;
+  const title = nameTier(query, names.title);
+  if (title) rank = NAME_RANKS.title[title];
+  let synonym: { name: string; rank: number } | undefined;
+  for (const name of names.synonyms ?? []) {
+    const tier = nameTier(query, name);
+    if (tier && (!synonym || NAME_RANKS.synonym[tier] < synonym.rank))
+      synonym = { name, rank: NAME_RANKS.synonym[tier] };
+  }
+  if (synonym) rank = Math.min(rank, synonym.rank);
+  const publicId = keyTier(query, names.publicId);
+  if (publicId) rank = Math.min(rank, 10 + KEY_RANKS[publicId]);
+  const slug = keyTier(query, names.slug);
+  if (slug) rank = Math.min(rank, 20 + KEY_RANKS[slug]);
+  return { rank, ...(!title && synonym ? { synonym: synonym.name } : {}) };
+}
 
 /**
  * How a prepared query stands in a name; undefined when it does not. The
@@ -178,6 +214,29 @@ export function matchName(
 const CYRILLIC = /\p{Script=Cyrillic}/u;
 
 /**
+ * What a text must hold for a query word to stand in it, asked before the
+ * text is read word by word: the start the word and its term share, a
+ * letter short of where they part — a vowel that drops out, «день», «дня»,
+ * stands just there — and, for a Cyrillic word, any Latin letter, which a
+ * name may be written in («ева», «EVA»).
+ */
+export function wordProbe(word: Pick<SearchQueryWord, 'word' | 'term'>): {
+  start: string;
+  latin: boolean;
+} {
+  let head = 0;
+  while (
+    head < Math.min(word.term.length, word.word.length) &&
+    word.term[head] === word.word[head]
+  )
+    head++;
+  return {
+    start: word.word.slice(0, Math.max(1, head - 1)),
+    latin: CYRILLIC.test(word.word),
+  };
+}
+
+/**
  * A filter of a list, which only keeps or drops: whether every word of a
  * typed query stands in the texts as a word — one it begins, or the same
  * word in another form or script — never inside another word, as «кот»
@@ -192,23 +251,12 @@ export function wordsFilter(
   analyzer: SearchAnalyzer = nameAnalyzer(),
 ): (texts: readonly string[]) => boolean {
   const patterns = prepareNameQuery(query, analyzer).words.map((word) => {
-    let head = 0;
-    while (
-      head < Math.min(word.term.length, word.word.length) &&
-      word.term[head] === word.word[head]
-    )
-      head++;
-    // A letter short of where the word and its term part: a vowel that
-    // drops out — «день», «дня» — stands just there.
-    head = Math.max(1, head - 1);
-    const start = word.word
-      .slice(0, head)
-      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const latin = CYRILLIC.test(word.word) ? '|[a-z]' : '';
+    const probe = wordProbe(word);
+    const latin = probe.latin ? '|[a-z]' : '';
     return {
       word,
       pattern: new RegExp(
-        `(?<![\\p{L}\\p{N}])(?:${start}${latin})[\\p{L}\\p{N}'’]*`,
+        `(?<![\\p{L}\\p{N}])(?:${escapeRegExp(probe.start)}${latin})[\\p{L}\\p{N}'’]*`,
         'gu',
       ),
     };

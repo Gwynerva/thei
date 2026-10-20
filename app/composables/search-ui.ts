@@ -8,6 +8,9 @@ import {
   formatAbsolutePublicDate,
   formatPublicDateRange,
 } from '#layers/thei/shared/public-date-format';
+import type { SearchSegment } from '#layers/thei/shared/search/snippet';
+import { AssetType } from '#layers/thei/shared/asset';
+import { assetKindName } from '#layers/thei/shared/asset-format-label';
 
 /**
  * How the search page and the quick search name what they found: the icon
@@ -55,12 +58,19 @@ const FIND_ICONS: Record<SearchFind['where'], IconName> = {
  */
 export function searchHitTitle(hit: SearchHit): string {
   if (hit.kind === 'diary-entry' && hit.date)
-    return formatAbsolutePublicDate(hit.date, language.value.code);
-  if (hit.title) return publicText(hit.title);
+    return searchEntityTitle(hit.kind, hit.date);
+  if (hit.title) return searchEntityTitle(hit.kind, hit.title);
   if (hit.kind === 'file' && hit.summary) return publicText(hit.summary);
   if (!hit.file) return '';
   const kind = fileKindName(hit.file.type);
   return hit.shownAt ? `${kind} · ${searchPlaceName(hit.shownAt)}` : kind;
+}
+
+/** What an entity is called by its stored title: a diary entry by its day. */
+export function searchEntityTitle(kind: SearchKind, title: string): string {
+  return kind === 'diary-entry'
+    ? formatAbsolutePublicDate(title, language.value.code)
+    : publicText(title);
 }
 
 /**
@@ -92,13 +102,48 @@ export function searchFileLine(
     .join(' · ');
 }
 
-/** What kind of file it is, in a word: a picture, a video, a recording. */
+/**
+ * What kind of file it is, in a word: a picture, a video, a recording, as
+ * its window names it — and any other a file, as the search calls its kind.
+ */
 function fileKindName(type: string): string {
-  const value = phrase.value;
-  if (type === 'image') return value.image;
-  if (type === 'video') return value.video;
-  if (type === 'audio') return value.audio;
-  return value.search_kind('file');
+  return type === AssetType.Image ||
+    type === AssetType.Video ||
+    type === AssetType.Audio
+    ? assetKindName(phrase.value, type)
+    : phrase.value.search_kind('file');
+}
+
+/** Where a found piece of a snippet opens and closes, while it is formatted. */
+const MARK_OPEN = '\uE000';
+const MARK_CLOSE = '\uE001';
+const MARK_SIGNS = /[\uE000\uE001]/gu;
+
+/**
+ * The pieces of a snippet, formatted as one text: typography reads across
+ * the marks — a quote opened before a found word is closed after it, a short
+ * word is bound to the found one after it — and the marks stay where they
+ * were, held by signs no text holds.
+ */
+export function formatSnippet(
+  segments: readonly SearchSegment[],
+  format: (text: string) => string = publicText,
+): SearchSegment[] {
+  const joined = segments
+    .map((segment) => {
+      const text = segment.text.replace(MARK_SIGNS, '');
+      return segment.mark ? MARK_OPEN + text + MARK_CLOSE : text;
+    })
+    .join('');
+  const pieces: SearchSegment[] = [];
+  for (const part of format(joined).split(
+    new RegExp(`(${MARK_OPEN}[^${MARK_CLOSE}]*${MARK_CLOSE})`, 'u'),
+  )) {
+    if (part.startsWith(MARK_OPEN))
+      pieces.push({ text: part.slice(1, -1), mark: true });
+    else if (part) pieces.push({ text: part });
+  }
+  return pieces;
 }
 
 /** Whether a result's title is its description, said once then. */
@@ -158,7 +203,12 @@ export function searchFindPlace(find: SearchFind): {
   text: string;
 } {
   const value = phrase.value;
-  const label = find.label ? searchPlaceName(find.label) : '';
+  // A linked page's own title or its address is shown as it is.
+  const label = find.label
+    ? find.labelAsIs
+      ? find.label
+      : searchPlaceName(find.label)
+    : '';
   if (find.place?.section && label)
     return { icon: 'project-section', text: value.search_where_section(label) };
   const where = value.search_where(find.where);

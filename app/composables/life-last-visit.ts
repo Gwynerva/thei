@@ -5,6 +5,7 @@ import {
   laterLifeDate,
   normalizeLifeLastViewedDate,
 } from '#layers/thei/shared/life';
+import { browserStorage } from './browser-storage';
 
 export const LIFE_LAST_VIEWED_STORAGE_KEY = 'thei:life:last-viewed-date:v1';
 export const LIFE_VIEW_CONFIRMATION_DELAY = 3_000;
@@ -113,14 +114,6 @@ export function useLifeLastVisit(options: {
 }) {
   const sessionCutoff = ref<string>();
 
-  function readStoredDate() {
-    try {
-      return localStorage.getItem(LIFE_LAST_VIEWED_STORAGE_KEY);
-    } catch {
-      return null;
-    }
-  }
-
   const tracker = createLifeVisitTracker({
     getActiveDate: () => options.activeDate.value,
     getNewestDate: () => options.newestDate.value,
@@ -128,17 +121,9 @@ export function useLifeLastVisit(options: {
     getPath: () => useSiteUrl().strip(window.location.pathname),
     isVisible: () => document.visibilityState === 'visible',
     isFocused: () => document.hasFocus(),
-    read: readStoredDate,
-    write: (date) => {
-      try {
-        localStorage.setItem(LIFE_LAST_VIEWED_STORAGE_KEY, date);
-      } catch {}
-    },
-    remove: () => {
-      try {
-        localStorage.removeItem(LIFE_LAST_VIEWED_STORAGE_KEY);
-      } catch {}
-    },
+    read: () => browserStorage.read(LIFE_LAST_VIEWED_STORAGE_KEY),
+    write: (date) => browserStorage.write(LIFE_LAST_VIEWED_STORAGE_KEY, date),
+    remove: () => browserStorage.remove(LIFE_LAST_VIEWED_STORAGE_KEY),
     schedule: (callback, delay) => setTimeout(callback, delay),
     cancel: (timer) => clearTimeout(timer),
     onSessionCutoff: (date) => {

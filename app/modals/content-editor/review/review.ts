@@ -20,6 +20,7 @@ import {
   type ReviewPart,
   type ReviewView,
 } from '#layers/thei/shared/content-review';
+import { browserStorage } from '#layers/thei/app/composables/browser-storage';
 
 /** What each kind of part is drawn with. */
 const KIND_ICONS: Record<ReviewPart['kind'], IconName> = {
@@ -163,22 +164,15 @@ const VIEW_KEY = 'thei-review-view';
 const DEFAULT_VIEW: ReviewView = 'diff';
 
 export function storedReviewView(): ReviewView {
-  try {
-    const value = localStorage.getItem(VIEW_KEY);
-    return REVIEW_VIEWS.includes(value as ReviewView)
-      ? (value as ReviewView)
-      : DEFAULT_VIEW;
-  } catch {
-    return DEFAULT_VIEW;
-  }
+  const value = browserStorage.read(VIEW_KEY);
+  return REVIEW_VIEWS.includes(value as ReviewView)
+    ? (value as ReviewView)
+    : DEFAULT_VIEW;
 }
 
+/** A browser that keeps nothing simply asks again next time. */
 export function storeReviewView(view: ReviewView) {
-  try {
-    localStorage.setItem(VIEW_KEY, view);
-  } catch {
-    // A browser that keeps nothing simply asks again next time.
-  }
+  browserStorage.write(VIEW_KEY, view);
 }
 
 /** The owner's word on an edit's parts so far, as its action keeps it. */

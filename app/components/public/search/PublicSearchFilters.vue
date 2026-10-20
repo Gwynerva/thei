@@ -1,12 +1,11 @@
 <script lang="ts" setup>
-import type { SearchFacets } from '#layers/thei/shared/search/api';
+import type { SearchFacets, SearchKind } from '#layers/thei/shared/search/api';
 import type { IconName } from '#thei/icons';
 import {
   countPublicSearchFilters,
   type PublicSearchFilters,
-  type PublicSearchType,
 } from '#layers/thei/shared/public-search';
-import { searchKey } from '#layers/thei/shared/search/match';
+import { wordsFilter } from '#layers/thei/shared/search/match';
 import { tagAccentCssColor } from '#layers/thei/shared/tag';
 
 /**
@@ -29,19 +28,19 @@ const emit = defineEmits<{
 }>();
 
 const tagQuery = ref('');
-const types = computed<
-  { value?: PublicSearchType; label: string; icon: IconName }[]
->(() => [
-  { label: phrase.value.search_type_all, icon: 'blocks' },
-  { value: 'project', label: phrase.value.projects, icon: 'project' },
-  { value: 'event', label: phrase.value.events, icon: 'event' },
-]);
+const types = computed<{ value?: SearchKind; label: string; icon: IconName }[]>(
+  () => [
+    { label: phrase.value.search_type_all, icon: 'blocks' },
+    { value: 'project', label: phrase.value.projects, icon: 'project' },
+    { value: 'event', label: phrase.value.events, icon: 'event' },
+  ],
+);
 const activeTags = computed(() => props.tags.filter((facet) => facet.state));
+// A tag is found by its words, as every list is (`wordsFilter`).
 const availableTags = computed(() => {
-  const query = searchKey(tagQuery.value);
+  const matches = tagQuery.value.trim() ? wordsFilter(tagQuery.value) : null;
   return props.tags.filter(
-    (facet) =>
-      !facet.state && (!query || searchKey(facet.tag.title).includes(query)),
+    (facet) => !facet.state && (!matches || matches([facet.tag.title])),
   );
 });
 /**

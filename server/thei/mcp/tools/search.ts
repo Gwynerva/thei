@@ -8,11 +8,13 @@ import {
   type SearchResponse,
 } from '#layers/thei/shared/search/api';
 import type { SearchSegment } from '#layers/thei/shared/search/snippet';
+import { EXACT_DATE_PRECISION } from '#layers/thei/shared/date-precision';
 import { READS } from '../annotations';
 import { dayInput } from '../inputs';
 import type { McpCallContext } from '../context';
 import { freshSearchIndex } from '../../search/indexer';
 import { runSearch } from '../../search/query';
+import { formatPeriod } from '../render';
 import { guardTool, McpToolError, toolResult } from '../result';
 
 /**
@@ -73,10 +75,9 @@ function findLine(find: SearchFind): string {
 }
 
 function hitLines(hit: SearchHit): string[] {
+  // Written as every period a model reads is, though a hit's says no doubt.
   const when = hit.period
-    ? hit.period.startDate === hit.period.endDate
-      ? hit.period.startDate
-      : `${hit.period.startDate} – ${hit.period.endDate}`
+    ? formatPeriod({ ...hit.period, ...EXACT_DATE_PRECISION, label: '' })
     : hit.kind !== 'diary-entry' && hit.date
       ? hit.date
       : '';

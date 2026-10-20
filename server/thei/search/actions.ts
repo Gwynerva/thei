@@ -1,24 +1,20 @@
-import { dayQueryRank, parseDayQuery } from '#layers/thei/shared/day-query';
-import { publicIdFromEventUrlPart } from '#layers/thei/shared/event-url';
-import { dateFromDiaryUrlPart } from '#layers/thei/shared/diary-url';
-import {
-  publicIdFromProjectSectionUrlPart,
-  publicIdFromProjectUrlPart,
-} from '#layers/thei/shared/project-url';
+import { resolveNamedDay, shiftDay } from '#layers/thei/shared/day-query';
+import { parseInternalUrl } from '#layers/thei/shared/internal-url';
 import {
   SEARCH_ADMIN_SECTIONS,
   searchAdminSectionName,
   type SearchAction,
   type SearchAdminSection,
-  type SearchKind,
 } from '#layers/thei/shared/search/api';
 import { matchName } from '#layers/thei/shared/search/match';
 import { isQuestion } from '#layers/thei/shared/search/tokens';
-import { normalizeTermText } from '#layers/thei/shared/text-terms';
-import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
-import { buildEventUrl } from '#layers/thei/shared/event-url';
-import { buildPageUrl } from '#layers/thei/shared/page-url';
-import { buildProjectUrl } from '#layers/thei/shared/project-url';
+import type { ContentEntityType } from '#layers/thei/shared/content-link';
+import { OWNER } from '../access-links/viewer';
+import {
+  findContentEntity,
+  findContentEntityByTarget,
+} from '../content-entities';
+import { adminPath, entityFace } from '../entity-kinds';
 import { searchAnalyzer } from './analyzer';
 
 /**
@@ -53,26 +49,20 @@ const SECTION_HREFS: Record<SearchAdminSection, string> = {
   ai: '/admin/ai/',
 };
 
-function shiftDay(day: string, by: number): string {
-  return new Date(Date.parse(`${day}T00:00:00Z`) + by * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
-}
-
 /**
  * The one day a query names: «вчера», «12 марта», «12.03.2025». A month or a
  * year names many days and none of them. A day of the month without a year is
  * the last such day up to today.
  */
 function namedDay(q: string, today: string): string | undefined {
-  const shift = searchAnalyzer().relativeDay(normalizeTermText(q.trim()));
-  if (shift !== undefined) return shiftDay(today, shift);
-  const query = parseDayQuery(q);
-  if (!query) return undefined;
+  const names = resolveNamedDay(q, today, (word) =>
+    searchAnalyzer().relativeDay(word),
+  );
+  if (!names) return undefined;
   const found: string[] = [];
   for (let back = 0; back < 3 * 366 && found.length < 4; back++) {
     const day = shiftDay(today, -back);
-    if (dayQueryRank(day, query) !== undefined) found.push(day);
+    if (names(day) !== undefined) found.push(day);
   }
   if (!found.length) return undefined;
   const sameDay = found.every((day) => day.slice(5) === found[0]!.slice(5));
@@ -93,131 +83,57 @@ function diaryAction(date: string, today: string): SearchAction {
     today: date === today,
     exists: Boolean(entry),
     href: entry
-      ? `/admin/diary/${entry.diaryUuid}/edit/`
+      ? adminPath('diary-entry', entry.diaryUuid)
       : `/admin/diary/new/?date=${date}`,
   };
 }
 
-/** The entity behind an address of the site or of its editor, as two sides. */
-function sidesOf(path: string | undefined): SearchAction | undefined {
+/** The kinds an editor's address names, by the part of the admin it is in. */
+const EDITORS: Record<string, ContentEntityType> = {
+  projects: 'project',
+  events: 'event',
+  pages: 'page',
+  diary: 'diary-entry',
+  tags: 'tag',
+};
+
+/**
+ * The entity behind an address of the site or of its editor, as two sides:
+ * on its page, its editor — a section's is its project's form, which opens
+ * it; in its editor, its page.
+ */
+async function sidesOf(
+  path: string | undefined,
+): Promise<SearchAction | undefined> {
   if (!path) return undefined;
-  const { rawDb } = THEI_SERVER.useDb();
-  const row = (sql: string, value: string) =>
-    rawDb.prepare(sql).get(value) as Record<string, string> | undefined;
-  const editor =
-    /^\/admin\/(projects|events|pages|diary)\/([^/]+)\/edit\/?$/u.exec(path);
+  const editor = /^\/admin\/([a-z]+)\/([^/]+)\/edit\/?$/u.exec(path);
   if (editor) {
-    const [, section, id] = editor as unknown as [string, string, string];
-    if (section === 'projects') {
-      const found = row(
-        'SELECT title, humanReadableSlug, publicId FROM projects WHERE projectUuid = ?',
-        id,
-      );
-      return (
-        found && {
-          type: 'view',
-          kind: 'project',
-          title: found.title!,
-          href: buildProjectUrl(found.humanReadableSlug!, found.publicId!),
-        }
-      );
-    }
-    if (section === 'events') {
-      const found = row(
-        'SELECT title, humanReadableSlug, publicId FROM events WHERE eventUuid = ?',
-        id,
-      );
-      return (
-        found && {
-          type: 'view',
-          kind: 'event',
-          title: found.title!,
-          href: buildEventUrl(found.humanReadableSlug!, found.publicId!),
-        }
-      );
-    }
-    if (section === 'pages') {
-      const found = row('SELECT title, slug FROM pages WHERE pageUuid = ?', id);
-      return (
-        found && {
-          type: 'view',
-          kind: 'page',
-          title: found.title!,
-          href: buildPageUrl(found.slug!),
-        }
-      );
-    }
-    const found = row(
-      'SELECT date FROM "diary-entries" WHERE diaryUuid = ?',
-      id,
-    );
+    const entityType = EDITORS[editor[1]!];
+    const found =
+      entityType &&
+      (await findContentEntity({ entityType, entityId: editor[2]! }, OWNER));
     return (
       found && {
         type: 'view',
-        kind: 'diary-entry',
-        title: found.date!,
-        href: buildDiaryUrl(found.date!),
+        kind: found.entityType,
+        title: found.title,
+        href: found.href,
       }
     );
   }
-  // A section's page: the section in its project's editor.
-  const [, projectPart, sectionPart] =
-    /^\/projects\/([^/]+)\/([^/]+)\/?$/u.exec(path) ?? [];
-  if (projectPart && sectionPart) {
-    const found = rawDb
-      .prepare(
-        `SELECT s.title, s.publicId, p.projectUuid FROM "project-content-sections" s
-         JOIN projects p ON p.projectUuid = s.projectUuid
-         WHERE s.publicId = ? AND p.publicId = ?`,
-      )
-      .get(
-        publicIdFromProjectSectionUrlPart(sectionPart),
-        publicIdFromProjectUrlPart(projectPart),
-      ) as { title: string; publicId: string; projectUuid: string } | undefined;
-    if (found)
-      return {
-        type: 'edit',
-        kind: 'project-section',
-        title: found.title,
-        href: `/admin/projects/${found.projectUuid}/edit/?section=${found.publicId}`,
-      };
-  }
-  const [, section, part] =
-    /^\/(projects|events|diary|pages)\/([^/]+)\/?$/u.exec(path) ?? [];
-  if (!section || !part) return undefined;
-  let found: Record<string, string> | undefined;
-  let kind: SearchKind;
-  let edit: string;
-  if (section === 'projects') {
-    found = row(
-      'SELECT projectUuid AS id, title FROM projects WHERE publicId = ?',
-      publicIdFromProjectUrlPart(part),
-    );
-    kind = 'project';
-    edit = `/admin/projects/${found?.id}/edit/`;
-  } else if (section === 'events') {
-    found = row(
-      'SELECT eventUuid AS id, title FROM events WHERE publicId = ?',
-      publicIdFromEventUrlPart(part),
-    );
-    kind = 'event';
-    edit = `/admin/events/${found?.id}/edit/`;
-  } else if (section === 'pages') {
-    found = row('SELECT pageUuid AS id, title FROM pages WHERE slug = ?', part);
-    kind = 'page';
-    edit = `/admin/pages/${found?.id}/edit/`;
-  } else {
-    const date = dateFromDiaryUrlPart(part);
-    found = date
-      ? row(
-          'SELECT diaryUuid AS id, date AS title FROM "diary-entries" WHERE date = ?',
-          date,
-        )
-      : undefined;
-    kind = 'diary-entry';
-    edit = `/admin/diary/${found?.id}/edit/`;
-  }
-  return found && { type: 'edit', kind, title: found.title!, href: edit };
+  // The path is the site's own, without its base.
+  const target = parseInternalUrl(path, { origins: [], base: '/' });
+  const found = target && (await findContentEntityByTarget(target, OWNER));
+  const face =
+    found && entityFace({ kind: found.entityType, id: found.entityId });
+  return (
+    face && {
+      type: 'edit',
+      kind: found.entityType,
+      title: found.title,
+      href: face.path,
+    }
+  );
 }
 
 /** What the owner saved last: five entities, newest first. */
@@ -232,23 +148,17 @@ function recentActions(): SearchAction[] {
        ORDER BY updatedAt DESC LIMIT 5`,
     )
     .all() as {
-    kind: SearchKind;
+    kind: 'project' | 'event' | 'page' | 'diary-entry';
     id: string;
     title: string;
     access: string;
     updatedAt: number;
   }[];
-  const editors: Partial<Record<SearchKind, string>> = {
-    project: 'projects',
-    event: 'events',
-    page: 'pages',
-    'diary-entry': 'diary',
-  };
   return rows.map((row) => ({
     type: 'recent',
     kind: row.kind,
     title: row.title,
-    href: `/admin/${editors[row.kind]}/${row.id}/edit/`,
+    href: adminPath(row.kind, row.id),
     updatedAt: row.updatedAt,
     ...(row.access === 'private' || row.access === 'link-only'
       ? { access: row.access }
@@ -256,9 +166,11 @@ function recentActions(): SearchAction[] {
   }));
 }
 
-export function searchActions(context: SearchActionContext): SearchAction[] {
+export async function searchActions(
+  context: SearchActionContext,
+): Promise<SearchAction[]> {
   const q = context.q.trim();
-  const sides = sidesOf(context.path);
+  const sides = await sidesOf(context.path);
   if (!q)
     return [
       diaryAction(context.today, context.today),

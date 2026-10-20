@@ -238,17 +238,9 @@ export async function runCatalogue(
     cv: false,
   }).entries)
     kinds[entry.type] = (kinds[entry.type] ?? 0) + 1;
-  const facetUuids = [
-    ...new Set([...tagCounts.keys(), ...included, ...excluded]),
-  ];
-  const tagRows = facetUuids.length
-    ? db
-        .select()
-        .from(schema.tags)
-        .where(inArray(schema.tags.tagUuid, facetUuids))
-        .all()
-    : [];
-  const summaries = await buildPublicTagRows(tagRows);
+  const facetCounts = new Map(tagCounts);
+  for (const tagUuid of [...included, ...excluded])
+    facetCounts.set(tagUuid, facetCounts.get(tagUuid) ?? 0);
   return {
     query: '',
     total: entries.length,
@@ -264,23 +256,44 @@ export async function runCatalogue(
     facets: {
       kinds,
       years: [],
-      tags: tagRows
-        .map((tag, at) => ({
-          tag: summaries[at]!,
-          count: tagCounts.get(tag.tagUuid) ?? 0,
-          ...(included.includes(tag.tagUuid)
-            ? { state: 'include' as const }
-            : excluded.includes(tag.tagUuid)
-              ? { state: 'exclude' as const }
-              : {}),
-        }))
-        .sort(
-          (left, right) =>
-            right.count - left.count ||
-            left.tag.title.localeCompare(right.tag.title),
-        ),
+      tags: await tagFacetRows(facetCounts, included, excluded),
     },
     page: pagination.page,
     pageCount: pagination.pageCount,
   };
+}
+
+/**
+ * The tags a search or the catalogue narrows by, each with how many it
+ * holds and whether it is asked for or left out, the most counted first.
+ * `counts` names every tag to show, those asked for too.
+ */
+export async function tagFacetRows(
+  counts: ReadonlyMap<string, number>,
+  included: readonly string[],
+  excluded: readonly string[],
+): Promise<SearchFacets['tags']> {
+  if (!counts.size) return [];
+  const { db, schema } = THEI_SERVER.useDb();
+  const tags = db
+    .select()
+    .from(schema.tags)
+    .where(inArray(schema.tags.tagUuid, [...counts.keys()]))
+    .all();
+  const summaries = await buildPublicTagRows(tags);
+  return tags
+    .map((tag, at) => ({
+      tag: summaries[at]!,
+      count: counts.get(tag.tagUuid) ?? 0,
+      ...(included.includes(tag.tagUuid)
+        ? { state: 'include' as const }
+        : excluded.includes(tag.tagUuid)
+          ? { state: 'exclude' as const }
+          : {}),
+    }))
+    .sort(
+      (left, right) =>
+        right.count - left.count ||
+        left.tag.title.localeCompare(right.tag.title),
+    );
 }

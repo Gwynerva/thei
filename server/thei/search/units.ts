@@ -1,3 +1,4 @@
+import { parseHtmlAttributes } from '#layers/thei/shared/content-link';
 import {
   contentBlockTextParts,
   isContentFileBlockType,
@@ -46,9 +47,11 @@ export interface SearchPlace {
   file?: { familyUuid: string; assetUuid: string; title?: string };
   /**
    * The other end of what the words are about: a related entity, by its kind
-   * and address, which the relations block shows it by; a tag; a link.
+   * and address, which the relations block shows it by; a tag; a link. A
+   * link's title may be the linked page's own or its address, `asIs`: not
+   * the owner's words, and never formatted.
    */
-  relation?: { title: string; kind?: string; href?: string };
+  relation?: { title: string; kind?: string; href?: string; asIs?: true };
   /** A link of the page, by its address. */
   link?: string;
   /** A status, by its day. */
@@ -76,27 +79,27 @@ export interface SearchUnit {
   placeOnly?: true;
   /** A file's preview, for a find in a file. */
   media?: MediaDescriptor;
-}
-
-const HINT = /data-content-(hint|note)="([^"]*)"/gu;
-
-function decodeAttribute(value: string) {
-  return richTextToPlainText(value.replaceAll('&quot;', '"'));
+  /**
+   * Not found before this moment, though its entity is: words a stranger
+   * reads at a place whose day has not come — a file's place, a section
+   * or a related entity of a day still to come.
+   */
+  visibleFrom?: number;
 }
 
 /** The hints and link notes of a piece of inline markup. */
 function inlineNotes(html: unknown, place: SearchPlace): SearchUnit[] {
   if (typeof html !== 'string' || !html.includes('data-content-')) return [];
   const units: SearchUnit[] = [];
-  for (const [, kind, value] of html.matchAll(HINT)) {
-    const text = decodeAttribute(value!);
-    if (text)
-      units.push({
-        field: 'extra',
-        where: kind === 'hint' ? 'hint' : 'link',
-        text,
-        place,
-      });
+  for (const [, attributes] of html.matchAll(/<[a-z][\w-]*\b([^>]*)>/giu)) {
+    const read = parseHtmlAttributes(attributes ?? '');
+    for (const [name, where] of [
+      ['data-content-hint', 'hint'],
+      ['data-content-note', 'link'],
+    ] as const) {
+      const text = richTextToPlainText(read[name] ?? '');
+      if (text) units.push({ field: 'extra', where, text, place });
+    }
   }
   return units;
 }

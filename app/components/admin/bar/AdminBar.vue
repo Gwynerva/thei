@@ -26,6 +26,7 @@ const route = useRoute();
 const registeredContextButton = useAdminBarContextButton();
 
 const historyBuffer = useContentHistoryBuffer();
+const { base: siteBase } = useSiteUrl();
 
 // The admin has no header of the site: the quick search opens from here.
 // A public page has its own search icon, and the bar no second one.
@@ -52,6 +53,7 @@ onBeforeUnmount(() => window.removeEventListener('online', sendUnsyncedTexts));
 async function signOut() {
   // Nothing typed may stay behind in the browser after signing out: it is sent
   // first, and what cannot be sent is given up only when the owner agrees.
+  // What the owner searched for goes too.
   const unsynced = await sendUnsyncedTexts().catch(
     () => historyBuffer.list().length,
   );
@@ -63,6 +65,7 @@ async function signOut() {
   await $fetch('/api/admin/session', { method: 'DELETE' });
   for (const entry of historyBuffer.list())
     historyBuffer.remove(entry.field, entry.writer);
+  forgetOwnerSearchHistory(siteBase);
   await navigateTo(sitePath('/sign-in/'), { external: true });
 }
 

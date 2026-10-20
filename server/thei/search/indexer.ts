@@ -372,6 +372,7 @@ function rewriteFiles(
   store: SearchStore,
   audience: SearchAudience,
   families?: Set<string>,
+  now = Date.now(),
 ): boolean {
   let changed = false;
   const places = store.filePlaces(audience, families);
@@ -382,13 +383,13 @@ function rewriteFiles(
   const wanted = families
     ? new Map([...unplaced].filter(([family]) => families.has(family)))
     : unplaced;
-  const documents = fileDocuments(audience, places, wanted);
+  const documents = fileDocuments(audience, places, wanted, now);
   for (const family of families ?? [])
     if (!documents.has(family)) documents.set(family, undefined);
   for (const [family, document] of documents)
     changed =
       (document
-        ? store.write(document)
+        ? store.write(document, now)
         : store.remove(audience, `file:${family}`)) || changed;
   if (!families) {
     for (const ref of store.refs(audience, 'file'))
@@ -545,6 +546,31 @@ export function markSearchStale() {
     void run('changes');
   }, wait);
   state.timer.unref?.();
+}
+
+/**
+ * Lets a stranger match, from `now` on, the words of places whose day has
+ * come since their documents were written — a caption on a diary entry of
+ * that day, a section's title, a note on a relation to it — as the search
+ * finds the entry itself that day, without waiting for a pass. A file's
+ * document is built again: its title and where it is shown come from the
+ * places found by then. Asked before every search, and costs nothing until
+ * something is due.
+ */
+export function admitArrivals(store: SearchStore, now = Date.now()) {
+  const due = store.arrivedDocs(now);
+  if (!due.length) return;
+  const files = new Map(
+    SEARCH_AUDIENCES.map((audience) => [audience, new Set<string>()]),
+  );
+  for (const doc of due) {
+    if (doc.kind === 'file')
+      files.get(doc.audience)!.add(doc.ref.slice('file:'.length));
+    else store.admitArrived(doc.id, now);
+  }
+  for (const [audience, families] of files)
+    if (families.size) rewriteFiles(store, audience, families, now);
+  store.bumpGeneration();
 }
 
 /** Builds the index whole, now; for tests and the first build. */

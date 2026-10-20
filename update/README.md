@@ -158,10 +158,13 @@ While the site is closed, anyone who opens it is led to `/update/`. The admin
 sees the steps there, and why the update stopped if it did, but never the log;
 a visitor sees only that the site is temporarily unavailable, and the
 response tells them no more than that. The admin is recognised from the first
-step: sessions are only loaded after the migrations, so the tokens of the
-active sessions are read beforehand, raw, from the `admin-sessions` table
-(`server/thei/admin-session/closed-site.ts`). Visitors are sent back to the
-site as soon as it opens.
+step: sessions are only loaded after the migrations, so the active sessions
+are read beforehand, with raw SQL, from the `admin-sessions` table
+(`server/thei/admin-session/closed-site.ts`), and the cookie's token is
+looked up by its hash. A session keeps only the hash of its token since
+0.0.7; a row an older release wrote still holds the token itself, and is
+read by hashing it, until the migration has turned it. Visitors are sent
+back to the site as soon as it opens.
 
 Updating and restarting are only offered when Thei is running as a managed
 service — the panel detects this from `THEI_MANAGED` in the unit file. In a

@@ -827,4 +827,226 @@ describe('the global search', () => {
       response.building === undefined || typeof response.building === 'number',
     ).toBe(true);
   });
+
+  it('says which places are named by another site, not by the owner', async () => {
+    const link = (url: string, title: string) =>
+      insert('external-links', {
+        url,
+        title,
+        description: '',
+        faviconKey: '',
+        status: 'complete',
+        touchedAt: 1,
+      });
+    link('https://example.org/lanterns', 'Lantern "Works"');
+    insert('project-external-links', {
+      projectUuid: PROJECT,
+      url: 'https://example.org/lanterns',
+      sortOrder: 0,
+      isPrivate: 0,
+      note: 'Здесь смотрела фонари',
+    });
+    link('https://example.org/me', '');
+    link('https://example.org/code', 'Code host');
+    insert('profile-external-links', {
+      url: 'https://example.org/me',
+      name: '',
+      sortOrder: 0,
+      isPrivate: 0,
+      note: 'Мои клёны',
+    });
+    insert('profile-external-links', {
+      url: 'https://example.org/code',
+      name: 'Мой "код"',
+      sortOrder: 1,
+      isPrivate: 0,
+      note: 'Мои ясени',
+    });
+    await rebuildSearchIndex();
+    const labelOf = async (q: string) => {
+      const hit = hits(await search(q))[0]!;
+      const find = findsOfResult({ q, audience: 'public', ref: hit.ref })!
+        .finds[0]!;
+      return { label: find.label, asIs: find.labelAsIs };
+    };
+    expect(await labelOf('фонари')).toEqual({
+      label: 'Lantern "Works"',
+      asIs: true,
+    });
+    expect(await labelOf('клёны')).toEqual({
+      label: 'https://example.org/me',
+      asIs: true,
+    });
+    expect(await labelOf('ясени')).toEqual({
+      label: 'Мой "код"',
+      asIs: undefined,
+    });
+  });
+
+  it('names the profile to a stranger by a ref its places open by', async () => {
+    const hit = hits(await search('Варвара'))[0]!;
+    expect(hit).toMatchObject({ kind: 'profile', ref: 'profile' });
+    expect(
+      findsOfResult({ q: 'Варвара', audience: 'public', ref: hit.ref })?.finds
+        .length,
+    ).toBeGreaterThan(0);
+  });
+});
+
+describe('a place whose day has not come', () => {
+  const later = () => Date.now() + 3 * 24 * 60 * 60 * 1000;
+
+  it('says nothing of itself through a file shown at a place found now', async () => {
+    const assetUuid = 'a-33333333-3333-4333-8333-333333333333';
+    insert('assets', {
+      assetUuid,
+      slug: 'lighthouse',
+      familyUuid: 'f-lighthouse',
+      contentHash: 'h-lighthouse',
+      settingsKey: 'k',
+      type: 'other',
+      extension: 'pdf',
+      size: 1,
+      touchedAt: 1,
+    });
+    // The same file on a public event of last year, with a caption, and on
+    // the diary entry of tomorrow, with a title and a word of its own.
+    const shown = (contentUuid: string, block: Record<string, unknown>) =>
+      insert('asset-usages', {
+        assetUuid,
+        containerType: 'content',
+        containerId: contentUuid,
+        role: 'content',
+        meta: {
+          role: 'content',
+          refs: [
+            {
+              blockId: block.id,
+              blockType: 'contentAttachment',
+              isPrivate: false,
+            },
+          ],
+          isPrivate: false,
+        },
+      });
+    const onEvent = {
+      id: 'f-event',
+      type: 'contentAttachment',
+      data: { asset: { assetUuid }, caption: 'Маяк на мысе' },
+    };
+    insert('content', {
+      contentUuid: 'c-event-file',
+      ownerType: 'event',
+      ownerId: EVENT,
+      slot: 'event-body',
+      data: { blocks: [onEvent] },
+      blockCount: 1,
+      assetCount: 1,
+      assetTotalSize: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    shown('c-event-file', onEvent);
+    const onEntry = {
+      id: 'f-entry',
+      type: 'contentAttachment',
+      data: {
+        asset: { assetUuid },
+        title: 'Утро у маяка',
+        caption: 'Маяк и ягель',
+      },
+    };
+    const entry = context.rawDb
+      .prepare('SELECT contentUuid FROM content WHERE ownerId = ?')
+      .get(FUTURE_DIARY) as { contentUuid: string };
+    context.rawDb
+      .prepare('UPDATE content SET data = ? WHERE contentUuid = ?')
+      .run(
+        JSON.stringify({
+          blocks: [paragraph('d3', 'Ещё не наступило: черёмуха.'), onEntry],
+        }),
+        entry.contentUuid,
+      );
+    shown(entry.contentUuid, onEntry);
+    await rebuildSearchIndex();
+
+    // Today a word only tomorrow's caption holds finds nothing at all, and
+    // the file says nothing of tomorrow.
+    expect((await search('ягель')).total).toBe(0);
+    const hit = hits(await search('маяк', { kind: 'file' }))[0]!;
+    expect(hit).toMatchObject({ ref: 'file:lighthouse', shownAt: 'Starcon' });
+    expect(hit.title).not.toBe('Утро у маяка');
+    const now = findsOfResult({ q: 'маяк', audience: 'public', ref: hit.ref })!;
+    expect(JSON.stringify(now)).not.toContain('ягель');
+    expect(JSON.stringify(now)).not.toContain(tomorrow);
+    // The owner reads it all at once.
+    expect(
+      titles(await search('ягель', { audience: 'owner', kind: 'file' })),
+    ).toEqual(['Утро у маяка']);
+
+    // Once its day has come, the file is found by it, and called by it.
+    const then = await search('ягель', { kind: 'file', now: later() });
+    expect(hits(then).map((each) => each.ref)).toEqual(['file:lighthouse']);
+    expect(hits(then)[0]!.title).toBe('Утро у маяка');
+    expect(
+      JSON.stringify(
+        findsOfResult({
+          q: 'маяк',
+          audience: 'public',
+          ref: hit.ref,
+          now: later(),
+        }),
+      ),
+    ).toContain('ягель');
+  });
+
+  it('keeps a dated section’s title, and a note on an entry, in the project till then', async () => {
+    insert('periods', {
+      ownerType: 'project-section',
+      ownerId: SECTION,
+      sortOrder: 0,
+      startDate: tomorrow,
+      endDate: tomorrow,
+      precision: 'exact',
+      precisionNote: '',
+      label: '',
+    });
+    insert('entity-relations', {
+      firstType: 'project',
+      firstId: PROJECT,
+      secondType: 'diary-entry',
+      secondId: FUTURE_DIARY,
+      type: 'related',
+      note: { type: 'shared', text: 'Примерка у ольхи' },
+      firstSortOrder: 2,
+      secondSortOrder: 0,
+    });
+    await rebuildSearchIndex();
+    const ref = `project:${PROJECT.slice(2, 10)}`;
+    const places = (q: string, at?: number) =>
+      findsOfResult({
+        q,
+        audience: 'public',
+        ref,
+        ...(at ? { now: at } : {}),
+      })!.finds.map((find) => find.where);
+
+    expect(places('парик')).not.toContain('section');
+    expect(places('ольхи')).not.toContain('relation');
+    // Nor is the project found by them.
+    expect((await search('ольхи')).total).toBe(0);
+    expect(titles(await search('ольхи', { now: later() }))).toContain(
+      'Косплей на Шедоухарт',
+    );
+    expect(places('парик', later())).toContain('section');
+    expect(places('ольхи', later())).toContain('relation');
+    // The owner reads them at once.
+    expect(
+      findsOfResult({
+        q: 'ольхи',
+        audience: 'owner',
+        ref: `project:${PROJECT}`,
+      })!.finds.map((find) => find.where),
+    ).toContain('relation');
+  });
 });

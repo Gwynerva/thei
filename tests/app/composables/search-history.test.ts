@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest';
+import { nextTick, ref } from 'vue';
 import {
   addToSearchHistory,
   createSearchHistory,
+  forgetOwnerSearchHistory,
   parseSearchHistory,
   SEARCH_HISTORY_SIZE,
   searchHistoryKey,
-  type SearchHistoryStorage,
+  useSearchHistoryAt,
 } from '../../../app/composables/search-history';
+import type { BrowserStorage } from '../../../app/composables/browser-storage';
 import { SEARCH_QUERY_MAX_LENGTH } from '../../../shared/search/tokens';
 
-function memoryStorage(): SearchHistoryStorage & {
+function memoryStorage(): BrowserStorage & {
   values: Map<string, string>;
 } {
   const values = new Map<string, string>();
@@ -49,6 +52,9 @@ describe('search history', () => {
     expect(addToSearchHistory([], long)[0]).toHaveLength(
       SEARCH_QUERY_MAX_LENGTH,
     );
+    // Cut by characters: a character of two halves is never cut in two.
+    const kept = addToSearchHistory([], '\u{1F30A}'.repeat(300))[0]!;
+    expect(kept).toBe('\u{1F30A}'.repeat(SEARCH_QUERY_MAX_LENGTH));
   });
 
   it('reads anything but a list of words as none', () => {
@@ -59,6 +65,18 @@ describe('search history', () => {
       'eva',
       'маяк',
     ]);
+  });
+
+  it('reads a stored list as it would have been kept: the same query once, the newer', () => {
+    expect(
+      parseSearchHistory(
+        JSON.stringify(['маяк', 'Териберка', '  Маяк ', 'где  я была']),
+      ),
+    ).toEqual(['маяк', 'Териберка', 'где я была']);
+    const long = Array.from({ length: 20 }, (_, at) => `query ${at}`);
+    expect(parseSearchHistory(JSON.stringify(long))).toEqual(
+      long.slice(0, SEARCH_HISTORY_SIZE),
+    );
   });
 
   it('keeps the owner apart from a visitor, per site', () => {
@@ -86,6 +104,19 @@ describe('search history', () => {
     expect(storage.values.has(key)).toBe(false);
   });
 
+  it('forgets the owner’s list on signing out, and leaves a visitor’s', () => {
+    const storage = memoryStorage();
+    createSearchHistory(storage, searchHistoryKey('/', 'owner')).remember(
+      'черновик',
+    );
+    createSearchHistory(storage, searchHistoryKey('/', 'visitor')).remember(
+      'маяк',
+    );
+    forgetOwnerSearchHistory('/', storage);
+    expect(storage.values.has(searchHistoryKey('/', 'owner'))).toBe(false);
+    expect(storage.values.has(searchHistoryKey('/', 'visitor'))).toBe(true);
+  });
+
   it('goes on without a storage that refuses', () => {
     const history = createSearchHistory(
       {
@@ -97,5 +128,41 @@ describe('search history', () => {
     );
     expect(history.remember('маяк')).toEqual(['маяк']);
     expect(history.read()).toEqual([]);
+  });
+});
+
+describe('the history of whoever reads the site', () => {
+  it('follows signing in and out, each reader with their own list', async () => {
+    const storage = memoryStorage();
+    const base = '/switching/';
+    const history = useSearchHistoryAt(
+      ref(searchHistoryKey(base, 'visitor')),
+      storage,
+    );
+    const key = ref(searchHistoryKey(base, 'visitor'));
+    const reading = useSearchHistoryAt(key, storage);
+    reading.remember('маяк');
+    expect(reading.entries.value).toEqual(['маяк']);
+    // Another reader of the same list in the tab sees it at once.
+    expect(history.entries.value).toEqual(['маяк']);
+
+    key.value = searchHistoryKey(base, 'owner');
+    await nextTick();
+    expect(reading.entries.value).toEqual([]);
+    reading.remember('черновик');
+    expect(reading.entries.value).toEqual(['черновик']);
+
+    key.value = searchHistoryKey(base, 'visitor');
+    await nextTick();
+    expect(reading.entries.value).toEqual(['маяк']);
+  });
+
+  it('reads and keeps nothing where there is no storage, as on the server', () => {
+    const history = useSearchHistoryAt(
+      ref(searchHistoryKey('/server/', 'visitor')),
+      undefined,
+    );
+    history.remember('маяк');
+    expect(history.entries.value).toEqual([]);
   });
 });

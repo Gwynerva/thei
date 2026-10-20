@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import {
   isPublicSecret,
   type PublicAssetDescriptor,
@@ -25,7 +25,9 @@ import { landingHash } from '#layers/thei/shared/search/landing';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
 import { OWNER, STRANGER, type PublicViewer } from '../access-links/viewer';
 import { readFamilyDescriptions } from '../assets/descriptions';
+import { adminPath } from '../entity-kinds';
 import { getProfile, getProfileIdentity, getProfileLinks } from '../profile';
+import { getEventPeriods } from '../events/periods';
 import { listProjectSections } from '../projects/content-sections';
 import { buildPublicContentData } from '../public/content';
 import {
@@ -38,6 +40,7 @@ import {
   canListPublicEntity,
 } from '../public/entities';
 import { resolvePublicRelated } from '../public/related';
+import { listPublicTagCounts } from '../public/tags';
 import type { RelationEntityType } from '#layers/thei/shared/relation';
 import type { StoredFilePlace } from './store';
 import {
@@ -152,12 +155,13 @@ function tagUuidsOf(type: 'project' | 'event', id: string): string[] {
 function tagUnits(tagUuids: string[]): SearchUnit[] {
   if (!tagUuids.length) return [];
   const { db, schema } = THEI_SERVER.useDb();
-  const wanted = new Set(tagUuids);
+  const order = new Map(tagUuids.map((tagUuid, at) => [tagUuid, at]));
   return db
     .select()
     .from(schema.tags)
+    .where(inArray(schema.tags.tagUuid, tagUuids))
     .all()
-    .filter((tag) => wanted.has(tag.tagUuid))
+    .sort((a, b) => order.get(a.tagUuid)! - order.get(b.tagUuid)!)
     .flatMap((tag) => [
       ...fieldUnit('names', 'tag', tag.title, {
         place: { relation: { title: tag.title }, zone: 'tags' },
@@ -194,36 +198,62 @@ function statusUnits(
     );
 }
 
-/** The notes of an entity's relations, as its related block shows them. */
+/**
+ * The notes of an entity's relations, as its related block shows them. A
+ * stranger finds the note on an entry or an event of a day still to come
+ * once that day comes, as the entry or the event itself.
+ */
 async function relationUnits(
   type: RelationEntityType,
   id: string,
   viewer: PublicViewer,
 ): Promise<SearchUnit[]> {
   const items = await resolvePublicRelated({ type, id }, viewer);
-  return items.flatMap((item) =>
-    item.secret || !item.note
-      ? []
-      : fieldUnit('extra', 'relation', item.note, {
-          place: {
-            relation: {
-              title: item.target.title || item.target.date || '',
-              kind: item.target.type,
-              href: relationHref(item.target),
-            },
-          },
-        }),
-  );
+  return items.flatMap((item) => {
+    if (item.secret || !item.note) return [];
+    const arrives = viewer === STRANGER ? arrivalOf(item.target) : 0;
+    return fieldUnit('extra', 'relation', item.note, {
+      place: {
+        relation: {
+          title: item.target.title || item.target.date || '',
+          kind: item.target.type,
+          href: relationHref(item.target),
+        },
+      },
+      ...(arrives ? { visibleFrom: arrives } : {}),
+    });
+  });
+}
+
+/**
+ * When a related entity is found by a stranger: a diary entry on its day,
+ * an event on the first day of its periods, a project at once.
+ */
+function arrivalOf(target: {
+  type: RelationEntityType;
+  id: string;
+  date?: string;
+}): number {
+  if (target.type === 'diary-entry')
+    return target.date ? dayArrives(target.date) : 0;
+  if (target.type !== 'event') return 0;
+  const periods = getEventPeriods(target.id);
+  return periods.length ? dayArrives(coverDatedPeriods(periods).startDate) : 0;
 }
 
 /** The words of links and files of an entity's own list, as its sidebar shows them. */
 function referenceUnits(references: {
-  links: { note?: string; title: string; href: string }[];
+  links: { kind: string; note?: string; title: string; href: string }[];
 }): SearchUnit[] {
   return references.links.flatMap((link) =>
     fieldUnit('extra', 'link', link.note, {
       place: {
-        relation: { title: link.title },
+        // An entity is called by its title; another site by its page's own
+        // title, or its address.
+        relation: {
+          title: link.title,
+          ...(link.kind === 'external' ? { asIs: true as const } : {}),
+        },
         link: link.href,
         zone: 'links',
       },
@@ -406,6 +436,16 @@ export async function projectDocument(
   const sectionUnits: SearchUnit[] = [];
   const days: DatedPeriod[] = [];
   for (const section of sections) {
+    // A dated section waits for its day as a result of its own
+    // (`sectionDocument`), and its title in the project with it.
+    const arrives =
+      audience === 'public' && section.periods.length
+        ? {
+            visibleFrom: dayArrives(
+              coverDatedPeriods(section.periods).startDate,
+            ),
+          }
+        : {};
     const place: SearchPlace = {
       section: {
         id: section.sectionUuid,
@@ -419,7 +459,10 @@ export async function projectDocument(
       },
     };
     sectionUnits.push(
-      ...fieldUnit('headings', 'section', section.title, { place }),
+      ...fieldUnit('headings', 'section', section.title, {
+        place,
+        ...arrives,
+      }),
     );
     days.push(...section.periods);
   }
@@ -435,7 +478,7 @@ export async function projectDocument(
     title: project.title,
     href,
     ...(audience === 'owner'
-      ? { editHref: `/admin/projects/${project.projectUuid}/edit/` }
+      ? { editHref: adminPath('project', project.projectUuid) }
       : {}),
     ...(period
       ? {
@@ -522,7 +565,12 @@ export async function sectionDocument(
     href: built.href,
     ...(audience === 'owner'
       ? {
-          editHref: `/admin/projects/${project.projectUuid}/edit/?section=${section.publicId}`,
+          editHref: adminPath(
+            'project-section',
+            section.sectionUuid,
+            project.projectUuid,
+            section.publicId,
+          ),
         }
       : {}),
     ...(period
@@ -578,7 +626,7 @@ export async function eventDocument(
     title: event.title,
     href: buildEventUrl(event.humanReadableSlug, event.publicId),
     ...(audience === 'owner'
-      ? { editHref: `/admin/events/${event.eventUuid}/edit/` }
+      ? { editHref: adminPath('event', event.eventUuid) }
       : {}),
     ...(period
       ? {
@@ -633,7 +681,7 @@ export async function diaryDocument(
     title: entry.date,
     href: buildDiaryUrl(entry.date),
     ...(audience === 'owner'
-      ? { editHref: `/admin/diary/${entry.diaryUuid}/edit/` }
+      ? { editHref: adminPath('diary-entry', entry.diaryUuid) }
       : {}),
     date: entry.date,
     sort: { from: entry.date, to: entry.date, life: true },
@@ -666,7 +714,7 @@ export async function pageDocument(
     title: stored.title,
     href: buildPageUrl(stored.slug),
     ...(audience === 'owner'
-      ? { editHref: `/admin/pages/${stored.pageUuid}/edit/` }
+      ? { editHref: adminPath('page', stored.pageUuid) }
       : {}),
     sort: sortOf(undefined, stored.createdAt),
     visibleFrom: 0,
@@ -689,35 +737,17 @@ export async function pageDocument(
 
 /**
  * The tags a reader may find: every tag for the owner, and for a stranger
- * the ones a public project or event carries — the tags whose page opens.
+ * the ones a public project or event carries — the tags whose page opens,
+ * as the tags page lists them.
  */
 export async function tagDocuments(
   audience: SearchAudience,
 ): Promise<SearchDocument[]> {
   const { db, schema } = THEI_SERVER.useDb();
-  const tags = db.select().from(schema.tags).all();
-  let shown = tags;
-  if (audience === 'public') {
-    const carried = new Set<string>();
-    const publicOwners = new Set([
-      ...db
-        .select()
-        .from(schema.projects)
-        .all()
-        .filter((row) => canListPublicEntity(row.access, false))
-        .map((row) => `project:${row.projectUuid}`),
-      ...db
-        .select()
-        .from(schema.events)
-        .all()
-        .filter((row) => canListPublicEntity(row.access, false))
-        .map((row) => `event:${row.eventUuid}`),
-    ]);
-    for (const usage of db.select().from(schema.tagUsages).all())
-      if (publicOwners.has(`${usage.containerType}:${usage.containerId}`))
-        carried.add(usage.tagUuid);
-    shown = tags.filter((tag) => carried.has(tag.tagUuid));
-  }
+  const shown =
+    audience === 'public'
+      ? listPublicTagCounts(false).map((item) => item.tag)
+      : db.select().from(schema.tags).all();
   const summaries = await buildPublicTagRows(shown);
   return shown.map((tag, at) => ({
     audience,
@@ -727,7 +757,7 @@ export async function tagDocuments(
     title: tag.title,
     href: buildTagUrl(tag.slug, tag.publicId),
     ...(audience === 'owner'
-      ? { editHref: `/admin/tags/${tag.tagUuid}/edit/` }
+      ? { editHref: adminPath('tag', tag.tagUuid) }
       : {}),
     visibleFrom: 0,
     summary: tag.description,
@@ -761,9 +791,12 @@ export async function profileDocument(
     audience,
     kind: 'profile',
     ref: 'profile',
+    publicRef: 'profile',
     title: profile.displayName,
     href: '/',
-    ...(audience === 'owner' ? { editHref: '/admin/about/' } : {}),
+    ...(audience === 'owner'
+      ? { editHref: adminPath('profile', PROFILE_ID) }
+      : {}),
     visibleFrom: 0,
     summary: profile.slogan,
     media: identity.avatarMedia,
@@ -782,7 +815,11 @@ export async function profileDocument(
         [link.name, link.note].flatMap((words) =>
           fieldUnit('extra', 'link', words, {
             place: {
-              relation: { title: link.name || link.title || link.url },
+              // The owner's name for it, else the page's own title or its
+              // address.
+              relation: link.name
+                ? { title: link.name }
+                : { title: link.title || link.url, asIs: true },
               link: link.url,
               zone: 'links',
             },
@@ -801,11 +838,19 @@ export async function profileDocument(
  * else. A stranger finds only files a page shows them. The owner also finds a
  * file of the library placed nowhere yet, by its description; `unplaced`
  * lists those families. A family left with nothing to say has no document.
+ *
+ * A stranger finds a file once the first of its places is found, and each
+ * place's words once that place is: a picture on a public project and on a
+ * diary entry of tomorrow says nothing of the entry before its day. What its
+ * card says — its title, where it is shown, its address — comes from the
+ * places found by the time the file is, as of `now`; a pass after a place's
+ * day takes its words in too.
  */
 export function fileDocuments(
   audience: SearchAudience,
   places: Map<string, StoredFilePlace[]>,
   unplaced: Map<string, { assetUuid: string; description: string }> = new Map(),
+  now = Date.now(),
 ): Map<string, SearchDocument | undefined> {
   const families = [...new Set([...places.keys(), ...unplaced.keys()])];
   const result = new Map<string, SearchDocument | undefined>();
@@ -820,7 +865,12 @@ export function fileDocuments(
   );
   const descriptions = readFamilyDescriptions(families);
   for (const family of families) {
-    const shown = places.get(family) ?? [];
+    const every = places.get(family) ?? [];
+    const visibleFrom = every.length
+      ? Math.min(...every.map((place) => place.visibleFrom))
+      : 0;
+    const found = Math.max(now, visibleFrom);
+    const shown = every.filter((place) => place.visibleFrom <= found);
     const asset = assets.get(firstAsset(family) ?? '');
     const description =
       shown.find((place) => place.description)?.description ??
@@ -851,9 +901,7 @@ export function fileDocuments(
         `/admin/assets/?q=${encodeURIComponent(title || description)}`,
       // Found once the earliest of its places is: a picture of a day still
       // to come waits with it.
-      visibleFrom: shown.length
-        ? Math.min(...shown.map((place) => place.visibleFrom))
-        : 0,
+      visibleFrom,
       ...(description ? { summary: description } : {}),
       ...(media ? { media } : {}),
       file: {
@@ -876,9 +924,12 @@ export function fileDocuments(
           description,
           first ? { place: { href: first.href } } : {},
         ),
-        ...shown.flatMap((place) =>
+        ...every.flatMap((place) =>
           fieldUnit('text', 'caption', place.caption, {
             place: { href: place.href, relation: { title: place.placeTitle } },
+            ...(place.visibleFrom > visibleFrom
+              ? { visibleFrom: place.visibleFrom }
+              : {}),
           }),
         ),
       ],

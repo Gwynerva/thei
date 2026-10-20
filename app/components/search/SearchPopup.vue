@@ -4,7 +4,6 @@ import {
   type SearchAction,
   type SearchAdminSection,
   type SearchHit,
-  type SearchKind,
 } from '#layers/thei/shared/search/api';
 import type { IconName } from '#thei/icons';
 import { SEARCH_QUERY_MAX_LENGTH } from '#layers/thei/shared/search/tokens';
@@ -97,12 +96,6 @@ const SECTION_ICONS: Record<SearchAdminSection, IconName> = {
   ai: 'sparkles',
 };
 
-function titleOf(kind: SearchKind, title: string) {
-  return kind === 'diary-entry'
-    ? formatAbsolutePublicDate(title, language.value.code)
-    : publicText(title);
-}
-
 function hitRow(hit: SearchHit): Row {
   const titled = searchTitleIsSummary(hit);
   // A file called by its description finds nothing more to say by it.
@@ -165,13 +158,20 @@ function hitRow(hit: SearchHit): Row {
   };
 }
 
-async function askAi(textToAsk: string) {
-  try {
-    const { sessionUuid } = await aiApi.start({ text: textToAsk });
-    await navigateTo({ path: '/admin/ai/', query: { session: sessionUuid } });
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  }
+/** A question for the site's model: a session of its own, opened. */
+function askAi(text: string) {
+  return startAiSession(
+    { text, about: [], files: [], restore: () => {}, templateId: undefined },
+    {
+      presets: [],
+      started: async (sessionUuid) => {
+        await navigateTo({
+          path: '/admin/ai/',
+          query: { session: sessionUuid },
+        });
+      },
+    },
+  );
 }
 
 function actionRow(action: SearchAction, at: number): Row {
@@ -197,14 +197,18 @@ function actionRow(action: SearchAction, at: number): Row {
       return {
         key,
         icon: 'edit',
-        title: value.search_action_edit(titleOf(action.kind, action.title)),
+        title: value.search_action_edit(
+          searchEntityTitle(action.kind, action.title),
+        ),
         href: action.href,
       };
     case 'view':
       return {
         key,
         icon: 'visibility',
-        title: value.search_action_view(titleOf(action.kind, action.title)),
+        title: value.search_action_view(
+          searchEntityTitle(action.kind, action.title),
+        ),
         href: action.href,
       };
     case 'recent':
@@ -212,7 +216,7 @@ function actionRow(action: SearchAction, at: number): Row {
         key,
         icon: SEARCH_KIND_ICONS[action.kind],
         iconLabel: value.search_kind(action.kind),
-        title: titleOf(action.kind, action.title),
+        title: searchEntityTitle(action.kind, action.title),
         access: searchAccessBadge(action.access),
         media: action.media,
         href: action.href,
@@ -317,6 +321,25 @@ const { listId, activeIndex, optionId, move, pointAt, current } = useActiveRow(
 const rowIndex = computed(
   () => new Map(rows.value.map((row, index) => [row.key, index])),
 );
+/**
+ * What was searched for before is a list of its own, after the others: the
+ * bin that forgets it stands at its heading, and a list of options holds
+ * nothing but options.
+ */
+const listed = computed(() =>
+  sections.value.filter((section) => section.key !== 'history'),
+);
+const searched = computed(() =>
+  sections.value.find((section) => section.key === 'history'),
+);
+const historyListId = `${listId}-history`;
+const historyHeadingId = `${listId}-history-heading`;
+const controls = computed(
+  () =>
+    [listed.value.length ? listId : '', searched.value ? historyListId : '']
+      .filter(Boolean)
+      .join(' ') || undefined,
+);
 /** Where each group starts: Tab goes from one to the next. */
 const groupStarts = computed(() => {
   const starts: number[] = [];
@@ -397,8 +420,7 @@ function onPick(row: Row, event: MouseEvent) {
   if (row.href) {
     if (row.hit) rememberQuery();
     // A click for a new tab or window leaves the search where it is.
-    if (event.ctrlKey || event.metaKey || event.shiftKey || event.button)
-      return;
+    if (!isPlainClick(event)) return;
     close();
     opener = null;
     return;
@@ -511,7 +533,7 @@ const foundNothing = computed(
           role="combobox"
           aria-autocomplete="list"
           :aria-expanded="rows.length > 0"
-          :aria-controls="listId"
+          :aria-controls="controls"
           :aria-activedescendant="
             activeIndex >= 0 ? optionId(activeIndex) : undefined
           "
@@ -576,67 +598,93 @@ const foundNothing = computed(
         </template>
         <div
           v-if="rows.length"
-          :id="listId"
-          role="listbox"
-          :aria-label="phrase.search"
           class="flex flex-col gap-1.5 transition-opacity"
           :class="{ 'opacity-60': loading && shown?.query !== query }"
         >
-          <template v-for="(section, at) in sections" :key="section.key">
-            <!-- What to do with the query leads, over what the search says
-                 of its answer, a line away from what was found. -->
-            <div
-              v-if="at === 1 && leads"
-              role="presentation"
-              class="flex flex-col gap-1 border-t border-border-1 px-xs pt-1.5"
-            >
-              <p v-for="note in notes" :key="note" class="text-xs text-text-3">
-                {{ note }}
-              </p>
-            </div>
-            <div
-              role="group"
-              :aria-label="section.heading"
-              class="flex flex-col"
-            >
-              <!-- What was searched for before, with the bin that forgets
-                   it: a button of its own, which Tab reaches after the
-                   groups. -->
+          <div
+            v-if="listed.length"
+            :id="listId"
+            role="listbox"
+            :aria-label="phrase.search"
+            class="flex flex-col gap-1.5"
+          >
+            <template v-for="(section, at) in listed" :key="section.key">
+              <!-- What to do with the query leads, over what the search says
+                   of its answer, a line away from what was found. -->
               <div
-                v-if="section.key === 'history'"
-                class="flex items-center justify-between gap-xs pl-xs"
-                data-search-history
+                v-if="at === 1 && leads"
+                role="presentation"
+                class="flex flex-col gap-1 border-t border-border-1 px-xs
+                  pt-1.5"
+              >
+                <p
+                  v-for="note in notes"
+                  :key="note"
+                  class="text-xs text-text-3"
+                >
+                  {{ note }}
+                </p>
+              </div>
+              <div
+                role="group"
+                :aria-label="section.heading"
+                class="flex flex-col"
               >
                 <span
-                  class="pt-1.5 pb-1 text-xs font-bold tracking-wider
+                  v-if="section.heading"
+                  class="px-xs pt-1.5 pb-1 text-xs font-bold tracking-wider
                     text-text-3 uppercase"
                   aria-hidden="true"
                   >{{ section.heading }}</span
                 >
-                <button
-                  type="button"
-                  class="flex size-7 shrink-0 cursor-pointer items-center
-                    justify-center rounded-sm text-text-3 transition
-                    focus-visible:ring-2 focus-visible:ring-accent
-                    focus-visible:outline-none pointer-coarse:size-9
-                    hocus:bg-bg-error hocus:text-text-error"
-                  :aria-label="phrase.search_history_clear"
-                  :data-title-popup="phrase.search_history_clear"
-                  data-search-history-clear
-                  @click="clearHistory"
-                >
-                  <Icon name="delete" />
-                </button>
+                <SearchQuickRow
+                  v-for="row in section.rows"
+                  :id="optionId(rowIndex.get(row.key)!)"
+                  :key="row.key"
+                  :row
+                  :active="activeIndex === rowIndex.get(row.key)"
+                  @point="pointAt($event, rowIndex.get(row.key)!)"
+                  @pick="onPick(row, $event)"
+                  @more="openPlaces(row)"
+                  @other="activate(row, true)"
+                />
               </div>
+            </template>
+          </div>
+          <!-- What was searched for before, with the bin that forgets it: a
+               button of its own, which Tab reaches after the groups, beside
+               the heading that names the list under it. -->
+          <div v-if="searched" class="flex flex-col" data-search-history>
+            <div class="flex items-center justify-between gap-xs pl-xs">
               <span
-                v-else-if="section.heading"
-                class="px-xs pt-1.5 pb-1 text-xs font-bold tracking-wider
-                  text-text-3 uppercase"
-                aria-hidden="true"
-                >{{ section.heading }}</span
+                :id="historyHeadingId"
+                class="pt-1.5 pb-1 text-xs font-bold tracking-wider text-text-3
+                  uppercase"
+                >{{ searched.heading }}</span
               >
+              <button
+                type="button"
+                class="flex size-7 shrink-0 cursor-pointer items-center
+                  justify-center rounded-sm text-text-3 transition
+                  focus-visible:ring-2 focus-visible:ring-accent
+                  focus-visible:outline-none pointer-coarse:size-9
+                  hocus:bg-bg-error hocus:text-text-error"
+                :aria-label="phrase.search_history_clear"
+                :data-title-popup="phrase.search_history_clear"
+                data-search-history-clear
+                @click="clearHistory"
+              >
+                <Icon name="delete" />
+              </button>
+            </div>
+            <div
+              :id="historyListId"
+              role="listbox"
+              :aria-labelledby="historyHeadingId"
+              class="flex flex-col"
+            >
               <SearchQuickRow
-                v-for="row in section.rows"
+                v-for="row in searched.rows"
                 :id="optionId(rowIndex.get(row.key)!)"
                 :key="row.key"
                 :row
@@ -647,7 +695,7 @@ const foundNothing = computed(
                 @other="activate(row, true)"
               />
             </div>
-          </template>
+          </div>
         </div>
         <p
           v-else-if="failed"

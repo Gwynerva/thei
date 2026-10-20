@@ -144,16 +144,22 @@ export function useQuickSearch(
     }
   }
 
+  /** Stops what waits for a pause or is on its way; its answer is dropped. */
+  function cancel() {
+    clearTimeout(timer);
+    controller?.abort();
+    version++;
+    loading.value = false;
+  }
+
   function schedule(now = false) {
     clearTimeout(timer);
     const q = text.value.trim();
     // A visitor with nothing typed has nothing to ask for: what is offered
     // then is their own history, kept in the browser.
     if (!q && !options.owner.value) {
-      controller?.abort();
-      version++;
+      cancel();
       response.value = null;
-      loading.value = false;
       failed.value = false;
       return;
     }
@@ -168,19 +174,11 @@ export function useQuickSearch(
     options.enabled,
     (enabled) => {
       if (enabled) schedule(true);
-      else {
-        clearTimeout(timer);
-        controller?.abort();
-        version++;
-        loading.value = false;
-      }
+      else cancel();
     },
     { immediate: true },
   );
-  onBeforeUnmount(() => {
-    clearTimeout(timer);
-    controller?.abort();
-  });
+  onBeforeUnmount(cancel);
 
   return { response, loading, failed, refresh: () => schedule(true) };
 }

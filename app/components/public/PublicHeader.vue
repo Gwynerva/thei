@@ -30,7 +30,7 @@ function openSearch(event: MouseEvent) {
     `[${SITE_SEARCH_ANCHOR}]`,
   );
   if (!link) return;
-  if (event.button || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  if (!isPlainClick(event)) return;
   event.preventDefault();
   showSearch(link);
 }

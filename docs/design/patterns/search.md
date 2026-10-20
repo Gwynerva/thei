@@ -90,8 +90,8 @@ and behaves.
   The same query twice is kept once, last typed (`useSearchHistory`,
   `app/composables/search-history.ts`).
 - It is kept in this browser alone, one list for the owner and one for a
-  visitor, so a visitor never sees what the owner searched for. A visitor
-  with nothing typed asks the server nothing.
+  visitor, so a visitor never sees what the owner searched for; signing out
+  forgets the owner's. A visitor with nothing typed asks the server nothing.
 - With no history, a visitor reads one line of what the search finds. A
   query that found nothing says so, «Ничего не нашлось», and nothing more,
   here and on the page. What it says stays while an answer is on its way, so
@@ -224,5 +224,7 @@ another page opens at its top, and the landing brings the place into view.
 - `tests/app/composables/search-history.test.ts` keeps, orders and forgets
   queries, the owner's apart; `tests/e2e/search.spec.ts` searches again from
   the history by its keys and clears it.
+- `tests/app/composables/search-ui.test.ts` formats a find's words across
+  its marks.
 - In the browser, at 1280 × 800 and 375 × 812, in both themes: the popup,
   the page, and a find in a spoiler, a gallery, a status and a sidebar.

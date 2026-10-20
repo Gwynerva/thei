@@ -5,14 +5,7 @@ import type { ImageAccent } from './accent-color';
 import { imageAccentCssColor } from './accent-color';
 import { stringColorHue } from './utils/string-color';
 import { identityKey } from './identity-key';
-import {
-  keyTier,
-  NAME_RANKS,
-  nameTier,
-  prepareNameQuery,
-  type NameQuery,
-  type NameTier,
-} from './search/match';
+import { nameRank, prepareNameQuery, type NameQuery } from './search/match';
 import {
   normalizeSynonyms,
   SYNONYM_LIMIT,
@@ -234,7 +227,7 @@ export function rankTagSearch<T extends SearchableTag>(
   const prepared = prepareNameQuery(cleanTagTitle(query));
   if (!prepared.key) return tags.slice(0, limit);
   return tags
-    .map((tag) => ({ tag, score: tagSearchScore(tag, prepared) }))
+    .map((tag) => ({ tag, score: tagNameRank(tag, prepared).rank }))
     .filter((item) => item.score < Number.POSITIVE_INFINITY)
     .sort(
       (a, b) =>
@@ -253,36 +246,17 @@ export function matchedTagSynonym(
   query: string,
 ): string | undefined {
   const prepared = prepareNameQuery(cleanTagTitle(query));
-  if (!prepared.key || nameTier(prepared, tag.title)) return undefined;
-  return synonymMatch(tag, prepared)?.synonym;
+  if (!prepared.key) return undefined;
+  return tagNameRank(tag, prepared).synonym;
 }
 
-const ID_RANKS = { exact: 0, start: 1, inside: 2 };
-
-function tagSearchScore(tag: SearchableTag, query: NameQuery) {
-  let best = Number.POSITIVE_INFINITY;
-  const title = nameTier(query, tag.title);
-  if (title) best = NAME_RANKS.title[title];
-  const synonym = synonymMatch(tag, query);
-  if (synonym) best = Math.min(best, NAME_RANKS.synonym[synonym.tier]);
-  const publicId = keyTier(query, tag.publicId);
-  if (publicId) best = Math.min(best, 10 + ID_RANKS[publicId]);
-  const slug = keyTier(query, tag.slug);
-  if (slug) best = Math.min(best, 20 + ID_RANKS[slug]);
-  return best;
-}
-
-function synonymMatch(tag: SearchableTag, query: NameQuery) {
-  let best: { synonym: string; tier: NameTier } | undefined;
-  for (const synonym of tag.synonyms ?? []) {
-    const tier = nameTier(query, synonym);
-    if (
-      tier &&
-      (!best || NAME_RANKS.synonym[tier] < NAME_RANKS.synonym[best.tier])
-    )
-      best = { synonym, tier };
-  }
-  return best;
+function tagNameRank(tag: SearchableTag, query: NameQuery) {
+  return nameRank(query, {
+    title: tag.title,
+    synonyms: tag.synonyms,
+    publicId: tag.publicId,
+    slug: tag.slug,
+  });
 }
 
 /**
