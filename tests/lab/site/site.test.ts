@@ -1,10 +1,11 @@
-// Snapshots and the playground swap, on folders made up for the test: whole
+// Snapshots and the playground, on folders made up for the test: whole
 // restores, files shared by hard link (or copied across volumes), refusals
-// where a database would be harmed, and sign-ins kept both ways.
+// where a database would be harmed, and sign-ins and access keys kept.
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -14,12 +15,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  downPlayground,
-  mergedConfig,
-  stashPaths,
-  upPlayground,
-} from './playground';
+import { LAB_CREDENTIALS } from './credentials';
+import { mergedConfig, playgroundState, upPlayground } from './playground';
 import {
   listSnapshots,
   restoreSnapshot,
@@ -44,6 +41,8 @@ function makeContent(
   options: {
     config?: Record<string, unknown>;
     sessions?: [string, number][];
+    /** Access keys, as [tokenUuid, tokenHash]. */
+    keys?: [string, string][];
     marker?: string;
   } = {},
 ) {
@@ -70,8 +69,16 @@ function makeContent(
     CREATE TABLE _thei_migrations (id TEXT PRIMARY KEY, version TEXT, appliedAt INTEGER);
     CREATE TABLE assets (assetUuid TEXT PRIMARY KEY, touchedAt INTEGER);
     CREATE TABLE "admin-sessions" (sessionUuid TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE "api-tokens" (tokenUuid TEXT PRIMARY KEY, label TEXT NOT NULL, tokenHash TEXT NOT NULL UNIQUE);
+    CREATE TABLE "oauth-clients" (clientId TEXT PRIMARY KEY, kind TEXT NOT NULL);
     CREATE TABLE marker (value TEXT);
   `);
+  for (const [tokenUuid, tokenHash] of options.keys ?? [])
+    db.prepare('INSERT INTO "api-tokens" VALUES (?, ?, ?)').run(
+      tokenUuid,
+      'an app',
+      tokenHash,
+    );
   db.prepare('INSERT INTO _thei_migrations VALUES (?, ?, ?)').run(
     '0.0.1/001-baseline',
     '0.0.1',
@@ -169,7 +176,7 @@ describe('snapshots', () => {
   });
 });
 
-describe('the playground swap', () => {
+describe('the playground', () => {
   it('keeps the playground’s own config keys and nothing else of it', () => {
     expect(
       mergedConfig(
@@ -196,15 +203,36 @@ describe('the playground swap', () => {
     });
   });
 
-  it('goes up and down, sign-ins kept both ways', async () => {
+  it('gives a playground with no config of its own the lab’s words', () => {
+    expect(
+      mergedConfig(
+        {
+          secretPhrase: LAB_CREDENTIALS.secretPhrase,
+          password: { hash: 'h', salt: 's', iterations: 1 },
+        },
+        undefined,
+      ),
+    ).toEqual({
+      secretPhrase: LAB_CREDENTIALS.secretPhrase,
+      password: {
+        hash: 'h',
+        salt: 's',
+        iterations: 1,
+        fallback: LAB_CREDENTIALS.password,
+      },
+    });
+  });
+
+  it('takes the archive in place of what it held, sign-ins and keys kept', async () => {
     const cache = tempDir();
     const lab = join(tempDir(), 'content');
     makeContent(lab, { marker: 'lab', sessions: [['shared', 5]] });
     const manifest = saveSnapshot({ contentDir: lab, cacheRoot: cache });
 
     const site = tempDir();
-    const stashRoot = join(tempDir(), 'stash');
-    makeContent(join(site, 'content'), {
+    const content = join(site, 'content');
+    const stateFile = join(tempDir(), 'playground.json');
+    makeContent(content, {
       marker: 'mine',
       config: {
         version: '0.0.7',
@@ -216,71 +244,96 @@ describe('the playground swap', () => {
         ['owner', 10],
         ['shared', 7],
       ],
+      keys: [['key-1', 'hash-1']],
     });
     mkdirSync(join(site, '.thei'), { recursive: true });
     writeFileSync(join(site, '.thei', 'search.db'), 'my index');
 
-    await upPlayground({
-      manifest,
-      siteDir: site,
-      stashRoot,
-      cacheRoot: cache,
-      assumeStopped: true,
-    });
-    expect(read(join(site, 'content'), 'SELECT value FROM marker')).toEqual([
+    const up = () =>
+      upPlayground({
+        manifest,
+        siteDir: site,
+        stateFile,
+        cacheRoot: cache,
+        assumeStopped: true,
+      });
+    const result = await up();
+    expect(result).toMatchObject({ sessions: 2, keys: 1, ownConfig: true });
+    expect(read(content, 'SELECT value FROM marker')).toEqual([
       { value: 'lab' },
     ]);
-    const config = JSON.parse(
-      readFileSync(join(site, 'content', 'thei.config.json'), 'utf8'),
-    );
-    expect(config).toMatchObject({
+    expect(
+      JSON.parse(readFileSync(join(content, 'thei.config.json'), 'utf8')),
+    ).toMatchObject({
       languageCode: 'ru',
       secretPhrase: 'mine',
       password: { fallback: 'pw' },
     });
-    const sessions = read(
-      join(site, 'content'),
-      'SELECT sessionUuid, data FROM "admin-sessions" ORDER BY sessionUuid',
-    ) as { sessionUuid: string; data: string }[];
-    expect(
-      sessions.map((row) => [row.sessionUuid, JSON.parse(row.data).lastUsedAt]),
-    ).toEqual([
+    const sessions = () =>
+      (
+        read(
+          content,
+          'SELECT sessionUuid, data FROM "admin-sessions" ORDER BY sessionUuid',
+        ) as { sessionUuid: string; data: string }[]
+      ).map((row) => [row.sessionUuid, JSON.parse(row.data).lastUsedAt]);
+    expect(sessions()).toEqual([
       ['owner', 10],
       ['shared', 7],
     ]);
-    expect(existsSync(join(site, '.thei', 'search.db'))).toBe(false);
-    await expect(
-      upPlayground({
-        manifest,
-        siteDir: site,
-        stashRoot,
-        cacheRoot: cache,
-        assumeStopped: true,
-      }),
-    ).rejects.toThrow(/already stands in/);
-
-    // A sign-in made while the archive stood in goes back with the playground.
-    const db = new Database(join(site, 'content', 'thei.db'));
-    db.prepare('INSERT INTO "admin-sessions" VALUES (?, ?)').run(
-      'new',
-      JSON.stringify({ lastUsedAt: 20 }),
-    );
-    db.close();
-    await downPlayground({ siteDir: site, stashRoot, assumeStopped: true });
-    expect(read(join(site, 'content'), 'SELECT value FROM marker')).toEqual([
-      { value: 'mine' },
-    ]);
     expect(
-      (
-        read(
-          join(site, 'content'),
-          'SELECT sessionUuid FROM "admin-sessions" ORDER BY sessionUuid',
-        ) as { sessionUuid: string }[]
-      ).map((row) => row.sessionUuid),
-    ).toEqual(['new', 'owner', 'shared']);
-    expect(readFileSync(join(site, '.thei', 'search.db'), 'utf8')).toBe(
-      'my index',
-    );
-    expect(existsSync(stashPaths(stashRoot).dir)).toBe(false);
+      read(content, 'SELECT tokenUuid, tokenHash FROM "api-tokens"'),
+    ).toEqual([{ tokenUuid: 'key-1', tokenHash: 'hash-1' }]);
+    expect(existsSync(join(site, '.thei', 'search.db'))).toBe(false);
+    // What it held is gone, not kept beside it.
+    expect(readdirSync(site).sort()).toEqual(['.thei', 'content']);
+    expect(playgroundState(stateFile)?.snapshot).toBe(manifest.id);
+
+    // A second `up` puts the archive back as it was seeded.
+    const db = new Database(join(content, 'thei.db'));
+    db.prepare('UPDATE marker SET value = ?').run('changed');
+    db.close();
+    await up();
+    expect(read(content, 'SELECT value FROM marker')).toEqual([
+      { value: 'lab' },
+    ]);
+    expect(sessions()).toEqual([
+      ['owner', 10],
+      ['shared', 7],
+    ]);
+  });
+
+  it('fills an empty playground', async () => {
+    const cache = tempDir();
+    const lab = join(tempDir(), 'content');
+    makeContent(lab, {
+      marker: 'lab',
+      config: {
+        version: '0.0.7',
+        languageCode: 'en',
+        secretPhrase: LAB_CREDENTIALS.secretPhrase,
+        password: { hash: 'h', salt: 's', iterations: 1 },
+      },
+    });
+    const manifest = saveSnapshot({ contentDir: lab, cacheRoot: cache });
+    const site = tempDir();
+    const result = await upPlayground({
+      manifest,
+      siteDir: site,
+      stateFile: join(tempDir(), 'playground.json'),
+      cacheRoot: cache,
+      assumeStopped: true,
+    });
+    expect(result.ownConfig).toBe(false);
+    expect(
+      JSON.parse(
+        readFileSync(join(site, 'content', 'thei.config.json'), 'utf8'),
+      ),
+    ).toMatchObject({
+      secretPhrase: LAB_CREDENTIALS.secretPhrase,
+      password: { fallback: LAB_CREDENTIALS.password },
+    });
+    expect(read(join(site, 'content'), 'SELECT value FROM marker')).toEqual([
+      { value: 'lab' },
+    ]);
   });
 });

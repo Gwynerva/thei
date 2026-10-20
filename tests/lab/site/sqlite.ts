@@ -1,6 +1,6 @@
 // The few things the lab does to a site's database itself, always with the
 // server stopped or through a consistent copy: copy it, read its ledger,
-// touch its files, carry admin sessions across.
+// touch its files, carry admin sessions and access keys across.
 import { existsSync, rmSync } from 'node:fs';
 import Database from 'better-sqlite3';
 
@@ -83,6 +83,51 @@ export function carrySessions(from: string, to: string): number {
         if (lastUsed(row) <= lastUsed(existing.get(row.sessionUuid))) continue;
         upsert.run(row.sessionUuid, row.data);
         carried++;
+      }
+    })();
+    return carried;
+  } finally {
+    source.close();
+    target.close();
+  }
+}
+
+/** The tables of what lets an app in: its access keys and the apps known. */
+const ACCESS_TABLES = ['api-tokens', 'oauth-clients'];
+
+/**
+ * Access keys and the apps they were given to, written into another
+ * database over the columns both have: an app connected to a site keeps its
+ * key when the site's content is replaced.
+ */
+export function carryAccessKeys(from: string, to: string): number {
+  if (!existsSync(from) || !existsSync(to)) return 0;
+  const source = new Database(from, { readonly: true, fileMustExist: true });
+  const target = new Database(to, { fileMustExist: true });
+  const columnsOf = (db: Database.Database, table: string) =>
+    (db.pragma(`table_info("${table}")`) as { name: string }[]).map(
+      (column) => column.name,
+    );
+  try {
+    let carried = 0;
+    target.transaction(() => {
+      for (const table of ACCESS_TABLES) {
+        const theirs = new Set(columnsOf(target, table));
+        const columns = columnsOf(source, table).filter((name) =>
+          theirs.has(name),
+        );
+        if (!columns.length) continue;
+        const list = columns.map((name) => `"${name}"`).join(', ');
+        const insert = target.prepare(
+          `INSERT OR REPLACE INTO "${table}" (${list}) VALUES (${columns.map(() => '?').join(', ')})`,
+        );
+        for (const row of source
+          .prepare(`SELECT ${list} FROM "${table}"`)
+          .raw()
+          .all() as unknown[][]) {
+          insert.run(...row);
+          carried++;
+        }
       }
     })();
     return carried;

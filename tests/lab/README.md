@@ -47,9 +47,11 @@ every worktree of the checkout uses.
 - `bun run lab up lab [--start]` puts a snapshot in place for the lab site;
   `bun run lab stop` stops a server the lab started.
 - `bun run lab up playground` makes the archive the playground's content —
-  its everyday data, not only for studies. The playground's own content goes
-  to `.lab/stash/` once; its secrets, AI settings and sign-ins stay.
-  `bun run lab down playground` brings its own content back.
+  its everyday data, not only for studies — or puts it back as it was
+  seeded. What the playground held goes; its secrets, AI settings, access
+  keys and sign-ins stay. A checkout's playground starts empty: in git it
+  installs an empty site, and the first `up` lets it sign in with the words
+  of `site/credentials.ts`.
 
 The lab never stops a server it did not start: stop it first.
 
@@ -104,5 +106,5 @@ findings by severity, and a verdict on each of the probe's suspicions.
 | `.lab/site-index.json`     | what the site was seeded with, by archive refs | no     |
 | `.lab/runs/<study>/`       | plays, reviews, reports                        | no     |
 | `.lab/studies/<id>/`       | studies of the moment                          | no     |
-| `.lab/stash/playground/`   | the playground's own content, while swapped    | no     |
+| `.lab/playground.json`     | the snapshot the playground holds              | no     |
 | `<main>/.lab/cache/`       | releases, files by hash, snapshots             | no     |

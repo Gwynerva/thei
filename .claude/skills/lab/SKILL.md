@@ -15,7 +15,7 @@ The lab is `tests/lab/` (`tests/lab/README.md`); `bun run lab help` lists its co
 bun run lab status
 ```
 
-It names the lab site, its content and snapshot, the playground swap, and every study with jobs waiting for a review. A server that was running before you began is the owner's: use it, never restart or stop it.
+It names the lab site, its content and snapshot, the snapshot the playground holds, and every study with jobs waiting for a review. A server that was running before you began is the owner's: use it, never restart or stop it.
 
 ## 2. Put the site in place
 

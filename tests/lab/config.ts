@@ -98,8 +98,8 @@ export const paths = {
   runs: join(labDir, 'runs'),
   /** Studies of the moment, never committed. */
   studies: join(labDir, 'studies'),
-  /** The playground's own content while the archive stands in its place. */
-  stash: join(labDir, 'stash'),
+  /** Which snapshot the playground holds, written by `lab up playground`. */
+  playgroundState: join(labDir, 'playground.json'),
   /** Kept studies, in git only with the owner's agreement. */
   keptStudies: join(repoRoot, 'tests', 'lab', 'studies'),
   personas: join(repoRoot, 'tests', 'lab', 'personas'),

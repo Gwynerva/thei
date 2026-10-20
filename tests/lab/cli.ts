@@ -153,22 +153,17 @@ const own: Commands = {
     },
   },
   clean: {
-    summary:
-      'Remove plays and reviews (--runs), or the playground stash (--stash)',
-    usage: 'clean --runs|--stash',
+    summary: 'Remove plays and reviews (--runs)',
+    usage: 'clean --runs',
     async run(args) {
-      const { values } = parse(args, {
-        runs: { type: 'boolean' },
-        stash: { type: 'boolean' },
-      });
-      if (!values.runs && !values.stash) {
+      const { values } = parse(args, { runs: { type: 'boolean' } });
+      if (!values.runs) {
         console.error(
-          'Name what to remove: --runs or --stash. The shared cache is removed by hand.',
+          'Name what to remove: --runs. The shared cache is removed by hand.',
         );
         return 2;
       }
-      if (values.runs) rmSync(paths.runs, { recursive: true, force: true });
-      if (values.stash) rmSync(paths.stash, { recursive: true, force: true });
+      rmSync(paths.runs, { recursive: true, force: true });
     },
   },
   help: {

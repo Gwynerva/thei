@@ -10,7 +10,7 @@ import { chromium, type BrowserContext } from '@playwright/test';
 import { labLoopbackOrigin, labOrigin, paths, repoRoot } from '../config';
 import { SiteClient } from '../archive/site-client';
 import { LAB_CREDENTIALS } from '../site/credentials';
-import { playgroundSwapState } from '../site/playground';
+import { playgroundState } from '../site/playground';
 import { serverMode, waitUntilReady } from '../site/server';
 import { snapshotPaths } from '../site/snapshot';
 import type {
@@ -131,14 +131,14 @@ function codeState() {
 
 function siteIndexFor(target: 'lab' | 'playground'): SiteIndex {
   if (target === 'playground') {
-    const swap = playgroundSwapState();
-    if (!swap)
+    const playground = playgroundState();
+    if (!playground)
       throw new Error(
-        'The playground holds its own content, not the archive: bun run lab up playground.',
+        'The playground does not hold the archive: bun run lab up playground.',
       );
-    const path = snapshotPaths(swap.snapshot).index;
+    const path = snapshotPaths(playground.snapshot).index;
     if (!existsSync(path))
-      throw new Error(`Snapshot ${swap.snapshot} has no site index.`);
+      throw new Error(`Snapshot ${playground.snapshot} has no site index.`);
     return JSON.parse(readFileSync(path, 'utf8'));
   }
   if (!existsSync(paths.siteIndex))

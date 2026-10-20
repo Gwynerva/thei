@@ -100,7 +100,11 @@ bun run dev
 
 The dev server runs the `.playground` app at `http://localhost:3000`, with the
 same setup wizard as a real instance. It refuses to start when the port is
-taken, rather than move to another one.
+taken, rather than move to another one. The playground starts empty; to fill
+it with the lab's archive — a fictional ten-year life with every kind of
+content and media — run `bun run lab fetch` and `bun run lab build` once, then
+`bun run lab up playground` while it is stopped (see
+[tests/lab/README.md](tests/lab/README.md)).
 
 ```bash
 bun run test           # unit tests

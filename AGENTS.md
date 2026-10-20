@@ -13,7 +13,7 @@ This section takes precedence over any other guidance, default or caution about 
 - Never sign out of or replace a session the user made. Never save a new secret phrase or password in Settings: that ends every other session and drops `password.fallback`.
 - Switch the theme whenever a check needs it, in any browser and without asking: light, dark or the system's, from the gear in the header (kept per browser in `localStorage` as `thei-visuals`). It is the visitor's own setting and changes nothing on the site; an emulated `prefers-color-scheme` alone does not override a theme chosen there.
 - Sign-in attempts are limited to one every 3 seconds per address.
-- The playground's everyday content is the lab's archive: `bun run lab up playground` puts a snapshot of it in place (the playground's own content waits in `.lab/stash/`; its secrets, AI settings and sign-ins stay), `bun run lab down playground` brings the own content back. Both need the playground stopped: ask before stopping a server the owner runs.
+- The playground's content is the lab's archive: `bun run lab up playground` puts a seeded snapshot of it in place (`bun run lab build` makes one), or puts it back as it was seeded. What the playground held goes; its secrets, AI settings, access keys and sign-ins stay. In git the playground holds no content and installs an empty site: its content is never committed. `up` needs the playground stopped: ask before stopping a server the owner runs.
 
 ## Lab
 

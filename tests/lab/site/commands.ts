@@ -1,5 +1,5 @@
 // The lab site and its snapshots: serving it, saving and restoring what it
-// holds, and standing the archive in for the playground's own content.
+// holds, and putting the archive in the playground.
 import { spawnSync } from 'node:child_process';
 import {
   existsSync,
@@ -24,11 +24,7 @@ import type {
   StatusLine,
 } from '../types';
 import { output, parse, portAnswers } from '../util';
-import {
-  downPlayground,
-  playgroundSwapState,
-  upPlayground,
-} from './playground';
+import { playgroundState, upPlayground } from './playground';
 import {
   ownServer,
   startServer,
@@ -211,8 +207,10 @@ export const commands: Commands = {
         const result = await upPlayground({ manifest });
         console.log(
           `The playground now holds snapshot ${manifest.id} (${result.files} files${result.copied ? `, ${result.copied} copied` : ''}). ` +
-            'Its own content waits in .lab/stash/playground; its secrets, AI settings and sign-ins were kept. ' +
-            'Access keys of MCP clients work again after bun run lab down playground. Start it with bun run dev.',
+            (result.ownConfig
+              ? `Its secrets and AI settings were kept, with ${result.sessions} sign-in(s) and ${result.keys} access key(s). `
+              : 'It signs in with the words of tests/lab/site/credentials.ts. ') +
+            'Start it with bun run dev.',
         );
         return;
       }
@@ -255,18 +253,6 @@ export const commands: Commands = {
       }
     },
   },
-  down: {
-    summary: 'Give the playground its own content back',
-    usage: 'down playground',
-    async run(args) {
-      const { positionals } = parse(args, {});
-      if (positionals[0] !== 'playground') throw new Error('down playground');
-      await downPlayground();
-      console.log(
-        'The playground holds its own content again. Start it with bun run dev.',
-      );
-    },
-  },
   stop: {
     summary: 'Stop the lab site, when the lab started it',
     usage: 'stop',
@@ -303,12 +289,12 @@ export async function status(): Promise<StatusLine[]> {
       ? `${snapshots.length} snapshot(s) in ${cachePaths().snapshots}, ${usable.length} usable here; newest ${snapshots[0]!.id}`
       : 'no snapshots yet',
   });
-  const swap = playgroundSwapState();
-  if (swap)
+  const playground = playgroundState();
+  if (playground)
     lines.push({
       part: 'site',
       ok: true,
-      text: `the playground holds snapshot ${swap.snapshot} since ${swap.swappedAt}`,
+      text: `the playground holds snapshot ${playground.snapshot}, put there ${playground.upAt}`,
     });
   return lines;
 }
