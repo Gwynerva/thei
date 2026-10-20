@@ -179,6 +179,23 @@ export async function refreshMediaPreview(
   );
 }
 
+/**
+ * What a video's meta says of its preview frame: its moment, how well it
+ * shows the video, and whether the owner chose it.
+ */
+export function videoPreviewMeta(
+  preview: { frameAt?: number; frameScore?: number },
+  chosen: boolean,
+): Pick<VideoAssetMeta, 'previewAt' | 'previewScore' | 'previewChosen'> {
+  return {
+    ...(preview.frameAt !== undefined ? { previewAt: preview.frameAt } : {}),
+    ...(preview.frameScore !== undefined
+      ? { previewScore: preview.frameScore }
+      : {}),
+    ...(chosen ? { previewChosen: true as const } : {}),
+  };
+}
+
 /** `refreshMediaPreview`, for a caller that holds the file's lane already. */
 async function remakeMediaPreview(
   asset: StoredAssetRecord,
@@ -221,11 +238,7 @@ async function remakeMediaPreview(
     ...rest,
     ...(accent !== undefined ? { accent } : {}),
     ...(isVideo
-      ? {
-          previewAt: frameAt ?? 0,
-          ...(frameScore !== undefined ? { previewScore: frameScore } : {}),
-          ...(chosenAt !== undefined ? { previewChosen: true as const } : {}),
-        }
+      ? videoPreviewMeta({ frameAt, frameScore }, chosenAt !== undefined)
       : {}),
   };
 
