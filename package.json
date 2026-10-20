@@ -16,7 +16,7 @@
     "build": "nuxt build .playground",
     "start": "nuxt start .playground",
     "test": "bun vitest",
-    "test:types": "bun vitest --typecheck.enabled --typecheck.only",
+    "test:types": "bun vitest run --typecheck.enabled --typecheck.only --typecheck.tsconfig tests/tsconfig.types.json",
     "test:e2e": "bunx playwright test --config=tests/e2e/playwright.config.ts",
     "e2e:dev": "bun scripts/dev-server.ts fixture",
     "e2e:serve": "bun scripts/dev-server.ts fixture --build",
