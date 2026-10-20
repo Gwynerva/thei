@@ -6,7 +6,8 @@ import { defineUpdateTask } from './types';
  * file window's still, the tick on its bar — showed another frame. Each video
  * whose frame the owner did not choose has it picked again, one at a time in
  * the video lane, and keeps the same frame at its true moment. A video that
- * cannot be read keeps its preview as it was.
+ * cannot be read keeps its preview as it was. Nothing marks a video done: a
+ * pass cut short looks at every one again, which picks the same frames.
  */
 export default defineUpdateTask({
   id: '0.0.7/003-video-preview-moments',

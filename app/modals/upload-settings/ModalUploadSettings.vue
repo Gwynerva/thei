@@ -988,7 +988,11 @@ const descriptionField =
  * stays at hand.
  */
 const withoutDescription = ref(false);
-watch(taken, () => (withoutDescription.value = false));
+// Another file takes the choice away; a still taken of the same one does not.
+watch(
+  () => taken.value?.assetUuid,
+  () => (withoutDescription.value = false),
+);
 // Words put in the field, typed or taken from a proposal, take the choice
 // away with it.
 watch(
@@ -1000,11 +1004,10 @@ watch(
 /** «Готово»: the description saved, or left out on purpose; the file handed over. */
 async function describeAndFinish() {
   const field = descriptionField.value;
-  if (field?.filled) {
-    if (await field.save()) done();
-    return;
-  }
-  if (withoutDescription.value) done();
+  if (!field?.filled && !withoutDescription.value) return;
+  // Left out after emptying a description the family had, it is saved
+  // empty: the words taken out go.
+  if (!field || (await field.save())) done();
 }
 
 /** The section a screen works on, as it opens. */
@@ -1666,7 +1669,7 @@ const directHref = computed(() =>
             />
             <!-- No fade: the screen's height changes with it at once. -->
             <button
-              v-if="!descriptionField?.filled"
+              v-if="descriptionField?.loaded && !descriptionField.filled"
               type="button"
               class="-ml-xs flex cursor-pointer items-center gap-1
                 rounded-normal px-xs py-0.5 text-xs transition

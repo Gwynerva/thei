@@ -9,16 +9,12 @@ import { svgNeedsUseSizes } from './svg-raster-input';
 import { eachWithProgress } from './each-with-progress';
 
 /**
- * Videos whose preview frame was not chosen by colour.
- *
- * A preview made since frames were compared records how well its frame
- * shows the video; one made before does not, whatever it shows. The
- * oldest-touched go first, so a pass cut short picks up roughly where it
- * stopped.
+ * Stored videos whose meta has no `key`. The oldest-touched go first, so a
+ * pass cut short picks up roughly where it stopped.
  */
-export async function findVideosWithUnscoredPreviews(): Promise<
-  StoredAssetRecord[]
-> {
+async function findVideosWithout(
+  key: 'previewScore' | 'previewChosen',
+): Promise<StoredAssetRecord[]> {
   const { db, schema } = THEI_SERVER.useDb();
   return await db
     .select()
@@ -27,10 +23,19 @@ export async function findVideosWithUnscoredPreviews(): Promise<
       and(
         eq(schema.assets.type, AssetType.Video),
         isNotNull(schema.assets.settings),
-        sql`json_extract(${schema.assets.meta}, '$.previewScore') IS NULL`,
+        sql`json_extract(${schema.assets.meta}, ${`$.${key}`}) IS NULL`,
       ),
     )
     .orderBy(schema.assets.touchedAt);
+}
+
+/**
+ * Videos whose preview frame was not chosen by colour: a preview made since
+ * frames were compared records how well its frame shows the video; one made
+ * before does not, whatever it shows.
+ */
+export async function findVideosWithUnscoredPreviews() {
+  return await findVideosWithout('previewScore');
 }
 
 /**
@@ -38,21 +43,8 @@ export async function findVideosWithUnscoredPreviews(): Promise<
  * 0.0.7 their `previewAt` said where the second ffmpeg weighed began, not
  * the frame it picked there, so a player put at it showed another frame.
  */
-export async function findVideosWithPickedPreviews(): Promise<
-  StoredAssetRecord[]
-> {
-  const { db, schema } = THEI_SERVER.useDb();
-  return await db
-    .select()
-    .from(schema.assets)
-    .where(
-      and(
-        eq(schema.assets.type, AssetType.Video),
-        isNotNull(schema.assets.settings),
-        sql`json_extract(${schema.assets.meta}, '$.previewChosen') IS NULL`,
-      ),
-    )
-    .orderBy(schema.assets.touchedAt);
+export async function findVideosWithPickedPreviews() {
+  return await findVideosWithout('previewChosen');
 }
 
 /** Every SVG in the library, whose preview used to be drawn at its own size. */

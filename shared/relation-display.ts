@@ -96,34 +96,16 @@ export function relationSentence(
 
 export type RelationSentencePart = string | { side: 'current' | 'other' };
 
-/**
- * A relation's sentence in pieces, its two names left for the caller to draw
- * — each with its picture, say. The quotes around a name go with it: the
- * picture already sets the name apart.
- */
-export function relationSentenceParts(
-  phrase: LanguagePhrases,
-  type: RelationType,
-): RelationSentencePart[] {
-  const current = '\u0000';
-  const other = '\u0001';
-  return relationSentence(phrase, type, current, other)
-    .split(/[«“"]?([\u0000\u0001])[»”"]?/)
-    .filter(Boolean)
-    .map((part) =>
-      part === current
-        ? { side: 'current' as const }
-        : part === other
-          ? { side: 'other' as const }
-          : part,
-    );
-}
+const CURRENT_MARK = '\u0000';
+const OTHER_MARK = '\u0001';
 
 /**
  * A relation's sentence said of its other end, as the word under the other
  * end's name says it: "Affects" — "B affects A". Each kind on offer is
  * named by that word and explained by this sentence, so the two never read
- * the other way round.
+ * the other way round. Its two names are left for the caller to draw — each
+ * with its picture, say. The quotes around a name go with it: the picture
+ * already sets the name apart.
  */
 export function relationSentencePartsFromOther(
   phrase: LanguagePhrases,
@@ -133,11 +115,17 @@ export function relationSentencePartsFromOther(
     RELATION_TYPE_OF_WORD[
       RELATION_WORD_FROM_OTHER_END[RELATION_WORD_OF_TYPE[type]]
     ];
-  return relationSentenceParts(phrase, converse).map((part) =>
-    typeof part === 'string'
-      ? part
-      : { side: part.side === 'current' ? 'other' : 'current' },
-  );
+  // The converse sentence, with the other end where it puts this one.
+  return relationSentence(phrase, converse, OTHER_MARK, CURRENT_MARK)
+    .split(/[«“"]?([\u0000\u0001])[»”"]?/)
+    .filter(Boolean)
+    .map((part) =>
+      part === CURRENT_MARK
+        ? { side: 'current' as const }
+        : part === OTHER_MARK
+          ? { side: 'other' as const }
+          : part,
+    );
 }
 
 /** The icon for the kind of thing on the other end of a relation. */

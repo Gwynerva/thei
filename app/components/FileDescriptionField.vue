@@ -156,7 +156,7 @@ async function save(): Promise<boolean> {
 const filled = computed(
   () => loaded.value && cleanAssetDescription(form.description).length > 0,
 );
-defineExpose({ save, filled, saving });
+defineExpose({ save, filled, saving, loaded });
 
 watch(
   () => form.description,

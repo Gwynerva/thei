@@ -82,7 +82,7 @@ export async function createMediaPreviewAsset(
 ): Promise<{
   previewAssetUuid: string;
   accent?: ImageAccent;
-  /** Of a video: seconds into it the preview frame was taken from. */
+  /** Of a video: seconds into it of the preview frame, where a player shows it. */
   frameAt?: number;
   /** Of a video: how well that frame shows it. */
   frameScore?: number;

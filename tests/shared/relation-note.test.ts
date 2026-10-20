@@ -6,7 +6,6 @@ import {
 } from '../../shared/relation';
 import {
   relationLabel,
-  relationSentenceParts,
   relationSentencePartsFromOther,
 } from '../../shared/relation-display';
 import type { LanguagePhrases } from '../../shared/language/types';
@@ -107,23 +106,13 @@ describe('relationSentencePartsFromOther', () => {
   });
 });
 
-describe('relationSentenceParts', () => {
+describe('relationSentencePartsFromOther', () => {
   it('leaves the names out, their quotes with them', () => {
-    expect(relationSentenceParts(ru, 'influencing')).toEqual([
-      { side: 'current' },
-      ' зависит от ',
+    expect(relationSentencePartsFromOther(ru, 'related')).toEqual([
       { side: 'other' },
-    ]);
-    expect(relationSentenceParts(ru, 'related')).toEqual([
-      { side: 'current' },
       ' и ',
-      { side: 'other' },
-      ' связаны',
-    ]);
-    expect(relationSentenceParts(en, 'dependent')).toEqual([
       { side: 'current' },
-      ' affects ',
-      { side: 'other' },
+      ' связаны',
     ]);
   });
 });

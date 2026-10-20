@@ -487,6 +487,23 @@ test('a video variant is made as a job the editor follows', async ({
   await expect(withoutDescription).toHaveAttribute('aria-pressed', 'true');
   await expect(still).toBeVisible();
   await expect(done).toBeEnabled();
+  // A still taken meanwhile keeps the choice: it is the same file.
+  await page
+    .locator('[data-upload-screen="describe"]')
+    .getByRole('slider', { name: 'Playback position' })
+    .evaluate((element) => {
+      const input = element as HTMLInputElement;
+      input.value = '0.5';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  await still.locator('[data-asset-preview-frame-take]').click();
+  await expect(still).toHaveAttribute(
+    'data-asset-preview-frame-state',
+    'chosen',
+  );
+  await expect(withoutDescription).toHaveAttribute('aria-pressed', 'true');
+  await expect(done).toBeEnabled();
   // It is offered only while the field is empty: words take it away, and
   // with it the choice made.
   await description.fill('A test clip');
@@ -506,6 +523,7 @@ test('a video variant is made as a job the editor follows', async ({
   const { asset } = await usages.json();
   expect(asset.extension).toBe('webm');
   expect(asset.settings.type).toBe('video-transform');
+  expect(asset.meta.previewChosen).toBe(true);
 });
 
 test('the quality bar walks its stops from the keyboard and by a tap', async ({
