@@ -147,8 +147,7 @@ async function loadMore() {
     more.value = [...more.value, ...page.entities];
     next.value = page.next;
   } catch (caught) {
-    if (list === listed)
-      showToast(errorMessage(caught, phrase.value.ai_error));
+    if (list === listed) showToast(errorMessage(caught, phrase.value.ai_error));
   } finally {
     if (list === listed) loadingMore.value = false;
   }

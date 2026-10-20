@@ -33,7 +33,11 @@ useLandingReveal(async (target) => {
   const listed = () => history.items.value.some((item) => item.date === day);
   for (
     let more = 0;
-    day && more < 40 && !listed() && history.cursor.value && !history.error.value;
+    day &&
+    more < 40 &&
+    !listed() &&
+    history.cursor.value &&
+    !history.error.value;
     more++
   )
     await history.load();

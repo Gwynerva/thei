@@ -54,7 +54,9 @@ describe('public search filters in the URL', () => {
   });
 
   it('takes every kind the search finds, and nothing else', () => {
-    expect(parsePublicSearchFilters({ type: 'diary-entry' }).type).toBe('diary-entry');
+    expect(parsePublicSearchFilters({ type: 'diary-entry' }).type).toBe(
+      'diary-entry',
+    );
     expect(parsePublicSearchFilters({ type: 'file' }).type).toBe('file');
     expect(parsePublicSearchFilters({ type: 'nonsense' }).type).toBeUndefined();
     expect(parsePublicSearchFilters({ year: '24' }).year).toBeUndefined();
@@ -87,7 +89,11 @@ describe('the catalogue', () => {
         access: ProjectEventAccessLevel.Public,
         ...patch,
       });
-    const event = (uuid: string, endDate: string, patch: Record<string, unknown> = {}) => {
+    const event = (
+      uuid: string,
+      endDate: string,
+      patch: Record<string, unknown> = {},
+    ) => {
       context.insert('events', {
         ...row,
         eventUuid: uuid,
@@ -110,7 +116,10 @@ describe('the catalogue', () => {
     };
     project('best', { showcase: 1, cv: 1 });
     project('mid-project', { createdAt: Date.parse('2024-01-01') });
-    project('private', { access: ProjectEventAccessLevel.Private, createdAt: Date.parse('2027-01-01') });
+    project('private', {
+      access: ProjectEventAccessLevel.Private,
+      createdAt: Date.parse('2027-01-01'),
+    });
     project('hidden-link', { access: ProjectEventAccessLevel.LinkOnly });
     event('old-event', '2020-05-01');
     event('new-event', '2026-05-01');
@@ -126,9 +135,24 @@ describe('the catalogue', () => {
         publicId: slug!,
         updatedAt: 1,
       });
-    context.insert('tag-usages', { tagUuid: 't-web', containerType: 'project', containerId: 'mid-project', sortOrder: 0 });
-    context.insert('tag-usages', { tagUuid: 't-game', containerType: 'project', containerId: 'mid-project', sortOrder: 1 });
-    context.insert('tag-usages', { tagUuid: 't-web', containerType: 'event', containerId: 'new-event', sortOrder: 0 });
+    context.insert('tag-usages', {
+      tagUuid: 't-web',
+      containerType: 'project',
+      containerId: 'mid-project',
+      sortOrder: 0,
+    });
+    context.insert('tag-usages', {
+      tagUuid: 't-game',
+      containerType: 'project',
+      containerId: 'mid-project',
+      sortOrder: 1,
+    });
+    context.insert('tag-usages', {
+      tagUuid: 't-web',
+      containerType: 'event',
+      containerId: 'new-event',
+      sortOrder: 0,
+    });
   });
 
   afterEach(async () => {
@@ -138,7 +162,9 @@ describe('the catalogue', () => {
 
   const list = (query: Record<string, unknown>, isAdmin = false) => {
     const { page: _page, ...filters } = parsePublicSearchFilters(query);
-    return filterCatalogue(catalogueEntries(isAdmin), filters).entries.map((entry) => entry.uuid);
+    return filterCatalogue(catalogueEntries(isAdmin), filters).entries.map(
+      (entry) => entry.uuid,
+    );
   };
 
   it('puts showcase projects first, then everything newest first', () => {
@@ -155,15 +181,37 @@ describe('the catalogue', () => {
   it('requires included tags and rejects excluded ones', () => {
     expect(list({ tags: 'web' })).toEqual(['new-event', 'mid-project']);
     expect(list({ tags: 'web,game' })).toEqual(['mid-project']);
-    expect(list({ exclude: 'game' })).toEqual(['best', 'new-event', 'old-event']);
-    expect(list({ tags: 'unknown' })).toEqual(['best', 'new-event', 'mid-project', 'old-event']);
+    expect(list({ exclude: 'game' })).toEqual([
+      'best',
+      'new-event',
+      'old-event',
+    ]);
+    expect(list({ tags: 'unknown' })).toEqual([
+      'best',
+      'new-event',
+      'mid-project',
+      'old-event',
+    ]);
   });
 
   it('finds projects and events by the readable part of their URL', async () => {
-    context.rawDb.prepare("UPDATE projects SET humanReadableSlug = 'green-garden', title = 'Сад' WHERE projectUuid = 'mid-project'").run();
-    context.rawDb.prepare("UPDATE events SET humanReadableSlug = 'stone-garden', title = 'Камни' WHERE eventUuid = 'old-event'").run();
+    context.rawDb
+      .prepare(
+        "UPDATE projects SET humanReadableSlug = 'green-garden', title = 'Сад' WHERE projectUuid = 'mid-project'",
+      )
+      .run();
+    context.rawDb
+      .prepare(
+        "UPDATE events SET humanReadableSlug = 'stone-garden', title = 'Камни' WHERE eventUuid = 'old-event'",
+      )
+      .run();
     Object.assign(context.server, {
-      console: { log() {}, warn() {}, error() {}, tag: () => ({ log() {}, warn() {}, error() {} }) },
+      console: {
+        log() {},
+        warn() {},
+        error() {},
+        tag: () => ({ log() {}, warn() {}, error() {} }),
+      },
     });
     useSearchStore(':memory:');
     await rebuildSearchIndex();

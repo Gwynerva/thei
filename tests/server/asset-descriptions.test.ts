@@ -252,7 +252,9 @@ describe('a file’s description', () => {
       await rebuildSearchIndex();
       const titles = async (q: string) =>
         (await runSearch({ q, audience: 'public' })).groups.flatMap((group) =>
-          group.hits.filter((hit) => hit.kind === 'project').map((hit) => hit.title),
+          group.hits
+            .filter((hit) => hit.kind === 'project')
+            .map((hit) => hit.title),
         );
       expect(await titles('grandmother dacha')).toEqual(['Parapet']);
       expect(await titles('night train')).toEqual([]);

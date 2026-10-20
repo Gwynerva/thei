@@ -98,7 +98,6 @@ export type PublicEntitySummary = {
   reminder?: string;
 };
 
-
 export type PublicAssetDescriptor = {
   key: string;
   title: string;

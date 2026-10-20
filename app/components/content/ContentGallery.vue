@@ -77,7 +77,8 @@ function select(id: string) {
 /** A link landed on a file of the gallery: it turns to that file. */
 function onLanding(event: Event) {
   const file = (event as CustomEvent<{ file?: string }>).detail?.file;
-  const item = file && props.items.find((each) => each.asset.assetUuid === file);
+  const item =
+    file && props.items.find((each) => each.asset.assetUuid === file);
   if (item) select(item.id);
 }
 

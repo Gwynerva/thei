@@ -538,10 +538,10 @@
 }
 
 :is([data-search-found], [data-search-found] *):is(
-    .line-clamp-1,
-    .line-clamp-2,
-    .line-clamp-3
-  ) {
+  .line-clamp-1,
+  .line-clamp-2,
+  .line-clamp-3
+) {
   -webkit-line-clamp: unset;
   line-clamp: unset;
   overflow: visible;
