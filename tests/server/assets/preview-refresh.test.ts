@@ -17,7 +17,9 @@ import {
 import { createOriginalAssetSettings } from '../../../shared/asset-upload-settings';
 import {
   findSvgAssetsWithUnsizedUses,
+  findVideosWithPickedPreviews,
   findVideosWithUnscoredPreviews,
+  refreshPickedVideoPreviews,
   refreshSvgUsePreviews,
   refreshVideoPreviews,
 } from '../../../server/thei/assets/preview-refresh';
@@ -194,6 +196,30 @@ describe('video preview refresh', () => {
     // Dealt with: the next pass has nothing to do.
     expect(await findVideosWithUnscoredPreviews()).toEqual([]);
     expect(await refreshVideoPreviews()).toMatchObject({ total: 0 });
+  }, 60_000);
+
+  it('picks again the frames the owner did not choose, and leaves a chosen one', async () => {
+    const picked = await storeClip('picked.mp4');
+    const chosen = await storeClip('chosen.mp4');
+    const chosenMeta = {
+      ...(chosen.meta as VideoAssetMeta),
+      previewAt: 2.5,
+      previewChosen: true as const,
+    };
+    await updateAsset(chosen.assetUuid, { meta: chosenMeta });
+    expect(
+      (await findVideosWithPickedPreviews()).map((row) => row.assetUuid),
+    ).toEqual([picked.assetUuid]);
+
+    expect(await refreshPickedVideoPreviews()).toEqual({
+      total: 1,
+      failed: 0,
+    });
+    // The frame red, at a moment inside the red stretch: past the black second.
+    const meta = (await findAssetByUuid(picked.assetUuid))!
+      .meta as VideoAssetMeta;
+    expect(meta.previewAt).toBeGreaterThanOrEqual(1);
+    expect((await findAssetByUuid(chosen.assetUuid))!.meta).toEqual(chosenMeta);
   }, 60_000);
 
   it('skips a video it cannot read and reports it', async () => {

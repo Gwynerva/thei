@@ -73,6 +73,28 @@ describe('video thumbnails', () => {
     expect(blue).toBeLessThan(40);
   }, 60_000);
 
+  it('says the moment of the frame it picked, the one a player shows there', async () => {
+    // The second weighed at 3.3 s opens on a blue stretch and goes on red:
+    // the frame picked is red, and so is the frame shown at its moment.
+    const clip = await makeClip('picked.mp4', [
+      ['gray', 3.32],
+      ['blue', 0.2],
+      ['red', 1],
+      ['gray', 5.48],
+    ]);
+    const picked = await extractVideoThumbnail(clip);
+    expect(picked.at).toBeGreaterThanOrEqual(3.52);
+    expect(picked.at).toBeLessThan(4.52);
+    const shown = await extractVideoThumbnail(clip, {
+      at: picked.at,
+      fps: 25,
+    });
+    const [red, green, blue] = await meanColor(shown.frame);
+    expect(red).toBeGreaterThan(200);
+    expect(green).toBeLessThan(40);
+    expect(blue).toBeLessThan(40);
+  }, 60_000);
+
   it('still yields a frame when the whole clip is one colour', async () => {
     const clip = await makeClip('black.mp4', [['black', 2]]);
     const { frame } = await extractVideoThumbnail(clip);

@@ -33,6 +33,28 @@ export async function findVideosWithUnscoredPreviews(): Promise<
     .orderBy(schema.assets.touchedAt);
 }
 
+/**
+ * Videos whose preview frame was picked here, not chosen by the owner. Until
+ * 0.0.7 their `previewAt` said where the second ffmpeg weighed began, not
+ * the frame it picked there, so a player put at it showed another frame.
+ */
+export async function findVideosWithPickedPreviews(): Promise<
+  StoredAssetRecord[]
+> {
+  const { db, schema } = THEI_SERVER.useDb();
+  return await db
+    .select()
+    .from(schema.assets)
+    .where(
+      and(
+        eq(schema.assets.type, AssetType.Video),
+        isNotNull(schema.assets.settings),
+        sql`json_extract(${schema.assets.meta}, '$.previewChosen') IS NULL`,
+      ),
+    )
+    .orderBy(schema.assets.touchedAt);
+}
+
 /** Every SVG in the library, whose preview used to be drawn at its own size. */
 export async function findSvgAssets(): Promise<StoredAssetRecord[]> {
   const { db, schema } = THEI_SERVER.useDb();
@@ -104,6 +126,21 @@ export async function refreshVideoPreviews(
 ): Promise<RefreshPreviewsResult> {
   return await refreshPreviews(
     await findVideosWithUnscoredPreviews(),
+    'video(s)',
+    options,
+  );
+}
+
+/**
+ * Picks the preview frame again of every video whose frame was not chosen
+ * by the owner, so that its moment is the frame's. A frame chosen by hand
+ * was always taken at its own moment and is left as it is.
+ */
+export async function refreshPickedVideoPreviews(
+  options: RefreshPreviewsOptions = {},
+): Promise<RefreshPreviewsResult> {
+  return await refreshPreviews(
+    await findVideosWithPickedPreviews(),
     'video(s)',
     options,
   );

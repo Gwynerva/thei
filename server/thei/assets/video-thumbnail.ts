@@ -41,7 +41,7 @@ export interface VideoThumbnailOptions {
 export interface VideoThumbnail {
   /** The frame, as PNG. */
   frame: Buffer;
-  /** Seconds into the video the frame was looked for. */
+  /** Seconds into the video of the frame: a player put there shows it. */
   at: number;
   /** How well it shows the video (`frameScore`). */
   score: number;
@@ -100,21 +100,35 @@ export async function extractVideoThumbnail(
             (share) => Math.round(share * duration * 10) / 10,
           )
         : [0];
+    // A moment inside the frame picked, so that a player put there shows it
+    // and not the one before it: half a frame on, or a thousandth of a second.
+    const inside = options.fps && options.fps > 0 ? 1 / options.fps / 2 : 0.001;
+    const momentOf = (seconds: number, picked: number | undefined) =>
+      Math.round((seconds + (picked ?? 0) + inside) * 1000) / 1000;
 
     let best: VideoThumbnail | undefined;
     for (const seconds of positions) {
-      const frame = await grabFrame(inputPath, outputPath, seconds).catch(
+      const grabbed = await grabFrame(inputPath, outputPath, seconds).catch(
         () => undefined,
       );
-      if (!frame) continue;
-      const score = await scoreFrame(frame);
-      if (!best || score > best.score) best = { frame, score, at: seconds };
+      if (!grabbed) continue;
+      const score = await scoreFrame(grabbed.frame);
+      if (!best || score > best.score)
+        best = {
+          frame: grabbed.frame,
+          score,
+          at: momentOf(seconds, grabbed.picked),
+        };
     }
     // Nothing usable past the opening — a very short clip, or one the probe
     // misjudged: the first frame is still a frame.
     if (!best) {
-      const frame = await grabFrame(inputPath, outputPath, 0);
-      best = { frame, score: await scoreFrame(frame), at: 0 };
+      const grabbed = await grabFrame(inputPath, outputPath, 0);
+      best = {
+        frame: grabbed.frame,
+        score: await scoreFrame(grabbed.frame),
+        at: momentOf(0, grabbed.picked),
+      };
     }
     return best;
   } finally {
@@ -133,28 +147,44 @@ async function writeFrame(
   outputPath: string,
   inputOptions: string[],
   outputOptions: string[],
+  onLog?: (line: string) => void,
 ): Promise<Buffer> {
   await rm(outputPath, { force: true });
   await new Promise<void>((resolve, reject) => {
-    ffmpeg(inputPath)
+    const command = ffmpeg(inputPath)
       .inputOptions(inputOptions)
       .outputOptions(outputOptions)
       .output(outputPath)
       .on('end', () => resolve())
-      .on('error', (err: Error) => reject(err))
-      .run();
+      .on('error', (err: Error) => reject(err));
+    if (onLog) command.on('stderr', onLog);
+    command.run();
   });
   return await readFile(outputPath);
 }
 
-/** The frame ffmpeg finds most typical of the second that starts at `seconds`. */
-function grabFrame(inputPath: string, outputPath: string, seconds: number) {
-  return writeFrame(
+/**
+ * The frame ffmpeg finds most typical of the second that starts at
+ * `seconds`, and how far into that second it stands: the filter tells which
+ * frame it picked, and the moment is that frame's, not the second's start.
+ */
+async function grabFrame(
+  inputPath: string,
+  outputPath: string,
+  seconds: number,
+): Promise<{ frame: Buffer; picked?: number }> {
+  let picked: number | undefined;
+  const frame = await writeFrame(
     inputPath,
     outputPath,
     ['-ss', seconds.toFixed(3)],
     ['-vf', `thumbnail=${THUMBNAIL_BATCH}`, '-frames:v', '1'],
+    (line) => {
+      const match = /pts_time=(\d+(?:\.\d+)?)\)? selected/.exec(line);
+      if (match) picked = Number(match[1]);
+    },
   );
+  return { frame, picked };
 }
 
 /** The frame shown at `seconds`, exactly: the seek decodes up to it. */

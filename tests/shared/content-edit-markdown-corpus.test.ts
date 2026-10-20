@@ -13,29 +13,34 @@ import { contentToEditMarkdown } from '#layers/thei/shared/content-edit-markdown
  */
 const database = new URL('../../.playground/content/thei.db', import.meta.url);
 
-describe.skipIf(!existsSync(database))('editing markdown over real texts', () => {
-  it('reads every playground text back as it was', () => {
-    const db = new Database(database.pathname.replace(/^\/(\w:)/, '$1'), {
-      readonly: true,
-    });
-    const rows = db
-      .prepare('SELECT contentUuid, data FROM content')
-      .all() as { contentUuid: string; data: string }[];
-    db.close();
-    const broken: string[] = [];
-    for (const row of rows) {
-      const data = normalizeContentData(JSON.parse(row.data));
-      const parsed = normalizeContentData({
-        blocks: parseEditMarkdownToBlocks(contentToEditMarkdown(data)).blocks,
-      } as never);
-      const keys = (blocks: typeof data.blocks) => blocks.map(editBlockKey);
-      if (
-        JSON.stringify(keys(parsed.blocks)) !==
-        JSON.stringify(keys(data.blocks))
-      )
-        broken.push(row.contentUuid);
-    }
-    expect(rows.length).toBeGreaterThan(0);
-    expect(broken).toEqual([]);
-  });
-});
+describe.skipIf(!existsSync(database))(
+  'editing markdown over real texts',
+  () => {
+    // The lab's archive is the playground now, thousands of texts: read
+    // alongside the whole suite they take longer than vitest's five seconds.
+    it('reads every playground text back as it was', () => {
+      const db = new Database(database.pathname.replace(/^\/(\w:)/, '$1'), {
+        readonly: true,
+      });
+      const rows = db
+        .prepare('SELECT contentUuid, data FROM content')
+        .all() as { contentUuid: string; data: string }[];
+      db.close();
+      const broken: string[] = [];
+      for (const row of rows) {
+        const data = normalizeContentData(JSON.parse(row.data));
+        const parsed = normalizeContentData({
+          blocks: parseEditMarkdownToBlocks(contentToEditMarkdown(data)).blocks,
+        } as never);
+        const keys = (blocks: typeof data.blocks) => blocks.map(editBlockKey);
+        if (
+          JSON.stringify(keys(parsed.blocks)) !==
+          JSON.stringify(keys(data.blocks))
+        )
+          broken.push(row.contentUuid);
+      }
+      expect(rows.length).toBeGreaterThan(0);
+      expect(broken).toEqual([]);
+    }, 60_000);
+  },
+);
