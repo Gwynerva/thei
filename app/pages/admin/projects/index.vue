@@ -131,7 +131,11 @@ const list = computed<ProjectListResponse | undefined>(() => data.value);
         <template #size>{{ humanSize(project.totalSize) }}</template>
         <template #action>
           <TheiLink
-            :to="buildProjectUrl(project.humanReadableSlug, project.publicId)"
+            :to="
+              sitePath(
+                buildProjectUrl(project.humanReadableSlug, project.publicId),
+              )
+            "
             external
             :data-title-popup="phrase.view_project"
             :aria-label="phrase.view_project"

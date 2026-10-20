@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { IconName } from '#thei/icons';
+import TheiLink from '#layers/thei/app/components/TheiLink';
 
 const props = withDefaults(
   defineProps<{
@@ -29,6 +30,12 @@ const props = withDefaults(
      * label, and what a screen reader hears with it.
      */
     reason?: string;
+    /**
+     * Where it leads, as a path in data: a link with the same look, loading
+     * the page in full as the admin's other ways to the site do. `disabled`
+     * and `reason` are a button's alone.
+     */
+    to?: string;
   }>(),
   // Without it Vue would read a missing `phoneDone` as false, and every
   // phone square would carry a hidden check.
@@ -42,7 +49,9 @@ const props = withDefaults(
 
 const slots = useSlots();
 const reasonId = useId();
-const blocked = computed(() => Boolean(!props.disabled && props.reason));
+const blocked = computed(() =>
+  Boolean(!props.to && !props.disabled && props.reason),
+);
 const hint = computed(() => {
   if (blocked.value)
     return titlePopup(
@@ -53,16 +62,24 @@ const hint = computed(() => {
     ? { 'data-title-popup': props.label }
     : {};
 });
+const attributes = computed(() => ({
+  ...(props.to
+    ? { to: sitePath(props.to), external: true }
+    : {
+        type: 'button',
+        disabled: props.disabled,
+        'aria-disabled': blocked.value ? 'true' : undefined,
+        'aria-describedby': blocked.value ? reasonId : undefined,
+      }),
+  ...hint.value,
+}));
 </script>
 
 <template>
-  <button
-    type="button"
-    :disabled="disabled"
-    :aria-disabled="blocked ? 'true' : undefined"
+  <component
+    :is="to ? TheiLink : 'button'"
+    v-bind="attributes"
     :aria-label="label"
-    :aria-describedby="blocked ? reasonId : undefined"
-    v-bind="hint"
     class="flex shrink-0 cursor-pointer items-center justify-center gap-1
       rounded-normal text-sm font-semibold transition-colors off:cursor-auto"
     :class="{
@@ -78,7 +95,7 @@ const hint = computed(() => {
       'bg-accent/80 text-white popup-open:bg-accent not-off:hocus:bg-accent':
         variant === 'accent',
       'off:bg-bg-accent off:text-text-2': variant === 'accent',
-      'pointer-events-none opacity-40': disabled && size === 'compact',
+      'pointer-events-none opacity-40': !to && disabled && size === 'compact',
       'w-9 px-0 pointer-coarse:w-11':
         size === 'default' && icon && !$slots.default,
       'max-sm:w-9 max-sm:px-0 max-sm:pointer-coarse:w-11':
@@ -101,5 +118,5 @@ const hint = computed(() => {
     <span v-if="phoneIcon" class="max-sm:hidden"><slot></slot></span>
     <slot v-else></slot>
     <span v-if="blocked" :id="reasonId" hidden>{{ reason }}</span>
-  </button>
+  </component>
 </template>

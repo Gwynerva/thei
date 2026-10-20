@@ -114,7 +114,7 @@ const list = computed<PageListResponse | undefined>(() => data.value);
         <template #size>{{ humanSize(item.totalSize) }}</template>
         <template #action>
           <TheiLink
-            :to="buildPageUrl(item.slug)"
+            :to="sitePath(buildPageUrl(item.slug))"
             external
             :data-title-popup="phrase.view_page"
             :aria-label="phrase.view_page"

@@ -176,7 +176,7 @@ async function save() {
     savedRevision.value++;
     await refreshNuxtData('admin-tag-count');
     if (!tagUuid)
-      await navigateTo(`/admin/tags/${result.tagUuid}/edit/`, {
+      await navigateTo(sitePath(`/admin/tags/${result.tagUuid}/edit/`), {
         external: true,
       });
   } catch (caught) {

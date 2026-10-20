@@ -26,6 +26,10 @@ The header:
   makes a modal informative — when, who, the cost, a source, the counts of
   what it holds — goes at the top of the body, not into the sticky row.
 - One control per meaning: a single close, not both a back and a cancel.
+- Delete, the action used least, is the leftmost of the header's buttons.
+- The way to an entity's public page is an eye icon link in the header
+  (`visibility`, `ModalHeaderButton`'s `to`): the admin bar under a modal
+  cannot be pressed.
 - Status speaks in icons with hints. Words only for what is urgent, such as
   "Offline"; counts without noise, never "0 / 0 bytes".
 - While a decision is pending — restoring a version, say — its row replaces the
@@ -202,6 +206,8 @@ Popups opened inside a modal join its `<dialog>` by themselves; see
 
 ## Why
 
+- The owner put delete at the left end of a modal's header, before the ✦ and
+  the eye: it is the action used least.
 - The owner rejected a header full of sentences — "Restored… · Undo · Draft
   saved…" — and a confirmation popup that covered the text; on a phone the
   stacked header took half the screen.

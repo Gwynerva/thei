@@ -97,7 +97,7 @@ Around them:
 ## Addresses
 
 - A site may be served from a subfolder, which becomes the build's `app.baseURL`. One rule keeps that manageable: a path stored or passed around in data — API responses, `shared/*-url.ts`, `MediaDescriptor.src`, canonical paths — never includes the base path.
-- The base is added only on the way out: by the router for `TheiLink` and `navigateTo`, by `sitePath()` for DOM attributes the router does not own (`src`, a plain `href`, `fetch`/XHR, `location`, a cookie path, a redirect), and by `siteUrl()` / `useSiteUrl().resolve()` for absolute URLs.
+- The base is added only on the way out: by the router for `TheiLink` and `navigateTo`, by `sitePath()` for DOM attributes the router does not own (`src`, a plain `href`, `fetch`/XHR, `location`, a cookie path, a redirect), and by `siteUrl()` / `useSiteUrl().resolve()` for absolute URLs. With `external` the router takes the path as it is, so a full load takes `sitePath()` too (`tests/app/components/external-navigation.test.ts`).
 - `$fetch` and `useFetch` already carry the base on both the client and the server, so an API call written as `/api/…` is correct as it stands.
 - h3 strips the base before middleware and routes, so `getRequestPath(event)` is already base-relative and path comparisons need no prefix.
 

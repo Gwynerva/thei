@@ -12,7 +12,8 @@ neutral — and in square icon-only sizes.
 - `ModalHeaderButton` in a modal's header row: close, delete, the main action
   (Save, Done).
 - Where the action is a navigation, `Button` with `to`: a link that looks as
-  the button of its rank does. Never a link styled by hand as a button.
+  the button of its rank does, and `ModalHeaderButton` with `to` in a modal's
+  header. Never a link styled by hand as a button.
 
 ## Rules
 
@@ -118,7 +119,11 @@ icon its words give way to on a phone, and `phoneDone` swaps it for `check`:
 both icons stay in the page, one hidden, since pointing an icon's `<use>`
 elsewhere while the owner types in a text ends the browser's run of typing,
 and Ctrl+Z would then stop after the first letter. `AdminSaveButton` keeps
-its two squares the same way.
+its two squares the same way. `to`, a path in data, makes it a link with the
+same look (`TheiLink` with `external`, the base path added by `sitePath()`):
+the page loads in full, as the admin's other ways to the site do, and Ctrl or
+the middle button opens it in a new tab. `disabled` and `reason` are a
+button's alone.
 
 ```vue
 <Button
@@ -131,6 +136,7 @@ its two squares the same way.
   <span class="max-sm:hidden">{{ phrase.share_link_extend }}</span>
 </Button>
 
+<ModalHeaderButton icon="visibility" :label="phrase.view_content_section" :to="pageUrl" />
 <ModalHeaderButton icon="close" :label="phrase.close_modal" @click="closeModal" />
 <ModalHeaderButton variant="accent" :label="phrase.save" @click="save">
   {{ phrase.save }}
@@ -159,4 +165,6 @@ checks what the save controls of a new diary entry say, before and after its
 text is written and once the entry is made, and the reason its Create gives
 under a mouse, a finger and Ctrl+S; `tests/e2e/form-needs.spec.ts` does the
 same for every other form, at 1280 and 375 px.
+`tests/e2e/admin-sections.spec.ts` follows the eye of a section's modal to
+the section's page, and finds none in a new section's.
 `tests/app/styles/off-variant.test.ts` compiles `off:`.
