@@ -26,6 +26,9 @@ The header:
   makes a modal informative — when, who, the cost, a source, the counts of
   what it holds — goes at the top of the body, not into the sticky row.
 - One control per meaning: a single close, not both a back and a cancel.
+- The way to an entity's public page is an eye icon link in the header, first
+  among its buttons (`visibility`, `ModalHeaderButton`'s `to`): the admin bar
+  under a modal cannot be pressed.
 - Status speaks in icons with hints. Words only for what is urgent, such as
   "Offline"; counts without noise, never "0 / 0 bytes".
 - While a decision is pending — restoring a version, say — its row replaces the

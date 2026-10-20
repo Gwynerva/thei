@@ -237,26 +237,17 @@ function sectionLinkDescription(slug: string, publicId: string) {
 }
 
 /**
- * While a section that already exists on the site is open, the admin bar's
- * eye leads to its own public page rather than to the project's. It uses the
- * address the section was opened with: an unsaved edit of the slug has no
- * page yet.
+ * The way to the section's own page, for a section that already exists on the
+ * site. It uses the address the section was opened with: an unsaved edit of
+ * the slug has no page yet, and the page finds a section by its id and leads
+ * on to its address of the moment. A section added here gets one once it is
+ * opened again.
  */
-useRegisterAdminBarContextButton(
-  computed(() => {
-    const opened = props.modalData.item;
-    if (!opened?.sectionUuid || !props.modalData.projectPublicId)
-      return undefined;
-    return {
-      to: {
-        href: sectionLinkDescription(opened.humanReadableSlug, opened.publicId),
-        external: true,
-      },
-      icon: 'visibility',
-      title: phrase.value.view_content_section,
-    };
-  }),
-);
+const pageUrl = computed(() => {
+  const opened = props.modalData.item;
+  if (!opened?.sectionUuid || !props.modalData.projectPublicId) return;
+  return sectionLinkDescription(opened.humanReadableSlug, opened.publicId);
+});
 
 function removePeriod(index: number) {
   item.value.periods = item.value.periods.filter((_, i) => i !== index);
@@ -281,6 +272,12 @@ async function deleteItem() {
           class="flex-1"
         />
         <div class="flex items-center gap-xs">
+          <ModalHeaderButton
+            v-if="pageUrl"
+            icon="visibility"
+            :label="phrase.view_content_section"
+            :to="pageUrl"
+          />
           <AiEntityButton />
           <ModalHeaderButton
             v-if="exists"
