@@ -428,7 +428,6 @@ export type LanguagePhrases = {
   search_failed: string;
   search_busy: string;
   search_quick_hint: string;
-  search_quick_empty: string;
   search_years: string;
   search_sort: string;
   search_sort_best: string;
@@ -441,6 +440,8 @@ export type LanguagePhrases = {
   search_no_filters: string;
   search_year_count: (year: number, count: number) => string;
   search_recent: string;
+  search_history: string;
+  search_history_clear: string;
   search_actions: string;
   search_action_diary_today: string;
   search_action_diary_today_new: string;

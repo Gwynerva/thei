@@ -645,7 +645,6 @@ export default defineI18nModule({
       `Поиск ещё готовится (${percent} %): часть найденного может не показаться.`,
     search_busy: 'Поиск сейчас занят: ответ вот-вот придёт.',
     search_failed: 'Не удалось выполнить поиск. Попробуйте ещё раз.',
-    search_quick_empty: 'Попробуйте другое слово.',
     search_quick_hint:
       'Проекты, события, дневник, страницы, файлы и теги — по любому слову в них.',
     search_years: 'Годы',
@@ -663,6 +662,8 @@ export default defineI18nModule({
     search_no_filters: 'Для этого контента фильтров нет',
     search_year_count: (year, count) => `${year}: найдено ${count}`,
     search_recent: 'Недавние',
+    search_history: 'Вы искали',
+    search_history_clear: 'Очистить историю поиска',
     search_actions: 'Действия',
     search_action_diary_today: 'Запись дневника за сегодня',
     search_action_diary_today_new: 'Написать запись за сегодня',

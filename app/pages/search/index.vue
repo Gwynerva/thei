@@ -218,6 +218,18 @@ function clearText() {
   input.value?.focus();
 }
 
+// What was searched for is kept for the quick search to offer again: on
+// Enter, and once a result is opened, as the search read it.
+const history = useSearchHistory();
+function submitText() {
+  commitText();
+  history.remember(text.value);
+}
+function rememberOpened(event: MouseEvent) {
+  if (!(event.target as Element | null)?.closest('a[href]')) return;
+  history.remember(search.value.keyboard ?? search.value.query);
+}
+
 onMounted(() => input.value?.focus({ preventScroll: true }));
 
 // ---- With a query --------------------------------------------------------
@@ -356,7 +368,7 @@ const countLine = computed(() => {
       pb-[calc(4.5rem+env(safe-area-inset-bottom))] sm:gap-lg sm:py-lg"
   >
     <h1 class="sr-only">{{ phrase.search }}</h1>
-    <form role="search" class="group relative" @submit.prevent="commitText">
+    <form role="search" class="group relative" @submit.prevent="submitText">
       <Icon
         name="search"
         class="pointer-events-none absolute top-1/2 left-3 z-1 -translate-y-1/2
@@ -499,6 +511,7 @@ const countLine = computed(() => {
           v-if="search.groups.length"
           class="flex flex-col gap-md transition-opacity"
           :class="{ 'opacity-60': pending }"
+          @click.capture="rememberOpened"
         >
           <section
             v-for="group in search.groups"
@@ -537,23 +550,7 @@ const countLine = computed(() => {
           v-else-if="!pending && !busy"
           :title="phrase.search_empty"
           :description="phrase.search_empty_description"
-        >
-          <!-- What the site is most about, as words to try instead. -->
-          <template v-if="search.suggestions?.length">
-            <TheiLink
-              v-for="word in search.suggestions"
-              :key="word"
-              :to="{ path: '/search/', query: { q: word } }"
-              class="rounded-full border border-border-1 px-sm py-0.5 text-sm
-                font-semibold text-text-2 no-underline transition
-                focus-visible:ring-2 focus-visible:ring-accent
-                focus-visible:outline-none hocus:border-border-2
-                hocus:text-text-1"
-            >
-              {{ publicText(word) }}
-            </TheiLink>
-          </template>
-        </PublicEmptyState>
+        />
         <Pagination
           v-if="!typed || filters.type"
           :page="search.page"

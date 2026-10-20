@@ -95,7 +95,8 @@ const PAUSE_MS = 150;
  * The quick search's answers as the query is typed: each after a pause,
  * the one before cancelled, an answer that comes late to a newer query
  * dropped. The owner's search also hears which page they are on and what
- * day it is for them, for what it offers to do.
+ * day it is for them, for what it offers to do; with nothing typed, only the
+ * owner's asks.
  */
 export function useQuickSearch(
   text: Ref<string>,
@@ -146,6 +147,16 @@ export function useQuickSearch(
   function schedule(now = false) {
     clearTimeout(timer);
     const q = text.value.trim();
+    // A visitor with nothing typed has nothing to ask for: what is offered
+    // then is their own history, kept in the browser.
+    if (!q && !options.owner.value) {
+      controller?.abort();
+      version++;
+      response.value = null;
+      loading.value = false;
+      failed.value = false;
+      return;
+    }
     const pause = now ? 0 : q.length < 3 ? PAUSE_SHORT_MS : PAUSE_MS;
     // Waiting shows from the key that started it, not from the request.
     loading.value = true;

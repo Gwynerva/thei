@@ -47,11 +47,12 @@ and behaves.
   instead.
 - The row Enter takes is ringed as a picker's row is (`useActiveRow`): the
   first, until the arrows or the pointer choose another, so what was typed
-  always shows where Enter goes.
+  always shows where Enter goes. Queries searched for before, offered with
+  nothing typed, wait for the keys instead.
 - ↑ ↓ choose, Tab and Shift+Tab go from group to group — past the last,
-  Tab goes on to «All results» at the foot — Enter opens,
-  Ctrl+Enter shows everything on the search page, Esc closes and gives the
-  focus back. None of it is told on screen: the foot holds how many were
+  Tab goes on to the history's bin, or to «All results» at the foot — Enter
+  opens, Ctrl+Enter shows everything on the search page, Esc closes and gives
+  the focus back. None of it is told on screen: the foot holds how many were
   found, always a link to all of them.
 - The owner's way to the editor is «✎ Изменить» on the row's last line,
   after «↳ Ещё в N местах», a target of its own apart from the row's link.
@@ -74,8 +75,25 @@ and behaves.
   first — and ✦ with AI on, come last. A question puts ✦ first and makes
   nothing; a day makes nothing either. Nothing that cannot be undone, nothing
   rare: those stay in their forms.
-- Nothing typed, a visitor is offered the site's busiest tags as words to
-  try, plain chips with no label; so is anyone whose query found nothing,
+- Nothing typed, everyone is offered what they searched for before, under
+  «Вы искали»: a row for each of the last twelve queries, newest first, with
+  the history icon, cut short with an ellipsis and read whole in its hint. A
+  visitor sees nothing else; the owner sees it last, after «Недавние». The
+  rows are not ringed until Tab, ↓ or the pointer goes to them, so Enter in an
+  empty field does nothing; chosen, a query is put back in the field and
+  searched for again there. The bin at the right of the heading forgets them
+  all.
+- A query is remembered once the reader goes somewhere with it — a result
+  opened, «All results», a find's other places, a query searched for again,
+  Enter on the search page or a result opened there — as the search read it,
+  on the other keyboard if it was typed there; never at a pause in typing.
+  The same query twice is kept once, last typed (`useSearchHistory`,
+  `app/composables/search-history.ts`).
+- It is kept in this browser alone, one list for the owner and one for a
+  visitor, so a visitor never sees what the owner searched for. A visitor
+  with nothing typed asks the server nothing.
+- With no history, a visitor reads one line of what the search finds. A
+  query that found nothing says so, «Ничего не нашлось», and nothing more,
   here and on the page. What it says stays while an answer is on its way, so
   the popup never shrinks to an empty strip.
 
@@ -193,6 +211,10 @@ there.
 - Two searches on one screen confused the owner; a stranger and the owner
   now meet one popup, which only holds more for the owner.
 - The kind's icon is on every result, so a group's name needs none.
+- The busiest tags offered as words to try were dropped: they said little of
+  what a reader wanted. The owner asked for the reader's own queries in their
+  place, each reader's kept apart, and for a search that found nothing to
+  say so and stop there.
 - A find that led to the top of a long page, or to a text under a spoiler,
   made the reader look for it again.
 
@@ -200,5 +222,8 @@ there.
 
 - `tests/shared/search/landing.test.ts` writes and reads every kind of place.
 - `tests/app/composables/shortcut.test.ts` presses the keys on other layouts.
+- `tests/app/composables/search-history.test.ts` keeps, orders and forgets
+  queries, the owner's apart; `tests/e2e/search.spec.ts` searches again from
+  the history by its keys and clears it.
 - In the browser, at 1280 × 800 and 375 × 812, in both themes: the popup,
   the page, and a find in a spoiler, a gallery, a status and a sidebar.

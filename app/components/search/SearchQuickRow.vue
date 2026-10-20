@@ -99,9 +99,13 @@ defineEmits<{
           gap-0.5 py-1.5 pl-xs"
         :class="row.media && !row.preview ? 'pr-16' : 'pr-xs'"
       >
+        <!-- A title cut short reads whole in its hint: a long query, a long
+             name. -->
         <span
           class="flex min-w-0 items-center gap-1.5 text-sm font-semibold"
           :class="{ 'text-accent': row.accent }"
+          :data-title-popup="row.title"
+          data-title-popup-clipped
         >
           <Icon
             :name="row.icon"
@@ -111,7 +115,9 @@ defineEmits<{
             class="shrink-0"
             :class="row.accent ? 'text-accent' : 'text-text-2'"
           />
-          <span class="-m-[0.75em] min-w-0 truncate p-[0.75em]"
+          <span
+            class="-m-[0.75em] min-w-0 truncate p-[0.75em]"
+            data-title-popup-clip
             ><SearchSnippet
               v-if="row.titleSegments"
               :segments="row.titleSegments"

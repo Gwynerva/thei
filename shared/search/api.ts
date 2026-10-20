@@ -240,9 +240,4 @@ export interface SearchResponse {
   building?: number;
   /** For the owner, in the quick search. */
   actions?: SearchAction[];
-  /**
-   * The quick search with nothing typed: what the site is most about, its
-   * busiest tags, as words to try. Titles as typed.
-   */
-  suggestions?: string[];
 }

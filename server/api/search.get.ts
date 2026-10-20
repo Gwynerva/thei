@@ -10,7 +10,6 @@ import {
   spendSearchTime,
   takeSearch,
 } from '../thei/search/limits';
-import { popularTagTitles } from '../thei/search/catalogue';
 import {
   cachedSearch,
   peekCachedSearch,
@@ -43,14 +42,9 @@ export default defineEventHandler(async (event): Promise<SearchResponse> => {
     typing: query.typing === '1',
   };
   const empty = quick && !filters.q.trim();
-  const found = isAdmin
-    ? await answer(request, empty, isAdmin)
+  const response = isAdmin
+    ? await answer(request, empty)
     : await limitedAnswer(event, request, empty);
-  // Nothing found: what the site is about, as other words to try.
-  const response =
-    filters.q.trim() && !found.total
-      ? { ...found, suggestions: popularTagTitles(isAdmin) }
-      : found;
   if (!isAdmin || !quick) return response;
   const today =
     typeof query.today === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(query.today)
@@ -67,17 +61,14 @@ export default defineEventHandler(async (event): Promise<SearchResponse> => {
 });
 
 /**
- * The quick search with nothing typed finds nothing: it offers words to try,
- * and the owner what to do.
+ * The quick search with nothing typed finds nothing: the owner is offered
+ * what to do, a visitor their own history, kept in the browser.
  */
 async function answer(
   request: SearchRequest,
   empty: boolean,
-  isAdmin: boolean,
 ): Promise<SearchResponse> {
-  return empty
-    ? { ...emptySearchResponse(), suggestions: popularTagTitles(isAdmin) }
-    : await cachedSearch(request);
+  return empty ? emptySearchResponse() : await cachedSearch(request);
 }
 
 /**
@@ -101,7 +92,7 @@ async function limitedAnswer(
   if (busy) refuse(event, 503, busy);
   const started = performance.now();
   try {
-    return await answer(request, empty, false);
+    return await answer(request, empty);
   } finally {
     spendSearchTime(performance.now() - started);
   }

@@ -18,7 +18,8 @@ import type { SearchQuickRowData } from './SearchQuickRow.vue';
  * the owner also finds what is closed, with its lock, and what to do — the
  * day's diary, the other side of the page they are on, what they saved last
  * with no query; a section of the admin, a new entity named by the query and
- * ✦ with one.
+ * ✦ with one. With nothing typed, everyone is offered what they searched for
+ * before in this browser (`useSearchHistory`), to search again.
  *
  * Enter opens where the owner is — a page on the site, an editor in the
  * admin — and Shift+Enter the other one; Ctrl+Enter shows everything found
@@ -38,6 +39,11 @@ const { response, loading, failed } = useQuickSearch(text, {
 });
 const query = computed(() => text.value.trim());
 const shown = response;
+const history = useSearchHistory();
+// Another tab may have searched since.
+watch(open, (isOpen) => {
+  if (isOpen) history.refresh();
+});
 const size = useHumanSize();
 const anchorIsElement = computed(
   () => typeof Element !== 'undefined' && anchor.value instanceof Element,
@@ -67,6 +73,10 @@ function onDismiss(reason: 'outside' | 'escape') {
 
 interface Row extends SearchQuickRowData {
   run?: () => void | Promise<void>;
+  /** What was found, as against what to do: opening it remembers the query. */
+  hit?: boolean;
+  /** A query searched for before: chosen, it is searched for again here. */
+  again?: string;
 }
 interface Section {
   key: string;
@@ -104,6 +114,7 @@ function hitRow(hit: SearchHit): Row {
   const edit = hit.editHref;
   return {
     key: hit.ref,
+    hit: true,
     icon: SEARCH_KIND_ICONS[hit.kind],
     iconLabel: phrase.value.search_kind(hit.kind),
     title: searchHitTitle(hit),
@@ -236,6 +247,16 @@ function actionRow(action: SearchAction, at: number): Row {
   }
 }
 
+/** A query searched for before, as a row that searches for it again. */
+function historyRow(searched: string): Row {
+  return {
+    key: `history:${searched}`,
+    icon: 'history',
+    title: searched,
+    again: searched,
+  };
+}
+
 const sections = computed<Section[]>(() => {
   const answer = shown.value;
   const actions = (answer?.actions ?? []).map(actionRow);
@@ -250,6 +271,12 @@ const sections = computed<Section[]>(() => {
         key: 'recent',
         heading: phrase.value.search_recent,
         rows: recent,
+      });
+    if (history.entries.value.length)
+      list.push({
+        key: 'history',
+        heading: phrase.value.search_history,
+        rows: history.entries.value.map(historyRow),
       });
     return list;
   }
@@ -280,9 +307,12 @@ const allResultsHref = computed(
   () => `/search/?q=${encodeURIComponent(query.value)}`,
 );
 
+// Queries offered with nothing typed wait for the keys: Enter in an empty
+// field searches for nothing. Opened again, the ring starts afresh.
 const { listId, activeIndex, optionId, move, pointAt, current } = useActiveRow(
   () => rows.value.length,
-  () => rows.value.map((row) => row.key).join('|'),
+  () => `${open.value}|${rows.value.map((row) => row.key).join('|')}`,
+  () => (sections.value[0]?.key === 'history' ? -1 : 0),
 );
 const rowIndex = computed(
   () => new Map(rows.value.map((row, index) => [row.key, index])),
@@ -319,10 +349,40 @@ function close() {
   open.value = false;
 }
 
+/**
+ * Remembers what was searched for, once the reader goes somewhere with it:
+ * as the answer read it — on the other keyboard, if it was typed there —
+ * when the answer is for what the field holds.
+ */
+function rememberQuery() {
+  const answer = shown.value;
+  history.remember(
+    answer?.query && answer.query === query.value
+      ? (answer.keyboard ?? answer.query)
+      : query.value,
+  );
+}
+
+/** A query of the history, searched for again where it was offered. */
+function searchAgain(searched: string) {
+  text.value = searched;
+  history.remember(searched);
+  const input = field.value;
+  input?.focus();
+  input?.setSelectionRange(searched.length, searched.length);
+}
+
+function clearHistory() {
+  history.clear();
+  field.value?.focus();
+}
+
 async function activate(row: Row | undefined, other = false) {
   if (!row) return;
+  if (row.again !== undefined) return searchAgain(row.again);
   const href = other ? row.other : row.href;
   if (other && !href) return;
+  if (row.hit) rememberQuery();
   close();
   opener = null;
   if (row.run && !other) await row.run();
@@ -335,6 +395,7 @@ function onPick(row: Row, event: MouseEvent) {
   // Its own targets inside the row act on their own.
   if (target?.closest('[data-row-more], [data-row-other]')) return;
   if (row.href) {
+    if (row.hit) rememberQuery();
     // A click for a new tab or window leaves the search where it is.
     if (event.ctrlKey || event.metaKey || event.shiftKey || event.button)
       return;
@@ -345,8 +406,16 @@ function onPick(row: Row, event: MouseEvent) {
   void activate(row);
 }
 
+/** Everything found, on the search page. */
+function openAll() {
+  rememberQuery();
+  close();
+  opener = null;
+}
+
 /** A result's other places: on the search page, opened under it. */
 function openPlaces(row: Row) {
+  rememberQuery();
   close();
   opener = null;
   void navigateTo({
@@ -369,9 +438,9 @@ function onKeyDown(event: KeyboardEvent) {
     event.preventDefault();
     if (event.ctrlKey || event.metaKey) {
       if (!query.value) return;
-      close();
-      opener = null;
-      void navigateTo(allResultsHref.value);
+      const href = allResultsHref.value;
+      openAll();
+      void navigateTo(href);
       return;
     }
     void activate(rows.value[current()], event.shiftKey);
@@ -530,8 +599,37 @@ const foundNothing = computed(
               :aria-label="section.heading"
               class="flex flex-col"
             >
+              <!-- What was searched for before, with the bin that forgets
+                   it: a button of its own, which Tab reaches after the
+                   groups. -->
+              <div
+                v-if="section.key === 'history'"
+                class="flex items-center justify-between gap-xs pl-xs"
+                data-search-history
+              >
+                <span
+                  class="pt-1.5 pb-1 text-xs font-bold tracking-wider
+                    text-text-3 uppercase"
+                  aria-hidden="true"
+                  >{{ section.heading }}</span
+                >
+                <button
+                  type="button"
+                  class="flex size-7 shrink-0 cursor-pointer items-center
+                    justify-center rounded-sm text-text-3 transition
+                    focus-visible:ring-2 focus-visible:ring-accent
+                    focus-visible:outline-none pointer-coarse:size-9
+                    hocus:bg-bg-error hocus:text-text-error"
+                  :aria-label="phrase.search_history_clear"
+                  :data-title-popup="phrase.search_history_clear"
+                  data-search-history-clear
+                  @click="clearHistory"
+                >
+                  <Icon name="delete" />
+                </button>
+              </div>
               <span
-                v-if="section.heading"
+                v-else-if="section.heading"
                 class="px-xs pt-1.5 pb-1 text-xs font-bold tracking-wider
                   text-text-3 uppercase"
                 aria-hidden="true"
@@ -559,38 +657,18 @@ const foundNothing = computed(
           {{ phrase.search_failed }}
         </p>
         <!-- Nothing to list: what the search does, or that it found nothing,
-             and words to try. It stays while an answer is on its way, so the
+             and no more. It stays while an answer is on its way, so the
              popup never shrinks to an empty strip. -->
-        <div v-else class="flex flex-col gap-sm px-xs py-sm text-sm">
-          <p v-if="foundNothing" class="flex flex-col gap-0.5">
-            <span class="font-semibold text-text-1">{{
-              phrase.search_empty
-            }}</span>
-            <span class="text-text-3">{{ phrase.search_quick_empty }}</span>
-          </p>
-          <p v-else class="text-text-3">{{ phrase.search_quick_hint }}</p>
-          <!-- What the site is most about, as words to try. -->
-          <div
-            v-if="shown?.suggestions?.length"
-            class="flex flex-wrap items-center gap-xs"
-          >
-            <button
-              v-for="word in shown.suggestions"
-              :key="word"
-              type="button"
-              class="cursor-pointer rounded-full border border-border-1 px-sm
-                py-0.5 font-semibold text-text-2 transition focus-visible:ring-2
-                focus-visible:ring-accent focus-visible:outline-none
-                hocus:border-border-2 hocus:text-text-1"
-              @click="
-                text = word;
-                field?.focus();
-              "
-            >
-              {{ publicText(word) }}
-            </button>
-          </div>
-        </div>
+        <p
+          v-else-if="foundNothing"
+          class="px-xs py-sm text-sm font-semibold text-text-1"
+          data-search-empty
+        >
+          {{ phrase.search_empty }}
+        </p>
+        <p v-else class="px-xs py-sm text-sm text-text-3" data-search-hint>
+          {{ phrase.search_quick_hint }}
+        </p>
       </div>
 
       <!-- How many were found, always the way to all of them: the keys are
@@ -608,7 +686,7 @@ const foundNothing = computed(
             focus-visible:ring-accent focus-visible:outline-none
             hocus:bg-accent/10"
           :class="{ 'w-full justify-center': phone }"
-          @click="close"
+          @click="openAll"
         >
           {{ phrase.search_all_results(shown.total) }}
           <Icon name="chevron-right" aria-hidden="true" />

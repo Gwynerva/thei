@@ -94,8 +94,9 @@ export function useContentEntitySearch(options: {
 /**
  * The row Enter takes in a picker's list, ringed as the select's option is:
  * the first, or the one `start` names, and again after every new answer.
- * The arrows walk it; the mouse takes the row it is over, a finger only what
- * it taps.
+ * `start` may name none (-1): rows offered with nothing typed wait for the
+ * keys or the pointer to choose one. The arrows walk it; the mouse takes the
+ * row it is over, a finger only what it taps.
  */
 export function useActiveRow(
   count: () => number,
@@ -103,13 +104,17 @@ export function useActiveRow(
   start: () => number = () => 0,
 ) {
   const listId = useId();
-  const index = ref(0);
+  const index = ref(start());
   watch(reset, () => (index.value = start()));
 
-  /** Always a row of the list while it has any; -1 while it is empty. */
+  /**
+   * A row of the list while it has any, unless none is chosen yet; -1 while
+   * it is empty or nothing is chosen.
+   */
   const activeIndex = computed(() => {
     const total = count();
-    return total ? Math.min(Math.max(index.value, 0), total - 1) : -1;
+    if (!total || index.value < 0) return -1;
+    return Math.min(index.value, total - 1);
   });
 
   const optionId = (index: number) => `${listId}-${index}`;
@@ -117,7 +122,10 @@ export function useActiveRow(
   function move(step: number) {
     const total = count();
     if (!total) return;
-    index.value = (activeIndex.value + step + total) % total;
+    // From none, down goes to the first row and up to the last.
+    const from =
+      activeIndex.value < 0 ? (step > 0 ? -1 : 0) : activeIndex.value;
+    index.value = (((from + step) % total) + total) % total;
     document
       .getElementById(optionId(index.value))
       ?.scrollIntoView({ block: 'nearest' });

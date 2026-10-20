@@ -586,7 +586,6 @@ export default defineI18nBase({
       `Search is still being prepared (${percent}%): some results may be missing.`,
     search_busy: 'The search is busy: an answer is on its way.',
     search_failed: 'Could not search. Try again.',
-    search_quick_empty: 'Try another word.',
     search_quick_hint:
       'Projects, events, the diary, pages, files and tags — by any word in them.',
     search_years: 'Years',
@@ -604,6 +603,8 @@ export default defineI18nBase({
     search_no_filters: 'There are no filters for this content',
     search_year_count: (year, count) => `${year}: ${count} found`,
     search_recent: 'Recent',
+    search_history: 'You searched for',
+    search_history_clear: 'Clear search history',
     search_actions: 'Actions',
     search_action_diary_today: 'Today’s diary entry',
     search_action_diary_today_new: 'Write today’s diary entry',

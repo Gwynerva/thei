@@ -16,7 +16,6 @@ import {
   buildPublicProjectSummary,
   buildPublicTagRows,
   canListPublicEntity,
-  listablePublicEntityWhere,
 } from '../public/entities';
 
 /**
@@ -182,58 +181,6 @@ function hitOfSummary(summary: PublicEntitySummary, ref: string): SearchHit {
     finds: [],
     more: 0,
   };
-}
-
-/**
- * The tags most carried by what this reader may open, busiest first: words a
- * quick search with nothing typed offers to try.
- */
-export function popularTagTitles(isAdmin: boolean, limit = 6): string[] {
-  const { db, schema } = THEI_SERVER.useDb();
-  const usages = schema.tagUsages;
-  // What carries a tag, as this reader may list it.
-  const carried = [
-    ...db
-      .select({ tagUuid: usages.tagUuid })
-      .from(usages)
-      .innerJoin(
-        schema.projects,
-        and(
-          eq(usages.containerType, 'project'),
-          eq(usages.containerId, schema.projects.projectUuid),
-        ),
-      )
-      .where(listablePublicEntityWhere(schema.projects.access, isAdmin))
-      .all(),
-    ...db
-      .select({ tagUuid: usages.tagUuid })
-      .from(usages)
-      .innerJoin(
-        schema.events,
-        and(
-          eq(usages.containerType, 'event'),
-          eq(usages.containerId, schema.events.eventUuid),
-        ),
-      )
-      .where(listablePublicEntityWhere(schema.events.access, isAdmin))
-      .all(),
-  ];
-  const counts = new Map<string, number>();
-  for (const { tagUuid } of carried)
-    counts.set(tagUuid, (counts.get(tagUuid) ?? 0) + 1);
-  if (!counts.size) return [];
-  return db
-    .select({ tagUuid: schema.tags.tagUuid, title: schema.tags.title })
-    .from(schema.tags)
-    .where(inArray(schema.tags.tagUuid, [...counts.keys()]))
-    .all()
-    .sort(
-      (left, right) =>
-        counts.get(right.tagUuid)! - counts.get(left.tagUuid)! ||
-        left.title.localeCompare(right.title),
-    )
-    .slice(0, limit)
-    .map((tag) => tag.title);
 }
 
 /** A page of the catalogue, as the search page and its presets show it. */

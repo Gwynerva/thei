@@ -154,6 +154,129 @@ for (const width of [1280, 375]) {
   });
 }
 
+/** A reader's history as this browser keeps it, by whose it is. */
+async function storedHistory(page: Page, reader: 'owner' | 'visitor') {
+  return page.evaluate((suffix) => {
+    const key = Object.keys(localStorage).find(
+      (each) =>
+        each.startsWith('thei:search-history:v1:') && each.endsWith(suffix),
+    );
+    return key ? (JSON.parse(localStorage.getItem(key)!) as string[]) : null;
+  }, `:${reader}`);
+}
+
+test('the quick search offers what was searched for before', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const asked: string[] = [];
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/search')
+      asked.push(request.url());
+  });
+  await open(page, '/');
+  await page.locator('[data-site-search]').first().click();
+  await expect(field(page)).toBeFocused();
+  // Nothing searched for yet: a line of what the search finds, and nothing
+  // asked of the server.
+  await expect(page.locator('[data-search-hint]')).toBeVisible();
+  await expect(page.getByRole('option')).toHaveCount(0);
+  expect(asked).toEqual([]);
+
+  await field(page).fill(WORD);
+  await expect(page.getByRole('option').first()).toContainText(TITLE);
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/#b-hidden1/);
+
+  // A query that finds nothing says so and no more, here and on the page.
+  const nothing = `nothing${WORD} `.repeat(20).slice(0, 200).trim();
+  await page.locator('[data-site-search]').first().click();
+  await field(page).fill(nothing);
+  await expect(page.locator('[data-search-empty]')).toHaveText('Nothing found');
+  await expect(page.getByRole('option')).toHaveCount(0);
+  await page.keyboard.press('Control+Enter');
+  await expect(page).toHaveURL(/\/search\/\?q=/);
+  await expect(page.locator('main').getByText('Nothing found')).toBeVisible();
+  await expect(page.locator('main section[aria-live] a')).toHaveCount(0);
+  expect(await storedHistory(page, 'visitor')).toEqual([nothing, WORD]);
+
+  await open(page, '/');
+  await page.locator('[data-site-search]').first().click();
+  await expect(page.locator('[data-search-history]')).toContainText(
+    'You searched for',
+  );
+  await expect(page.locator('[data-search-hint]')).toHaveCount(0);
+  const rows = page.getByRole('option');
+  await expect(rows).toHaveCount(2);
+  // No row is ringed until the keys go there: Enter in the empty field
+  // searches for nothing.
+  await expect(page.locator('[role="option"][data-active]')).toHaveCount(0);
+  await page.keyboard.press('Enter');
+  await expect(field(page)).toHaveValue('');
+  await page.keyboard.press('Tab');
+  await expect(rows.first()).toHaveAttribute('data-active', 'true');
+  await page.keyboard.press('ArrowDown');
+  await expect(rows.nth(1)).toHaveAttribute('data-active', 'true');
+  await page.keyboard.press('Enter');
+  // Searched for again, where it was offered.
+  await expect(field(page)).toHaveValue(WORD);
+  await expect(field(page)).toBeFocused();
+  await expect(rows.first()).toContainText(TITLE);
+
+  await page.getByRole('button', { name: 'Clear search' }).click();
+  await expect(rows.first()).toContainText(WORD);
+  // A query too long for its row reads whole in its hint.
+  const long = rows.nth(1).locator('[data-title-popup-clipped]');
+  await expect(long).toHaveAttribute('data-title-popup', nothing);
+  await long.hover();
+  await expect(page.locator('[data-title-popup-el]')).toContainText(
+    nothing.slice(0, 40),
+  );
+
+  // The bin forgets them all.
+  await page.locator('[data-search-history-clear]').click();
+  await expect(page.locator('[data-search-history]')).toHaveCount(0);
+  await expect(page.locator('[data-search-hint]')).toBeVisible();
+  await expect(field(page)).toBeFocused();
+  expect(await storedHistory(page, 'visitor')).toBeNull();
+});
+
+test("the owner's searches are kept apart from a visitor's", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    baseURL: E2E_ORIGIN,
+    storageState: adminState,
+  });
+  const page = await context.newPage();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await open(page, '/');
+  await page.evaluate(() =>
+    localStorage.setItem(
+      'thei:search-history:v1:/:visitor',
+      JSON.stringify(['a visitor’s query']),
+    ),
+  );
+  await page.locator('[data-site-search]').first().click();
+  // The owner is offered what to do, and none of a visitor's queries.
+  await expect(page.getByRole('option').first()).toBeVisible();
+  await expect(page.locator('[data-search-history]')).toHaveCount(0);
+  await field(page).fill(WORD);
+  // On the site the owner's Enter opens the page, not its editor.
+  await expect(page.getByRole('option').first()).toContainText(TITLE);
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/#b-hidden1/);
+  expect(await storedHistory(page, 'owner')).toEqual([WORD]);
+  expect(await storedHistory(page, 'visitor')).toEqual(['a visitor’s query']);
+
+  // The owner's own come last, after what there is to do.
+  await page.locator('[data-site-search]').first().click();
+  await field(page).fill('');
+  await expect(page.locator('[data-search-history]')).toBeVisible();
+  await expect(page.getByRole('option').last()).toContainText(WORD);
+  await context.close();
+});
+
 test('the search page shows a card with its places and kinds', async ({
   page,
 }) => {
