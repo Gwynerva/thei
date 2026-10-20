@@ -32,8 +32,10 @@ import {
   busySubjects,
   coverageOf,
   holdBatch,
+  rememberAsked,
   settleTemplateTurn,
 } from '../../server/thei/ai/templates/coverage';
+import { dueNext } from '../../server/thei/ai/templates/continue';
 import { continueRun, runTemplate } from '../../server/thei/ai/templates/run';
 import { messageItem } from '../../server/thei/ai/sessions/view';
 import { TEMPLATE_SOURCES } from '../../server/thei/ai/templates/sources';
@@ -1281,6 +1283,31 @@ describe('batches the owner asks for', () => {
     // Nothing left: the last answer says all of it was looked at.
     expect(offer()).toMatchObject({ type: 'continue', next: 0, looked: 0 });
     expect(await continueRun(sessionUuid!)).toEqual({ messageUuid: null });
+  });
+
+  it('count what is next as it stands, and only what this session looked at', async () => {
+    const subjects = (await due('proofread', { whole: true })).length;
+    expect(subjects).toBeGreaterThan(2);
+    let calls = 0;
+    reply = () =>
+      ++calls === 1
+        ? { toolCalls: [{ name: 'check_batch', input: { count: 1 } }] }
+        : { text: 'Looked.' };
+    const sessionUuid = await run('proofread', { request: 'Start with one.' });
+    expect(await dueNext(sessionUuid!)).toEqual({ next: 1, looked: 1 });
+    // Another run looks at all of the rest but one meanwhile: not counted
+    // here, and what is next is what is left, however many were asked for.
+    const other = createSession({
+      origin: 'template',
+      templateId: id('proofread'),
+      title: 'Another',
+    });
+    const rest = (await due('proofread', { whole: true })).slice(1);
+    const { db, schema } = THEI_SERVER.useDb();
+    db.transaction((tx) => holdBatch(tx, schema, id('proofread'), other, rest));
+    settleTemplateTurn(other, true);
+    rememberAsked(sessionUuid!, { count: 5 });
+    expect(await dueNext(sessionUuid!)).toEqual({ next: 1, looked: 1 });
   });
 
   it('are offered to go on after a turn paused at its limits', async () => {

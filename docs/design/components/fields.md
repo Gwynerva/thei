@@ -43,8 +43,10 @@ card's footer, before its decisions. A text edit opens in the text's own editor 
 With AI on and a model to answer, a quiet ✦ stands at every such label but
 a switch's, and asks about the field: a click opens a small box — a sheet on
 a phone — with the field's ready requests («Опиши файл», «Предложи
-название») and room for the owner's own words. A session answers in the
-background; the ✦ runs meanwhile, its box says so and can stop it, and what
+название») and room for the owner's own words — up to `FIELD_ASK_MAX`
+characters: past it the box says so and sends nothing, never cutting them.
+A session answers in the background; the ✦ runs meanwhile, its box says so
+and can stop it, and what
 the model proposes waits at the label as any proposal; an answer with nothing
 to propose puts the box away and stays beside the ✦, one line of the model's
 words. A request that only mends what is there — check the dates, make it
@@ -72,6 +74,8 @@ with the old. See [File window](file-window.md).
   `required` adds an accent asterisk.
 - `app/components/field/FieldHint.vue` — `text-sm tracking-tight text-text-2`.
 - `app/components/ai/AiFieldOffer.vue` — the ✦ and its popup.
+- `app/components/ai/AiAskState.vue` — in the box to ask in, the session at
+  work, or the answer with nothing to propose; the editor's ✦ shows the same.
 - `app/components/FileDescriptionField.vue` — a file's description, read and
   saved through any file of its family over the version it was read at.
 

@@ -24,7 +24,8 @@ import ruModule from '../../shared/language/list/ru';
  * Every kind of action is whole: the site knows how to check it, apply it,
  * tell where it stands and say what it proposes, and the cards know how to
  * show it. A new kind, or a new field of an entity, that misses one fails
- * here.
+ * here. A video's poster frame is no field and has no action, by the
+ * owner's word: it is chosen by eye (`registry.ts`).
  */
 describe('the kinds of action', () => {
   it('each have everything the site needs of them', () => {

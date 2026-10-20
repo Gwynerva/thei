@@ -103,6 +103,10 @@ describe('a proposal corrected in its card', () => {
     await expect(editAction(id, { value: 'A browser remake' })).rejects.toThrow(
       /already/,
     );
+    // Letters lost to a wrong encoding are refused, as from a model.
+    await expect(
+      editAction(id, { value: `A remake ${String.fromCharCode(0xfffd)}` }),
+    ).rejects.toThrow(/U\+FFFD/);
     updateSession(sessionUuid, { archivedAt: Date.now() });
     await expect(editAction(id, { value: 'Other' })).rejects.toThrow(
       /archived/,

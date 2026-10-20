@@ -1,6 +1,6 @@
 import type { IconName } from '#thei/icons';
 import type { AiActionItem, AiSessionItem } from '#layers/thei/shared/ai';
-import { stripMarks } from '#layers/thei/shared/content-edit-markdown/patch-core';
+import { plainMarkdown } from '#layers/thei/shared/ai-message-text';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 import { isContentEntityType } from '#layers/thei/shared/content-link';
 
@@ -186,15 +186,14 @@ export function compactAmount(value: number): string {
   return formatCompactNumber(value, language.value.code);
 }
 
+/** Words cut at `max`, an ellipsis saying so. */
+function clipped(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
 /** The words of editing Markdown, its marks and addresses dropped, on one line. */
 export function plainWords(markdown: string, max = 400): string {
-  const line = stripMarks(markdown)
-    .replace(/^#+\s*/gm, '')
-    .replace(/^\s*[-*>]\s+/gm, '')
-    .replace(/::\w+(\[[^\]]*\])?\{[^}]*\}/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return line.length > max ? `${line.slice(0, max - 1)}…` : line;
+  return clipped(plainMarkdown(markdown), max);
 }
 
 /**
@@ -202,12 +201,5 @@ export function plainWords(markdown: string, max = 400): string {
  * it stay apart, the marks and addresses dropped. For a text shown whole.
  */
 export function plainLines(markdown: string, max = 600): string {
-  const text = stripMarks(markdown)
-    .replace(/^#+\s*/gm, '')
-    .replace(/^\s*[-*>]\s+/gm, '')
-    .replace(/::\w+(\[[^\]]*\])?\{[^}]*\}/g, '')
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\s*\n\s*/g, '\n')
-    .trim();
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  return clipped(plainMarkdown(markdown, true), max);
 }

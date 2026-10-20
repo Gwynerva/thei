@@ -81,9 +81,14 @@ export function prepareContentFile(file: {
   return { name, assetType: contentFileAssetType(name) };
 }
 
+/** The kind of file an extension makes, as the server reads it. */
+export function assetTypeOfExtension(extension: string): AssetType {
+  return ASSET_TYPE_BY_KIND[getAssetMediaKind(extension)];
+}
+
 /** The kind of file a name makes, as the server reads it. */
 export function contentFileAssetType(name: string): AssetType {
-  return ASSET_TYPE_BY_KIND[getAssetMediaKind(getPathExtension(name))];
+  return assetTypeOfExtension(getPathExtension(name));
 }
 
 /** Whether a stored file may be shown in a block of this kind. */

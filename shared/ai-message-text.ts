@@ -5,6 +5,7 @@ import {
 } from './content';
 import { escapeHtmlText } from './content-edit-markdown/html';
 import { parseEditMarkdownToBlocks } from './content-edit-markdown/parse';
+import { stripMarks } from './content-edit-markdown/patch-core';
 
 /**
  * What is said in an AI session — the model's answers, the owner's messages:
@@ -36,6 +37,24 @@ export function typedLines(text: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim()
     .replace(/([^\n\\])\n(?!\n)/g, '$1\\\n');
+}
+
+/**
+ * The words of editing Markdown, to show in a line or to compare: a link by
+ * its words; its marks, escapes, the signs of its headings, lists and
+ * quotes and the files placed in it dropped. On one line, or with `lines`
+ * by its lines — a heading and the paragraph after it apart.
+ */
+export function plainMarkdown(markdown: string, lines = false): string {
+  const text = stripMarks(markdown.replace(/\\(?=\n|[^\p{L}\p{N}\s])/gu, ''))
+    .replace(/^#+\s*/gm, '')
+    .replace(/^\s*[-*>]\s+/gm, '')
+    .replace(/::\w+(\[[^\]]*\])?\{[^}]*\}/g, '');
+  return (
+    lines
+      ? text.replace(/[ \t]+/g, ' ').replace(/\s*\n\s*/g, '\n')
+      : text.replace(/\s+/g, ' ')
+  ).trim();
 }
 
 /** Words of a message as a text, its diary days still named by day. */

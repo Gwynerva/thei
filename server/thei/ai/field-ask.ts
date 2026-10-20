@@ -1,6 +1,8 @@
 import { and, eq, like } from 'drizzle-orm';
 import type { AiMessagePart } from '#layers/thei/shared/ai';
 import { AI_FIELD_ACTIONS } from '#layers/thei/shared/ai-actions';
+import { archivedOriginalFromMeta } from '#layers/thei/shared/asset';
+import { assetFormatName } from '#layers/thei/shared/asset-format-label';
 import {
   askablePlace,
   FIELD_ASK_MAX,
@@ -71,10 +73,14 @@ function fileFace(assetUuid: string): { title: string; placed: boolean } {
   if (place) return { title: place.source.title, placed: true };
   const info = libraryFile(assetUuid);
   if (!info) return { title: assetUuid, placed: false };
-  const phrase = THEI_SERVER.phrase as Record<string, unknown>;
-  const kind = typeof phrase[info.type] === 'string' ? phrase[info.type] : '';
-  const title = [kind, info.extension.toUpperCase()].filter(Boolean).join(' ');
-  return { title, placed: false };
+  return {
+    title: assetFormatName(
+      THEI_SERVER.phrase,
+      info.extension,
+      archivedOriginalFromMeta(info.meta),
+    ),
+    placed: false,
+  };
 }
 
 /**
@@ -96,11 +102,11 @@ export function askAtField(input: {
   const place =
     typeof input.place === 'string' ? input.place.trim().slice(0, 100) : '';
   if (!place || !askablePlace(place)) fail('Nothing is asked at that field.');
-  const words =
-    typeof input.text === 'string'
-      ? input.text.trim().slice(0, FIELD_ASK_MAX)
-      : '';
+  const words = typeof input.text === 'string' ? input.text.trim() : '';
   if (!words) fail('Say what to do with it.');
+  // Never cut: the box the owner asks in says the limit before it sends.
+  if (words.length > FIELD_ASK_MAX)
+    fail(`Say it in at most ${FIELD_ASK_MAX} characters.`);
   const file = isFileKey(target);
   if (file && place !== 'field:description')
     fail('A file is asked about its description alone.');

@@ -1,4 +1,4 @@
-import { and, count, eq, gte, inArray } from 'drizzle-orm';
+import { and, count, eq, inArray } from 'drizzle-orm';
 import {
   AI_BUILTIN_TEMPLATE_KEYS,
   builtinTemplateId,
@@ -14,9 +14,9 @@ import { TEMPLATE_SOURCES, type CheckItem, type Covered } from './sources';
  * to a model's memory. A run is given what is due, and holds it while its
  * turn runs, so two runs never look at the same; once the turn went through,
  * or its model asked for the next batch, what it was given counts as looked
- * at, as it read then. A turn that failed keeps only what it proposed
- * something for. An action the owner applies leaves what it mended looked at
- * too.
+ * at, as it read then, by its session. A turn that failed keeps only what it
+ * proposed something for. An action the owner applies leaves what it mended
+ * looked at too, by no session.
  */
 
 type CoverageRow =
@@ -39,20 +39,22 @@ export function coverageOf(templateId: string): Map<string, Covered> {
 }
 
 /**
- * How many subjects a check has looked at since a moment — a session's
- * start: one count, never a read of what is left, which over a whole
- * archive would hold the server up.
+ * How many subjects a check has looked at — in all, or in one session's
+ * runs: one count, never a read of what is left, which over a whole
+ * archive would hold the server up. A session counts only what its own runs
+ * were given, never another's, nor what a fix applied in a form mended.
  */
-export function coveredSince(templateId: string, since: number): number {
+export function coveredCount(templateId: string, sessionUuid?: string): number {
   const { db, schema } = THEI_SERVER.useDb();
+  const table = schema.aiTemplateCoverage;
   return (
     db
       .select({ count: count() })
-      .from(schema.aiTemplateCoverage)
+      .from(table)
       .where(
         and(
-          eq(schema.aiTemplateCoverage.templateId, templateId),
-          gte(schema.aiTemplateCoverage.at, since),
+          eq(table.templateId, templateId),
+          sessionUuid ? eq(table.sessionUuid, sessionUuid) : undefined,
         ),
       )
       .get()?.count ?? 0
@@ -132,6 +134,10 @@ export function holdBatch(
   return free;
 }
 
+/**
+ * Keeps subjects as looked at. A session's run makes them its own; a fix
+ * applied (`sessionUuid` none) leaves them with the run that looked at them.
+ */
 function cover(
   tx: any,
   schema: any,
@@ -142,10 +148,20 @@ function cover(
     entityId: string | null;
   })[],
   now: number,
+  sessionUuid: string | null,
 ) {
   for (const row of rows)
     tx.insert(schema.aiTemplateCoverage)
-      .values({ templateId, ...row, at: now })
+      .values({
+        templateId,
+        subject: row.subject,
+        entityType: row.entityType,
+        entityId: row.entityId,
+        fingerprint: row.fingerprint,
+        parts: row.parts,
+        sessionUuid,
+        at: now,
+      })
       .onConflictDoUpdate({
         target: [
           schema.aiTemplateCoverage.templateId,
@@ -156,6 +172,7 @@ function cover(
           entityId: row.entityId,
           fingerprint: row.fingerprint,
           parts: row.parts,
+          ...(sessionUuid ? { sessionUuid } : {}),
           at: now,
         },
       })
@@ -210,7 +227,7 @@ export function settleTemplateTurn(
           row,
         ]);
     for (const [templateId, rows] of byTemplate)
-      cover(tx, schema, templateId, rows, now);
+      cover(tx, schema, templateId, rows, now, sessionUuid);
     tx.delete(table).where(eq(table.sessionUuid, sessionUuid)).run();
   });
 }
@@ -262,6 +279,7 @@ export function coverApplied(actionUuids: readonly string[], now = Date.now()) {
               parts: item.parts,
             })),
             now,
+            null,
           ),
         );
     }
@@ -304,12 +322,16 @@ export function forgetAll(templateId: string) {
     .run();
 }
 
-/** Lets go of what runs of these sessions were given: they are gone. */
+/**
+ * Lets go of what runs of these sessions were given, and of what their
+ * models last asked for: they are gone.
+ */
 export function dropBatches(tx: any, schema: any, sessionUuids: string[]) {
   if (!sessionUuids.length) return;
   tx.delete(schema.aiTemplateBatches)
     .where(inArray(schema.aiTemplateBatches.sessionUuid, sessionUuids))
     .run();
+  for (const sessionUuid of sessionUuids) asked.delete(sessionUuid);
 }
 
 /** What checks looked at of deleted entities, forgotten with them in `tx`. */
@@ -325,16 +347,14 @@ export function forgetCoverage(
       .run();
 }
 
-/** What a check's run last asked for, by session: its areas and refs. */
 /**
  * What a run's model last asked for: the areas and refs, and the number of
- * subjects it asked for with what was left of that after the batch it got.
+ * subjects it asked for.
  */
 interface Asked {
   areas?: string[];
   refs?: string[];
   count?: number;
-  left?: number;
 }
 const asked = new Map<string, Asked>();
 

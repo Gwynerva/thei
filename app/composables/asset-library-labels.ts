@@ -4,11 +4,9 @@ import {
   type AssetRole,
 } from '#layers/thei/shared/asset';
 import {
-  getAssetMediaKind,
-  normalizeAssetExtension,
-  type AssetMediaKind,
-} from '#layers/thei/shared/assets/formats';
-import { assetPreview } from '#layers/thei/shared/assets/preview';
+  assetFormatName,
+  assetKindName,
+} from '#layers/thei/shared/asset-format-label';
 import type {
   AssetSource,
   AssetSourceType,
@@ -70,12 +68,7 @@ export function assetFileLabel(asset: {
 
 /** What kind of file it is, in a word: the name of a file's window. */
 export function assetKindLabel(type: AssetType) {
-  return {
-    [AssetType.Image]: phrase.value.image,
-    [AssetType.Video]: phrase.value.video,
-    [AssetType.Audio]: phrase.value.audio,
-    [AssetType.Other]: phrase.value.asset,
-  }[type];
+  return assetKindName(phrase.value, type);
 }
 
 /** The icon a file's window is named with, by the kind of file. */
@@ -86,35 +79,16 @@ export const assetKindIcon = {
   [AssetType.Other]: 'file',
 } as const satisfies Record<AssetType, IconName>;
 
-const ASSET_TYPE_OF_KIND = {
-  image: AssetType.Image,
-  video: AssetType.Video,
-  audio: AssetType.Audio,
-  other: AssetType.Other,
-} as const satisfies Record<AssetMediaKind, AssetType>;
-
-/** The kind of a file, as its extension says. */
-export function assetTypeOfExtension(extension: string): AssetType {
-  return ASSET_TYPE_OF_KIND[getAssetMediaKind(extension)];
-}
-
 /**
  * What a file is, for a reader who has no title to go by: a picture, a video
  * or a recording by its kind; any other file by the format a person knows it
- * as — a PDF document, a ZIP archive — and failing that, by its extension. A
- * file kept zipped is named by its original, as it is shown.
+ * as (`assetFormatName`).
  */
 export function assetFormatLabel(
   extension: string,
   archivedOriginal?: ArchivedOriginalFileMeta,
 ): string {
-  const type = assetTypeOfExtension(extension);
-  if (type !== AssetType.Other) return assetKindLabel(type);
-  const kind = assetPreview(extension, archivedOriginal)?.kind;
-  return phrase.value.asset_format(
-    !kind || kind === 'probe' ? 'other' : kind,
-    normalizeAssetExtension(archivedOriginal?.extension ?? extension),
-  );
+  return assetFormatName(phrase.value, extension, archivedOriginal);
 }
 
 export function assetDeletionLabel(deleteAfter: number) {

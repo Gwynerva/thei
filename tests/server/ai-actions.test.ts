@@ -1544,6 +1544,124 @@ describe('a new version after a comment', () => {
       supersedes: first,
     });
   });
+
+  function commentOn(sessionUuid: string, actionUuid: string) {
+    const { db, schema } = THEI_SERVER.useDb();
+    db.transaction((tx) =>
+      insertMessage(tx, schema, sessionUuid, {
+        role: 'owner',
+        text: 'Not quite',
+        parts: [{ type: 'comment', actionUuid }],
+      }),
+    );
+  }
+
+  it('leaves it be for another field of the same entity', async () => {
+    const sessionUuid = session();
+    const first = await proposed(sessionUuid, {
+      kind: 'field',
+      target: `project:${PROJECT}`,
+      field: 'summary',
+      value: 'A remake',
+    });
+    commentOn(sessionUuid, first);
+    const title = await proposed(sessionUuid, {
+      kind: 'field',
+      target: `project:${PROJECT}`,
+      field: 'title',
+      value: 'Parapet II',
+    });
+    expect(findAction(first)).toMatchObject({ state: 'pending' });
+    expect(findAction(title)).toMatchObject({ supersedes: null });
+  });
+
+  it('knows a relation by its pair, whatever word it is named by now', async () => {
+    const sessionUuid = session();
+    const relation = {
+      kind: 'relation',
+      target: `project:${PROJECT}`,
+      other: 'diary-entry:2026-10-13',
+      reason: 'Named together',
+      whyNotInlineLink: 'The day is a part of the work',
+    };
+    const first = await proposed(sessionUuid, {
+      ...relation,
+      relation: 'related',
+    });
+    commentOn(sessionUuid, first);
+    const second = await proposed(sessionUuid, {
+      ...relation,
+      relation: 'depends-on',
+    });
+    expect(findAction(first)).toMatchObject({ state: 'superseded' });
+    expect(findAction(second)).toMatchObject({ supersedes: first });
+  });
+
+  it('is replaced by one new version a call, and a bundle stays whole', async () => {
+    const sessionUuid = session();
+    const first = await proposed(sessionUuid, {
+      kind: 'tags',
+      target: `project:${PROJECT}`,
+      add: [{ title: 'Remakes' }],
+    });
+    commentOn(sessionUuid, first);
+    const { results } = await proposeActions({
+      sessionUuid,
+      atomic: true,
+      actions: [
+        {
+          kind: 'tags',
+          target: `project:${PROJECT}`,
+          add: [{ title: 'Browser games' }],
+        },
+        {
+          kind: 'tags',
+          target: `project:${PROJECT}`,
+          add: [{ title: 'Ports' }],
+        },
+      ],
+    });
+    const ids = results.map((result) =>
+      'actionUuid' in result ? result.actionUuid : result.refused,
+    );
+    expect(findAction(first)).toMatchObject({ state: 'superseded' });
+    expect(findAction(ids[0]!)).toMatchObject({
+      state: 'pending',
+      supersedes: first,
+    });
+    expect(findAction(ids[1]!)).toMatchObject({
+      state: 'pending',
+      supersedes: null,
+    });
+  });
+
+  it('refuses a second action of a call that names the same one', async () => {
+    const sessionUuid = session();
+    const first = await proposed(sessionUuid, {
+      kind: 'tags',
+      target: `project:${PROJECT}`,
+      add: [{ title: 'Remakes' }],
+    });
+    const { results } = await propose(
+      sessionUuid,
+      {
+        kind: 'tags',
+        target: `project:${PROJECT}`,
+        add: [{ title: 'Browser games' }],
+        supersedes: first,
+      },
+      {
+        kind: 'tags',
+        target: `project:${PROJECT}`,
+        add: [{ title: 'Ports' }],
+        supersedes: first,
+      },
+    );
+    expect(results[0]).toMatchObject({ actionUuid: expect.any(String) });
+    expect(results[1]).toMatchObject({
+      refused: expect.stringMatching(/new version of .* already/),
+    });
+  });
 });
 
 describe('never again', () => {

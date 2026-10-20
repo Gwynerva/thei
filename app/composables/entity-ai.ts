@@ -132,11 +132,14 @@ function useFieldAsks(options: {
     return found;
   });
   let timer: ReturnType<typeof setTimeout> | undefined;
+  /** The form is gone: a read on its way when it went is followed no more. */
+  let disposed = false;
   function follow() {
     clearTimeout(timer);
-    if (!asking.value.size) return;
+    if (disposed || !asking.value.size) return;
     timer = setTimeout(async () => {
       await options.refresh().catch(() => undefined);
+      if (disposed) return;
       const running = new Set(options.running().map((ask) => ask.place));
       const left = new Map(started.value);
       const done = new Map(ended.value);
@@ -156,25 +159,22 @@ function useFieldAsks(options: {
       () => options.running().length,
       (count) => count && follow(),
     );
-    onScopeDispose(() => clearTimeout(timer));
+    onScopeDispose(() => {
+      disposed = true;
+      clearTimeout(timer);
+    });
   }
   async function ask(place: string, text: string, label?: string) {
     const target = options.ref();
     if (!target || !text.trim()) return;
     const current = options.current(place);
-    const { sessionUuid } = await $fetch<{ sessionUuid: string }>(
-      '/api/admin/ai/ask',
-      {
-        method: 'POST',
-        body: {
-          ref: target,
-          place,
-          text,
-          ...(current !== undefined ? { current } : {}),
-          ...(label ? { label } : {}),
-        },
-      },
-    );
+    const { sessionUuid } = await aiApi.ask({
+      ref: target,
+      place,
+      text,
+      ...(current !== undefined ? { current } : {}),
+      ...(label ? { label } : {}),
+    });
     started.value = new Map(started.value).set(place, sessionUuid);
     const done = new Map(ended.value);
     done.delete(place);
@@ -403,26 +403,51 @@ function savedWords(
 }
 
 /**
- * «Taken into the form — save it», with a way back while the form still
- * holds what was taken. Its id, to take it away once the form is saved.
+ * Proposals laid into a form, until it is saved or they are taken back. One
+ * taken stays out of sight while the form holds anything but what it held
+ * before — corrected words included; changed back by hand, it is offered
+ * again. It is taken back only while the form reads as the take left it:
+ * corrected since, the words are the owner's own, not undone for them.
  */
-function showTakenToast(
-  id: string,
-  taken: Ref<Map<string, Take>>,
-  untouched: (id: string) => boolean,
-  said = phrase.value.ai_offer_taken,
-): number {
-  return showToast(said, {
-    label: phrase.value.ai_offer_take_back,
-    run: () => {
+function useTakes(form: () => Record<string, unknown> | undefined) {
+  const taken = ref(new Map<string, Take>());
+  const reads = (id: string, as: 'before' | 'after') => {
+    const done = taken.value.get(id);
+    const now = form();
+    return done && now ? fieldsOf(now, done.keys) === done[as] : undefined;
+  };
+  return {
+    taken,
+    stillTaken: (id: string) => reads(id, 'before') === false,
+    keep(id: string, take: Take) {
+      taken.value = new Map(taken.value).set(id, take);
+    },
+    takeBack(id: string) {
       const back = taken.value.get(id);
-      // Corrected since, it is the owner's own words: not undone for them.
-      if (!back || !untouched(id)) return;
+      if (!back || !reads(id, 'after')) return;
       back.undo();
       const next = new Map(taken.value);
       next.delete(id);
       taken.value = next;
     },
+    clear() {
+      taken.value = new Map();
+    },
+  };
+}
+
+/**
+ * «Taken into the form — save it», with a way back while the form still
+ * holds what was taken. Its id, to take it away once the form is saved.
+ */
+function showTakenToast(
+  id: string,
+  laid: ReturnType<typeof useTakes>,
+  said = phrase.value.ai_offer_taken,
+): number {
+  return showToast(said, {
+    label: phrase.value.ai_offer_take_back,
+    run: () => laid.takeBack(id),
   });
 }
 
@@ -436,10 +461,20 @@ async function tellTakenWords(
     took.map((action) => {
       const values = savedWords(action, form);
       return values
-        ? aiApi.takenWith(action.actionUuid, values).catch(() => undefined)
+        ? aiApi.taken(action.actionUuid, { values }).catch(() => undefined)
         : undefined;
     }),
   );
+}
+
+/** The owner's comment on a proposal, sent to its session. */
+async function sendComment(offer: AiEntityOffer, text: string) {
+  try {
+    await aiApi.comment(offer.action.actionUuid, text);
+    showToast(phrase.value.ai_toast_comment_sent);
+  } catch (caught) {
+    showToast(errorMessage(caught, phrase.value.ai_error));
+  }
 }
 
 /** The fields as a take compares them. */
@@ -609,8 +644,10 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
   const canonical = computed(
     () => panel.value?.memory.entity.ref ?? target.value,
   );
-  /** Proposals laid into the form, until it is saved or they are taken back. */
-  const taken = ref(new Map<string, Take>());
+  const laid = useTakes(
+    () => options.form?.() as Record<string, unknown> | undefined,
+  );
+  const { stillTaken } = laid;
   /** The toast that says to save what was taken, gone once it is saved. */
   let takenToast: number | undefined;
   /** Proposals answered here, until the panel is read again. */
@@ -624,10 +661,7 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
     takenInTexts.clear();
     await Promise.all(
       told.map(([actionUuid, parts]) =>
-        $fetch(`/api/admin/ai/actions/${actionUuid}/taken`, {
-          method: 'POST',
-          body: { parts },
-        }).catch(() => undefined),
+        aiApi.taken(actionUuid, { parts }).catch(() => undefined),
       ),
     );
   }
@@ -665,7 +699,7 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
           // was taken is told as saved.
           const took = outdated.value
             ? []
-            : [...taken.value.keys()].flatMap(
+            : [...laid.taken.value.keys()].flatMap(
                 (id) =>
                   panel.value?.offers.find(
                     (offer) => offer.action.actionUuid === id,
@@ -679,7 +713,7 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
               ...panel.value,
               waiting: Math.max(0, panel.value.waiting - took.length),
             };
-          taken.value = new Map();
+          laid.clear();
           hideToast(takenToast);
           outdated.value = false;
           void Promise.all([tellTaken(), tellTakenWords(took, form)]).then(
@@ -720,23 +754,6 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
     onScopeDispose(() => listeners.delete(heard));
   }
 
-  /**
-   * A proposal taken into the form stays out of sight while the form holds
-   * anything but what it held before — corrected words included; changed
-   * back by hand, it is offered again. Undone from its toast only while
-   * the form reads as the take left it.
-   */
-  function stillTaken(id: string) {
-    const done = taken.value.get(id);
-    const form = options.form?.() as Record<string, unknown> | undefined;
-    return Boolean(done && form && fieldsOf(form, done.keys) !== done.before);
-  }
-  function untouched(id: string) {
-    const done = taken.value.get(id);
-    const form = options.form?.() as Record<string, unknown> | undefined;
-    return Boolean(done && form && fieldsOf(form, done.keys) === done.after);
-  }
-
   const offers = computed(() =>
     (panel.value?.offers ?? []).filter(
       (offer) =>
@@ -753,7 +770,7 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
       () =>
         [
           panel.value?.waiting,
-          [...taken.value.keys()].filter((id) => stillTaken(id)).length,
+          [...laid.taken.value.keys()].filter((id) => stillTaken(id)).length,
         ] as const,
       ([waiting, takes]) => {
         if (waiting !== undefined) setAiWaiting(Math.max(0, waiting - takes));
@@ -797,22 +814,10 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
     const undo = takeInto(form, offer.action, canonical.value);
     if (!undo) return;
     const id = offer.action.actionUuid;
-    taken.value = new Map(taken.value).set(id, undo);
+    laid.keep(id, undo);
     // At the form's head its row says so itself, where it stood: no toast
     // laid over the form's first fields.
-    if (offer.place !== 'form')
-      takenToast = showTakenToast(id, taken, untouched);
-  }
-
-  function untake(offer: AiEntityOffer) {
-    const id = offer.action.actionUuid;
-    const back = taken.value.get(id);
-    // Corrected since, it is the owner's own words: not undone for them.
-    if (!back || !untouched(id)) return;
-    back.undo();
-    const next = new Map(taken.value);
-    next.delete(id);
-    taken.value = next;
+    if (offer.place !== 'form') takenToast = showTakenToast(id, laid);
   }
 
   function answer(id: string) {
@@ -828,15 +833,6 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
     },
     refresh,
   });
-
-  async function comment(offer: AiEntityOffer, text: string) {
-    try {
-      await aiApi.comment(offer.action.actionUuid, text);
-      showToast(phrase.value.ai_toast_comment_sent);
-    } catch (caught) {
-      showToast(errorMessage(caught, phrase.value.ai_error));
-    }
-  }
 
   async function remember(text: string) {
     if (!target.value) return;
@@ -866,8 +862,8 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
       (panel.value?.offers ?? []).filter(
         (offer) => offer.place === place && stillTaken(offer.action.actionUuid),
       ),
-    untake,
-    comment,
+    untake: (offer) => laid.takeBack(offer.action.actionUuid),
+    comment: sendComment,
     remember,
     // A form tells what it took as its version moves, saved.
     saved: async () => {},
@@ -915,18 +911,10 @@ export interface FileAiOptions {
 export function provideFileAi(options: FileAiOptions): EntityAi {
   const aiEnabled = useAiEnabled();
   const target = computed(() => options.ref());
-  const taken = ref(new Map<string, Take>());
+  const laid = useTakes(options.form);
+  const { stillTaken } = laid;
   let takenToast: number | undefined;
   const answered = ref(new Set<string>());
-
-  function stillTaken(id: string) {
-    const done = taken.value.get(id);
-    return Boolean(done && fieldsOf(options.form(), done.keys) !== done.before);
-  }
-  function untouched(id: string) {
-    const done = taken.value.get(id);
-    return Boolean(done && fieldsOf(options.form(), done.keys) === done.after);
-  }
   const offers = computed(() =>
     aiEnabled.value
       ? options
@@ -950,7 +938,7 @@ export function provideFileAi(options: FileAiOptions): EntityAi {
   });
   async function refresh() {
     await options.reload();
-    taken.value = new Map();
+    laid.clear();
     answered.value = new Set();
   }
 
@@ -974,14 +962,9 @@ export function provideFileAi(options: FileAiOptions): EntityAi {
       const undo = takeInto(options.form(), offer.action, target.value);
       if (!undo) return;
       const id = offer.action.actionUuid;
-      taken.value = new Map(taken.value).set(id, undo);
+      laid.keep(id, undo);
       // The file's window has no form: its description field is saved alone.
-      takenToast = showTakenToast(
-        id,
-        taken,
-        untouched,
-        phrase.value.ai_offer_taken_file,
-      );
+      takenToast = showTakenToast(id, laid, phrase.value.ai_offer_taken_file);
     },
     reject: declined.reject,
     declinedAt: declined.declinedAt,
@@ -991,14 +974,7 @@ export function provideFileAi(options: FileAiOptions): EntityAi {
     // A file's window has no form head: what is taken is its one field.
     takenAt: () => [],
     untake: () => {},
-    async comment(offer, text) {
-      try {
-        await aiApi.comment(offer.action.actionUuid, text);
-        showToast(phrase.value.ai_toast_comment_sent);
-      } catch (caught) {
-        showToast(errorMessage(caught, phrase.value.ai_error));
-      }
-    },
+    comment: sendComment,
     noteTaken: () => {},
     askable: computed(() => aiEnabled.value && options.modelReady()),
     askingAt: (place) => asks.askingAt(place),
@@ -1009,7 +985,7 @@ export function provideFileAi(options: FileAiOptions): EntityAi {
     async saved() {
       hideToast(takenToast);
       await tellTakenWords(
-        [...taken.value.keys()].flatMap(
+        [...laid.taken.value.keys()].flatMap(
           (id) =>
             options.offers().find((offer) => offer.action.actionUuid === id)
               ?.action ?? [],

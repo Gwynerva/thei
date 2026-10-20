@@ -105,18 +105,11 @@ async function run(work: () => Promise<void>) {
 }
 
 /** Applies these; says why not, when it did not. */
-async function applyNow(actions: AiActionItem[]) {
-  const outcome = await aiApi.apply(
+function applyNow(actions: AiActionItem[]) {
+  return applyAndTell(
     actions.map((action) => action.actionUuid),
-    partsOf(actions),
+    { parts: partsOf(actions) },
   );
-  // Every entity whose version moved: a relation's other end too.
-  tellEntitiesChanged(outcome.changed);
-  if (outcome.refused) showToast(outcome.refused);
-  else if (outcome.failed) showToast(outcome.failed.error);
-  // Said as declining is, so no word of an earlier step stays up.
-  else showToast(phrase.value.ai_toast_applied(outcome.applied.length));
-  return !outcome.refused && !outcome.failed;
 }
 
 function applyOne(action: AiActionItem) {
@@ -164,11 +157,7 @@ function never(action: AiActionItem) {
 }
 
 function undo(action: AiActionItem) {
-  return run(async () => {
-    const answer = await aiApi.undo(action.actionUuid);
-    tellEntitiesChanged([action.target?.ref, ...answer.changed]);
-    showToast(phrase.value.ai_toast_undone);
-  });
+  return run(() => undoAndTell([action.actionUuid]));
 }
 
 function restore(action: AiActionItem) {

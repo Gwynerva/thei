@@ -78,3 +78,17 @@ export function useFieldOffers(as: 'label' | 'switch') {
   );
   return { place, offered };
 }
+
+/**
+ * The words of the label an element stands in — «Суть события», not a
+ * generic «Суть» — without what the label shows beside them (a ✦'s answer,
+ * a count); none outside a label.
+ */
+export function fieldLabelWords(element: Element): string | undefined {
+  const label = element.closest('[data-field-label]');
+  if (!label) return undefined;
+  const words = label.cloneNode(true) as HTMLElement;
+  for (const extra of words.querySelectorAll('[data-field-label-extra]'))
+    extra.remove();
+  return words.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+}

@@ -7,6 +7,7 @@ import {
 import type { AiActionKind } from '#layers/thei/shared/ai-actions';
 import type { RelationNote } from '#layers/thei/shared/relation';
 import { refuse as fail } from '../../entity-patch/text';
+import { lostLettersProblem } from '../../lost-letters';
 import { publishActions } from '../sessions/bus';
 import { refreshSessionCounts } from '../sessions/store';
 import { coverApplied } from '../templates/coverage';
@@ -84,6 +85,8 @@ export async function editAction(
   if (!AI_EDITABLE_KINDS.has(row.kind as AiActionKind))
     fail('The words of this proposal are not corrected here.');
   const words = wordsOf(values);
+  const lostLetters = lostLettersProblem(words);
+  if (lostLetters) fail(lostLetters);
   const def = actionDef(row.kind as AiActionKind);
   const edited = withActionTexts(row.kind, row.payload, words);
   const parsed = def.schema.safeParse(proposalInputOf(row.kind, edited));

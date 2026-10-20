@@ -627,6 +627,46 @@ test('the ✦ sends a ready-made request about the entity, and the form stays', 
   }
 });
 
+test('a ready-made request takes the place of the one before, and Ctrl+Z brings it back', async ({
+  page,
+}) => {
+  const preset = async (title: string, instruction: string) =>
+    (await (
+      await page.request.post('/api/admin/ai/templates', {
+        data: { title, instruction },
+      })
+    ).json()) as { templateId: string };
+  const first = await preset(`First ${run}`, 'Look over the first part.');
+  const second = await preset(`Second ${run}`, 'Look over the second part.');
+  try {
+    await page.setViewportSize(DESKTOP);
+    await openForm(page);
+    await page.locator('[data-ai-entity]').click();
+    const menu = page.locator('[data-ai-entity-menu]');
+    const composer = menu.locator('[data-ai-entity-composer]');
+    const field = composer.locator('[contenteditable="true"]');
+    await field.press('End');
+    await page.keyboard.type(' My own words.');
+    await chooseTemplate(menu, first.templateId);
+    await expect(field).toContainText('Look over the first part.');
+    // The next takes its place; the owner's words and the chip stay.
+    await chooseTemplate(menu, second.templateId);
+    await expect(field).toContainText('Look over the second part.');
+    await expect(field).not.toContainText('the first part');
+    await expect(field).toContainText('My own words.');
+    await expect(composer.locator('[data-mention]')).toHaveCount(1);
+    // One step back is the request before, as it was put in.
+    await field.focus();
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(field).toContainText('Look over the first part.');
+    await expect(field).not.toContainText('the second part');
+    await expect(field).toContainText('My own words.');
+  } finally {
+    for (const { templateId } of [first, second])
+      await page.request.delete(`/api/admin/ai/templates/${templateId}`);
+  }
+});
+
 test('the ✦ stops the session it sent while it answers', async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   await openForm(page);
@@ -879,6 +919,14 @@ test('a field’s ✦ offers what can find something, and an empty answer stays 
   await expect(notesBox.locator('[data-ai-field-empty]')).toHaveText(
     /^Nothing\shere\syet\sto\scheck\.\sAsk\sin\syour\sown\swords$/,
   );
+  // Words past what the ask takes are said to be, never cut and sent.
+  await notesBox.locator('textarea').fill('a'.repeat(2001));
+  await expect(notesBox.locator('[data-comment-too-long]')).toHaveText(
+    'At most 2000 characters',
+  );
+  await expect(notesBox.locator('[data-comment-send]')).toBeDisabled();
+  await notesBox.locator('textarea').fill('');
+  await expect(notesBox.locator('[data-comment-too-long]')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(notesBox).toBeHidden();
 

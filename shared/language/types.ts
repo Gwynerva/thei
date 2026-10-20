@@ -1973,6 +1973,8 @@ export type LanguagePhrases = {
   ai_entity_offer_show: string;
   ai_comment_label: string;
   ai_comment_placeholder: string;
+  /** Past the length the field takes: what it takes. */
+  ai_comment_too_long: (max: number) => string;
   ai_comment_quick: [string, string];
   ai_model_states: Record<
     'ready' | 'off' | 'none' | 'no-key' | 'no-address' | 'no-model' | 'budget',

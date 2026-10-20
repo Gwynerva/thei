@@ -59,11 +59,6 @@ export interface TemplateSource {
   /** The areas it looks at, each with what it holds, in English. */
   areas: Record<string, string>;
   /**
-   * How many subjects one run is given, where it counts them; none where it
-   * measures a run otherwise — proofreading, by characters.
-   */
-  size?: number;
-  /**
    * The kinds of entity it looks at, if not every kind: an entity's ✦
    * offers it only on those.
    */

@@ -1,5 +1,6 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { normalizeHeadingText } from '#layers/thei/shared/terminal-punctuation';
+import { plainMarkdown } from '#layers/thei/shared/ai-message-text';
 import { publishSession } from './bus';
 import { findSession, updateSession, type SessionRow } from './store';
 
@@ -20,18 +21,9 @@ export function cleanSessionTitle(value: string, max = 200): string {
   return normalizeHeadingText(value.replace(/\s+/g, ' ').trim().slice(0, max));
 }
 
-/** Words with their Markdown dropped — a link by its words — on one line. */
-function plainLine(text: string): string {
-  return text
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/[*_`#>\\]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 /** The start of the owner's first words, as a session goes by until named. */
 export function titleFromWords(text: string): string {
-  const line = plainLine(text);
+  const line = plainMarkdown(text);
   if (line.length <= FIRST_WORDS_MAX) return cleanSessionTitle(line);
   const cut = line.slice(0, FIRST_WORDS_MAX);
   const space = cut.lastIndexOf(' ');
@@ -75,7 +67,7 @@ export function nameSession(
   // A name is shown as words: a link the model wrote in it, by its words.
   const title =
     typeof name === 'string'
-      ? cleanSessionTitle(plainLine(name), SESSION_NAME_MAX)
+      ? cleanSessionTitle(plainMarkdown(name), SESSION_NAME_MAX)
       : '';
   if (!title) return 'A name needs its words.';
   updateSession(sessionUuid, { title });

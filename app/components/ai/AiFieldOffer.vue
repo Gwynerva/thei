@@ -1,7 +1,10 @@
 <script lang="ts" setup>
-import type { AiSessionDetail } from '#layers/thei/shared/ai';
 import type { AiOfferPlace } from '#layers/thei/shared/ai-entity';
-import { askablePlace, placeField } from '#layers/thei/shared/ai-field-ask';
+import {
+  askablePlace,
+  FIELD_ASK_MAX,
+  placeField,
+} from '#layers/thei/shared/ai-field-ask';
 import type { AiFieldAskKind } from '#layers/thei/shared/language/types';
 
 /**
@@ -57,15 +60,10 @@ watch(
     nothing.value = undefined;
     said.value = '';
     if (!sessionUuid || !import.meta.client) return;
-    const detail = await $fetch<AiSessionDetail>(
-      `/api/admin/ai/sessions/${sessionUuid}`,
-    ).catch(() => null);
-    if (!detail || answered.value !== sessionUuid || detail.actions.length)
+    const answer = await askAnswer(sessionUuid);
+    if (!answer || answered.value !== sessionUuid || answer.actions.length)
       return;
-    const last = detail.messages
-      .filter((message) => message.role === 'model' && message.text.trim())
-      .at(-1);
-    said.value = last ? plainWords(last.text, 280) : '';
+    said.value = answer.said;
     nothing.value = sessionUuid;
   },
   { immediate: true },
@@ -169,12 +167,8 @@ async function restore(offer: NonNullable<typeof shown.value>) {
 const button = ref<HTMLElement>();
 // The label's words, read once the ✦ is drawn: it waits for the form's AI.
 watch(button, (element) => {
-  const label = element?.closest('[data-field-label]');
-  if (!label) return;
-  const words = label.cloneNode(true) as HTMLElement;
-  for (const extra of words.querySelectorAll('[data-field-label-extra]'))
-    extra.remove();
-  labelWords.value = words.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+  const words = element && fieldLabelWords(element);
+  if (words !== undefined) labelWords.value = words;
 });
 const open = ref(false);
 /** Opened by a click, a tap or the keyboard, it stays until put away. */
@@ -433,49 +427,15 @@ const decisions = {};
       <!-- Its room is the popup's, which scrolls it when an answer makes it
            taller than the room its side has. -->
       <div class="flex flex-col gap-1.5" :data-ai-field-ask="place">
-        <div
-          v-if="asking"
-          class="flex min-h-9 items-center gap-xs rounded-sm border
-            border-border-1 bg-bg-1 py-0.5 pr-0.5 pl-2.5 text-sm"
-          data-ai-field-asking
-        >
-          <AiRunningDots />
-          <span class="min-w-0 flex-1">{{ phrase.ai_field_asking }}</span>
-          <TheiLink
-            :to="{ path: '/admin/ai/', query: { session: asking } }"
-            class="shrink-0 text-xs text-text-2 underline decoration-text-2/35
-              underline-offset-2 hocus:text-accent"
-            >{{ phrase.ai_field_ask_open }}</TheiLink
-          >
-          <AiStopButton data-ai-field-stop @click="stop" />
-        </div>
-        <template v-else>
-          <div
-            v-if="nothing"
-            class="flex flex-col gap-1 px-1 text-xs text-text-2"
-            data-ai-field-answered
-          >
-            <p class="flex items-center gap-1">
-              <Icon name="ai-chat" class="shrink-0" />
-              <span class="min-w-0 flex-1">{{
-                phrase.ai_field_ask_nothing
-              }}</span>
-              <TheiLink
-                :to="{ path: '/admin/ai/', query: { session: nothing } }"
-                class="-my-3 inline-flex shrink-0 items-center py-3 underline
-                  decoration-text-2/35 underline-offset-2 hocus:text-accent"
-                >{{ phrase.ai_field_ask_open }}</TheiLink
-              >
-            </p>
-            <!-- Why, as the model put it: no need to leave the form for it. -->
-            <p
-              v-if="said"
-              class="line-clamp-4 border-l-2 border-border-2 pl-2 text-sm
-                text-text-1"
-            >
-              {{ said }}
-            </p>
-          </div>
+        <AiAskState
+          :asking
+          :answered="nothing"
+          :said
+          :nothing="phrase.ai_field_ask_nothing"
+          mark="ai-field"
+          @stop="stop"
+        />
+        <template v-if="!asking">
           <p
             v-if="emptyHint && !nothing"
             class="px-1 text-xs text-text-2"
@@ -488,6 +448,7 @@ const decisions = {};
             about-icon="sparkles"
             :quick
             :placeholder="phrase.ai_field_ask_placeholder"
+            :max="FIELD_ASK_MAX"
             @send="send"
           />
         </template>

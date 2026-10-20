@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { AiSessionDetail } from '#layers/thei/shared/ai';
+import { FIELD_ASK_MAX } from '#layers/thei/shared/ai-field-ask';
 import ModalHeaderButton from '#layers/thei/app/modals/ModalHeaderButton.vue';
 
 /**
@@ -51,18 +51,12 @@ async function send(text: string) {
   sending.value = true;
   answered.value = undefined;
   try {
-    const { sessionUuid } = await $fetch<{ sessionUuid: string }>(
-      '/api/admin/ai/ask',
-      {
-        method: 'POST',
-        body: {
-          ref: props.target,
-          place: `text:${props.textSlot}`,
-          text,
-          label: props.title,
-        },
-      },
-    );
+    const { sessionUuid } = await aiApi.ask({
+      ref: props.target,
+      place: `text:${props.textSlot}`,
+      text,
+      label: props.title,
+    });
     asked.value = sessionUuid;
   } catch (caught) {
     showToast(errorMessage(caught, phrase.value.ai_error));
@@ -82,11 +76,9 @@ async function stop() {
  */
 let settling = false;
 async function settle(sessionUuid: string) {
-  const detail = await $fetch<AiSessionDetail>(
-    `/api/admin/ai/sessions/${sessionUuid}`,
-  ).catch(() => null);
-  if (!detail || asked.value !== sessionUuid) return;
-  const edits = detail.actions
+  const answer = await askAnswer(sessionUuid);
+  if (!answer || asked.value !== sessionUuid) return;
+  const edits = answer.actions
     .filter((action) => action.kind === 'revise' && action.state === 'pending')
     .map((action) => action.actionUuid);
   asked.value = undefined;
@@ -96,11 +88,8 @@ async function settle(sessionUuid: string) {
     emit('proposed', edits);
     return;
   }
-  answered.value = detail.session.sessionUuid;
-  const last = detail.messages
-    .filter((message) => message.role === 'model' && message.text.trim())
-    .at(-1);
-  said.value = last ? plainWords(last.text, 280) : '';
+  answered.value = sessionUuid;
+  said.value = answer.said;
 }
 watch(
   () => followed.detail.value,
@@ -147,56 +136,23 @@ watch(
     complex
   >
     <div class="flex flex-col gap-1.5" data-editor-ai-ask>
-      <div
-        v-if="asking"
-        class="flex min-h-9 items-center gap-xs rounded-sm border
-          border-border-1 bg-bg-1 py-0.5 pr-0.5 pl-2.5 text-sm"
-        data-editor-ai-asking
-      >
-        <AiRunningDots />
-        <span class="min-w-0 flex-1">{{ phrase.ai_field_asking }}</span>
-        <TheiLink
-          :to="{ path: '/admin/ai/', query: { session: asked } }"
-          class="shrink-0 text-xs text-text-2 underline decoration-text-2/35
-            underline-offset-2 hocus:text-accent"
-          >{{ phrase.ai_field_ask_open }}</TheiLink
-        >
-        <AiStopButton data-editor-ai-stop @click="stop" />
-      </div>
-      <template v-else>
-        <div
-          v-if="answered"
-          class="flex flex-col gap-1 px-1 text-xs text-text-2"
-          data-editor-ai-answered
-        >
-          <p class="flex items-center gap-1">
-            <Icon name="ai-chat" class="shrink-0" />
-            <span class="min-w-0 flex-1">{{
-              phrase.ai_editor_ask_nothing
-            }}</span>
-            <TheiLink
-              :to="{ path: '/admin/ai/', query: { session: answered } }"
-              class="-my-3 inline-flex shrink-0 items-center py-3 underline
-                decoration-text-2/35 underline-offset-2 hocus:text-accent"
-              >{{ phrase.ai_field_ask_open }}</TheiLink
-            >
-          </p>
-          <p
-            v-if="said"
-            class="line-clamp-4 border-l-2 border-border-2 pl-2 text-sm
-              text-text-1"
-          >
-            {{ said }}
-          </p>
-        </div>
-        <AiCommentBox
-          :about="phrase.ai_editor_ask_about(title)"
-          about-icon="sparkles"
-          :quick
-          :placeholder="phrase.ai_editor_ask_placeholder"
-          @send="send"
-        />
-      </template>
+      <AiAskState
+        :asking="asking ? asked : undefined"
+        :answered
+        :said
+        :nothing="phrase.ai_editor_ask_nothing"
+        mark="editor-ai"
+        @stop="stop"
+      />
+      <AiCommentBox
+        v-if="!asking"
+        :about="phrase.ai_editor_ask_about(title)"
+        about-icon="sparkles"
+        :quick
+        :placeholder="phrase.ai_editor_ask_placeholder"
+        :max="FIELD_ASK_MAX"
+        @send="send"
+      />
     </div>
   </FloatingPopup>
 </template>

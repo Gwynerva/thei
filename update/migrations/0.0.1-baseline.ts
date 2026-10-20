@@ -521,6 +521,7 @@ export const baselineSql: string[] = [
 	\`entityId\` text,
 	\`fingerprint\` text NOT NULL,
 	\`parts\` text DEFAULT '[]' NOT NULL,
+	\`sessionUuid\` text,
 	\`at\` integer NOT NULL,
 	PRIMARY KEY(\`templateId\`, \`subject\`)
 );

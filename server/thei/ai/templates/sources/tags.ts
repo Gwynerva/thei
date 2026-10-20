@@ -45,7 +45,6 @@ function tagsLine(document: McpDocument, titles: Map<string, string>) {
 }
 
 export const tagsSource: TemplateSource = {
-  size: BATCH,
   areas: AREAS,
   kinds: KINDS,
 
