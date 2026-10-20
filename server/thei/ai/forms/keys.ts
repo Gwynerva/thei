@@ -155,3 +155,27 @@ export const FORM_KEYS = {
     [Key in keyof Forms[K]]-?: FieldOf<K> | readonly FieldOf<K>[] | null;
   };
 };
+
+/**
+ * The field a change of a form's key names it by — `externalLinks` is
+ * `links` — or the key itself, for one no change proposes.
+ */
+export function fieldOfKey(kind: FormKind, key: string): string {
+  const named = (FORM_KEYS[kind] as Record<string, unknown>)[key];
+  if (typeof named === 'string') return named;
+  return Array.isArray(named) ? String(named[0]) : key;
+}
+
+/**
+ * The fields of a form, as its keys are kept in what an update changes, by
+ * the names a change gives them: what a card of it says.
+ */
+export function fieldNamesOf(
+  kind: string,
+  keys: readonly string[],
+): Record<string, string> | undefined {
+  if (!(kind in FORM_KEYS)) return undefined;
+  return Object.fromEntries(
+    keys.map((key) => [key, fieldOfKey(kind as FormKind, key)]),
+  );
+}

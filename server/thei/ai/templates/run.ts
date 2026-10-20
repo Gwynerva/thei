@@ -11,6 +11,7 @@ import {
   type ActionTarget,
 } from '../actions/target';
 import { libraryFile } from '../sessions/files';
+import { fileFace } from '../field-ask';
 import { sessionModel } from '../model/settings';
 import { startTurn } from '../runner/queue';
 import {
@@ -66,11 +67,18 @@ function scopeOf(about: readonly string[] | undefined) {
   );
 }
 
-/** What a run is about, as its session's title and its model name it. */
+/**
+ * What a run is about, as its session's title and its model name it: a
+ * file as a field's ✦ names it, by the place it stands in or its kind.
+ */
 function faceOf(key: ActionTarget) {
   if (!isFileKey(key)) return entityFace(key);
-  const file = libraryFile(key.id);
-  return file && { ref: targetRef(key), title: file.slug };
+  return (
+    libraryFile(key.id) && {
+      ref: targetRef(key),
+      title: fileFace(key.id).title,
+    }
+  );
 }
 
 export async function runTemplate(

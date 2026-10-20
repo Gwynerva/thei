@@ -1,3 +1,4 @@
+import type { AiActionItem } from '#layers/thei/shared/ai';
 import { diffContentText } from '#layers/thei/shared/content-diff';
 
 /** One piece of a change said word by word: kept, gone or come. */
@@ -46,8 +47,14 @@ export function valueChange(was: unknown, next: unknown): AiValueChange {
   const after = listWords(next ?? (Array.isArray(was) ? [] : null));
   if (before && after) return itemsChange(before, after);
   if (!sayable(was) || !sayable(next)) return { type: 'none' };
-  const old = fieldValueWords(was);
-  const now = fieldValueWords(next);
+  return textChange(fieldValueWords(was), fieldValueWords(next));
+}
+
+/**
+ * Old words and new as they are: word by word where most of the shorter
+ * stays, whole where it is written anew, a value cleared said so.
+ */
+function textChange(old: string, now: string): AiValueChange {
   const parts = old && now ? diffContentText(old, now) : [];
   const kept = parts
     .filter((part) => part.kind === 'same')
@@ -58,6 +65,48 @@ export function valueChange(was: unknown, next: unknown): AiValueChange {
       pieces: parts.map((part) => ({ kind: part.kind, text: part.text })),
     };
   return { type: 'whole', before: old, after: now };
+}
+
+/**
+ * A field's change in the shape a proposal gives it or a form keeps it,
+ * said as `fieldSaid` says each side: a list item by item, else in words;
+ * nothing, where neither side says anything.
+ */
+export function fieldChange(
+  field: string,
+  was: unknown,
+  next: unknown,
+  options: Parameters<typeof fieldSaid>[2] = {},
+): AiValueChange {
+  const before = fieldSaid(field, was, options);
+  const after = fieldSaid(field, next, options);
+  const list = (said: string | string[]) =>
+    Array.isArray(said) ? said : said ? [said] : [];
+  if (Array.isArray(before) || Array.isArray(after))
+    return itemsChange(list(before), list(after));
+  if (!before && !after) return { type: 'none' };
+  return textChange(before, after);
+}
+
+/**
+ * The fields an update changes, as its form keeps them (`key`) and by the
+ * names a change gives them (`field`) — what its card's head says — each
+ * with what it was and what it would be.
+ */
+export function updateFields(action: AiActionItem) {
+  const base = (action.base ?? {}) as {
+    fields?: string[];
+    before?: Record<string, unknown>;
+    after?: Record<string, unknown>;
+  };
+  // Without what it was made against, by the fields its change names.
+  const changes = (action.payload as { changes?: object } | null)?.changes;
+  return (base.fields ?? Object.keys(changes ?? {})).map((key) => ({
+    key,
+    field: action.fieldNames?.[key] ?? key,
+    before: base.before?.[key],
+    after: base.after?.[key],
+  }));
 }
 
 /**

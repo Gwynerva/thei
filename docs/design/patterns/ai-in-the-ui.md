@@ -84,26 +84,38 @@ attention.
     kind says its change so: dates, tags, a relation's ends, access, a text
     written whole, a text edit's first parts, a new entity's fields, what is
     deleted, what is remembered, a word of the dictionary, a memory in fewer
-    facts, a file's description beside the file;
+    facts, a file's description beside the file. A change of a form's fields
+    names them as a change does, never as the form keeps them, and says
+    their values in words as a new entity's fields are said — files, links,
+    relations item by item (`fieldSaid` in `app/composables/ai-format.ts`,
+    `fieldChange` in `app/composables/ai-change.ts`);
   - the model's reason, and where it came from;
   - the footer, on `bg-bg-3`: «Исправить самому» and comment (or open, for
     a text edit) as squares at its start, after a pager where there is one;
     decline as a square ✕ and the accept button at its end — then
     «Отменить» or «Вернуть» in their place. Its neutral buttons are `raised`, so they
-    show on that ground.
+    show on that ground. The squares, the two that end a correction and the
+    way back are one part wherever they stand
+    (`app/components/ai/AiActionTools.vue`): here, or at the end of a
+    bundle row's first line.
   - In a popup — at a field's label, on a proposed chip — the card draws no
     ground of its own, as [Popups](../components/popups.md) asks: head,
     change and footer are parted by horizontal rules on the popup's one
     ground, so the popup and its arrow stay one surface, and the footer's
     neutral buttons are `secondary` (`AiActionRow`'s `inPopup`).
 - A bundle is headed and decided alike: its head on `bg-bg-3` says what the
-  rows are and how many are sure, each row starts with its checkbox and its
-  first line, its own tools at the end of that line, and the footer says its
-  hint first, then ✕ and «Применить · N». A comment written in the card
-  opens over its footer, never under it.
+  rows are and how many are sure, each row starts with its checkbox
+  (`app/components/ai/AiCheckbox.vue`, which ticks a new entity's parts
+  too) and its first line, its own tools at the end of that line, and the
+  footer says its hint first, then ✕ and «Применить · N». A comment written
+  in the card opens over its footer, never under it.
+- What a card's buttons ask of the server goes through `aiAttempt`
+  (`app/composables/ai-session.ts`): one at a time where it holds a busy
+  flag, a failure said in a toast in the server's words.
 - Once decided, a card's undo or way back stands where the pressed button
   stood: for half a second it takes no press, so a double click never
-  applies and undoes at once. Correcting the words, the way back to the
+  applies and undoes at once — the row says so meanwhile as
+  `data-action-settling`. Correcting the words, the way back to the
   model's is `undo`, never the decline's ✕.
 - The accept button says what it does. Where it changes the archive at
   once — a session, what the AI remembers, a text edit's own screen — it is
@@ -257,6 +269,10 @@ attention.
   turning it on offers it at once.
 - `tests/server/ai-actions-contract.test.ts` fails when an action or a field
   misses a part: its reference, its card, its place in a form.
+- `tests/server/ai-update-card.test.ts` and
+  `tests/app/composables/ai-change.test.ts` check that a change of a form's
+  fields names them as a change does and says files, links and relations
+  item by item.
 - `tests/e2e/ai-entity.spec.ts` opens proposals at labels and in the ✦ menu and
   checks each with `expectPopupUsable`, and stops a session from the ✦;
   `tests/e2e/ai-sessions.spec.ts` stops an answer with words typed.

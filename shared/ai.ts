@@ -328,6 +328,11 @@ export interface AiActionItem {
   never: boolean;
   /** A file it is about, as the library has it now. */
   file?: import('./api/asset').AssetVariantInfo;
+  /**
+   * An update's fields as its form keeps them — the keys of `base` — by the
+   * names a change gives them: `externalLinks` is `links`. For its card.
+   */
+  fieldNames?: Record<string, string>;
 }
 
 /**

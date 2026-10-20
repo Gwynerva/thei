@@ -35,13 +35,15 @@ import { findActions, sessionActions } from '../actions/rows';
 import { fileRef, isFileKey, type ActionTarget } from '../actions/target';
 import { fileOfFamily } from '../../assets/descriptions';
 import { assetKindName } from '#layers/thei/shared/asset-format-label';
+import { humanSize } from '#layers/thei/shared/human-size';
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
 import type { ActionRow } from '../actions/types';
 import { undoState } from '../actions/undo';
 import { findTemplate } from '../templates/store';
+import { fieldNamesOf } from '../forms/keys';
 import { messageFromMarkdown } from '../../mcp/text-input';
 import { writingOf } from './bus';
-import { libraryFile, megabytes, messageFiles } from './files';
+import { libraryFile, messageFiles } from './files';
 import { sessionModel } from '../model/settings';
 import {
   findMessage,
@@ -78,12 +80,14 @@ function refsIn(payload: unknown): Record<string, AiEntityRef> {
     add?: { ref?: unknown }[];
     remove?: { ref?: unknown }[];
     fields?: { relations?: { ref?: unknown }[] };
+    changes?: { relations?: { ref?: unknown }[] };
   };
   if (typeof data.other === 'string') named.add(data.other);
   for (const item of [
     ...(data.add ?? []),
     ...(data.remove ?? []),
     ...(Array.isArray(data.fields?.relations) ? data.fields.relations : []),
+    ...(Array.isArray(data.changes?.relations) ? data.changes.relations : []),
   ])
     if (typeof item?.ref === 'string') named.add(item.ref);
   const refs: Record<string, AiEntityRef> = {};
@@ -174,7 +178,7 @@ export function messageItem(row: MessageRow): AiMessageItem {
 /** A file as a chip names it: what it is, its format and its size. */
 function fileTitle(file: AssetVariantInfo): string {
   const kind = assetKindName(THEI_SERVER.phrase, file.type);
-  return `${kind} · ${file.extension.toUpperCase()} · ${megabytes(file.size)}`;
+  return `${kind} · ${file.extension.toUpperCase()} · ${humanSize(file.size, THEI_SERVER.language.sizeUnits)}`;
 }
 
 /**
@@ -201,6 +205,15 @@ export async function actionItems(rows: ActionRow[]): Promise<AiActionItem[]> {
             ({ kind: row.targetType, id: row.targetId } as EntityKey))
         : undefined;
     const file = key && isFileKey(key) ? actionFile(row, key) : undefined;
+    const fieldNames =
+      row.kind === 'update' && key
+        ? fieldNamesOf(
+            key.kind,
+            ((row.base as { fields?: string[] } | null)?.fields ?? []).map(
+              String,
+            ),
+          )
+        : undefined;
     items.push({
       actionUuid: row.actionUuid,
       messageUuid: row.messageUuid,
@@ -219,6 +232,7 @@ export async function actionItems(rows: ActionRow[]): Promise<AiActionItem[]> {
           : entityRef(key)
         : null,
       ...(file ? { file } : {}),
+      ...(fieldNames ? { fieldNames } : {}),
       payload: row.payload,
       base: row.base,
       proposed: row.proposed ?? null,

@@ -221,8 +221,7 @@ const KINDS: Record<AssetType, string> = {
   [AssetType.Other]: 'a file',
 };
 
-/** A file's size in short: KB under a megabyte, else MB. */
-export function megabytes(size: number) {
+function megabytes(size: number) {
   return size < 1024 * 1024
     ? `${Math.max(1, Math.round(size / 1024))} KB`
     : `${(size / 1024 / 1024).toFixed(1)} MB`;

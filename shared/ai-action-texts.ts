@@ -17,7 +17,7 @@ import type { AiActionKind } from './ai-actions';
  * How a text is corrected: one line, one item a line, a paragraph, or
  * editing Markdown.
  */
-export type AiActionTextShape = 'line' | 'lines' | 'paragraph' | 'markdown';
+type AiActionTextShape = 'line' | 'lines' | 'paragraph' | 'markdown';
 
 export interface AiActionText {
   /** Where it stands in the proposal: `text`, `changes.summary`, `facts.0`… */

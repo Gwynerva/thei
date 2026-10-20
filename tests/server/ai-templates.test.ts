@@ -1110,7 +1110,8 @@ describe('the files of the archive', () => {
       } as never),
     ).toEqual(['file:af-8', 'file:af-5', 'file:af-4']);
     const sessionUuid = await run('describe', { about: ['asset:a-2'] });
-    expect(findSession(sessionUuid!)!.title).toContain('file-2');
+    // A file named as a field's ✦ names it: by the place it stands in.
+    expect(findSession(sessionUuid!)!.title).toContain('Harbour');
     expect(await subjects('describe')).not.toContain('file:af-2');
     // Asked again, the file is looked at again from the start.
     const again = await run('describe', { about: ['asset:a-2'] });

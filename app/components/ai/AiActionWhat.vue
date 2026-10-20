@@ -24,12 +24,10 @@ const words = computed(() => {
   const kind = props.action.kind;
   const said = phrase.value;
   if (kind === 'field') return fieldName(String(payload.value.field));
-  if (kind === 'update') {
-    const fields =
-      (props.action.base as { fields?: string[] } | null)?.fields ??
-      Object.keys((payload.value.changes ?? {}) as object);
-    return fields.map(fieldName).join(', ');
-  }
+  if (kind === 'update')
+    return updateFields(props.action)
+      .map(({ field }) => fieldName(field))
+      .join(', ');
   if (kind === 'write')
     return said.ai_action_write_modes[
       payload.value.mode as keyof typeof said.ai_action_write_modes

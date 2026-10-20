@@ -116,10 +116,7 @@ function comment(partId: string, words: string) {
     :why-link="
       text?.session
         ? {
-            to: {
-              path: '/admin/ai/',
-              query: { session: text.session.sessionUuid },
-            },
+            to: sessionLocation(text.session.sessionUuid),
             label: phrase.ai_review_from_session(sessionTitle(text.session)),
           }
         : undefined

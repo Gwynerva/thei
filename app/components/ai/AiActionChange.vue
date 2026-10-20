@@ -11,7 +11,9 @@ import {
 import { relationWordIcon } from '#layers/thei/shared/relation-display';
 import { libraryAssetDetailsModal } from '#layers/thei/app/modals/asset-library/details-modal';
 import {
+  fieldChange,
   itemsChange,
+  updateFields,
   valueChange,
   wordsChange,
   type AiValueChange,
@@ -67,14 +69,18 @@ const lines = computed<{ name: string; change: AiValueChange }[] | null>(() => {
       },
     ];
   if (kind.value === 'update') {
-    const fields = (base.value.fields ?? []) as string[];
-    const before = (base.value.before ?? {}) as Record<string, unknown>;
-    const after = (base.value.after ?? {}) as Record<string, unknown>;
-    // One field is named by the first line already.
-    return fields.map((field) => ({
-      name: fields.length > 1 ? fieldName(field) : '',
-      change: valueChange(before[field], after[field]),
-    }));
+    const fields = updateFields(props.action);
+    const options = {
+      entity: props.action.target?.type,
+      refs: props.action.refs,
+    };
+    // One field is named by the first line already; dates are drawn below.
+    return fields
+      .filter(({ field }) => field !== 'periods')
+      .map(({ field, before, after }) => ({
+        name: fields.length > 1 ? fieldName(field) : '',
+        change: fieldChange(field, before, after, options),
+      }));
   }
   if (kind.value === 'term' && base.value.before) {
     const was = base.value.before as Record<string, any>;
@@ -119,12 +125,27 @@ function openFile() {
 /** In the file's own window the file is not opened again. */
 const fileHere = computed(() => props.here === props.action.target?.ref);
 
+/** An update's dates, among the fields it changes. */
+const updatedPeriods = computed(() =>
+  kind.value === 'update'
+    ? updateFields(props.action).find(({ field }) => field === 'periods')
+    : undefined,
+);
+/** Named, when the update changes more than its dates. */
+const periodsName = computed(() =>
+  updatedPeriods.value && updateFields(props.action).length > 1
+    ? fieldName('periods')
+    : '',
+);
+
 /** Dates: the ones that stay, go and come. */
 const periods = computed(() => {
-  if (kind.value !== 'periods') return null;
+  const update = updatedPeriods.value;
+  if (kind.value !== 'periods' && !update) return null;
   const key = (period: Period) => JSON.stringify(period);
-  const was = (base.value.periods ?? []) as Period[];
-  const next = (payload.value.periods ?? []) as Period[];
+  const was = ((update ? update.before : base.value.periods) ?? []) as Period[];
+  const next = ((update ? update.after : payload.value.periods) ??
+    []) as Period[];
   const after = new Set(next.map(key));
   const before = new Set(was.map(key));
   return [
@@ -223,57 +244,6 @@ const facts = computed(() => {
   return valueChange(was, next);
 });
 
-/**
- * A new entity's field in words, as it would read: a text by its words, a
- * file by its title or caption — the others counted — a link by its name
- * or note, else its address, a status by its words; a picture of its own
- * said to be there, its access by name, its address as typed.
- */
-function createdWords(entity: unknown, field: string, value: unknown): string {
-  const said = phrase.value;
-  if (
-    ['content', 'body', 'notes'].includes(field) ||
-    (field === 'description' && entity === 'project')
-  )
-    return publicText(plainWords(String(value ?? ''), 200));
-  if (field === 'slug' || field === 'publicId') return String(value ?? '');
-  if (field === 'access')
-    return (
-      said.ai_action_access[value as keyof typeof said.ai_action_access] ??
-      String(value ?? '')
-    );
-  if (field === 'icon' || field === 'banner')
-    return value ? said.ai_action_flag.on : '';
-  if (!Array.isArray(value)) return fieldValueWords(value);
-  const items = value as unknown[];
-  const words = (item: unknown, keys: string[]) => {
-    if (typeof item === 'string') return publicText(item);
-    const record = (item ?? {}) as Record<string, unknown>;
-    const text = keys
-      .map((key) => record[key])
-      .find((word) => typeof word === 'string' && word.trim());
-    return text ? publicText(String(text)) : '';
-  };
-  if (field === 'files' || field === 'showcaseFiles') {
-    const named = items
-      .map((item) => words(item, ['title', 'caption']))
-      .filter(Boolean);
-    const unnamed = items.length - named.length;
-    return [
-      ...named,
-      ...(unnamed ? [said.content_file_count(unnamed)] : []),
-    ].join(', ');
-  }
-  return items
-    .map(
-      (item) =>
-        words(item, ['name', 'note', 'text']) ||
-        String((item as { url?: unknown } | null)?.url ?? ''),
-    )
-    .filter(Boolean)
-    .join(', ');
-}
-
 /** A new entity's fields, every one new; its parts are listed apart. */
 const created = computed(() => {
   if (kind.value !== 'create') return null;
@@ -293,7 +263,11 @@ const created = computed(() => {
         said.push({ name: fieldName(field), periods: value as Period[] });
       continue;
     }
-    const text = createdWords(payload.value.entity, field, value);
+    const words = fieldSaid(field, value, {
+      entity: payload.value.entity,
+      refs: props.action.refs,
+    });
+    const text = Array.isArray(words) ? words.join(', ') : words;
     // A diary entry's text is its body, as every other text is.
     if (text)
       said.push({
@@ -417,6 +391,9 @@ const rule = 'min-w-0 border-l-2 pl-2.5 leading-normal wrap-anywhere';
       v-if="periods"
       :class="[rule, 'flex flex-wrap items-center gap-1 border-border-2']"
     >
+      <span v-if="periodsName" class="mr-1 text-text-3"
+        >{{ periodsName }}:</span
+      >
       <span
         v-for="(item, index) in periods"
         :key="index"

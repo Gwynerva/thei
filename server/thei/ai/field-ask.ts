@@ -64,7 +64,10 @@ function placeName(kind: string, place: string, file: boolean): string {
  * a hash more often than not, and tells nothing — else by its kind and
  * format.
  */
-function fileFace(assetUuid: string): { title: string; placed: boolean } {
+export function fileFace(assetUuid: string): {
+  title: string;
+  placed: boolean;
+} {
   const place = (readPlacements([assetUuid]).get(assetUuid) ?? [])
     .filter(
       (placement) =>
