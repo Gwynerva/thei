@@ -6,8 +6,8 @@ import { topModal } from './modal';
 
 /**
  * The file editor goes one screen at a time: how to take the file, what that
- * way needs, and last the file's description. These are its controls, found
- * in the modal on top.
+ * way needs, and last, for a file new to the library, its description. These
+ * are its controls, found in the modal on top.
  */
 export const uploadControls = (page: Page) => {
   const modal = topModal(page);
@@ -18,7 +18,10 @@ export const uploadControls = (page: Page) => {
     savedVariants: modal.locator('[data-upload-saved]'),
     /** «Another file»: back to the picker. */
     otherFile: modal.locator('[data-upload-other]'),
-    /** The foot's one button: «Next», or making a video or an archive. */
+    /**
+     * The foot's one button: «Next», making a video or an archive, or «Done»
+     * for a file already stored.
+     */
     next: modal.locator('[data-upload-next]'),
     back: modal.locator('[data-upload-back]'),
     cancel: modal.locator('[data-upload-cancel]'),

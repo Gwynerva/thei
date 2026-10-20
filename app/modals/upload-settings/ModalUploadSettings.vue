@@ -96,8 +96,8 @@ type Section = 'source' | 'family' | 'create';
 /**
  * The panel goes one screen at a time: how to take the file, then what that
  * way needs — a saved variant to choose, the settings of a new one — and
- * last the file's description. `section` is what the preview and the
- * settings work on; a screen sets it as it opens.
+ * last, for a file new to the library, its description. `section` is what
+ * the preview and the settings work on; a screen sets it as it opens.
  */
 type Screen = 'root' | 'family' | 'create' | 'describe';
 
@@ -834,7 +834,7 @@ const busyLabel = computed(() =>
 
 async function useUnchanged() {
   await commitAndThen(createOriginalAssetSettings(), (asset) =>
-    take(asset, false),
+    take(asset, { describe: true, confirm: false }),
   );
 }
 
@@ -846,14 +846,14 @@ async function useRender() {
   renders.hold(primaryRenderKey.value);
   let taken = false;
   await commitAndThen(request, async (asset) => {
-    taken = await take(asset, false);
+    taken = await take(asset, { describe: true, confirm: false });
   });
   if (!taken) renders.release();
 }
 
 async function useAudio() {
   if (currentCreated.value) {
-    await take(currentCreated.value);
+    await take(currentCreated.value, { describe: true });
     return;
   }
   const request = edit.request.value;
@@ -865,7 +865,7 @@ async function useAudio() {
       // Stored either way: when this place cannot take it, the modal stays
       // on it and says why, and the next "Use" does not store it again.
       created.value = { key, asset };
-      return take(asset, false);
+      return take(asset, { describe: true, confirm: false });
     });
   } finally {
     usingDirectly.value = false;
@@ -929,10 +929,15 @@ async function commitAndThen(
 }
 
 /**
- * Takes the file it will hand over, and goes on to its description; false
- * when the modal stays where it is instead.
+ * Takes the file it will hand over; false when the modal stays where it is
+ * instead. A file new to the library — the one picked, or a variant just
+ * made — goes on to its description; one already stored, chosen as it is,
+ * is handed over at once, since choosing it says nothing new about it.
  */
-async function take(asset: AssetVariantInfo, confirm = true) {
+async function take(
+  asset: AssetVariantInfo,
+  { describe, confirm = true }: { describe: boolean; confirm?: boolean },
+) {
   if (assetSelectionError(asset, props.modalData)) return false;
   busy.value = 'finish';
   try {
@@ -940,6 +945,10 @@ async function take(asset: AssetVariantInfo, confirm = true) {
     // just stored has been confirmed by storing it.
     if (confirm) await touch(asset.assetUuid);
     taken.value = asset;
+    if (!describe) {
+      done();
+      return true;
+    }
     takenOn.value = screen.value;
     screen.value = 'describe';
     return true;
@@ -999,13 +1008,17 @@ function back() {
   open('root');
 }
 
-/** «Далее» on the first screen: the file as it is. */
+/**
+ * The foot's button on the first screen: the file as it is — stored now and
+ * described, or, when it is stored already, handed over.
+ */
 async function takeAsIs() {
   if (!sourceAsset) {
     await useUnchanged();
     return;
   }
-  if (selectedVariant.value) await take(selectedVariant.value);
+  if (selectedVariant.value)
+    await take(selectedVariant.value, { describe: false });
 }
 
 function selectVariant(assetUuid: string) {
@@ -1063,17 +1076,20 @@ const newVariantHint = computed(() =>
 const step = computed<{ label: string; can: boolean; run: () => unknown }>(
   () => {
     const next = phrase.value.upload_next;
+    // A file already stored is handed over at once: nothing follows it.
     if (screen.value === 'root')
       return {
-        label: next,
+        label: sourceAsset ? phrase.value.done : next,
         can: sourceAsset ? canUseSelected.value : !busy.value,
         run: takeAsIs,
       };
     if (screen.value === 'family')
       return {
-        label: next,
+        label: phrase.value.done,
         can: canUseSelected.value,
-        run: () => selectedVariant.value && take(selectedVariant.value),
+        run: () =>
+          selectedVariant.value &&
+          take(selectedVariant.value, { describe: false }),
       };
     if (transformKind.value === 'image')
       return { label: next, can: canUseRender.value, run: useRender };
@@ -1089,7 +1105,11 @@ const step = computed<{ label: string; can: boolean; run: () => unknown }>(
         run: createVariant,
       };
     const made = currentCreated.value;
-    return { label: next, can: canUseCreated.value, run: () => take(made) };
+    return {
+      label: next,
+      can: canUseCreated.value,
+      run: () => take(made, { describe: true }),
+    };
   },
 );
 
