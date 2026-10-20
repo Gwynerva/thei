@@ -273,18 +273,18 @@ async function deleteItem() {
         />
         <div class="flex items-center gap-xs">
           <ModalHeaderButton
-            v-if="pageUrl"
-            icon="visibility"
-            :label="phrase.view_content_section"
-            :to="pageUrl"
-          />
-          <AiEntityButton />
-          <ModalHeaderButton
             v-if="exists"
             icon="delete"
             variant="delete"
             :label="phrase.delete_content_section"
             @click="deleteItem"
+          />
+          <AiEntityButton />
+          <ModalHeaderButton
+            v-if="pageUrl"
+            icon="visibility"
+            :label="phrase.view_content_section"
+            :to="pageUrl"
           />
           <ModalHeaderButton
             icon="close"

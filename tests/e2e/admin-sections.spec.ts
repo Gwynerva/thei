@@ -323,12 +323,18 @@ test('a saved section opens its own page from its modal, a new one has no way th
   await expect(eye).toHaveAttribute('href', href);
   await expect(eye).toHaveAttribute('data-title-popup', viewOnSite);
 
-  // First of the header's squares, all of them on the title's line and
-  // inside the screen.
+  // Delete leads the header's squares, the action used least, and the eye
+  // follows; all of them on the title's line and inside the screen.
   const squares = eye.locator('xpath=..');
-  await expect(squares.locator(':scope > *').first()).toHaveAccessibleName(
-    viewOnSite,
-  );
+  expect(
+    await squares
+      .locator(':scope > *')
+      .evaluateAll((elements) =>
+        elements.map((element) =>
+          element.getAttribute('aria-label')?.replace(/\s/g, ' '),
+        ),
+      ),
+  ).toEqual(['Delete section', 'View on Site', 'Close dialog', 'Save']);
   const boxes = await squares.evaluate((group) =>
     [group.parentElement!.firstElementChild!, ...group.children]
       .map((element) => element.getBoundingClientRect())
