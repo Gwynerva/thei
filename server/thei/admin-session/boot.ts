@@ -10,7 +10,7 @@ export async function bootAdminSessions() {
   const sessions = await db.select().from(schema.adminSessions);
   const now = Date.now();
 
-  await expireAdminSessions(
+  expireAdminSessions(
     sessions.map((row) => row.data),
     now,
   );

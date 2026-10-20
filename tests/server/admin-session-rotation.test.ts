@@ -6,6 +6,7 @@ import { createEvent } from 'h3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminSessions } from '../../server/thei/db/schema/admin-sessions';
 import {
+  destroyCurrentAdminSession,
   flushSessionsBeforeExit,
   flushSessionsToDb,
   getCurrentAdminSession,
@@ -14,6 +15,7 @@ import {
   type AdminSessionData,
 } from '../../server/thei/admin-session';
 import { bootAdminSessions } from '../../server/thei/admin-session/boot';
+import { hashSessionToken } from '../../server/thei/admin-session/token';
 import {
   previousTokenGrace,
   sessionDuration,
@@ -26,6 +28,7 @@ const cookieName = 'thei-admin-session-token';
 
 let rawDb: Database.Database | undefined;
 let failWrites = false;
+let baseURL = '/';
 
 beforeEach(() => {
   // Time moves only by `setSystemTime`: the 30 s snapshot never runs on its
@@ -34,13 +37,14 @@ beforeEach(() => {
     now: start,
     toFake: ['Date', 'setTimeout', 'clearTimeout'],
   });
-  vi.stubGlobal('useRuntimeConfig', () => ({ app: { baseURL: '/' } }));
+  vi.stubGlobal('useRuntimeConfig', () => ({ app: { baseURL } }));
 });
 
 afterEach(() => {
   rawDb?.close();
   rawDb = undefined;
   failWrites = false;
+  baseURL = '/';
   memorySessions.clear();
   toSnapshotSessions.clear();
   vi.useRealTimers();
@@ -70,7 +74,7 @@ async function bootSite() {
     lastUsedAt: start - hour,
     expiresAt: start - hour + sessionDuration,
     meta: {},
-    token: 'first-token',
+    tokenHash: hashSessionToken('first-token'),
     tokenCreatedAt: start - tokenRotationInterval - 1,
   };
   db.insert(adminSessions)
@@ -86,25 +90,40 @@ async function restart() {
   await bootAdminSessions();
 }
 
+/** An admin request carrying `token`, and the response it is answered with. */
+function request(token: string, userAgent?: string) {
+  const request = new IncomingMessage(new Socket());
+  request.url = '/api/admin/summary';
+  request.headers.cookie = `${cookieName}=${token}`;
+  if (userAgent) request.headers['user-agent'] = userAgent;
+  const response = new ServerResponse(request);
+  return { event: createEvent(request, response), response };
+}
+
+/** The line of the session's cookie a response sets, whole. */
+function cookieLine(response: ServerResponse) {
+  const header = response.getHeader('set-cookie');
+  const cookies =
+    header === undefined ? [] : Array.isArray(header) ? header : [`${header}`];
+  return cookies.filter((line) => line.startsWith(`${cookieName}=`)).pop();
+}
+
 /**
  * An admin request carrying `token`: whose session it opened, and the token
  * the cookie of its response sets — '' when it clears the cookie.
  */
 async function visit(token: string) {
-  const request = new IncomingMessage(new Socket());
-  request.url = '/api/admin/summary';
-  request.headers.cookie = `${cookieName}=${token}`;
-  const response = new ServerResponse(request);
-  const session = await getCurrentAdminSession(createEvent(request, response));
-  const header = response.getHeader('set-cookie');
-  const cookies =
-    header === undefined ? [] : Array.isArray(header) ? header : [`${header}`];
-  const cookie = cookies
-    .filter((line) => line.startsWith(`${cookieName}=`))
-    .pop()
+  const { event, response } = request(token);
+  const session = await getCurrentAdminSession(event);
+  const cookie = cookieLine(response)
     ?.slice(cookieName.length + 1)
     .split(';')[0];
   return { sessionUuid: session?.sessionUuid, cookie };
+}
+
+/** What the database holds of every session, as text. */
+function storedText() {
+  return JSON.stringify(rawDb!.prepare('SELECT * FROM "admin-sessions"').all());
 }
 
 function stored(): AdminSessionData {
@@ -155,13 +174,14 @@ describe('a token rotation whose response never reaches the browser', () => {
       sessionUuid: undefined,
       cookie: undefined,
     });
-    expect(memorySessions.has('first-token')).toBe(false);
+    expect(memorySessions.has(hashSessionToken('first-token'))).toBe(false);
     expect((await visit(newToken)).sessionUuid).toBe('owner');
 
     flushSessionsToDb();
-    expect(stored().token).toBe(newToken);
-    expect(stored().previousToken).toBeUndefined();
+    expect(stored().tokenHash).toBe(hashSessionToken(newToken));
+    expect(stored().previousTokenHash).toBeUndefined();
     expect(stored().previousTokenExpiresAt).toBeUndefined();
+    expect(stored().tokenSalt).toBeUndefined();
   });
 
   it('rotates again only once the previous token is gone', async () => {
@@ -181,7 +201,10 @@ describe('a token rotation whose response never reaches the browser', () => {
     expect(third).not.toBe(second);
     expect((await visit('first-token')).sessionUuid).toBeUndefined();
     expect((await visit(second)).cookie).toBe(third);
-    expect(stored()).toMatchObject({ token: third, previousToken: second });
+    expect(stored()).toMatchObject({
+      tokenHash: hashSessionToken(third),
+      previousTokenHash: hashSessionToken(second),
+    });
   });
 });
 
@@ -190,10 +213,14 @@ describe('a rotated token across a restart', () => {
     await bootSite();
     const newToken = (await visit('first-token')).cookie!;
     expect(stored()).toMatchObject({
-      token: newToken,
-      previousToken: 'first-token',
+      tokenHash: hashSessionToken(newToken),
+      previousTokenHash: hashSessionToken('first-token'),
       tokenCreatedAt: start,
     });
+    // Neither token is kept: the new one is sent again made anew from the
+    // previous one the browser shows.
+    expect(storedText()).not.toContain(newToken);
+    expect(storedText()).not.toContain('first-token');
 
     await restart();
     vi.setSystemTime(start + hour);
@@ -227,13 +254,88 @@ describe('a rotated token across a restart', () => {
     failWrites = true;
     const newToken = (await visit('first-token')).cookie!;
     expect(newToken).toMatch(/^[0-9a-f]{64}$/);
-    expect(stored().token).toBe('first-token');
+    expect(stored().tokenHash).toBe(hashSessionToken('first-token'));
 
     failWrites = false;
     flushSessionsToDb();
     expect(stored()).toMatchObject({
-      token: newToken,
-      previousToken: 'first-token',
+      tokenHash: hashSessionToken(newToken),
+      previousTokenHash: hashSessionToken('first-token'),
     });
+  });
+});
+
+describe('the session cookie', () => {
+  it('is kept from scripts and other sites, sent over HTTPS alone, and scoped to the site’s folder', async () => {
+    baseURL = '/blog/';
+    await bootSite();
+    const { event, response } = request('first-token');
+    await getCurrentAdminSession(event);
+    const attributes = cookieLine(response)!
+      .split(';')
+      .slice(1)
+      .map((part) => part.trim().toLowerCase());
+    expect(attributes).toEqual(
+      expect.arrayContaining([
+        'httponly',
+        'secure',
+        'samesite=strict',
+        'path=/blog/',
+      ]),
+    );
+  });
+
+  it('is left alone, and nothing is written, for a token no session knows', async () => {
+    await bootSite();
+    const before = storedText();
+    expect(await visit('random-token')).toEqual({
+      sessionUuid: undefined,
+      cookie: undefined,
+    });
+    expect(toSnapshotSessions.size).toBe(0);
+    flushSessionsToDb();
+    expect(storedText()).toBe(before);
+  });
+
+  it('is cleared when the previous token reaches a session that has expired', async () => {
+    await bootSite();
+    const newToken = (await visit('first-token')).cookie!;
+
+    vi.setSystemTime(start + sessionDuration);
+    expect(await visit('first-token')).toEqual({
+      sessionUuid: undefined,
+      cookie: '',
+    });
+    expect(stored().state).toBe('destroyed');
+    expect((await visit(newToken)).sessionUuid).toBeUndefined();
+  });
+});
+
+describe('a rotated token', () => {
+  it('is written before the request goes on to look up where it came from', async () => {
+    await bootSite();
+    // A browser the session has not seen yet: its device is looked up, which
+    // may wait seconds for the network.
+    const { event } = request('first-token', 'Mozilla/5.0 Firefox/131.0');
+    const pending = getCurrentAdminSession(event);
+    expect(stored().tokenHash).not.toBe(hashSessionToken('first-token'));
+    expect(stored().previousTokenHash).toBe(hashSessionToken('first-token'));
+    expect((await pending)?.sessionUuid).toBe('owner');
+  });
+});
+
+describe('signing out', () => {
+  it('ends the session while the token it replaced is still taken', async () => {
+    await bootSite();
+    const newToken = (await visit('first-token')).cookie!;
+
+    // The browser never got the new token, and signs out with the old one.
+    const { event, response } = request('first-token');
+    destroyCurrentAdminSession(event);
+    expect(cookieLine(response)?.split(';')[0]).toBe(`${cookieName}=`);
+    expect(stored().state).toBe('destroyed');
+    expect(memorySessions.size).toBe(0);
+    expect((await visit('first-token')).sessionUuid).toBeUndefined();
+    expect((await visit(newToken)).sessionUuid).toBeUndefined();
   });
 });

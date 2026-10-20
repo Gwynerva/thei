@@ -18,6 +18,7 @@ import {
   rememberClosedSiteAdmins,
 } from '../../server/thei/admin-session/closed-site';
 import { getPublicAdminSessions } from '../../server/thei/admin-session/repository/public';
+import { hashSessionToken } from '../../server/thei/admin-session/token';
 
 let rawDb: Database.Database | undefined;
 
@@ -26,6 +27,7 @@ afterEach(() => {
   rawDb = undefined;
   memorySessions.clear();
   toSnapshotSessions.clear();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -41,7 +43,7 @@ function session(
     lastUsedAt: 200,
     expiresAt,
     meta: {},
-    token: `${sessionUuid}-token`,
+    tokenHash: hashSessionToken(`${sessionUuid}-token`),
     tokenCreatedAt: 100,
   };
 }
@@ -101,11 +103,11 @@ describe('admin sessions before they are loaded', () => {
     const now = Date.now();
     const missed = {
       ...session('missed', 'active', now + 60_000),
-      previousToken: 'missed-old-token',
+      previousTokenHash: hashSessionToken('missed-old-token'),
     };
     const seen = {
       ...session('seen', 'active', now + 60_000),
-      previousToken: 'seen-old-token',
+      previousTokenHash: hashSessionToken('seen-old-token'),
       previousTokenExpiresAt: now - 1,
     };
     const insert = rawDb!.prepare(
@@ -124,6 +126,31 @@ describe('admin sessions before they are loaded', () => {
     expect(isClosedSiteAdmin(withToken('missed-old-token'))).toBe(true);
     expect(isClosedSiteAdmin(withToken('seen-token'))).toBe(true);
     expect(isClosedSiteAdmin(withToken('seen-old-token'))).toBe(false);
+  });
+
+  it('take the token a rotation replaced only through its grace, though the session goes on', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    createDb();
+    const now = Date.now();
+    const graced = {
+      ...session('graced', 'active', now + 60_000),
+      previousTokenHash: hashSessionToken('graced-old-token'),
+      previousTokenExpiresAt: now + 3000,
+    };
+    rawDb!
+      .prepare('INSERT INTO "admin-sessions" (sessionUuid, data) VALUES (?, ?)')
+      .run(graced.sessionUuid, JSON.stringify(graced));
+    rememberClosedSiteAdmins(rawDb!);
+
+    const withToken = (token: string) => {
+      const request = new IncomingMessage(new Socket());
+      request.headers.cookie = `thei-admin-session-token=${token}`;
+      return createEvent(request, new ServerResponse(request));
+    };
+    expect(isClosedSiteAdmin(withToken('graced-old-token'))).toBe(true);
+    vi.setSystemTime(now + 3000);
+    expect(isClosedSiteAdmin(withToken('graced-old-token'))).toBe(false);
+    expect(isClosedSiteAdmin(withToken('graced-token'))).toBe(true);
   });
 
   it('recognise nobody early when the table cannot be read', () => {
@@ -152,7 +179,7 @@ describe('admin session expiration', () => {
         { sessionUuid: destroyed.sessionUuid, data: destroyed },
       ])
       .run();
-    expiredMemory.previousToken = 'old-expired-token';
+    expiredMemory.previousTokenHash = hashSessionToken('old-expired-token');
     rememberSessionInMemory(expiredMemory);
     rememberSessionInMemory(active);
 
@@ -176,9 +203,11 @@ describe('admin session expiration', () => {
     expect(result.find((item) => item.sessionUuid === 'destroyed')?.state).toBe(
       'destroyed',
     );
-    expect(memorySessions.has(expiredMemory.token)).toBe(false);
-    expect(memorySessions.has(active.token)).toBe(true);
-    expect(memorySessions.has('old-expired-token')).toBe(false);
+    expect(memorySessions.has(expiredMemory.tokenHash)).toBe(false);
+    expect(memorySessions.has(active.tokenHash)).toBe(true);
+    expect(memorySessions.has(hashSessionToken('old-expired-token'))).toBe(
+      false,
+    );
     expect(
       db
         .select()
@@ -198,14 +227,14 @@ describe('admin session expiration', () => {
         { sessionUuid: other.sessionUuid, data: other },
       ])
       .run();
-    other.previousToken = 'old-other-token';
+    other.previousTokenHash = hashSessionToken('old-other-token');
     rememberSessionInMemory(current);
     rememberSessionInMemory(other);
 
-    expect(await destroyOtherAdminSessions(current.sessionUuid)).toBe(true);
-    expect(memorySessions.get(current.token)).toBe(current);
-    expect(memorySessions.has(other.token)).toBe(false);
-    expect(memorySessions.has('old-other-token')).toBe(false);
+    expect(destroyOtherAdminSessions(current.sessionUuid)).toBe(true);
+    expect(memorySessions.get(current.tokenHash)).toBe(current);
+    expect(memorySessions.has(other.tokenHash)).toBe(false);
+    expect(memorySessions.has(hashSessionToken('old-other-token'))).toBe(false);
     expect(
       db
         .select()

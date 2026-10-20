@@ -69,7 +69,7 @@ export default defineEventHandler(async (event) => {
       (config.secretPhrase !== previous.secretPhrase ||
         config.password.hash !== previous.password.hash)
     )
-      await destroyOtherAdminSessions(currentSession.sessionUuid);
+      destroyOtherAdminSessions(currentSession.sessionUuid);
   });
   queue = save.catch(() => {});
   await save;
