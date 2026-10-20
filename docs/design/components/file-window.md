@@ -103,8 +103,9 @@ The editor goes one screen at a time:
   it, the still chosen there being the family's at once. «Готово», the foot's
   one button, full width with a tick, is off until the field holds words or,
   under it, the pale «Без описания файла» with a dead face is pressed: that
-  only lets «Готово» go on, so the rest of the screen stays at hand. Back
-  returns to the screen the file was taken on.
+  only lets «Готово» go on, so the rest of the screen stays at hand. It is
+  there only while the field is empty, and words in the field take it away
+  with the choice made. Back returns to the screen the file was taken on.
 - A file already stored, taken as it is — opened by «Изменить», picked in
   the library, found again by its bytes — and a saved variant are handed over
   at once: their foot's button reads «Готово».

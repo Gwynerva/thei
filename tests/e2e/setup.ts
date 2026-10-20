@@ -7,7 +7,15 @@ export default async function setup() {
   const api = await request.newContext({ baseURL: E2E_ORIGIN });
   const marker = await api.get('/test-fixture.json');
   expect(await marker.json()).toEqual({ fixture: 'thei-regression' });
-  const response = await api.get('/');
+  // A fixture kept from earlier runs boots into the update tasks a release
+  // brings, closed until they are done: its pages lead to the update screen.
+  let response = await api.get('/');
+  for (
+    const until = Date.now() + 600_000;
+    response.url().includes('/update/') && Date.now() < until;
+    response = await api.get('/')
+  )
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
   if (response.url().includes('/install')) {
     expect(
       await (

@@ -983,12 +983,14 @@ function done() {
 const descriptionField =
   useTemplateRef<InstanceType<typeof FileDescriptionField>>('descriptionField');
 /**
- * Going on without a description, chosen under the field: it only lets
- * «Готово» go on, so the rest of the screen — a video's still — stays at hand.
+ * Going on without a description, chosen under the field while it is empty:
+ * it only lets «Готово» go on, so the rest of the screen — a video's still —
+ * stays at hand.
  */
 const withoutDescription = ref(false);
 watch(taken, () => (withoutDescription.value = false));
-// Words put in the field, typed or taken from a proposal, take it back.
+// Words put in the field, typed or taken from a proposal, take the choice
+// away with it.
 watch(
   () => descriptionField.value?.filled,
   (filled) => {
@@ -1661,9 +1663,10 @@ const directHref = computed(() =>
               global
               embedded
               required
-              @input="withoutDescription = false"
             />
+            <!-- No fade: the screen's height changes with it at once. -->
             <button
+              v-if="!descriptionField?.filled"
               type="button"
               class="-ml-xs flex cursor-pointer items-center gap-1
                 rounded-normal px-xs py-0.5 text-xs transition

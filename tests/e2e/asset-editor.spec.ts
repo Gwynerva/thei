@@ -477,12 +477,24 @@ test('a video variant is made as a job the editor follows', async ({
   ).toHaveAttribute('aria-pressed', 'true');
   // Going on without a description only lets «Done» go on: the still stays
   // at hand until then.
-  const { done, skipDescription: withoutDescription } = uploadControls(page);
+  const {
+    done,
+    description,
+    skipDescription: withoutDescription,
+  } = uploadControls(page);
   await expect(done).toBeDisabled();
   await withoutDescription.click();
   await expect(withoutDescription).toHaveAttribute('aria-pressed', 'true');
   await expect(still).toBeVisible();
   await expect(done).toBeEnabled();
+  // It is offered only while the field is empty: words take it away, and
+  // with it the choice made.
+  await description.fill('A test clip');
+  await expect(withoutDescription).toHaveCount(0);
+  await description.fill('');
+  await expect(withoutDescription).toHaveAttribute('aria-pressed', 'false');
+  await expect(done).toBeDisabled();
+  await withoutDescription.click();
   await done.click();
   await expect(page.locator('[data-result]')).toContainText('assetUuid');
   const [stored] = JSON.parse(
