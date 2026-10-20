@@ -83,9 +83,7 @@ asked about stays in sight.
   stays visible over a row's picture. A choice pinned at the top of the list
   is the row Enter takes until something is typed; after that, it is the
   first match. The link picker rings it only while its search field has the
-  focus, since elsewhere Enter belongs to ✓. Rows offered before anything is
-  typed and found by nothing — the quick search's earlier queries — wait for
-  the keys or the pointer instead (`useActiveRow`'s `start` of -1).
+  focus, since elsewhere Enter belongs to ✓.
 - **The arrow is on by default.** It points at the middle of the anchor, or,
   for an anchor as wide as the popup, near the edge the popup is aligned to,
   and goes when it would point past the anchor. Turn it off (`:arrow="false"`)
