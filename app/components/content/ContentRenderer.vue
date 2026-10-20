@@ -223,7 +223,7 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
           v-else-if="block.type === 'list'"
           v-bind="blockAnchor(block)"
           :items="block.data.items as any[]"
-          :style="block.data.style as any"
+          :list-style="block.data.style as any"
           :meta="block.data.meta as any"
         />
         <blockquote

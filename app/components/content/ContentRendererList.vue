@@ -13,13 +13,15 @@ type ListMeta = {
   counterType?: string;
 };
 
+// The list tool's `style` is `listStyle` here: a prop named `style` is merged
+// as CSS by Vue, which turns "ordered" into an object.
 const props = withDefaults(
   defineProps<{
     items: ListItem[];
-    style?: 'unordered' | 'ordered' | 'checklist';
+    listStyle?: 'unordered' | 'ordered' | 'checklist';
     meta?: ListMeta;
   }>(),
-  { style: 'unordered', meta: undefined },
+  { listStyle: 'unordered', meta: undefined },
 );
 
 /**
@@ -36,20 +38,20 @@ const COUNTER_TYPES: Record<string, { type: string; style: string }> = {
 };
 
 const start = computed(() =>
-  props.style === 'ordered' &&
+  props.listStyle === 'ordered' &&
   typeof props.meta?.start === 'number' &&
   props.meta.start !== 1
     ? props.meta.start
     : undefined,
 );
 const counterType = computed(() =>
-  props.style === 'ordered' && props.meta?.counterType
+  props.listStyle === 'ordered' && props.meta?.counterType
     ? COUNTER_TYPES[props.meta.counterType]
     : undefined,
 );
 /** The markers are drawn, so the count they show is kept by CSS. */
-const listStyle = computed(() => {
-  if (props.style !== 'ordered') return undefined;
+const counterStyle = computed(() => {
+  if (props.listStyle !== 'ordered') return undefined;
   return {
     ...(start.value !== undefined
       ? { counterReset: `item ${start.value - 1}` }
@@ -65,23 +67,25 @@ const listStyle = computed(() => {
   <!-- `role="list"`: some readers stop announcing a list drawn without its
   own markers. -->
   <component
-    :is="style === 'ordered' ? 'ol' : 'ul'"
+    :is="listStyle === 'ordered' ? 'ol' : 'ul'"
     class="content-list"
-    :class="`content-list-${style}`"
+    :class="`content-list-${listStyle}`"
     role="list"
     :start="start"
     :type="counterType?.type"
-    :style="listStyle"
+    :style="counterStyle"
   >
     <li
       v-for="(item, index) in items"
       :key="index"
       class="content-list__item"
-      :data-checked="style === 'checklist' ? !!item.meta?.checked : undefined"
+      :data-checked="
+        listStyle === 'checklist' ? !!item.meta?.checked : undefined
+      "
     >
       <!-- The list tool's own tick, so it is drawn alike in the editor. -->
       <span
-        v-if="style === 'checklist'"
+        v-if="listStyle === 'checklist'"
         class="content-list__check"
         aria-hidden="true"
         ><svg viewBox="0 0 24 24" fill="none">
@@ -100,7 +104,7 @@ const listStyle = computed(() => {
         v-if="item.items?.length"
         class="content-list__children"
         :items="item.items"
-        :style="style"
+        :list-style="listStyle"
         :meta="meta && { counterType: meta.counterType }"
       />
     </li>
