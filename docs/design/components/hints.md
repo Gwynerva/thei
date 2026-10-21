@@ -17,10 +17,10 @@ mouse, a finger or the keyboard is on [Interaction](../foundations/interaction.m
   count, a compact badge, a status mark: the hint says what it is in words.
 - **A control that cannot act until something is done.** Its hint says
   what: the control's name in bold, then the reason in italic, a line each,
-  as a form's Save does for what the form still needs. Such a control is
-  `aria-disabled` rather than `disabled`, so that a tap or a press reaches it
-  and can say the same where a hint does not show (see
-  [Buttons](buttons.md)).
+  as a form's Save does for what the form still needs. A form's Save is then
+  `aria-disabled` rather than `disabled` (`useBlockedReason`,
+  `app/composables/form-needs.ts`), so a tap or a press reaches it and it
+  says the same where a hint does not show (see [Buttons](buttons.md)).
 
 Not for words already on screen in full, and not for anything long: a hint
 that needs more than a few sentences belongs on the page, or in a popup.

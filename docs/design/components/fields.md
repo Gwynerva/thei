@@ -15,8 +15,7 @@ names itself with an `aria-label`.
 
 - Wrap each field in `Field`, label first.
 - Give every field a label. A switch with no label of its own has its words
-  beside it, which count as one (`FieldToggle`). Under a finger the switch
-  answers in a finger's height around it, its look unchanged.
+  beside it, which count as one (`FieldToggle`).
 - The control the label should focus carries `data-label-focus`;
   `FieldInput`, `FieldTextarea`, `FieldSelect` and `FieldDateButton` already
   do.
@@ -29,13 +28,6 @@ names itself with an `aria-label`.
   `border-border-error`.
 - Suggestions of the site's own — recommended tags, candidates — wait next to
   the field they are about, never in the form's header.
-- A field the form cannot be saved without names its place: the `need` of
-  its `Field`, the key of its need in the form's `useFormNeeds`
-  (`app/composables/form-needs.ts`). Once a save was asked for and refused
-  for it, its label and asterisk turn to the error colour, its ✦ keeping its
-  own, and the form may bring it into view; filled, it turns back. A need
-  with no `Field` of its own — a section, a list — marks its place with
-  `data-need`.
 
 ## The ✦ at a label
 
@@ -83,6 +75,9 @@ with the old. See [File window](file-window.md).
 - `app/components/field/FieldLabel.vue` — `font-semibold tracking-tight`;
   `required` adds an accent asterisk.
 - `app/components/field/FieldHint.vue` — `text-sm tracking-tight text-text-2`.
+- `app/components/field/FieldToggle.vue` — under a finger its switch answers
+  in a finger's height around it (a `pointer-coarse:` area of its own), its
+  look unchanged.
 - `app/components/ai/AiFieldOffer.vue` — the ✦ and its popup.
 - `app/components/ai/AiAskState.vue` — in the box to ask in, the session at
   work, or the answer with nothing to propose; the editor's ✦ shows the same.
@@ -97,6 +92,13 @@ with the old. See [File window](file-window.md).
 ```
 
 (From the event form, `app/pages/admin/events/components/AdminAddEditEvent.vue`.)
+
+A field a form cannot be saved without carries a `need` on its `Field`: the
+key of its need in the form's `useFormNeeds` (`app/composables/form-needs.ts`).
+Once a save was asked for and refused for it, its label and asterisk turn to
+the error colour, its ✦ keeping its own, and the form may bring it into view;
+filled, it turns back. A need with no `Field` of its own — a section, a list —
+marks its place with `data-need`.
 
 The other controls in `app/components/field/`: `FieldInput`, `FieldTextarea`,
 `FieldSelect` ([Select](select.md)), `FieldToggle`, `FieldOptions`,

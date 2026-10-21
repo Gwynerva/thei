@@ -78,9 +78,9 @@ and behaves.
 - Nothing typed, everyone is offered what they searched for before, under
   «Вы искали»: a row for each of the last twelve queries, newest first, with
   the history icon, cut short with an ellipsis and read whole in its hint. A
-  visitor sees nothing else; the owner sees it last, after «Недавние». The
-  rows are not ringed until Tab, ↓ or the pointer goes to them, so Enter in an
-  empty field does nothing; chosen, a query is put back in the field and
+  visitor sees nothing else; the owner sees it last, after «Недавние».
+  `SearchPopup.vue` rings these rows only once Tab, ↓ or the pointer goes to
+  them, so Enter in an empty field does nothing; chosen, a query is put back in the field and
   searched for again there. The bin at the right of the heading forgets them
   all.
 - A query is remembered once the reader goes somewhere with it — a result
