@@ -12,6 +12,7 @@ import { migrations_0_0_3, schema_0_0_3 } from './fixtures/schema-0.0.3';
 import { migrations_0_0_4, schema_0_0_4 } from './fixtures/schema-0.0.4';
 import { migrations_0_0_5, schema_0_0_5 } from './fixtures/schema-0.0.5';
 import { migrations_0_0_6, schema_0_0_6 } from './fixtures/schema-0.0.6';
+import { migrations_0_0_7, schema_0_0_7 } from './fixtures/schema-0.0.7';
 import { insertRow } from '../helpers/insert-row';
 import { writeSiteConfig_0_0_2 } from '../helpers/site-config';
 
@@ -400,6 +401,7 @@ describe.each([
   ['0.0.4', schema_0_0_4, migrations_0_0_4],
   ['0.0.5', schema_0_0_5, migrations_0_0_5],
   ['0.0.6', schema_0_0_6, migrations_0_0_6],
+  ['0.0.7', schema_0_0_7, migrations_0_0_7],
 ] as const)('upgrading a %s site', (_version, schema, migrations) => {
   it('ends with the schema a new installation starts from', async () => {
     for (const statement of schema) rawDb.prepare(statement).run();

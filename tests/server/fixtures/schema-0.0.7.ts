@@ -1,0 +1,572 @@
+// The schema Thei 0.0.7 created, frozen from
+// `git show v0.0.7:update/migrations/0.0.1-baseline.ts`. Every released
+// version keeps a file like this, so the upgrade from it stays tested.
+export const schema_0_0_7: string[] = [
+  `CREATE TABLE \`profiles\` (
+	\`profileId\` text PRIMARY KEY NOT NULL,
+	\`displayName\` text NOT NULL,
+	\`slogan\` text DEFAULT '' NOT NULL,
+	\`nickname\` text DEFAULT '' NOT NULL,
+	\`birthDate\` text DEFAULT '' NOT NULL,
+	\`currentAvatarId\` text,
+	\`bannerAssetUuid\` text,
+	\`faviconAssetUuid\` text,
+	\`facts\` text DEFAULT '[]' NOT NULL,
+	\`updatedAt\` integer DEFAULT 0 NOT NULL
+);
+`,
+  `CREATE TABLE \`profile-avatars\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`assetUuid\` text NOT NULL,
+	\`createdAt\` integer NOT NULL
+);
+`,
+  `CREATE INDEX \`profile-avatars-date-idx\` ON \`profile-avatars\` (\`createdAt\`,\`id\`);`,
+  `CREATE TABLE \`profile-pinned-pages\` (
+	\`pageUuid\` text PRIMARY KEY NOT NULL,
+	\`sortOrder\` integer NOT NULL,
+	FOREIGN KEY (\`pageUuid\`) REFERENCES \`pages\`(\`pageUuid\`) ON UPDATE no action ON DELETE cascade
+);
+`,
+  `CREATE TABLE \`profile-external-links\` (
+	\`url\` text PRIMARY KEY NOT NULL,
+	\`name\` text NOT NULL,
+	\`isPrivate\` integer DEFAULT false NOT NULL,
+	\`sortOrder\` integer NOT NULL,
+	\`note\` text DEFAULT '' NOT NULL
+);
+`,
+  `CREATE TABLE \`statuses\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`ownerType\` text NOT NULL,
+	\`ownerId\` text NOT NULL,
+	\`kind\` text DEFAULT 'regular' NOT NULL,
+	\`assetUuid\` text,
+	\`text\` text NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`date\` text DEFAULT '' NOT NULL
+);
+`,
+  `CREATE INDEX \`statuses-owner-date-idx\` ON \`statuses\` (\`ownerType\`,\`ownerId\`,\`date\`,\`createdAt\`,\`id\`);`,
+  `CREATE TABLE \`assets\` (
+	\`assetUuid\` text PRIMARY KEY NOT NULL,
+	\`slug\` text NOT NULL,
+	\`extension\` text NOT NULL,
+	\`familyUuid\` text NOT NULL,
+	\`contentHash\` text NOT NULL,
+	\`settingsKey\` text NOT NULL,
+	\`settings\` text,
+	\`type\` text NOT NULL,
+	\`size\` integer NOT NULL,
+	\`touchedAt\` integer NOT NULL,
+	\`meta\` text
+);
+`,
+  `CREATE UNIQUE INDEX \`assets_slug_unique\` ON \`assets\` (\`slug\`);`,
+  `CREATE UNIQUE INDEX \`assets_family_content_settings_idx\` ON \`assets\` (\`familyUuid\`,\`contentHash\`,\`settingsKey\`);`,
+  `CREATE INDEX \`assets_family_idx\` ON \`assets\` (\`familyUuid\`);`,
+  `CREATE INDEX \`assets_content_hash_idx\` ON \`assets\` (\`contentHash\`);`,
+  `CREATE TABLE \`asset-descriptions\` (
+	\`familyUuid\` text PRIMARY KEY NOT NULL,
+	\`text\` text NOT NULL,
+	\`updatedAt\` integer NOT NULL
+);
+`,
+  `CREATE TABLE \`asset-usages\` (
+	\`assetUuid\` text NOT NULL,
+	\`containerType\` text NOT NULL,
+	\`containerId\` text NOT NULL,
+	\`role\` text NOT NULL,
+	\`meta\` text,
+	PRIMARY KEY(\`assetUuid\`, \`containerType\`, \`containerId\`, \`role\`)
+);
+`,
+  `CREATE INDEX \`asset-usages-container-idx\` ON \`asset-usages\` (\`containerType\`,\`containerId\`);`,
+  `CREATE INDEX \`asset-usages-asset-idx\` ON \`asset-usages\` (\`assetUuid\`);`,
+  `CREATE TABLE \`backups\` (
+	\`backupUuid\` text PRIMARY KEY NOT NULL,
+	\`kind\` text NOT NULL,
+	\`startedAt\` integer NOT NULL,
+	\`completedAt\` integer NOT NULL,
+	\`fileCount\` integer NOT NULL,
+	\`byteCount\` integer NOT NULL,
+	\`clientLabel\` text
+);
+`,
+  `CREATE INDEX \`backups-completed-idx\` ON \`backups\` (\`completedAt\`);`,
+  `CREATE TABLE \`content\` (
+	\`contentUuid\` text PRIMARY KEY NOT NULL,
+	\`ownerType\` text NOT NULL,
+	\`ownerId\` text NOT NULL,
+	\`slot\` text NOT NULL,
+	\`data\` text NOT NULL,
+	\`blockCount\` integer DEFAULT 0 NOT NULL,
+	\`assetCount\` integer DEFAULT 0 NOT NULL,
+	\`assetTotalSize\` integer DEFAULT 0 NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`updatedAt\` integer NOT NULL
+);
+`,
+  `CREATE UNIQUE INDEX \`content-owner-slot-idx\` ON \`content\` (\`ownerType\`,\`ownerId\`,\`slot\`);`,
+  `CREATE INDEX \`content-owner-idx\` ON \`content\` (\`ownerType\`,\`ownerId\`);`,
+  `CREATE TABLE \`content-history\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`ownerType\` text NOT NULL,
+	\`ownerRef\` text NOT NULL,
+	\`slot\` text NOT NULL,
+	\`kind\` text NOT NULL,
+	\`reason\` text,
+	\`data\` text NOT NULL,
+	\`digest\` text NOT NULL,
+	\`wordCount\` integer NOT NULL,
+	\`blockCount\` integer NOT NULL,
+	\`assetCount\` integer NOT NULL,
+	\`size\` integer NOT NULL,
+	\`assetUuids\` text NOT NULL,
+	\`writer\` text DEFAULT '' NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`updatedAt\` integer NOT NULL,
+	\`heldBy\` text
+);
+`,
+  `CREATE INDEX \`content-history-field-idx\` ON \`content-history\` (\`ownerType\`,\`ownerRef\`,\`slot\`,\`kind\`,\`createdAt\`);`,
+  `CREATE INDEX \`content-history-kind-idx\` ON \`content-history\` (\`kind\`,\`createdAt\`);`,
+  `CREATE TABLE \`content-anchors\` (
+	\`ownerType\` text NOT NULL,
+	\`ownerId\` text NOT NULL,
+	\`slot\` text NOT NULL,
+	\`anchor\` text NOT NULL,
+	\`blockId\` text NOT NULL,
+	\`title\` text NOT NULL,
+	\`seenAt\` integer NOT NULL,
+	PRIMARY KEY(\`ownerType\`, \`ownerId\`, \`slot\`, \`anchor\`, \`blockId\`)
+);
+`,
+  `CREATE INDEX \`content-anchors-field-idx\` ON \`content-anchors\` (\`ownerType\`,\`ownerId\`,\`slot\`);`,
+  `CREATE TABLE \`events\` (
+	\`eventUuid\` text PRIMARY KEY NOT NULL,
+	\`title\` text NOT NULL,
+	\`summary\` text NOT NULL,
+	\`access\` text NOT NULL,
+	\`humanReadableSlug\` text NOT NULL,
+	\`publicId\` text NOT NULL,
+	\`action\` text,
+	\`reminder\` text DEFAULT '' NOT NULL,
+	\`synonyms\` text DEFAULT '[]' NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`updatedAt\` integer NOT NULL
+);
+`,
+  `CREATE UNIQUE INDEX \`events_publicId_unique\` ON \`events\` (\`publicId\`);`,
+  `CREATE TABLE \`diary-entries\` (
+	\`diaryUuid\` text PRIMARY KEY NOT NULL,
+	\`date\` text NOT NULL,
+	\`access\` text NOT NULL,
+	\`reminder\` text DEFAULT '' NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`updatedAt\` integer NOT NULL
+);
+`,
+  `CREATE UNIQUE INDEX \`diary-entries-date-idx\` ON \`diary-entries\` (\`date\`);`,
+  `CREATE TABLE \`projects\` (
+	\`projectUuid\` text PRIMARY KEY NOT NULL,
+	\`title\` text NOT NULL,
+	\`summary\` text NOT NULL,
+	\`access\` text NOT NULL,
+	\`humanReadableSlug\` text NOT NULL,
+	\`publicId\` text NOT NULL,
+	\`showcase\` integer DEFAULT false NOT NULL,
+	\`cv\` integer DEFAULT false NOT NULL,
+	\`action\` text,
+	\`reminder\` text DEFAULT '' NOT NULL,
+	\`synonyms\` text DEFAULT '[]' NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`updatedAt\` integer NOT NULL
+);
+`,
+  `CREATE UNIQUE INDEX \`projects_publicId_unique\` ON \`projects\` (\`publicId\`);`,
+  `CREATE TABLE \`pages\` (
+	\`pageUuid\` text PRIMARY KEY NOT NULL,
+	\`slug\` text NOT NULL,
+	\`title\` text NOT NULL,
+	\`summary\` text NOT NULL,
+	\`access\` text NOT NULL,
+	\`reminder\` text DEFAULT '' NOT NULL,
+	\`synonyms\` text DEFAULT '[]' NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`updatedAt\` integer NOT NULL
+);
+`,
+  `CREATE UNIQUE INDEX \`pages_slug_unique\` ON \`pages\` (\`slug\`);`,
+  `CREATE TABLE \`admin-sessions\` (
+	\`sessionUuid\` text PRIMARY KEY NOT NULL,
+	\`data\` text NOT NULL
+);
+`,
+  `CREATE TABLE \`sign-in-links\` (
+	\`tokenHash\` text PRIMARY KEY NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`expiresAt\` integer NOT NULL,
+	\`createdFrom\` text
+);
+`,
+  `CREATE INDEX \`sign-in-links-expires-idx\` ON \`sign-in-links\` (\`expiresAt\`);`,
+  `CREATE TABLE \`share-links\` (
+	\`shareUuid\` text PRIMARY KEY NOT NULL,
+	\`token\` text NOT NULL,
+	\`entityType\` text NOT NULL,
+	\`entityUuid\` text NOT NULL,
+	\`label\` text DEFAULT '' NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`extendedAt\` integer,
+	\`expiresAt\` integer NOT NULL
+);
+`,
+  `CREATE UNIQUE INDEX \`share-links_token_unique\` ON \`share-links\` (\`token\`);`,
+  `CREATE INDEX \`share-links-entity-idx\` ON \`share-links\` (\`entityType\`,\`entityUuid\`);`,
+  `CREATE INDEX \`share-links-expires-idx\` ON \`share-links\` (\`expiresAt\`);`,
+  `CREATE TABLE \`project-content-sections\` (
+	\`sectionUuid\` text PRIMARY KEY NOT NULL,
+	\`projectUuid\` text NOT NULL,
+	\`title\` text NOT NULL,
+	\`summary\` text DEFAULT '' NOT NULL,
+	\`humanReadableSlug\` text NOT NULL,
+	\`publicId\` text NOT NULL,
+	\`isPrivate\` integer DEFAULT false NOT NULL,
+	\`sortOrder\` integer NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`updatedAt\` integer NOT NULL
+);
+`,
+  `CREATE INDEX \`project-content-sections-project-idx\` ON \`project-content-sections\` (\`projectUuid\`,\`sortOrder\`);`,
+  `CREATE UNIQUE INDEX \`project-content-sections-public-id-unique\` ON \`project-content-sections\` (\`publicId\`);`,
+  `CREATE TABLE \`periods\` (
+	\`ownerType\` text NOT NULL,
+	\`ownerId\` text NOT NULL,
+	\`sortOrder\` integer NOT NULL,
+	\`startDate\` text NOT NULL,
+	\`endDate\` text NOT NULL,
+	\`precision\` text DEFAULT 'exact' NOT NULL,
+	\`precisionNote\` text DEFAULT '' NOT NULL,
+	\`label\` text DEFAULT '' NOT NULL,
+	PRIMARY KEY(\`ownerType\`, \`ownerId\`, \`sortOrder\`),
+	CONSTRAINT "periods-owner-type-check" CHECK("periods"."ownerType" in ('event', 'project-section'))
+);
+`,
+  `CREATE TABLE \`entity-relations\` (
+	\`firstType\` text NOT NULL,
+	\`firstId\` text NOT NULL,
+	\`secondType\` text NOT NULL,
+	\`secondId\` text NOT NULL,
+	\`type\` text NOT NULL,
+	\`note\` text,
+	\`firstSortOrder\` integer NOT NULL,
+	\`secondSortOrder\` integer NOT NULL,
+	PRIMARY KEY(\`firstType\`, \`firstId\`, \`secondType\`, \`secondId\`)
+);
+`,
+  `CREATE INDEX \`entity-relations-first-idx\` ON \`entity-relations\` (\`firstType\`,\`firstId\`,\`firstSortOrder\`);`,
+  `CREATE INDEX \`entity-relations-second-idx\` ON \`entity-relations\` (\`secondType\`,\`secondId\`,\`secondSortOrder\`);`,
+  `CREATE TABLE \`tags\` (
+	\`tagUuid\` text PRIMARY KEY NOT NULL,
+	\`title\` text NOT NULL,
+	\`normalizedTitle\` text NOT NULL,
+	\`slug\` text NOT NULL,
+	\`publicId\` text NOT NULL,
+	\`description\` text DEFAULT '' NOT NULL,
+	\`synonyms\` text DEFAULT '[]' NOT NULL,
+	\`updatedAt\` integer DEFAULT 0 NOT NULL
+);
+`,
+  `CREATE UNIQUE INDEX \`tags_normalizedTitle_unique\` ON \`tags\` (\`normalizedTitle\`);`,
+  `CREATE UNIQUE INDEX \`tags_slug_unique\` ON \`tags\` (\`slug\`);`,
+  `CREATE UNIQUE INDEX \`tags_publicId_unique\` ON \`tags\` (\`publicId\`);`,
+  `CREATE TABLE \`tag-usages\` (
+	\`tagUuid\` text NOT NULL,
+	\`containerType\` text NOT NULL,
+	\`containerId\` text NOT NULL,
+	\`sortOrder\` integer NOT NULL,
+	PRIMARY KEY(\`tagUuid\`, \`containerType\`, \`containerId\`)
+);
+`,
+  `CREATE INDEX \`tag-usages-container-idx\` ON \`tag-usages\` (\`containerType\`,\`containerId\`);`,
+  `CREATE INDEX \`tag-usages-tag-idx\` ON \`tag-usages\` (\`tagUuid\`);`,
+  `CREATE TABLE \`external-links\` (
+	\`url\` text PRIMARY KEY NOT NULL,
+	\`title\` text,
+	\`description\` text,
+	\`faviconKey\` text NOT NULL,
+	\`accent\` text,
+	\`status\` text DEFAULT 'complete' NOT NULL,
+	\`touchedAt\` integer NOT NULL
+);
+`,
+  `CREATE TABLE \`project-external-links\` (
+	\`projectUuid\` text NOT NULL,
+	\`url\` text NOT NULL,
+	\`sortOrder\` integer NOT NULL,
+	\`isPrivate\` integer DEFAULT false NOT NULL,
+	\`note\` text DEFAULT '' NOT NULL,
+	PRIMARY KEY(\`projectUuid\`, \`url\`),
+	FOREIGN KEY (\`projectUuid\`) REFERENCES \`projects\`(\`projectUuid\`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (\`url\`) REFERENCES \`external-links\`(\`url\`) ON UPDATE no action ON DELETE no action
+);
+`,
+  `CREATE INDEX \`project-external-links-project-idx\` ON \`project-external-links\` (\`projectUuid\`,\`sortOrder\`);`,
+  `CREATE TABLE \`event-external-links\` (
+	\`eventUuid\` text NOT NULL,
+	\`url\` text NOT NULL,
+	\`sortOrder\` integer NOT NULL,
+	\`isPrivate\` integer DEFAULT false NOT NULL,
+	\`note\` text DEFAULT '' NOT NULL,
+	PRIMARY KEY(\`eventUuid\`, \`url\`),
+	FOREIGN KEY (\`eventUuid\`) REFERENCES \`events\`(\`eventUuid\`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (\`url\`) REFERENCES \`external-links\`(\`url\`) ON UPDATE no action ON DELETE no action
+);
+`,
+  `CREATE INDEX \`event-external-links-event-idx\` ON \`event-external-links\` (\`eventUuid\`,\`sortOrder\`);`,
+  `CREATE TABLE \`api-tokens\` (
+	\`tokenUuid\` text PRIMARY KEY NOT NULL,
+	\`label\` text NOT NULL,
+	\`tokenHash\` text NOT NULL,
+	\`scopes\` text NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`lastUsedAt\` integer,
+	\`lastClient\` text,
+	\`kind\` text DEFAULT 'token' NOT NULL,
+	\`clientId\` text,
+	\`resource\` text,
+	\`accessExpiresAt\` integer,
+	\`refreshHash\` text,
+	\`refreshExpiresAt\` integer,
+	\`previousRefreshHash\` text,
+	\`refreshedAt\` integer
+);
+`,
+  `CREATE UNIQUE INDEX \`api-tokens_tokenHash_unique\` ON \`api-tokens\` (\`tokenHash\`);`,
+  `CREATE UNIQUE INDEX \`api-tokens-refresh-idx\` ON \`api-tokens\` (\`refreshHash\`);`,
+  `CREATE INDEX \`api-tokens-previous-refresh-idx\` ON \`api-tokens\` (\`previousRefreshHash\`);`,
+  `CREATE TABLE \`oauth-clients\` (
+	\`clientId\` text PRIMARY KEY NOT NULL,
+	\`kind\` text NOT NULL,
+	\`name\` text NOT NULL,
+	\`uri\` text,
+	\`redirectUris\` text NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`fetchedAt\` integer,
+	\`staleAt\` integer,
+	\`lastUsedAt\` integer
+);
+`,
+  `CREATE TABLE \`oauth-authorizations\` (
+	\`requestId\` text PRIMARY KEY NOT NULL,
+	\`clientId\` text NOT NULL,
+	\`redirectUri\` text NOT NULL,
+	\`codeChallenge\` text NOT NULL,
+	\`state\` text,
+	\`resource\` text NOT NULL,
+	\`requestedScopes\` text NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`expiresAt\` integer NOT NULL,
+	\`codeHash\` text,
+	\`grantedScopes\` text,
+	\`label\` text,
+	\`tokenUuid\` text,
+	\`usedAt\` integer
+);
+`,
+  `CREATE UNIQUE INDEX \`oauth-authorizations_codeHash_unique\` ON \`oauth-authorizations\` (\`codeHash\`);`,
+  `CREATE INDEX \`oauth-authorizations-expires-idx\` ON \`oauth-authorizations\` (\`expiresAt\`);`,
+  `CREATE TABLE \`ai-usage\` (
+	\`day\` text PRIMARY KEY NOT NULL,
+	\`inputTokens\` integer DEFAULT 0 NOT NULL,
+	\`outputTokens\` integer DEFAULT 0 NOT NULL,
+	\`cacheReadTokens\` integer DEFAULT 0 NOT NULL,
+	\`cacheWriteTokens\` integer DEFAULT 0 NOT NULL,
+	\`calls\` integer DEFAULT 0 NOT NULL
+);
+`,
+  `CREATE TABLE \`ai-sessions\` (
+	\`sessionUuid\` text PRIMARY KEY NOT NULL,
+	\`title\` text DEFAULT '' NOT NULL,
+	\`origin\` text NOT NULL,
+	\`tokenUuid\` text,
+	\`client\` text,
+	\`templateId\` text,
+	\`model\` text,
+	\`state\` text DEFAULT 'idle' NOT NULL,
+	\`pinned\` integer DEFAULT false NOT NULL,
+	\`waiting\` integer DEFAULT 0 NOT NULL,
+	\`applied\` integer DEFAULT 0 NOT NULL,
+	\`rejected\` integer DEFAULT 0 NOT NULL,
+	\`tokens\` integer DEFAULT 0 NOT NULL,
+	\`error\` text,
+	\`createdAt\` integer NOT NULL,
+	\`lastActiveAt\` integer NOT NULL,
+	\`closedAt\` integer,
+	\`archivedAt\` integer,
+	\`context\` text
+);
+`,
+  `CREATE INDEX \`ai-sessions-active-idx\` ON \`ai-sessions\` (\`archivedAt\`,\`lastActiveAt\`);`,
+  `CREATE INDEX \`ai-sessions-app-idx\` ON \`ai-sessions\` (\`tokenUuid\`,\`client\`,\`lastActiveAt\`);`,
+  `CREATE INDEX \`ai-sessions-template-idx\` ON \`ai-sessions\` (\`templateId\`,\`createdAt\`);`,
+  `CREATE INDEX \`ai-sessions-waiting-idx\` ON \`ai-sessions\` (\`waiting\`);`,
+  `CREATE TABLE \`ai-messages\` (
+	\`messageUuid\` text PRIMARY KEY NOT NULL,
+	\`sessionUuid\` text NOT NULL,
+	\`seq\` integer NOT NULL,
+	\`role\` text NOT NULL,
+	\`text\` text DEFAULT '' NOT NULL,
+	\`parts\` text DEFAULT '[]' NOT NULL,
+	\`transcript\` text DEFAULT '[]' NOT NULL,
+	\`tokens\` integer DEFAULT 0 NOT NULL,
+	\`createdAt\` integer NOT NULL
+);
+`,
+  `CREATE UNIQUE INDEX \`ai-messages-seq-idx\` ON \`ai-messages\` (\`sessionUuid\`,\`seq\`);`,
+  `CREATE TABLE \`ai-actions\` (
+	\`actionUuid\` text PRIMARY KEY NOT NULL,
+	\`sessionUuid\` text NOT NULL,
+	\`messageUuid\` text,
+	\`bundleUuid\` text,
+	\`bundleOrder\` integer DEFAULT 0 NOT NULL,
+	\`atomic\` integer DEFAULT false NOT NULL,
+	\`kind\` text NOT NULL,
+	\`targetType\` text,
+	\`targetId\` text,
+	\`payload\` text NOT NULL,
+	\`parts\` text,
+	\`base\` text,
+	\`certainty\` text NOT NULL,
+	\`reason\` text DEFAULT '' NOT NULL,
+	\`state\` text NOT NULL,
+	\`supersedes\` text,
+	\`fingerprint\` text NOT NULL,
+	\`undo\` text,
+	\`assetUuids\` text DEFAULT '[]' NOT NULL,
+	\`appliedBy\` text,
+	\`proposed\` text,
+	\`createdAt\` integer NOT NULL,
+	\`decidedAt\` integer,
+	\`error\` text
+);
+`,
+  `CREATE INDEX \`ai-actions-session-idx\` ON \`ai-actions\` (\`sessionUuid\`,\`createdAt\`);`,
+  `CREATE INDEX \`ai-actions-target-idx\` ON \`ai-actions\` (\`targetType\`,\`targetId\`,\`state\`);`,
+  `CREATE INDEX \`ai-actions-state-idx\` ON \`ai-actions\` (\`state\`);`,
+  `CREATE INDEX \`ai-actions-fingerprint-idx\` ON \`ai-actions\` (\`fingerprint\`);`,
+  `CREATE TABLE \`ai-session-entities\` (
+	\`sessionUuid\` text NOT NULL,
+	\`entityType\` text NOT NULL,
+	\`entityId\` text NOT NULL,
+	\`role\` text NOT NULL,
+	\`at\` integer NOT NULL,
+	PRIMARY KEY(\`sessionUuid\`, \`entityType\`, \`entityId\`)
+);
+`,
+  `CREATE INDEX \`ai-session-entities-entity-idx\` ON \`ai-session-entities\` (\`entityType\`,\`entityId\`,\`at\`);`,
+  `CREATE TABLE \`ai-memory\` (
+	\`memoryUuid\` text PRIMARY KEY NOT NULL,
+	\`anchor\` text NOT NULL,
+	\`anchorType\` text DEFAULT '' NOT NULL,
+	\`anchorId\` text DEFAULT '' NOT NULL,
+	\`otherType\` text,
+	\`otherId\` text,
+	\`type\` text NOT NULL,
+	\`text\` text NOT NULL,
+	\`fingerprint\` text,
+	\`sessionUuid\` text,
+	\`createdAt\` integer NOT NULL,
+	\`updatedAt\` integer NOT NULL
+);
+`,
+  `CREATE INDEX \`ai-memory-anchor-idx\` ON \`ai-memory\` (\`anchor\`,\`anchorType\`,\`anchorId\`);`,
+  `CREATE INDEX \`ai-memory-other-idx\` ON \`ai-memory\` (\`otherType\`,\`otherId\`);`,
+  `CREATE INDEX \`ai-memory-fingerprint-idx\` ON \`ai-memory\` (\`fingerprint\`);`,
+  `CREATE TABLE \`ai-terms\` (
+	\`word\` text PRIMARY KEY NOT NULL,
+	\`display\` text NOT NULL,
+	\`note\` text DEFAULT '' NOT NULL,
+	\`forms\` text DEFAULT '[]' NOT NULL,
+	\`keep\` integer DEFAULT true NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`updatedAt\` integer NOT NULL
+);
+`,
+  `CREATE TABLE \`ai-digests\` (
+	\`entityType\` text NOT NULL,
+	\`entityId\` text NOT NULL,
+	\`text\` text NOT NULL,
+	\`fingerprint\` text NOT NULL,
+	\`model\` text DEFAULT '' NOT NULL,
+	\`at\` integer NOT NULL,
+	PRIMARY KEY(\`entityType\`, \`entityId\`)
+);
+`,
+  `CREATE TABLE \`ai-templates\` (
+	\`templateId\` text PRIMARY KEY NOT NULL,
+	\`builtin\` text,
+	\`title\` text,
+	\`instruction\` text,
+	\`lastSessionUuid\` text,
+	\`createdAt\` integer NOT NULL,
+	\`updatedAt\` integer NOT NULL
+);
+`,
+  `CREATE TABLE \`ai-template-coverage\` (
+	\`templateId\` text NOT NULL,
+	\`subject\` text NOT NULL,
+	\`entityType\` text,
+	\`entityId\` text,
+	\`fingerprint\` text NOT NULL,
+	\`parts\` text DEFAULT '[]' NOT NULL,
+	\`sessionUuid\` text,
+	\`at\` integer NOT NULL,
+	PRIMARY KEY(\`templateId\`, \`subject\`)
+);
+`,
+  `CREATE INDEX \`ai-template-coverage-entity-idx\` ON \`ai-template-coverage\` (\`entityType\`,\`entityId\`);`,
+  `CREATE TABLE \`ai-template-batches\` (
+	\`sessionUuid\` text NOT NULL,
+	\`templateId\` text NOT NULL,
+	\`subject\` text NOT NULL,
+	\`entityType\` text,
+	\`entityId\` text,
+	\`fingerprint\` text NOT NULL,
+	\`parts\` text DEFAULT '[]' NOT NULL,
+	PRIMARY KEY(\`sessionUuid\`, \`subject\`)
+);
+`,
+  `CREATE INDEX \`ai-template-batches-template-idx\` ON \`ai-template-batches\` (\`templateId\`);`,
+  `CREATE INDEX \`ai-template-batches-entity-idx\` ON \`ai-template-batches\` (\`entityType\`,\`entityId\`);`,
+];
+
+export const migrations_0_0_7 = [
+  '0.0.1/001-baseline',
+  '0.0.2/001-access-links-tokens',
+  '0.0.2/002-date-precision',
+  '0.0.2/003-entity-reminders',
+  '0.0.2/004-statuses-owner',
+  '0.0.2/005-tag-accent',
+  '0.0.2/006-relations',
+  '0.0.2/007-diary-entries',
+  '0.0.2/008-asset-recipe-crops',
+  '0.0.2/009-external-link-status',
+  '0.0.2/010-tag-names',
+  '0.0.2/011-config-shape',
+  '0.0.3/001-status-dates',
+  '0.0.3/002-content-history',
+  '0.0.3/003-shared-link-favicons',
+  '0.0.3/004-external-link-notes',
+  '0.0.4/001-period-labels',
+  '0.0.4/002-project-sections',
+  '0.0.4/003-audio-extensions',
+  '0.0.6/001-ai',
+  '0.0.6/002-ai-config',
+  '0.0.6/003-entities',
+  '0.0.6/004-file-captions',
+  '0.0.7/001-ai',
+  '0.0.7/002-check-coverage-session',
+  '0.0.7/003-session-token-hashes',
+];
