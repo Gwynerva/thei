@@ -11,11 +11,16 @@ import { settleActions } from './actions/apply';
 import { actionsAbout } from './actions/rows';
 import type { ActionRow } from './actions/types';
 import { entityMemory } from './memory/read';
-import { sessionModel } from './model/settings';
 import { sessionName, sessionsAbout } from './sessions/store';
-import { actionItems, entityRef, listSessions } from './sessions/view';
+import {
+  actionItems,
+  aiReadiness,
+  entityRef,
+  listSessions,
+} from './sessions/view';
 import { TEMPLATE_SOURCES } from './templates/sources';
 import { listTemplates } from './templates/store';
+import { asksRunning } from './field-ask';
 
 /**
  * What an entity's form shows of the AI, read whole when the form opens and
@@ -293,6 +298,17 @@ export async function entityPanel(key: EntityKey): Promise<AiEntityPanel> {
         instruction,
         ...(builtin ? { builtin } : {}),
       })),
-    modelReady: Boolean(sessionModel()),
+    ...aiFieldState(refOf(key)),
   };
+}
+
+/**
+ * What a field's ✦ reads, of an entity or a file by its ref: whether a model
+ * answers it, what is asked and still answered, and what waits for the
+ * owner, for the admin bar's ✦.
+ */
+export function aiFieldState(
+  ref: string,
+): Pick<AiEntityPanel, 'modelReady' | 'asking' | 'waiting'> {
+  return { ...aiReadiness(), asking: asksRunning(ref) };
 }

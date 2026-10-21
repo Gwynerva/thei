@@ -116,9 +116,7 @@ export function useAiSession(sessionUuid: Ref<string | undefined>) {
 
   async function reload(id: string) {
     try {
-      detail.value = await $fetch<AiSessionDetail>(
-        `/api/admin/ai/sessions/${id}`,
-      );
+      detail.value = await aiApi.session(id);
       missing.value = false;
     } catch {
       if (sessionUuid.value === id) missing.value = true;
@@ -267,6 +265,11 @@ export function newSessionLocation(
   };
 }
 
+/** The page of a session. */
+export function sessionLocation(sessionUuid: string) {
+  return { path: '/admin/ai/', query: { session: sessionUuid } };
+}
+
 const ARCHIVED: InjectionKey<Readonly<Ref<boolean>>> = Symbol('ai-archived');
 
 /**
@@ -301,6 +304,10 @@ export const aiApi = {
     }).catch(() => null);
     return list?.sessions.slice(0, 5) ?? [];
   },
+  /** One session whole: itself, what was said and what was proposed. */
+  session(sessionUuid: string) {
+    return $fetch<AiSessionDetail>(`/api/admin/ai/sessions/${sessionUuid}`);
+  },
   /** The few sessions the dashboard shows; none when unread. */
   sessionOverview(): Promise<AiSessionOverview | null> {
     return $fetch<AiSessionOverview>('/api/admin/ai/overview').catch(
@@ -327,6 +334,45 @@ export const aiApi = {
     return $fetch(`/api/admin/ai/actions/${actionUuid}/parts`, {
       method: 'POST',
       body: { parts },
+    });
+  },
+  /** The owner's words in place of the model's, by text key, before applying. */
+  editAction(actionUuid: string, values: Record<string, string>) {
+    return $fetch(`/api/admin/ai/actions/${actionUuid}/edit`, {
+      method: 'POST',
+      body: { values },
+    });
+  },
+  /**
+   * A proposal taken into a form, the form saved: its words as saved, which
+   * it counts as applied with when they are the owner's — or, a text edit
+   * taken in the editor, the parts taken and those left.
+   */
+  taken(
+    actionUuid: string,
+    body:
+      { values: Record<string, string> } | { parts: Record<string, string> },
+  ) {
+    return $fetch(`/api/admin/ai/actions/${actionUuid}/taken`, {
+      method: 'POST',
+      body,
+    });
+  },
+  /**
+   * Asks the model at a field's ✦ or a text's: `place` as the form names
+   * it, `current` what the form holds there unsaved, `label` the field's
+   * name. The session that answers, in the background.
+   */
+  ask(body: {
+    ref: string;
+    place: string;
+    text: string;
+    current?: string;
+    label?: string;
+  }) {
+    return $fetch<{ sessionUuid: string }>('/api/admin/ai/ask', {
+      method: 'POST',
+      body,
     });
   },
   reject(actionUuid: string, never = false) {
@@ -393,6 +439,16 @@ export const aiApi = {
     });
   },
   /**
+   * Goes on with a check's run: the next batch of the same. The message the
+   * owner sends, or none when nothing is due any more.
+   */
+  continueRun(sessionUuid: string) {
+    return $fetch<{ messageUuid: string | null }>(
+      `/api/admin/ai/sessions/${sessionUuid}/continue`,
+      { method: 'POST' },
+    );
+  },
+  /**
    * Runs a built-in check: over what it has not looked at yet of the whole
    * archive, or of the entities named — which start over once all of them is
    * looked at — narrowed by the owner's words. No session when there is
@@ -400,7 +456,12 @@ export const aiApi = {
    */
   runCheck(
     templateId: string,
-    body: { about?: string[]; request?: string; model?: string } = {},
+    body: {
+      about?: string[];
+      request?: string;
+      model?: string;
+      again?: boolean;
+    } = {},
   ) {
     return $fetch<AiTemplateRunResponse>(
       `/api/admin/ai/templates/${templateId}/run`,
@@ -428,3 +489,93 @@ export const aiApi = {
     });
   },
 };
+
+/**
+ * Does something of the AI's and says why in a toast when it fails, in the
+ * words the server gave. With `busy`, it is done once at a time: a press
+ * while it runs does nothing. Whether it went.
+ */
+export async function aiAttempt(
+  work: () => Promise<unknown>,
+  busy?: Ref<boolean>,
+): Promise<boolean> {
+  if (busy?.value) return false;
+  if (busy) busy.value = true;
+  try {
+    await work();
+    return true;
+  } catch (caught) {
+    showToast(errorMessage(caught, phrase.value.ai_error));
+    return false;
+  } finally {
+    if (busy) busy.value = false;
+  }
+}
+
+/**
+ * Applies proposals and says how it went: why not, when it did not, else
+ * how many — with a way back when `undoable`. Every entity whose version
+ * moved is told, a relation's other end too. Whether all of it went.
+ */
+export async function applyAndTell(
+  actionUuids: string[],
+  options: {
+    parts?: Record<string, Record<string, AiRevisePartState>>;
+    undoable?: boolean;
+  } = {},
+): Promise<boolean> {
+  const outcome = await aiApi.apply(actionUuids, options.parts);
+  tellEntitiesChanged(outcome.changed);
+  if (outcome.refused) showToast(outcome.refused);
+  else if (outcome.failed) showToast(outcome.failed.error);
+  else {
+    const done = outcome.applied.map((item) => item.actionUuid);
+    // Said as declining is, so no word of an earlier step stays up.
+    showToast(
+      phrase.value.ai_toast_applied(done.length),
+      options.undoable && done.length
+        ? { label: phrase.value.ai_action_undo, run: () => undoAndTell(done) }
+        : undefined,
+    );
+  }
+  return !outcome.refused && !outcome.failed;
+}
+
+/**
+ * Takes applied proposals back, the last first, and says how it went: the
+ * forms of every entity they moved back read anew, and one that could not
+ * be taken back — changed since — says why.
+ */
+export async function undoAndTell(actionUuids: string[]) {
+  const changed: (string | undefined)[] = [];
+  let refused: string | undefined;
+  for (const actionUuid of [...actionUuids].reverse()) {
+    try {
+      const answer = await aiApi.undo(actionUuid);
+      changed.push(answer.entity, ...answer.changed);
+    } catch (caught) {
+      refused ??= errorMessage(caught, phrase.value.ai_error);
+    }
+  }
+  tellEntitiesChanged(changed);
+  showToast(refused ?? phrase.value.ai_toast_undone);
+}
+
+/**
+ * What a session asked at a ✦ answered: what it proposed, and its model's
+ * last words as a line — why, when it proposed nothing — formatted as the
+ * thread shows them. None when unread.
+ */
+export async function askAnswer(
+  sessionUuid: string,
+): Promise<{ actions: AiActionItem[]; said: string } | null> {
+  const detail = await aiApi.session(sessionUuid).catch(() => null);
+  if (!detail) return null;
+  const last = detail.messages
+    .filter((message) => message.role === 'model' && message.text.trim())
+    .at(-1);
+  return {
+    actions: detail.actions,
+    said: last ? publicText(plainWords(last.text, 280)) : '',
+  };
+}

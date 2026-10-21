@@ -15,9 +15,10 @@ import {
  * `window.location`, so a hydrated page agrees with the server-rendered one.
  *
  * Paths in data never carry the base path (see `shared/site-url.ts`):
- * - the router adds it on its own to `TheiLink` and `navigateTo`;
+ * - the router adds it on its own to `TheiLink` and `navigateTo`, but not
+ *   with `external`, which takes the path as it is;
  * - `path()` adds it for DOM attributes the router does not own — `src`,
- *   plain `href`, `fetch`/XHR, `location`;
+ *   plain `href`, `fetch`/XHR, `location`, an `external` link;
  * - `resolve()` builds the absolute URL.
  */
 export function useSiteUrl() {

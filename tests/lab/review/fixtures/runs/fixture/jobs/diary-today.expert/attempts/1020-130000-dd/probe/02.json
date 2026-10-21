@@ -1,0 +1,12 @@
+{
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "dpr": 1,
+  "scrollY": 0,
+  "root": "page",
+  "ms": 94,
+  "findings": [],
+  "suppressed": []
+}

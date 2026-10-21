@@ -1,0 +1,41 @@
+{
+  "viewport": {
+    "width": 375,
+    "height": 812
+  },
+  "dpr": 2,
+  "scrollY": 0,
+  "root": "page",
+  "ms": 101,
+  "findings": [
+    {
+      "fp": "uneven-gap:e9d8c7b6a5",
+      "rule": "uneven-gap",
+      "hint": "minor",
+      "elements": [
+        {
+          "path": "main > p:nth-child(2)",
+          "desc": "paragraph 2"
+        },
+        {
+          "path": "main > p:nth-child(3)",
+          "desc": "paragraph 3"
+        }
+      ],
+      "measure": {
+        "gapPx": 14,
+        "modePx": 16
+      },
+      "message": "The gap between paragraphs 2 and 3 is 14 px; the others are 16 px.",
+      "boxes": [
+        {
+          "x": 24,
+          "y": 196,
+          "width": 300,
+          "height": 120
+        }
+      ]
+    }
+  ],
+  "suppressed": []
+}

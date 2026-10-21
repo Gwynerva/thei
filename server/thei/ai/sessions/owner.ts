@@ -4,7 +4,7 @@ import type { AiEntityType, AiMessagePart } from '#layers/thei/shared/ai';
 import { findTemplate } from '../templates/store';
 import { findEntity, refOf, type EntityKey } from '../../entity-kinds';
 import { actionDef } from '../actions/registry';
-import { findAction, targetOf } from '../actions/rows';
+import { findAction, sessionActions, targetOf } from '../actions/rows';
 import { targetRef } from '../actions/target';
 import { startTurn } from '../runner/queue';
 import { publishSession } from './bus';
@@ -15,6 +15,7 @@ import {
   insertMessage,
   linkSessionEntities,
   refreshSessionCounts,
+  sessionMessages,
 } from './store';
 import { cleanSessionTitle, titleFromWords } from './names';
 import {
@@ -38,6 +39,34 @@ function messageText(text: string): string {
   const trimmed = text.trim();
   if (trimmed.length > MESSAGE_MAX) refused('The message is too long');
   return trimmed;
+}
+
+/**
+ * The owner's corrections of the model's proposals it has not heard of yet:
+ * told with the owner's next words, so it writes in their manner from then
+ * on. Each is told once — by its id in what the owner's messages carried.
+ */
+function correctionsNote(sessionUuid: string): string {
+  const told = sessionMessages(sessionUuid)
+    .filter((message) => message.role === 'owner')
+    .flatMap((message) => message.transcript)
+    .map((turn) => ('text' in turn ? turn.text : ''))
+    .join('\n');
+  const rows = sessionActions(sessionUuid).filter(
+    (row) =>
+      row.proposed !== null &&
+      row.proposed !== undefined &&
+      (row.state === 'pending' || row.state === 'applied') &&
+      !told.includes(row.actionUuid),
+  );
+  if (!rows.length) return '';
+  const summary = (kind: string, payload: unknown) =>
+    actionDef(kind as never).summary(payload as never);
+  const lines = rows.map(
+    (row) =>
+      `${row.actionUuid}: you proposed ${summary(row.kind, row.proposed)}; they made it ${summary(row.kind, row.payload)}`,
+  );
+  return `(Thei: the owner corrected your words before applying them — ${lines.join('; ')}. Write in their manner from now on.)`;
 }
 
 /** The entities a message names: links to them, as the composer makes them. */
@@ -68,6 +97,13 @@ export interface OwnerMessage {
   answers?: string;
   /** The action this comments on: a new version of it is due. */
   comment?: string;
+  /** Parts of its own: the template the words began from, the field asked at. */
+  parts?: AiMessagePart[];
+  /**
+   * What the model reads in place of the words alone: the words with what
+   * the site tells the model about them, which the owner does not see.
+   */
+  brief?: string;
 }
 
 /**
@@ -89,7 +125,7 @@ export function postOwnerMessage(
   if (!text && !files.length) refused('A message needs words or files');
 
   const about = [...mentionedIn(text), ...keysOf(message.about)];
-  const parts: AiMessagePart[] = [];
+  const parts: AiMessagePart[] = [...(message.parts ?? [])];
   let said = text;
   let question: { messageUuid: string; parts: AiMessagePart[] } | undefined;
   if (message.answers) {
@@ -122,7 +158,10 @@ export function postOwnerMessage(
     said = `About ${action.actionUuid} (${action.kind}${target ? ` on ${targetRef(target)}` : ''}: ${actionDef(action.kind).summary(action.payload as never)}): ${text}`;
   }
   for (const file of files) parts.push({ type: 'file', ...file });
-  said = [said, sessionFilesNote(files)].filter(Boolean).join('\n\n');
+  if (message.brief) said = message.brief;
+  said = [said, sessionFilesNote(files), correctionsNote(sessionUuid)]
+    .filter(Boolean)
+    .join('\n\n');
 
   const { db, schema } = THEI_SERVER.useDb();
   const row = db.transaction((tx) => {
@@ -206,6 +245,9 @@ export function startOwnerSession(
     templateId?: unknown;
     /** The model chosen for it; none for the connection's. */
     model?: string;
+    /** Parts and a brief of the first message's own (`OwnerMessage`). */
+    parts?: AiMessagePart[];
+    brief?: string;
   },
   now = Date.now(),
 ): string {
@@ -246,7 +288,18 @@ export function startOwnerSession(
   if (input.text?.trim() || (Array.isArray(input.files) && input.files.length))
     postOwnerMessage(
       sessionUuid,
-      { text: input.text ?? '', files: input.files },
+      {
+        text: input.text ?? '',
+        files: input.files,
+        // Begun from a template, the message says so.
+        parts: [
+          ...(template
+            ? [{ type: 'template' as const, templateId: template.templateId }]
+            : []),
+          ...(input.parts ?? []),
+        ],
+        ...(input.brief ? { brief: input.brief } : {}),
+      },
       now,
     );
   return sessionUuid;

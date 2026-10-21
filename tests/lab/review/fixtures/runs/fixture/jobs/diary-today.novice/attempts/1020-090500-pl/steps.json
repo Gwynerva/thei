@@ -1,0 +1,94 @@
+[
+  {
+    "n": 1,
+    "label": "Open the dashboard",
+    "action": "open",
+    "url": "http://lab.localhost:3003/admin/",
+    "sinceStartMs": 400,
+    "shot": "shots/01-open-the-dashboard.png",
+    "marked": "shots/01-open-the-dashboard.marked.png",
+    "answer": {
+      "firstFeedbackMs": 90,
+      "answerMs": 400
+    },
+    "probe": {
+      "counts": {},
+      "fps": []
+    }
+  },
+  {
+    "n": 2,
+    "label": "Find it in the menu",
+    "action": "tap",
+    "url": "http://lab.localhost:3003/admin/",
+    "sinceStartMs": 800,
+    "shot": "shots/02-find-it-in-the-menu.png",
+    "marked": "shots/02-find-it-in-the-menu.marked.png",
+    "target": {
+      "name": "Menu",
+      "box": {
+        "x": 24,
+        "y": 520,
+        "width": 96,
+        "height": 28
+      },
+      "inView": true,
+      "smallestSide": 28
+    },
+    "pointer": {
+      "from": [
+        187.5,
+        406
+      ],
+      "to": [
+        72,
+        534
+      ],
+      "travelPx": 172
+    },
+    "answer": {
+      "firstFeedbackMs": 90,
+      "answerMs": 400
+    },
+    "probe": {
+      "counts": {
+        "small-target": 1
+      },
+      "fps": [
+        "small-target:d4e5f6a7b8"
+      ]
+    },
+    "note": "There was no “New entry” button on the screen; it was only in the menu."
+  },
+  {
+    "n": 3,
+    "label": "Write and save",
+    "action": "fill",
+    "url": "http://lab.localhost:3003/admin/diary/2026-10-20/",
+    "sinceStartMs": 1200,
+    "shot": "shots/03-write-and-save.png",
+    "marked": "shots/03-write-and-save.marked.png",
+    "target": {
+      "name": "Entry text",
+      "box": {
+        "x": 24,
+        "y": 520,
+        "width": 327,
+        "height": 44
+      },
+      "inView": true
+    },
+    "scroll": {
+      "needed": true,
+      "distancePx": 220
+    },
+    "answer": {
+      "firstFeedbackMs": 90,
+      "answerMs": 400
+    },
+    "probe": {
+      "counts": {},
+      "fps": []
+    }
+  }
+]

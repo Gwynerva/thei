@@ -7,6 +7,7 @@ import type {
   TagUsageStats,
 } from '#layers/thei/shared/tag';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import type { FormNeed } from '#layers/thei/app/composables/form-needs';
 import AssetTile from '#layers/thei/app/components/AssetTile.vue';
 import LinkField from '../../components/LinkField.vue';
 import { useSingleMediaAsset } from '#layers/thei/app/composables/single-media-asset';
@@ -99,15 +100,23 @@ useRegisterAdminBarContextButton(
     };
   }),
 );
-const canSave = computed(
-  () =>
-    !saving.value &&
-    Boolean(
-      data.value.title.trim() &&
-      data.value.slug.trim() &&
-      data.value.publicId.trim(),
-    ) &&
-    (!isEdit.value || dirty.value),
+/** What the tag still needs before it can be saved, in the form's order. */
+const needs = useFormNeeds(
+  () => {
+    const list: FormNeed[] = [];
+    if (!data.value.title.trim())
+      list.push({ key: 'title', label: phrase.value.tag_title });
+    if (!data.value.slug.trim())
+      list.push({ key: 'link-slug', label: phrase.value.human_readable_url });
+    if (!data.value.publicId.trim())
+      list.push({ key: 'link-public-id', label: phrase.value.public_id });
+    return list;
+  },
+  {
+    ready: () => !saving.value && (!isEdit.value || dirty.value),
+    save,
+    error,
+  },
 );
 watch(
   () => data.value.publicId,
@@ -144,8 +153,8 @@ const iconAsset = useSingleMediaAsset({
   },
 });
 
+/** The save itself; a press or Ctrl+S comes to it through `needs.submit`. */
 async function save() {
-  if (saving.value) return;
   saving.value = true;
   error.value = undefined;
   try {
@@ -172,7 +181,7 @@ async function save() {
     savedRevision.value++;
     await refreshNuxtData('admin-tag-count');
     if (!tagUuid)
-      await navigateTo(`/admin/tags/${result.tagUuid}/edit/`, {
+      await navigateTo(sitePath(`/admin/tags/${result.tagUuid}/edit/`), {
         external: true,
       });
   } catch (caught) {
@@ -184,8 +193,6 @@ async function save() {
     saving.value = false;
   }
 }
-
-useSaveShortcut(save, { canSave });
 
 async function remove() {
   if (!tagUuid) return;
@@ -225,32 +232,17 @@ await useAdminTabTitle(
 </script>
 
 <template>
-  <StickyGlassHeader width="var(--width-wide)" :error="error">
-    <div class="flex items-center justify-between gap-xs py-xs">
-      <div class="flex min-w-0 items-center gap-xs text-xl font-bold">
-        <Icon name="tag" />
-        <span class="truncate">{{
-          isEdit ? phrase.edit_tag : phrase.new_tag
-        }}</span>
-      </div>
-      <div class="flex items-center gap-xs">
-        <AiEntityButton />
-        <Button
-          v-if="isEdit"
-          variant="delete"
-          :aria-label="phrase.delete"
-          :data-title-popup="phrase.delete"
-          @click="remove"
-        >
-          <Icon name="delete" />
-        </Button>
-        <Button class="font-semibold" :disabled="!canSave" @click="save">
-          <Icon v-if="saving" name="loading" class="mr-xs" />
-          {{ isEdit ? (dirty ? phrase.save : phrase.saved) : phrase.create }}
-        </Button>
-      </div>
-    </div>
-  </StickyGlassHeader>
+  <AdminSaveHeader
+    :title="isEdit ? phrase.edit_tag : phrase.new_tag"
+    icon="tag"
+    :dirty
+    :saving
+    :creating="!isEdit"
+    :deletable="isEdit"
+    :needs
+    @delete="remove"
+    ><AiEntityButton
+  /></AdminSaveHeader>
   <div
     class="m-auto flex w-(--width-wide) max-w-full flex-col gap-lg px-window
       py-lg"
@@ -258,7 +250,7 @@ await useAdminTabTitle(
     <AiFormOffers />
     <Box class="flex flex-col gap-md p-sm sm:p-md">
       <div class="flex flex-col gap-md sm:flex-row">
-        <Field class="min-w-0 flex-1">
+        <Field need="title" class="min-w-0 flex-1">
           <FieldLabel required>{{ phrase.tag_title }}</FieldLabel>
           <FieldInput
             v-model="data.title"
@@ -302,6 +294,7 @@ await useAdminTabTitle(
       </Field>
 
       <LinkField
+        need="link"
         v-model:title="data.title"
         v-model:human-readable-slug="data.slug"
         v-model:public-id="data.publicId"

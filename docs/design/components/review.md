@@ -16,8 +16,10 @@ of a field that is not a text is a proposal at the field's label instead
 ## Rules
 
 - The text is read as it will be, or as what goes and what comes, or as a
-  list of the parts; the owner's choice of view is kept in the browser. Each
-  part opens a card where it stands, with the part before and after it.
+  list of the parts; the owner's choice of view is kept in the browser.
+  Until they choose, it opens on what goes and what comes, so a correction
+  is seen with the words it replaces. Each part opens a card where it
+  stands, with the part before and after it.
 - A part is accepted, left as it is, or undecided. A part left as it is stays
   where it was, marked in grey — a block in its place, a block it would have
   brought folded to a line — so it can be opened and decided again. The way
@@ -39,9 +41,12 @@ of a field that is not a text is a proposal at the field's label instead
   through `publicText()`; the words of a correction do not, so a fix of a
   dash or a quote mark stays visible.
 - The foot is slim and sticky: the part before, how many are decided of how
-  many, the part after; then «take the sure ones» with its count, offered only
-  where some part could be taken that way, and the finish. Nothing taken, the
-  finish closes; something taken with parts still waiting, it asks first.
+  many, the part after; then the finish, which always says what it does
+  next. Nothing taken yet and some part could be taken as sure, it takes the
+  sure ones («Accept the sure ones · N»); nothing to take that way, it
+  closes; something taken, it applies — asking first while parts still wait
+  — and «take the sure ones» stands beside it with its count while some are
+  left.
 - Closing is one step, whatever closes it — the close button, Escape, Back,
   a click around the card: the review goes, and the owner's word on what was
   decided goes with it to where it is kept. A click around the card with a
@@ -67,6 +72,10 @@ of a field that is not a text is a proposal at the field's label instead
   found again, a picture or a list changed showed nothing, and the foot did
   not say what it would do. Every part is now in reach and every change is
   drawn.
+- A newcomer read only the corrected words — a letter changed is no change
+  to the eye — and took the coloured «Close» for the way to accept, beside a
+  bare «✓✓ 1». The review now opens on what goes and what comes, and its
+  finish names the next step.
 
 ## How it is checked
 

@@ -33,10 +33,8 @@ import ProjectExternalLinks from './ProjectExternalLinks.vue';
 import { projectDeleteModal } from './project-delete-modal';
 import ProjectContentItems from './ProjectContentItems.vue';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
-import {
-  DEFAULT_PROJECT_ACTION,
-  projectActionValidationError,
-} from '#layers/thei/shared/project-action';
+import { DEFAULT_PROJECT_ACTION } from '#layers/thei/shared/project-action';
+import type { FormNeed } from '#layers/thei/app/composables/form-needs';
 import {
   addStatusUsageDelta,
   emptyStatusEditData,
@@ -136,6 +134,9 @@ const statusUsageDelta = computed(() =>
 const isEdit = computed(() => Boolean(projectUuid));
 const saving = ref(false);
 const savedSnapshot = ref(JSON.stringify(projectData.value));
+// Begun from the quick search: the query is the title, as if typed.
+if (!isEdit.value && titleFromQuery())
+  projectData.value.title = titleFromQuery();
 /**
  * When the entity last changed, as the form read it. A save names it, and
  * one over a change made elsewhere since — another tab, an AI client — is
@@ -151,27 +152,40 @@ provideEntityAi({
   form: () => projectData.value,
   version: () => formVersion.value,
 });
-const actionError = computed(() =>
-  projectActionValidationError(projectData.value.action),
-);
 
 const isDirty = computed(
   () => JSON.stringify(projectData.value) !== savedSnapshot.value,
 );
 
-const isFormValid = computed(
-  () =>
-    projectData.value.title.trim() !== '' &&
-    projectData.value.summary.trim() !== '' &&
-    projectData.value.publicId.trim() !== '' &&
-    !!projectData.value.access &&
-    !actionError.value,
+/** What the project still needs before it can be saved, in the form's order. */
+const needs = useFormNeeds(
+  () => {
+    const data = projectData.value;
+    const list: FormNeed[] = [];
+    if (!data.title.trim())
+      list.push({ key: 'title', label: phrase.value.project_title });
+    if (!data.access)
+      list.push({ key: 'access', label: phrase.value.project_access });
+    if (!data.summary.trim())
+      list.push({ key: 'summary', label: phrase.value.project_summary });
+    if (!data.publicId.trim())
+      list.push({ key: 'link-public-id', label: phrase.value.public_id });
+    const action = actionNeed(
+      phrase.value,
+      data.action,
+      phrase.value.project_action,
+    );
+    if (action) list.push(action);
+    return list;
+  },
+  {
+    ready: () => !saving.value && (!isEdit.value || isDirty.value),
+    save: handleSave,
+    error: headerError,
+  },
 );
 
-const canSave = computed(() => isDirty.value && isFormValid.value);
-const canUseSaveShortcut = computed(
-  () => !saving.value && (isEdit.value ? canSave.value : isFormValid.value),
-);
+const canSave = computed(() => isDirty.value && !needs.blocked.value);
 
 const requestFetch = useRequestFetch();
 
@@ -243,8 +257,8 @@ if (isEdit.value) {
   }
 }
 
+/** The save itself; a press or Ctrl+S comes to it through `needs.submit`. */
 async function handleSave() {
-  if (saving.value) return;
   saving.value = true;
   headerError.value = undefined;
   try {
@@ -291,16 +305,15 @@ async function handleSave() {
       applySavedAction(result.action);
       markProjectSaved();
       await refreshNuxtData('admin-bar');
-      await navigateTo(`/admin/projects/${result.projectUuid}/edit/`, {
-        external: true,
-      });
+      await navigateTo(
+        sitePath(`/admin/projects/${result.projectUuid}/edit/`),
+        { external: true },
+      );
     }
   } finally {
     saving.value = false;
   }
 }
-
-useSaveShortcut(handleSave, { canSave: canUseSaveShortcut });
 
 await useAdminTabTitle(
   computed(() =>
@@ -451,40 +464,17 @@ async function openDeleteProjectModal() {
 </script>
 
 <template>
-  <StickyGlassHeader width="var(--width-wide)" :error="headerError">
-    <div class="flex items-center justify-between gap-xs py-xs">
-      <div class="flex min-w-0 items-center gap-xs text-xl font-bold">
-        <Icon name="project" class="shrink-0" />
-        <span class="truncate">
-          {{ isEdit ? phrase.edit_project : phrase.new_project }}
-        </span>
-      </div>
-
-      <div class="flex items-center gap-xs">
-        <AiEntityButton />
-        <Button
-          v-if="isEdit"
-          variant="delete"
-          :data-title-popup="phrase.delete"
-          @click="openDeleteProjectModal"
-        >
-          <Icon name="delete" class="scale-120" />
-        </Button>
-        <Button
-          class="font-semibold"
-          :disabled="saving || (isEdit ? !canSave : !isFormValid)"
-          @click="handleSave"
-        >
-          <Icon v-if="saving" name="loading" class="mr-xs" />
-          <span>
-            {{
-              isEdit ? (isDirty ? phrase.save : phrase.saved) : phrase.create
-            }}
-          </span>
-        </Button>
-      </div>
-    </div>
-  </StickyGlassHeader>
+  <AdminSaveHeader
+    :title="isEdit ? phrase.edit_project : phrase.new_project"
+    icon="project"
+    :dirty="isDirty"
+    :saving
+    :creating="!isEdit"
+    :deletable="isEdit"
+    :needs
+    @delete="openDeleteProjectModal"
+    ><AiEntityButton
+  /></AdminSaveHeader>
   <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
     <AiFormOffers />
     <ProjectMain />

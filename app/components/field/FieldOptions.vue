@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { IconName } from '#thei/icons';
+import { useFieldLabelName } from './field-label';
 
 export interface FieldOptionValue {
   icon?: IconName;
@@ -17,18 +18,30 @@ const { direction = 'row' } = defineProps<{
 }>();
 
 const model = defineModel<string>();
+/** The field's label: what the group of options is called. */
+const labelledBy = useFieldLabelName();
 </script>
 
+<!-- Each option is a button pressed while chosen, named by its words; inside
+     it only what a button may hold, so its name is read the same way by
+     anything that reads the page. -->
 <template>
   <div class="flex">
     <div
       class="flex flex-wrap gap-1 rounded-normal bg-bg-3 p-1 text-sm"
       :class="[direction === 'column' ? 'flex-1 flex-col' : '', classes]"
+      :role="labelledBy ? 'group' : undefined"
+      :aria-labelledby="labelledBy"
     >
       <button
         v-for="(option, key) in options"
         :key
         type="button"
+        :aria-pressed="model === key"
+        :aria-label="option.title"
+        :aria-description="
+          direction === 'column' ? option.description : undefined
+        "
         @click="model = key"
         :data-title-popup="direction === 'row' ? option.description : undefined"
         class="cursor-pointer rounded-normal border-2 p-xs transition"
@@ -42,7 +55,7 @@ const model = defineModel<string>();
           direction === 'column' ? 'flex flex-col gap-2 text-left' : '',
         ]"
       >
-        <div
+        <span
           class="flex gap-2"
           :class="[
             direction === 'column'
@@ -50,17 +63,17 @@ const model = defineModel<string>();
               : 'flex-wrap items-center justify-center gap-y-1',
           ]"
         >
-          <Icon v-if="option.icon" :name="option.icon" />
+          <Icon v-if="option.icon" :name="option.icon" aria-hidden="true" />
           <span v-if="option.title" class="font-semibold">
             {{ option.title }}
           </span>
-        </div>
-        <p
+        </span>
+        <span
           v-if="option.description && direction === 'column'"
-          class="text-sm text-text-2"
+          class="block text-sm text-text-2"
         >
           {{ option.description }}
-        </p>
+        </span>
       </button>
     </div>
   </div>

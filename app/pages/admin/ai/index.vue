@@ -57,7 +57,7 @@ const tabs = computed<TabItem<AiTab>[]>(() => [
   },
   { key: 'templates', label: phrase.value.ai_tab_templates, icon: 'template' },
   { key: 'memory', label: phrase.value.ai_tab_memory, icon: 'brain' },
-  { key: 'connection', label: phrase.value.ai_tab_connection, icon: 'power' },
+  { key: 'connection', label: phrase.value.ai_tab_connection, icon: 'tune' },
 ]);
 </script>
 
@@ -73,7 +73,10 @@ const tabs = computed<TabItem<AiTab>[]>(() => [
          their icons. -->
     <StickyGlassHeader width="var(--width-wide)">
       <div class="flex min-w-0 items-end gap-sm">
-        <h1 class="flex shrink-0 items-center gap-xs py-sm text-xl font-bold">
+        <h1
+          class="flex shrink-0 items-center gap-xs py-sm text-lg font-bold
+            sm:text-xl"
+        >
           <Icon name="sparkles" class="shrink-0" />
           <span>{{ phrase.ai_page }}</span>
         </h1>

@@ -70,7 +70,9 @@ async function installClick() {
       :error="installError"
     >
       <div class="flex items-center justify-between gap-xs">
-        <div class="flex min-w-0 items-center gap-sm text-xl font-bold">
+        <div
+          class="flex min-w-0 items-center gap-sm text-lg font-bold sm:text-xl"
+        >
           <Icon name="thei" class="shrink-0 text-2xl text-accent" />
           <h1 class="truncate">{{ phrase.install_thei }}</h1>
         </div>

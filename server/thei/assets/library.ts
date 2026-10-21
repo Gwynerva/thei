@@ -2,10 +2,7 @@ import { createError } from 'h3';
 import type Database from 'better-sqlite3';
 import { inArray } from 'drizzle-orm';
 import { AssetType, type AssetUsageMeta } from '../../../shared/asset';
-import {
-  normalizeAdminSearchText,
-  resolveAdminPagination,
-} from '../../../shared/admin/entity-list';
+import { resolveAdminPagination } from '../../../shared/admin/entity-list';
 import {
   assetSelectionError,
   assetSourceKey,
@@ -18,12 +15,14 @@ import {
   type AssetLibraryAssetsResponse,
   type AssetLibraryFacets,
   type AssetLibraryResponse,
+  type AssetLibraryDescribed,
   type AssetLibrarySourceFilter,
   type AssetUsagesResponse,
 } from '../../../shared/asset-library';
 import { normalizeAssetExtension } from '../../../shared/assets/formats';
 import { dayQueryRank, parseDayQuery } from '../../../shared/day-query';
 import { richTextToPlainText } from '../../../shared/rich-text';
+import { useWordsSql } from '../search/words-sql';
 import {
   buildProjectSectionUrl,
   buildProjectUrl,
@@ -41,6 +40,8 @@ export interface LibraryQuery extends AssetSelectionConstraints {
   usage?: string;
   /** Only the groups of this kind of entity; sections listing only. */
   source?: AssetLibrarySourceFilter;
+  /** Only files without a description, or only those with one. */
+  described?: AssetLibraryDescribed;
   page?: number;
 }
 
@@ -89,7 +90,8 @@ members AS (
  * was called is never kept, so it is never searchable. The file's own
  * description, kept for its family, finds it wherever it is placed.
  * `scoped` restricts the match by placements to the member row's own
- * source. Takes the query five times.
+ * source. Takes the query five times. Words are found as words
+ * (`thei_words`, `server/thei/search/words-sql.ts`).
  */
 function siteTextMatchSql(scoped: boolean) {
   const scope = scoped
@@ -97,22 +99,22 @@ function siteTextMatchSql(scoped: boolean) {
     : '';
   return `(EXISTS (
       SELECT 1 FROM placements p WHERE p.assetUuid=a.assetUuid${scope}
-      AND (instr(asset_search_text(CASE WHEN p.sourceType='diary-entry' THEN '' ELSE coalesce(p.title,'') END || ' ' || coalesce(p.summary,'') || ' ' || p.description || ' ' || coalesce(json_extract(p.meta,'$.caption'),'') || ' ' || coalesce(json_extract(p.meta,'$.title'),'')),?)>0
+      AND (thei_words(asset_search_text(CASE WHEN p.sourceType='diary-entry' THEN '' ELSE coalesce(p.title,'') END || ' ' || coalesce(p.summary,'') || ' ' || p.description || ' ' || coalesce(json_extract(p.meta,'$.caption'),'') || ' ' || coalesce(json_extract(p.meta,'$.title'),'')),?)
         OR (p.sourceType='diary-entry' AND asset_day_match(p.slug,?))))
     OR EXISTS (
       SELECT 1 FROM placements p JOIN content c ON p.containerType='content' AND c.contentUuid=p.containerId,
         json_each(c.data,'$.blocks') b
       WHERE p.assetUuid=a.assetUuid${scope} AND (
         (json_extract(b.value,'$.data.asset.assetUuid')=a.assetUuid AND
-          instr(asset_search_text(coalesce(json_extract(b.value,'$.data.caption'),'') || ' ' || coalesce(json_extract(b.value,'$.data.title'),'')),?)>0)
+          thei_words(asset_search_text(coalesce(json_extract(b.value,'$.data.caption'),'') || ' ' || coalesce(json_extract(b.value,'$.data.title'),'')),?))
         OR EXISTS (SELECT 1 FROM json_each(b.value,'$.data.items') i
           WHERE json_extract(i.value,'$.asset.assetUuid')=a.assetUuid
-            AND instr(asset_search_text(coalesce(json_extract(i.value,'$.caption'),'') || ' ' || coalesce(json_extract(i.value,'$.title'),'') || ' ' || coalesce(json_extract(b.value,'$.data.title'),'')),?)>0)
+            AND thei_words(asset_search_text(coalesce(json_extract(i.value,'$.caption'),'') || ' ' || coalesce(json_extract(i.value,'$.title'),'') || ' ' || coalesce(json_extract(b.value,'$.data.title'),'')),?))
       )
     )
     OR EXISTS (
       SELECT 1 FROM "asset-descriptions" d WHERE d.familyUuid=a.familyUuid
-      AND instr(asset_search_plain(d.text),?)>0
+      AND thei_words(d.text,?)
     ))`;
 }
 const registered = new WeakSet<Database.Database>();
@@ -124,18 +126,9 @@ function connection() {
       { deterministic: true },
       // Captions are rich text: their markup is not what anyone searches for.
       (value: unknown) =>
-        normalizeAdminSearchText(
-          typeof value === 'string' ? richTextToPlainText(value) : '',
-        ),
+        typeof value === 'string' ? richTextToPlainText(value) : '',
     );
-    // A file's description is plain text: what looks like markup in it is
-    // words, and is searched as typed.
-    context.rawDb.function(
-      'asset_search_plain',
-      { deterministic: true },
-      (value: unknown) =>
-        normalizeAdminSearchText(typeof value === 'string' ? value : ''),
-    );
+    useWordsSql(context.rawDb);
     // Asked once per diary placement with the same query each time, so the
     // query is read once.
     let lastQuery: string | undefined;
@@ -162,6 +155,9 @@ function connection() {
  * (`source`) is the member row's kind in a group listing, and any placement
  * of the file in an entity of that kind in a flat one.
  */
+/** Whether a file's family has a description, in words. */
+const DESCRIBED_SQL = `EXISTS (SELECT 1 FROM "asset-descriptions" d WHERE d.familyUuid=a.familyUuid AND trim(d.text)<>'')`;
+
 function matchSql(query: LibraryQuery, scoped = false) {
   const parts = ['a.settings IS NOT NULL'];
   const args: (string | number)[] = [];
@@ -190,7 +186,7 @@ function matchSql(query: LibraryQuery, scoped = false) {
     parts.push('a.type=?');
     args.push(query.type);
   }
-  const q = normalizeAdminSearchText(query.q ?? '');
+  const q = (query.q ?? '').replace(/\s+/g, ' ').trim();
   if (q) {
     parts.push(siteTextMatchSql(scoped));
     args.push(q, q, q, q, q);
@@ -203,6 +199,8 @@ function matchSql(query: LibraryQuery, scoped = false) {
     );
     args.push(query.source);
   }
+  if (query.described)
+    parts.push(`${query.described === 'none' ? 'NOT ' : ''}${DESCRIBED_SQL}`);
   if (query.usage === 'used')
     parts.push(
       'EXISTS (SELECT 1 FROM placements p WHERE p.assetUuid=a.assetUuid)',
@@ -476,10 +474,19 @@ function libraryFacets(
           )
           .get(...byPlace.args) as { count: number }
       ).count;
+  const byDescription = matchSql({ ...query, described: undefined }, scoped);
+  const described = counted<{ value: number; count: number }>(
+    `SELECT ${DESCRIBED_SQL} AS value,count(DISTINCT a.assetUuid) AS count ${files} WHERE ${byDescription.where} GROUP BY value`,
+    byDescription.args,
+  );
   return {
     types: Object.fromEntries(types.map((row) => [row.value, row.count])),
     sources: Object.fromEntries(places.map((row) => [row.value, row.count])),
     anywhere,
+    described: {
+      none: described.find((row) => !row.value)?.count ?? 0,
+      some: described.find((row) => row.value)?.count ?? 0,
+    },
   };
 }
 export function listLibraryAssets(

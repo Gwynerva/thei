@@ -44,7 +44,9 @@ const { place, offered } = useFieldOffers('switch');
         :aria-label="switchLabel"
         @click="model = !model"
         class="relative block h-6 w-11 shrink-0 cursor-pointer rounded-full
-          transition-colors"
+          transition-colors pointer-coarse:before:absolute
+          pointer-coarse:before:-inset-x-1 pointer-coarse:before:-inset-y-2.5
+          pointer-coarse:before:content-['']"
         :class="model ? 'bg-accent' : 'bg-bg-1'"
       >
         <span

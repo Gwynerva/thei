@@ -172,41 +172,64 @@ async function exclusively(run: () => Promise<void>) {
   }
 }
 
+/**
+ * Whether the project's last save holds the section as the form holds it
+ * now. A section handed over from its modal waits in the form until the
+ * project is saved with it.
+ */
+function sectionStored(section: ProjectSectionItem | undefined) {
+  // Read through the form's own list, so that a save setting the section's
+  // identity and stamping its text is heard.
+  const held =
+    section && sections.value.find((item) => toRaw(item) === toRaw(section));
+  const uuid = held?.sectionUuid;
+  const stored = savedProjectData.value.sections?.find(
+    (item) => uuid && item.sectionUuid === uuid,
+  );
+  return Boolean(stored) && JSON.stringify(held) === JSON.stringify(stored);
+}
+
 function openItem(target?: ProjectSectionItem) {
   return exclusively(async () => {
-    let current = target;
+    // The section as the form holds it: the modal hands over new ones.
+    const current = shallowRef(target);
     const result = await openModal(projectContentItemModal, {
       projectHumanReadableSlug: projectData.value.humanReadableSlug,
       projectPublicId: projectData.value.publicId,
+      savedProject: {
+        humanReadableSlug: savedProjectData.value.humanReadableSlug,
+        publicId: savedProjectData.value.publicId,
+      },
       item: target,
       saved: () => projectAi?.panel.value,
       onSave: (item: ProjectSectionItem) => {
-        const merged = mergeSaved(current, item);
-        replaceItem(current, merged);
-        current = merged;
+        const merged = mergeSaved(current.value, item);
+        replaceItem(current.value, merged);
+        current.value = merged;
         // A section that gained or lost its dates is now in the other tab;
         // the list follows it there.
         selected.value = groupOf(merged);
         saveProject(merged);
       },
+      stored: () => sectionStored(current.value),
       // The section as the modal holds it, in place of the one it was
       // opened with, against the project as last saved.
       usageDelta: (draft: ProjectSectionItem) =>
         projectAssetUsageDelta(
           {
             ...projectData.value,
-            sections: current
+            sections: current.value
               ? sections.value.map((item) =>
                   // The list holds proxies; `current` may be the plain
                   // object the last save put there.
-                  toRaw(item) === toRaw(current) ? draft : item,
+                  toRaw(item) === toRaw(current.value) ? draft : item,
                 )
               : [...sections.value, draft],
           },
           savedProjectData.value,
         ),
     });
-    if (result.type === 'deleted' && current) removeItem(current);
+    if (result.type === 'deleted' && current.value) removeItem(current.value);
   });
 }
 

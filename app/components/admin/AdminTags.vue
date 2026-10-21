@@ -28,6 +28,7 @@ const tags = defineModel<TagEditItem[]>({ required: true });
       icon="tag"
       :title="title"
       :description="description"
+      ai="tags"
       class="mb-md"
     />
     <Box>

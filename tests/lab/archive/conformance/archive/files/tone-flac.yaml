@@ -1,0 +1,7 @@
+kind: audio
+ext: flac
+title: A bell
+origin: generated
+licence: CC0-1.0
+people: none
+truth: a generated test file (audio, .flac)

@@ -1,4 +1,4 @@
-import { normalizeTermText } from '../text-terms';
+import { searchKey, wordsFilter } from '../search/match';
 import {
   paginate,
   resolvePagination,
@@ -61,30 +61,37 @@ export function canonicalizeAdminEntityListRouteQuery(
 
 /**
  * One page of an admin list, searched and sorted. The search finds the query
- * in an entity's title, summary, slug, public ID or text; `matches` lets a
- * kind find its entities in some other way too — a diary entry by its day.
+ * in an entity's title, summary, synonyms or text word by word, each in any
+ * of its forms and anywhere among them (`wordsFilter`), and in its slug or
+ * public ID by any part of them; `matches` lets a kind find its entities in
+ * some other way too — a diary entry by its day.
  */
 export function paginateAdminEntities<T extends SearchableAdminEntity>(
   items: T[],
   query: AdminEntityListQuery,
   matches?: (item: T) => boolean,
 ): PaginatedResponse<T> {
-  const q = normalizeAdminSearchText(query.q ?? '');
+  const q = searchKey(query.q ?? '');
+  const byWords = wordsFilter(query.q ?? '');
   const order = query.order === 'oldest' ? 'oldest' : 'newest';
 
   const filtered = q
-    ? items.filter(
-        (item) =>
-          [
-            item.title,
-            item.summary,
-            item.humanReadableSlug,
-            item.publicId,
-            item.contentText ?? '',
-            ...(item.synonyms ?? []),
-          ].some((value) => normalizeAdminSearchText(value).includes(q)) ||
-          matches?.(item),
-      )
+    ? items.filter((item) => {
+        const texts = [
+          item.title,
+          item.summary,
+          item.humanReadableSlug,
+          item.publicId,
+          item.contentText ?? '',
+          ...(item.synonyms ?? []),
+        ];
+        // An address and an id are found by any part of them, as they are
+        // pasted; words, only as words.
+        const ids = [item.humanReadableSlug, item.publicId].map(searchKey);
+        return (
+          ids.some((id) => id.includes(q)) || byWords(texts) || matches?.(item)
+        );
+      })
     : [...items];
 
   filtered.sort((a, b) => {
@@ -99,10 +106,6 @@ export function paginateAdminEntities<T extends SearchableAdminEntity>(
   });
 
   return paginate(filtered, query.page, adminPageSize(query));
-}
-
-export function normalizeAdminSearchText(value: string): string {
-  return normalizeTermText(value.trim());
 }
 
 /** The page size an admin list asked for, within what it may ask. */

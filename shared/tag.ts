@@ -4,7 +4,8 @@ import { normalizeUrlSegment } from './language/slugify';
 import type { ImageAccent } from './accent-color';
 import { imageAccentCssColor } from './accent-color';
 import { stringColorHue } from './utils/string-color';
-import { normalizeTermText } from './text-terms';
+import { identityKey } from './identity-key';
+import { nameRank, prepareNameQuery, type NameQuery } from './search/match';
 import {
   normalizeSynonyms,
   SYNONYM_LIMIT,
@@ -96,10 +97,11 @@ export const TAG_SYNONYM_SEPARATOR = SYNONYM_SEPARATOR;
 
 /**
  * A tag's identity: its title without case, compatibility forms or the
- * difference between «ё» and «е». Two titles that normalize alike name one tag.
+ * difference between «ё» and «е». Two titles that normalize alike name one
+ * tag. Stored as `tags.normalizedTitle`, so it is an identity key.
  */
 export function normalizeTagTitle(value: string): string {
-  return normalizeTermText(value.trim());
+  return identityKey(value.trim());
 }
 
 /**
@@ -211,19 +213,21 @@ type SearchableTag = Pick<TagItem, 'title' | 'publicId' | 'slug'> & {
 };
 
 /**
- * Tags matching what is typed, best first: the title, then a synonym, then
- * the public ID and the slug. A synonym typed word for word ranks right after
- * a title typed word for word, above titles that merely begin with the query.
+ * Tags matching what is typed, best first, as a picker ranks entities: the
+ * title found whole, by its start, by its words in the order typed or in any
+ * order, or inside it from a word's start — «косплея» finds «Косплей»; then a
+ * synonym, one typed word for word right after a title typed word for word
+ * (`NAME_RANKS`); then the public ID and the slug by any part of them.
  */
 export function rankTagSearch<T extends SearchableTag>(
   tags: T[],
   query: string,
   limit = TAG_SEARCH_LIMIT,
 ): T[] {
-  const needle = normalizeTagTitle(cleanTagTitle(query));
-  if (!needle) return tags.slice(0, limit);
+  const prepared = prepareNameQuery(cleanTagTitle(query));
+  if (!prepared.key) return tags.slice(0, limit);
   return tags
-    .map((tag) => ({ tag, score: tagSearchScore(tag, needle) }))
+    .map((tag) => ({ tag, score: tagNameRank(tag, prepared).rank }))
     .filter((item) => item.score < Number.POSITIVE_INFINITY)
     .sort(
       (a, b) =>
@@ -241,40 +245,18 @@ export function matchedTagSynonym(
   tag: SearchableTag,
   query: string,
 ): string | undefined {
-  const needle = normalizeTagTitle(cleanTagTitle(query));
-  if (!needle || textMatch(tag.title, needle) !== undefined) return undefined;
-  return synonymMatch(tag, needle)?.synonym;
+  const prepared = prepareNameQuery(cleanTagTitle(query));
+  if (!prepared.key) return undefined;
+  return tagNameRank(tag, prepared).synonym;
 }
 
-function tagSearchScore(tag: SearchableTag, needle: string) {
-  const title = textMatch(tag.title, needle);
-  if (title !== undefined) return title;
-  const synonym = synonymMatch(tag, needle);
-  if (synonym) return synonym.score ? 10 + synonym.score : 0.5;
-  const publicId = textMatch(tag.publicId, needle);
-  if (publicId !== undefined) return 20 + publicId;
-  const slug = textMatch(tag.slug, needle);
-  if (slug !== undefined) return 30 + slug;
-  return Number.POSITIVE_INFINITY;
-}
-
-/** 0 for the whole value, 1 for its beginning, 2 for anywhere in it. */
-function textMatch(value: string, needle: string) {
-  const normalized = normalizeTagTitle(value);
-  if (normalized === needle) return 0;
-  if (normalized.startsWith(needle)) return 1;
-  if (normalized.includes(needle)) return 2;
-  return undefined;
-}
-
-function synonymMatch(tag: SearchableTag, needle: string) {
-  let best: { synonym: string; score: number } | undefined;
-  for (const synonym of tag.synonyms ?? []) {
-    const score = textMatch(synonym, needle);
-    if (score !== undefined && (!best || score < best.score))
-      best = { synonym, score };
-  }
-  return best;
+function tagNameRank(tag: SearchableTag, query: NameQuery) {
+  return nameRank(query, {
+    title: tag.title,
+    synonyms: tag.synonyms,
+    publicId: tag.publicId,
+    slug: tag.slug,
+  });
 }
 
 /**

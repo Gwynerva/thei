@@ -1,7 +1,8 @@
 <script lang="ts" setup>
 import ModalWaiting from '#layers/thei/app/modals/ModalWaiting.vue';
-import type { AiActionItem, AiSessionItem } from '#layers/thei/shared/ai';
+import type { AiActionItem, AiMessagePart } from '#layers/thei/shared/ai';
 import type { AiComposerFile } from '#layers/thei/app/composables/ai-session';
+import { builtinKeyOf } from '#layers/thei/shared/ai-template';
 import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';
 
 /**
@@ -50,6 +51,21 @@ const title = computed(() =>
   session.value ? sessionTitle(session.value) : '',
 );
 
+/**
+ * What it is about, a few at first: a check over the whole archive is
+ * about a hundred entities, which would bury the thread under their chips.
+ */
+const ABOUT_SHOWN = 8;
+const aboutOpen = ref(false);
+watch(id, () => (aboutOpen.value = false));
+const aboutShown = computed(() => {
+  const about = session.value?.about ?? [];
+  return aboutOpen.value ? about : about.slice(0, ABOUT_SHOWN);
+});
+const aboutLeft = computed(
+  () => (session.value?.about.length ?? 0) - aboutShown.value.length,
+);
+
 const app = computed(() => session.value?.origin === 'app');
 const running = computed(() => session.value?.state === 'running');
 const archived = computed(() => Boolean(session.value?.archivedAt));
@@ -90,6 +106,26 @@ const writingUuid = computed(() => {
   return last?.role === 'model' ? last.messageUuid : undefined;
 });
 
+/** The last message: a check's «go on» stands only under it. */
+const lastSeq = computed(() => detail.value?.messages.at(-1)?.seq ?? 0);
+/**
+ * What is left of a check, as its last answer says it: offered to go on
+ * from the strip over the composer, where the owner is once the proposals
+ * above are decided. Not while it answers, nor where the site's model does
+ * not.
+ */
+const more = computed(() => {
+  const last = detail.value?.messages.at(-1);
+  if (!last || running.value || !detail.value?.answerable) return undefined;
+  if (last.seq <= ownerSpokeAt.value) return undefined;
+  const part = (last.parts as AiMessagePart[]).find(
+    (item) => item.type === 'continue',
+  );
+  return part?.type === 'continue' && part.next
+    ? { ...part, key: builtinKeyOf(detail.value.session.templateId) }
+    : undefined;
+});
+const goingOn = ref(false);
 /**
  * Where the owner last wrote: a question asked before it was passed over,
  * as the server counts it, and is no longer offered to answer.
@@ -131,38 +167,45 @@ async function send(
   files: AiComposerFile[],
   restore: () => void,
 ) {
-  if (!session.value) return;
+  const current = session.value;
+  if (!current) return;
   busy.value = true;
   stuck = true;
-  try {
-    await aiApi.post(session.value.sessionUuid, { text, about, files });
+  const sent = await aiAttempt(async () => {
+    await aiApi.post(current.sessionUuid, { text, about, files });
     await refresh();
-  } catch (caught) {
-    restore();
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  } finally {
-    busy.value = false;
-  }
+  });
+  // Not sent, the words go back where they were written.
+  if (!sent) restore();
+  busy.value = false;
 }
 
 async function answer(question: string, text: string) {
-  if (!session.value) return;
-  try {
-    await aiApi.post(session.value.sessionUuid, { text, answers: question });
-    showToast(phrase.value.ai_toast_answer_sent);
+  const current = session.value;
+  if (!current) return;
+  await aiAttempt(async () => {
+    // The answer shows in the thread at once, and the model goes on there.
+    await aiApi.post(current.sessionUuid, { text, answers: question });
     await refresh();
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  }
+  });
+}
+
+/** A check goes on: its next batch, or word that nothing is left. */
+async function goOn() {
+  const current = session.value;
+  if (!current || goingOn.value) return;
+  // The thread follows the next batch down, wherever the owner was reading.
+  stuck = true;
+  await aiAttempt(async () => {
+    const { messageUuid } = await aiApi.continueRun(current.sessionUuid);
+    if (!messageUuid) showToast(phrase.value.ai_continue_nothing);
+    await refresh();
+  }, goingOn);
 }
 
 async function stop() {
-  if (!session.value) return;
-  try {
-    await aiApi.stop(session.value.sessionUuid);
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  }
+  const current = session.value;
+  if (current) await aiAttempt(() => aiApi.stop(current.sessionUuid));
 }
 
 const placeholder = computed(() =>
@@ -184,15 +227,14 @@ async function change(
   body: Parameters<typeof aiApi.change>[1],
   toast?: string,
 ) {
-  if (!session.value) return;
+  const current = session.value;
+  if (!current) return;
   menuOpen.value = false;
-  try {
-    await aiApi.change(session.value.sessionUuid, body);
+  await aiAttempt(async () => {
+    await aiApi.change(current.sessionUuid, body);
     if (toast) showToast(toast);
     await refresh();
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  }
+  });
 }
 
 function startRename() {
@@ -207,16 +249,15 @@ async function rename() {
 }
 
 async function remove() {
-  if (!session.value) return;
+  const current = session.value;
+  if (!current) return;
   menuOpen.value = false;
   if (!window.confirm(phrase.value.ai_session_delete_confirm(title.value)))
     return;
-  try {
-    await aiApi.remove(session.value.sessionUuid);
+  await aiAttempt(async () => {
+    await aiApi.remove(current.sessionUuid);
     emit('deleted');
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  }
+  });
 }
 </script>
 
@@ -311,22 +352,26 @@ async function remove() {
             <span class="inline-flex items-center gap-1"
               ><Icon :name="sessionSource(session).icon" />{{ origin }}</span
             >
-            <!-- Which model answers it from here on, and what it spent. -->
+            <!-- Which model answers it from here on; what it spent is the
+                 hint of its mark, a word few owners need in the head. -->
             <span
               v-if="!app"
               class="inline-flex min-w-0 items-center gap-1"
               data-session-model
-              ><Icon name="sparkles" /><AiModelPicker
+              ><span
+                class="inline-flex"
+                :data-title-popup="
+                  session.tokens
+                    ? phrase.ai_session_tokens(compactAmount(session.tokens))
+                    : undefined
+                "
+                data-session-tokens
+                ><Icon name="sparkles" /></span
+              ><AiModelPicker
                 :model-value="session.model ?? ''"
                 :disabled="archived"
                 @update:model-value="change({ model: $event })"
-              /><template v-if="session.tokens">
-                ·
-                {{
-                  phrase.ai_session_tokens(compactAmount(session.tokens))
-                }}</template
-              ></span
-            >
+            /></span>
           </p>
           <!-- What it is about, drawn as links in a text are: each with its
                picture, its accent and its card on hover. -->
@@ -336,10 +381,26 @@ async function remove() {
             class="flex flex-wrap gap-1.5"
           >
             <AiEntityChip
-              v-for="entity in session.about"
+              v-for="entity in aboutShown"
               :key="entity.ref"
               :entity
             />
+            <button
+              v-if="aboutLeft > 0 || aboutOpen"
+              type="button"
+              class="cursor-pointer rounded-full px-2 text-xs font-semibold
+                text-text-2 transition pointer-coarse:min-h-11 hocus:bg-bg-2
+                hocus:text-text-1"
+              :aria-expanded="aboutOpen"
+              data-session-about-more
+              @click="aboutOpen = !aboutOpen"
+            >
+              {{
+                aboutOpen
+                  ? phrase.ai_session_about_less
+                  : phrase.ai_session_about_more(aboutLeft)
+              }}
+            </button>
             <ContentInlineLinkDecorator
               :root="aboutRoot"
               :resolver="linkResolver"
@@ -364,6 +425,7 @@ async function remove() {
           :actions="byMessage.get(message.messageUuid) ?? []"
           :writing="message.messageUuid === writingUuid"
           :answerable="detail.answerable && message.seq > ownerSpokeAt"
+          :last="message.seq === lastSeq && detail.session.state !== 'running'"
           :action-of="actionOf"
           @answer="answer"
         />
@@ -419,6 +481,15 @@ async function remove() {
       class="px-sm pt-1.5
         pb-[calc(var(--spacing-sm)+env(safe-area-inset-bottom,0px))]"
     >
+      <AiSessionWaiting
+        v-if="detail"
+        :actions="detail.actions"
+        :scroller="scroller"
+        :more
+        :going-on="goingOn"
+        :running
+        @continue="goOn"
+      />
       <AiComposer
         :running
         :busy

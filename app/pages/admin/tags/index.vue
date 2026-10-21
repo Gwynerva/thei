@@ -18,7 +18,7 @@ function placeholderStyle(tag: TagListItem) {
 <template>
   <StickyGlassHeader width="var(--width-wide)">
     <div class="flex items-center justify-between gap-xs py-xs">
-      <div class="flex items-center gap-xs text-xl font-bold">
+      <div class="flex items-center gap-xs text-lg font-bold sm:text-xl">
         <Icon name="tag" />
         <span>{{ phrase.admin_tags }}</span>
       </div>

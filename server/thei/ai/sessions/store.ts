@@ -293,6 +293,7 @@ export function updateSession(
       | 'model'
       | 'closedAt'
       | 'archivedAt'
+      | 'context'
     >
   >,
 ) {

@@ -1,0 +1,37 @@
+[
+  {
+    "n": 1,
+    "label": "Open the dashboard",
+    "action": "open",
+    "url": "http://lab.localhost:3003/admin/",
+    "sinceStartMs": 400,
+    "shot": "shots/01-open-the-dashboard.png",
+    "marked": "shots/01-open-the-dashboard.marked.png",
+    "answer": {
+      "firstFeedbackMs": 90,
+      "answerMs": 400
+    },
+    "probe": {
+      "counts": {},
+      "fps": []
+    }
+  },
+  {
+    "n": 2,
+    "label": "Ctrl+K “today”",
+    "action": "press",
+    "url": "http://lab.localhost:3003/admin/",
+    "sinceStartMs": 800,
+    "shot": "shots/02-ctrl-k-today.png",
+    "marked": "shots/02-ctrl-k-today.marked.png",
+    "keys": 9,
+    "answer": {
+      "firstFeedbackMs": 90,
+      "answerMs": 400
+    },
+    "probe": {
+      "counts": {},
+      "fps": []
+    }
+  }
+]

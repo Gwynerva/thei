@@ -8,37 +8,20 @@ import {
 import { E2E_ORIGIN } from './fixture-url';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import sharp from 'sharp';
-import { createOriginalAssetSettings } from '../../shared/asset-upload-settings';
-import { buildUploadHeaders } from '../../shared/api/asset-upload-headers';
 import { screenshot } from './screenshots';
-import { skipDescription, uploadControls } from './helpers/upload';
+import { uploadControls, uploadFile, uploadPicture } from './helpers/upload';
 
 test.use({
   storageState: fileURLToPath(
     new URL('./.artifacts/admin.json', import.meta.url),
   ),
 });
-async function upload(api: APIRequestContext, color = '#4368a2') {
-  const buffer = await sharp({
-    create: { width: 80, height: 60, channels: 3, background: color },
-  })
-    .png()
-    .toBuffer();
-  // The file is the raw body; its metadata rides in headers so the server can
-  // stream it to disk instead of buffering the whole request.
-  const response = await api.post('/api/admin/assets', {
-    headers: buildUploadHeaders({
-      settings: createOriginalAssetSettings(),
-      extension: 'png',
-    }),
-    data: buffer,
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  return { asset: await response.json(), buffer };
-}
-
 async function uploadVideo(api: APIRequestContext) {
   const video = await readFile(
     fileURLToPath(
@@ -51,16 +34,7 @@ async function uploadVideo(api: APIRequestContext) {
   const free = Buffer.alloc(8);
   free.writeUInt32BE(free.length + filler.length, 0);
   free.write('free', 4, 'latin1');
-  const buffer = Buffer.concat([video, free, filler]);
-  const response = await api.post('/api/admin/assets', {
-    headers: buildUploadHeaders({
-      settings: createOriginalAssetSettings(),
-      extension: 'mp4',
-    }),
-    data: buffer,
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  return response.json();
+  return uploadFile(api, 'mp4', Buffer.concat([video, free, filler]));
 }
 async function library(page: Page, batch = false) {
   await page.goto('/asset-regression');
@@ -83,15 +57,16 @@ async function choose(page: Page, assetUuid: string) {
   if (!(await assetButton.isVisible())) await unused.click();
   await expect(assetButton).toBeVisible();
   await assetButton.click();
-  // The editor asks how to take the stored file; as it is goes on at once.
+  // The editor asks how to take the stored file; as it is, it is handed over
+  // at once, with no description to ask for.
   const controls = uploadControls(page);
   await expect(controls.newVariant).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Processing source', exact: true }),
   ).toHaveCount(0);
+  await expect(controls.next).toHaveText('Done');
   await expect(controls.next).toBeEnabled();
   await controls.next.click();
-  await skipDescription(page);
 }
 
 /** A picture nothing else has uploaded: the bytes differ on every run. */
@@ -170,7 +145,11 @@ test('hash lookup reuses stored bytes without multipart upload, including rename
   page,
   request,
 }) => {
-  const { asset, buffer } = await upload(request, '#5a3d21');
+  const { asset, buffer } = await uploadPicture(request, {
+    color: '#5a3d21',
+    width: 80,
+    height: 60,
+  });
   const lookup = await request.post('/api/admin/assets/lookup', {
     data: {
       hash: createHash('sha256').update(buffer).digest('hex'),
@@ -196,11 +175,12 @@ test('hash lookup reuses stored bytes without multipart upload, including rename
   await page
     .locator('input[type=file]')
     .setInputFiles({ name: 'renamed.png', mimeType: 'image/png', buffer });
-  // The same bytes are the stored file: as it is, it is taken again.
+  // The same bytes are the stored file: as it is, it is taken again, with no
+  // description to ask for.
   const { next } = uploadControls(page);
+  await expect(next).toHaveText('Done');
   await expect(next).toBeEnabled();
   await next.click();
-  await skipDescription(page);
   await expect(page.locator('[data-result]')).toContainText(asset.assetUuid);
   expect(uploads).toBe(0);
 });
@@ -211,11 +191,16 @@ for (const width of [1280, 390]) {
     request,
   }) => {
     await page.setViewportSize({ width, height: 900 });
-    const first = await upload(request, width === 1280 ? '#763a55' : '#7d405b');
-    const second = await upload(
-      request,
-      width === 1280 ? '#1c5362' : '#245b69',
-    );
+    const first = await uploadPicture(request, {
+      color: width === 1280 ? '#763a55' : '#7d405b',
+      width: 80,
+      height: 60,
+    });
+    const second = await uploadPicture(request, {
+      color: width === 1280 ? '#1c5362' : '#245b69',
+      width: 80,
+      height: 60,
+    });
     expect(JSON.stringify([first.asset, second.asset])).not.toContain('.png"');
     await page.goto('/asset-regression');
     await expect(page.locator('[data-ready]')).toHaveAttribute(
@@ -340,9 +325,13 @@ test('the library narrows to one kind of entity and finds a diary entry by its d
   request,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  const { asset } = await upload(request, '#3d6b4f');
+  const { asset } = await uploadPicture(request, {
+    color: '#3d6b4f',
+    width: 80,
+    height: 60,
+  });
   // One file nothing holds, so the unused ones are never an empty choice.
-  await upload(request, '#6b3d5a');
+  await uploadPicture(request, { color: '#6b3d5a', width: 80, height: 60 });
   // A day no earlier run is likely to have taken: one entry per day.
   const random = (size: number) => 1 + Math.floor(Math.random() * size);
   // Past the 12th, the day cannot be read as a month the other way round.
@@ -527,6 +516,8 @@ test('video previews play on hover and keyboard focus in both library views', as
   }
 
   await page.goto('/admin/assets/');
+  // A click before the page is hydrated opens nothing.
+  await page.waitForLoadState('networkidle');
   await page.getByRole('button', { name: /^Used in: / }).click();
   await page
     .getByRole('listbox', { name: 'Used in' })
@@ -568,4 +559,153 @@ test('video previews play on hover and keyboard focus in both library views', as
       tile.evaluate((element) => getComputedStyle(element).borderColor),
     )
     .not.toBe(restingBorder);
+});
+
+/**
+ * A video whose frames differ: a grey second, which the automatic pick
+ * passes over, then a colour of this run alone, so its bytes are new.
+ */
+async function uploadChangingVideo(api: APIRequestContext) {
+  const directory = await mkdtemp(join(tmpdir(), 'thei-e2e-frames-'));
+  const path = join(directory, 'frames.mp4');
+  // A full colour of a hue of its own, livelier than grey whatever it is.
+  const hue = Math.random() * 6;
+  const rising = Math.round(255 * (1 - Math.abs((hue % 2) - 1)));
+  const [red, green, blue] = [
+    [255, rising, 0],
+    [rising, 255, 0],
+    [0, 255, rising],
+    [0, rising, 255],
+    [rising, 0, 255],
+    [255, 0, rising],
+  ][Math.floor(hue)]!;
+  const colour = `0x${[red, green, blue]
+    .map((channel) => channel!.toString(16).padStart(2, '0'))
+    .join('')}`;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(
+        ffmpegInstaller.path,
+        [
+          '-y',
+          '-f',
+          'lavfi',
+          '-i',
+          'color=c=gray:s=320x180:r=25:d=1',
+          '-f',
+          'lavfi',
+          '-i',
+          `color=c=${colour}:s=320x180:r=25:d=2`,
+          '-filter_complex',
+          '[0:v][1:v]concat=n=2:v=1:a=0,format=yuv420p',
+          '-c:v',
+          'libx264',
+          path,
+        ],
+        { stdio: 'ignore' },
+      );
+      child.on('error', reject);
+      child.on('close', (code) =>
+        code === 0 ? resolve() : reject(new Error(`ffmpeg exited ${code}`)),
+      );
+    });
+    return await uploadFile(api, 'mp4', await readFile(path));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+test('a video takes the frame its player stands at as its still, and gives it back', async ({
+  page,
+  request,
+}) => {
+  const asset = await uploadChangingVideo(request);
+  await page.goto('/admin/assets/?usage=unused');
+  const tile = page.locator(`[data-asset-uuid="${asset.assetUuid}"]`);
+  const tileStill = tile.locator('[data-media-preview-pair] img.media-main');
+  await expect(tileStill).toHaveAttribute('src', /\/content$/);
+  const automatic = await tileStill.getAttribute('src');
+  await tile.click();
+
+  const section = page.locator('[data-asset-preview-frame]');
+  const still = section.locator('[data-asset-preview-frame-poster] img');
+  const auto = section.locator('[data-asset-preview-frame-auto]');
+  const take = section.locator('[data-asset-preview-frame-take]');
+  const mark = page.locator('[data-video-poster-mark]');
+  // The way the still was taken is the button pressed.
+  await expect(section).toHaveAttribute(
+    'data-asset-preview-frame-state',
+    'auto',
+  );
+  await expect(auto).toHaveAttribute('aria-pressed', 'true');
+  await expect(auto).toContainText('automatically');
+  await expect(take).toHaveAttribute('aria-pressed', 'false');
+  await expect(still).toHaveAttribute('src', automatic!);
+  await expect(mark).toBeVisible();
+  const automaticMark = await mark.evaluate((element) => element.style.left);
+
+  // The button follows the player.
+  // A range cannot be filled: the owner's drag, as the input tells it.
+  await page
+    .getByRole('slider', { name: 'Playback position' })
+    .evaluate((element) => {
+      const input = element as HTMLInputElement;
+      input.value = '0.5';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  await expect(take).toContainText('0:00.5');
+  await take.click();
+  await expect(section).toHaveAttribute(
+    'data-asset-preview-frame-state',
+    'chosen',
+  );
+  await expect(take).toHaveAttribute('aria-pressed', 'true');
+  await expect(auto).toHaveAttribute('aria-pressed', 'false');
+  await expect(auto).toBeEnabled();
+  await expect(still).not.toHaveAttribute('src', automatic!);
+  const chosen = await still.getAttribute('src');
+  // At the frame already chosen there is nothing to take.
+  await expect(take).toBeDisabled();
+  await expect
+    .poll(() => mark.evaluate((element) => element.style.left))
+    .not.toBe(automaticMark);
+  // The window's own player shows the still, and the tile behind it too.
+  await expect(page.locator('dialog[open] video')).toHaveAttribute(
+    'poster',
+    chosen!,
+  );
+  await expect(tileStill).toHaveAttribute('src', chosen!);
+
+  const grey = await page.evaluate(async (src) => {
+    const image = new Image();
+    image.src = src;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const context = canvas.getContext('2d')!;
+    context.drawImage(image, 0, 0, 1, 1);
+    const [red, green, blue] = context.getImageData(0, 0, 1, 1).data;
+    return Math.max(red!, green!, blue!) - Math.min(red!, green!, blue!);
+  }, chosen!);
+  expect(grey).toBeLessThan(12);
+
+  // Read again, the library keeps the choice.
+  await page.keyboard.press('Escape');
+  await expect(page.locator('dialog[open]')).toHaveCount(0);
+  await page.reload();
+  await expect(tileStill).toHaveAttribute('src', chosen!);
+  await tile.click();
+  await expect(take).toHaveAttribute('aria-pressed', 'true');
+
+  await auto.click();
+  await expect(section).toHaveAttribute(
+    'data-asset-preview-frame-state',
+    'auto',
+  );
+  await expect(still).toHaveAttribute('src', automatic!);
+  // Chosen automatically already, it has nothing more to do.
+  await expect(auto).toHaveAttribute('aria-pressed', 'true');
+  await expect(auto).toBeDisabled();
+  await expect(tileStill).toHaveAttribute('src', automatic!);
 });

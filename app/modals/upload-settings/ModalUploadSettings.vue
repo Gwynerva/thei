@@ -52,6 +52,7 @@ import AssetModalButton from '../asset-modal/AssetModalButton.vue';
 import AssetModalCompareMedia from '../asset-modal/AssetModalCompareMedia.vue';
 import AssetModalPreviewAudio from '../asset-modal/AssetModalPreviewAudio.vue';
 import AssetModalPreviewMedia from '../asset-modal/AssetModalPreviewMedia.vue';
+import AssetPreviewFrameSection from '../asset-modal/AssetPreviewFrameSection.vue';
 import FilePreviewContent from '../../components/file-preview/FilePreviewContent.vue';
 import { useFileInfo } from '../asset-modal/use-file-info';
 import { detectVideoAudio } from '../asset-modal/video-audio';
@@ -96,8 +97,8 @@ type Section = 'source' | 'family' | 'create';
 /**
  * The panel goes one screen at a time: how to take the file, then what that
  * way needs — a saved variant to choose, the settings of a new one — and
- * last the file's description. `section` is what the preview and the
- * settings work on; a screen sets it as it opens.
+ * last, for a file new to the library, its description. `section` is what
+ * the preview and the settings work on; a screen sets it as it opens.
  */
 type Screen = 'root' | 'family' | 'create' | 'describe';
 
@@ -351,6 +352,17 @@ const screen = ref<Screen>('root');
 const takenOn = ref<Screen>('root');
 /** The file being handed over, stored, waiting only for its description. */
 const taken = shallowRef<AssetVariantInfo>();
+/** The file taken, when it is a video: its still is chosen under its description. */
+const takenVideo = computed(() =>
+  taken.value?.type === AssetType.Video ? taken.value : undefined,
+);
+/** A still taken: the video handed over is the one that shows it. */
+function takeStill(variants: AssetVariantInfo[]) {
+  const shown = variants.find(
+    (variant) => variant.assetUuid === taken.value?.assetUuid,
+  );
+  if (shown) taken.value = shown;
+}
 /** As it is: the stored file itself, or the picked one as it came. */
 const section = ref<Section>(rootSection());
 
@@ -834,7 +846,7 @@ const busyLabel = computed(() =>
 
 async function useUnchanged() {
   await commitAndThen(createOriginalAssetSettings(), (asset) =>
-    take(asset, false),
+    take(asset, { describe: true, confirm: false }),
   );
 }
 
@@ -846,14 +858,14 @@ async function useRender() {
   renders.hold(primaryRenderKey.value);
   let taken = false;
   await commitAndThen(request, async (asset) => {
-    taken = await take(asset, false);
+    taken = await take(asset, { describe: true, confirm: false });
   });
   if (!taken) renders.release();
 }
 
 async function useAudio() {
   if (currentCreated.value) {
-    await take(currentCreated.value);
+    await take(currentCreated.value, { describe: true });
     return;
   }
   const request = edit.request.value;
@@ -865,7 +877,7 @@ async function useAudio() {
       // Stored either way: when this place cannot take it, the modal stays
       // on it and says why, and the next "Use" does not store it again.
       created.value = { key, asset };
-      return take(asset, false);
+      return take(asset, { describe: true, confirm: false });
     });
   } finally {
     usingDirectly.value = false;
@@ -929,10 +941,15 @@ async function commitAndThen(
 }
 
 /**
- * Takes the file it will hand over, and goes on to its description; false
- * when the modal stays where it is instead.
+ * Takes the file it will hand over; false when the modal stays where it is
+ * instead. A file new to the library — the one picked, or a variant just
+ * made — goes on to its description; one already stored, chosen as it is,
+ * is handed over at once, since choosing it says nothing new about it.
  */
-async function take(asset: AssetVariantInfo, confirm = true) {
+async function take(
+  asset: AssetVariantInfo,
+  { describe, confirm = true }: { describe: boolean; confirm?: boolean },
+) {
   if (assetSelectionError(asset, props.modalData)) return false;
   busy.value = 'finish';
   try {
@@ -940,6 +957,10 @@ async function take(asset: AssetVariantInfo, confirm = true) {
     // just stored has been confirmed by storing it.
     if (confirm) await touch(asset.assetUuid);
     taken.value = asset;
+    if (!describe) {
+      done();
+      return true;
+    }
     takenOn.value = screen.value;
     screen.value = 'describe';
     return true;
@@ -961,9 +982,32 @@ function done() {
 
 const descriptionField =
   useTemplateRef<InstanceType<typeof FileDescriptionField>>('descriptionField');
-/** «Готово»: the description saved, the file handed over. */
+/**
+ * Going on without a description, chosen under the field while it is empty:
+ * it only lets «Готово» go on, so the rest of the screen — a video's still —
+ * stays at hand.
+ */
+const withoutDescription = ref(false);
+// Another file takes the choice away; a still taken of the same one does not.
+watch(
+  () => taken.value?.assetUuid,
+  () => (withoutDescription.value = false),
+);
+// Words put in the field, typed or taken from a proposal, take the choice
+// away with it.
+watch(
+  () => descriptionField.value?.filled,
+  (filled) => {
+    if (filled) withoutDescription.value = false;
+  },
+);
+/** «Готово»: the description saved, or left out on purpose; the file handed over. */
 async function describeAndFinish() {
-  if (await descriptionField.value?.save()) done();
+  const field = descriptionField.value;
+  if (!field?.filled && !withoutDescription.value) return;
+  // Left out after emptying a description the family had, it is saved
+  // empty: the words taken out go.
+  if (!field || (await field.save())) done();
 }
 
 /** The section a screen works on, as it opens. */
@@ -999,13 +1043,17 @@ function back() {
   open('root');
 }
 
-/** «Далее» on the first screen: the file as it is. */
+/**
+ * The foot's button on the first screen: the file as it is — stored now and
+ * described, or, when it is stored already, handed over.
+ */
 async function takeAsIs() {
   if (!sourceAsset) {
     await useUnchanged();
     return;
   }
-  if (selectedVariant.value) await take(selectedVariant.value);
+  if (selectedVariant.value)
+    await take(selectedVariant.value, { describe: false });
 }
 
 function selectVariant(assetUuid: string) {
@@ -1063,17 +1111,20 @@ const newVariantHint = computed(() =>
 const step = computed<{ label: string; can: boolean; run: () => unknown }>(
   () => {
     const next = phrase.value.upload_next;
+    // A file already stored is handed over at once: nothing follows it.
     if (screen.value === 'root')
       return {
-        label: next,
+        label: sourceAsset ? phrase.value.done : next,
         can: sourceAsset ? canUseSelected.value : !busy.value,
         run: takeAsIs,
       };
     if (screen.value === 'family')
       return {
-        label: next,
+        label: phrase.value.done,
         can: canUseSelected.value,
-        run: () => selectedVariant.value && take(selectedVariant.value),
+        run: () =>
+          selectedVariant.value &&
+          take(selectedVariant.value, { describe: false }),
       };
     if (transformKind.value === 'image')
       return { label: next, can: canUseRender.value, run: useRender };
@@ -1089,7 +1140,11 @@ const step = computed<{ label: string; can: boolean; run: () => unknown }>(
         run: createVariant,
       };
     const made = currentCreated.value;
-    return { label: next, can: canUseCreated.value, run: () => take(made) };
+    return {
+      label: next,
+      can: canUseCreated.value,
+      run: () => take(made, { describe: true }),
+    };
   },
 );
 
@@ -1124,9 +1179,22 @@ function handleAssetMissing(error: unknown) {
 // ---------------------------------------------------------------------------
 // Preview.
 
+/**
+ * A stored file shown as it is: the variant picked from the list, or, on the
+ * last screen, the one taken — never the source under the frame it was cut
+ * with.
+ */
+const shownVariant = computed(() =>
+  screen.value === 'describe'
+    ? taken.value
+    : section.value === 'family'
+      ? selectedVariant.value
+      : undefined,
+);
+
 const previewSource = computed(() => {
-  if (section.value === 'family' && selectedVariant.value) {
-    const variant = selectedVariant.value;
+  if (shownVariant.value) {
+    const variant = shownVariant.value;
     return {
       key: `variant:${variant.assetUuid}`,
       extension: variant.extension,
@@ -1163,8 +1231,8 @@ const previewSource = computed(() => {
  * new version is made from it, that version under it.
  */
 const audioPlayers = computed(() => {
-  if (section.value === 'family' && selectedVariant.value) {
-    const variant = selectedVariant.value;
+  if (shownVariant.value) {
+    const variant = shownVariant.value;
     if (variant.type !== AssetType.Audio) return [];
     return [
       {
@@ -1213,6 +1281,7 @@ const audioPlayers = computed(() => {
 const editingSource = computed(
   () =>
     section.value === 'create' &&
+    !shownVariant.value &&
     Boolean(transformKind.value) &&
     Boolean(transformSource.value),
 );
@@ -1249,7 +1318,11 @@ const compareOutput = computed(() => {
     : undefined;
 });
 const compare = computed(() => {
-  if (section.value !== 'create' || previewMode.value !== 'compare')
+  if (
+    section.value !== 'create' ||
+    shownVariant.value ||
+    previewMode.value !== 'compare'
+  )
     return null;
   const output = compareOutput.value;
   const crop = edit.cropRect.value;
@@ -1279,6 +1352,7 @@ const compare = computed(() => {
 const canCompare = computed(
   () =>
     section.value === 'create' &&
+    !shownVariant.value &&
     Boolean(compareOutput.value?.dimensions) &&
     Boolean(edit.cropRect.value),
 );
@@ -1313,6 +1387,7 @@ const directHref = computed(() =>
         :extension="previewSource.extension"
         :src="previewSource.src"
         :poster="previewSource.poster"
+        :poster-at="takenVideo?.meta?.previewAt"
         :has-audio="previewSource.hasAudio"
         :display-dimensions="previewDimensions"
         :rotation="previewRotation"
@@ -1577,15 +1652,50 @@ const directHref = computed(() =>
           />
         </div>
 
-        <!-- Last, what the file is: the same for every place it goes. -->
-        <div v-else-if="taken" class="p-sm">
-          <FileDescriptionField
-            ref="descriptionField"
-            :key="taken.assetUuid"
-            :asset-uuid="taken.assetUuid"
-            global
-            embedded
-            required
+        <!-- Last, what the file is: the same for every place it goes; under
+             it a video's still, the family's too. -->
+        <div v-else-if="taken" class="flex flex-col divide-y divide-border-1">
+          <!-- Going on without a description is the description's own
+               choice, under it: the screen holds more than the field. -->
+          <div class="flex flex-col items-start gap-1 p-sm">
+            <FileDescriptionField
+              ref="descriptionField"
+              :key="taken.assetUuid"
+              :asset-uuid="taken.assetUuid"
+              class="self-stretch"
+              global
+              embedded
+              required
+            />
+            <!-- No fade: the screen's height changes with it at once. -->
+            <button
+              v-if="descriptionField?.loaded && !descriptionField.filled"
+              type="button"
+              class="-ml-xs flex cursor-pointer items-center gap-1
+                rounded-normal px-xs py-0.5 text-xs transition
+                pointer-coarse:min-h-11 pointer-coarse:px-sm hocus:bg-bg-3
+                hocus:text-accent"
+              :class="withoutDescription ? 'text-accent' : 'text-text-3'"
+              :aria-pressed="withoutDescription"
+              data-upload-skip-description
+              @click="withoutDescription = !withoutDescription"
+            >
+              <Icon
+                :name="withoutDescription ? 'check' : 'face-dead'"
+                aria-hidden="true"
+              />
+              <span>{{ phrase.upload_skip_description }}</span>
+            </button>
+          </div>
+          <AssetPreviewFrameSection
+            v-if="takenVideo"
+            :asset-uuid="takenVideo.assetUuid"
+            :poster="videoPosterOf(takenVideo.media)"
+            :preview-at="takenVideo.meta?.previewAt"
+            :chosen="takenVideo.meta?.previewChosen"
+            :current-time="mediaPreview?.playbackTime"
+            @chosen="takeStill"
+            @seek="mediaPreview?.seek($event)"
           />
         </div>
       </div>
@@ -1593,21 +1703,18 @@ const directHref = computed(() =>
 
     <template #footer>
       <template v-if="screen === 'describe'">
-        <ModalHeaderButton
-          icon="face-dead"
-          :label="phrase.upload_skip_description"
-          data-upload-skip-description
-          @click="done"
-        />
         <Button
           variant="primary"
           class="flex h-9 flex-1 items-center justify-center gap-xs
             font-semibold"
-          :disabled="!descriptionField?.filled || descriptionField?.saving"
+          :disabled="
+            !(descriptionField?.filled || withoutDescription) ||
+            descriptionField?.saving
+          "
           data-upload-done
           @click="describeAndFinish"
         >
-          <Icon v-if="descriptionField?.saving" name="loading" />
+          <Icon :name="descriptionField?.saving ? 'loading' : 'check'" />
           <span>{{ phrase.done }}</span>
         </Button>
       </template>

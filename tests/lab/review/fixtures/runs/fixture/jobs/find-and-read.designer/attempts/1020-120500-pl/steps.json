@@ -1,0 +1,36 @@
+[
+  {
+    "n": 1,
+    "label": "Home",
+    "action": "open",
+    "url": "http://lab.localhost:3003/",
+    "sinceStartMs": 400,
+    "shot": "shots/01-home.png",
+    "marked": "shots/01-home.marked.png",
+    "answer": {
+      "firstFeedbackMs": 90,
+      "answerMs": 400
+    },
+    "probe": {
+      "counts": {},
+      "fps": []
+    }
+  },
+  {
+    "n": 2,
+    "label": "Look for search",
+    "action": "look",
+    "url": "http://lab.localhost:3003/",
+    "sinceStartMs": 800,
+    "shot": "shots/02-look-for-search.png",
+    "marked": "shots/02-look-for-search.marked.png",
+    "answer": {
+      "firstFeedbackMs": 90,
+      "answerMs": 400
+    },
+    "probe": {
+      "counts": {},
+      "fps": []
+    }
+  }
+]

@@ -1,5 +1,7 @@
 import {
   RELATION_TYPE_OF_WORD,
+  RELATION_WORD_FROM_OTHER_END,
+  RELATION_WORD_OF_TYPE,
   type RelationEntityType,
   type RelationType,
   type RelationWord,
@@ -69,9 +71,8 @@ export const RELATION_GROUP_ORDER: readonly RelationType[] = [
 ];
 
 /**
- * What the other end is to this entity, in one word under its name:
- * "Influences" when this one depends on it, "Depends" when this one affects
- * it.
+ * What the other end is to this entity, in a word under its name: "Affects"
+ * when this one depends on it, "Depends on" when this one affects it.
  */
 export function relationLabel(
   phrase: LanguagePhrases,
@@ -95,24 +96,33 @@ export function relationSentence(
 
 export type RelationSentencePart = string | { side: 'current' | 'other' };
 
+const CURRENT_MARK = '\u0000';
+const OTHER_MARK = '\u0001';
+
 /**
- * A relation's sentence in pieces, its two names left for the caller to draw
- * — each with its picture, say. The quotes around a name go with it: the
- * picture already sets the name apart.
+ * A relation's sentence said of its other end, as the word under the other
+ * end's name says it: "Affects" — "B affects A". Each kind on offer is
+ * named by that word and explained by this sentence, so the two never read
+ * the other way round. Its two names are left for the caller to draw — each
+ * with its picture, say. The quotes around a name go with it: the picture
+ * already sets the name apart.
  */
-export function relationSentenceParts(
+export function relationSentencePartsFromOther(
   phrase: LanguagePhrases,
   type: RelationType,
 ): RelationSentencePart[] {
-  const current = '\u0000';
-  const other = '\u0001';
-  return relationSentence(phrase, type, current, other)
+  const converse =
+    RELATION_TYPE_OF_WORD[
+      RELATION_WORD_FROM_OTHER_END[RELATION_WORD_OF_TYPE[type]]
+    ];
+  // The converse sentence, with the other end where it puts this one.
+  return relationSentence(phrase, converse, OTHER_MARK, CURRENT_MARK)
     .split(/[«“"]?([\u0000\u0001])[»”"]?/)
     .filter(Boolean)
     .map((part) =>
-      part === current
+      part === CURRENT_MARK
         ? { side: 'current' as const }
-        : part === other
+        : part === OTHER_MARK
           ? { side: 'other' as const }
           : part,
     );

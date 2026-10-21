@@ -15,7 +15,8 @@ names itself with an `aria-label`.
 
 - Wrap each field in `Field`, label first.
 - Give every field a label. A switch with no label of its own has its words
-  beside it, which count as one (`FieldToggle`).
+  beside it, which count as one (`FieldToggle`). Under a finger the switch
+  answers in a finger's height around it, its look unchanged.
 - The control the label should focus carries `data-label-focus`;
   `FieldInput`, `FieldTextarea`, `FieldSelect` and `FieldDateButton` already
   do.
@@ -28,6 +29,13 @@ names itself with an `aria-label`.
   `border-border-error`.
 - Suggestions of the site's own — recommended tags, candidates — wait next to
   the field they are about, never in the form's header.
+- A field the form cannot be saved without names its place: the `need` of
+  its `Field`, the key of its need in the form's `useFormNeeds`
+  (`app/composables/form-needs.ts`). Once a save was asked for and refused
+  for it, its label and asterisk turn to the error colour, its ✦ keeping its
+  own, and the form may bring it into view; filled, it turns back. A need
+  with no `Field` of its own — a section, a list — marks its place with
+  `data-need`.
 
 ## The ✦ at a label
 
@@ -36,11 +44,23 @@ When an AI proposes something for a field, its label turns to the accent and a
 pointer rests on the ✦ for a moment, and stays while the pointer moves into it;
 a tap or the keyboard open it too. It is drawn as its session's card draws it:
 take it into the form, decline it or comment on it. Several proposals at one
-field are gone through one at a time, the pager (‹ 1/2 ›) at the left of the
-card's own row of buttons. A text edit opens in the text's own editor instead.
+field are gone through one at a time, the pager (‹ 1/2 ›) at the start of the
+card's footer, before its decisions. A text edit opens in the text's own editor instead.
 
-With AI off, or nothing proposed, there is no ✦ and the label is plain. See
-[AI in the UI](../patterns/ai-in-the-ui.md).
+With AI on and a model to answer, a quiet ✦ stands at every such label but
+a switch's, and asks about the field: a click opens a small box — a sheet on
+a phone — with the field's ready requests («Опиши файл», «Предложи
+название») and room for the owner's own words — up to `FIELD_ASK_MAX`
+characters: past it the box says so and sends nothing, never cutting them.
+A session answers in the background; the ✦ runs meanwhile, its box says so
+and can stop it, and what
+the model proposes waits at the label as any proposal; an answer with nothing
+to propose puts the box away and stays beside the ✦, one line of the model's
+words. A request that only mends what is there — check the dates, make it
+shorter — is offered once the field holds something. With AI off there is no
+✦; with nothing proposed the label stays plain. A list with no label of its
+own — tags, relations — asks from its heading (`SectionHeader`'s `ai`), its
+proposals standing among its chips. See [AI in the UI](../patterns/ai-in-the-ui.md).
 
 A file's description («Описание файла», "File description") is the one
 field of a file (`app/components/FileDescriptionField.vue`): it stands in
@@ -57,10 +77,15 @@ with the old. See [File window](file-window.md).
 
 - `app/components/field/Field.vue` — the column (`flex flex-col gap-xs`), and
   the `ai` place it provides to what is inside (`app/composables/field-ai.ts`).
+  A field of parts — an entity's link, its address and its public ID — holds a
+  `Field` for each part, each with its own `need`
+  (`app/pages/admin/components/LinkField.vue`).
 - `app/components/field/FieldLabel.vue` — `font-semibold tracking-tight`;
   `required` adds an accent asterisk.
 - `app/components/field/FieldHint.vue` — `text-sm tracking-tight text-text-2`.
 - `app/components/ai/AiFieldOffer.vue` — the ✦ and its popup.
+- `app/components/ai/AiAskState.vue` — in the box to ask in, the session at
+  work, or the answer with nothing to propose; the editor's ✦ shows the same.
 - `app/components/FileDescriptionField.vue` — a file's description, read and
   saved through any file of its family over the version it was read at.
 
@@ -77,6 +102,19 @@ The other controls in `app/components/field/`: `FieldInput`, `FieldTextarea`,
 `FieldSelect` ([Select](select.md)), `FieldToggle`, `FieldOptions`,
 `FieldDiscreteBar`, the date pickers, `FieldSynonyms` and
 `FieldContentEditor`.
+
+`FieldOptions` is a row of buttons, the chosen one pressed (`aria-pressed`),
+each named by its words; in a `Field` with a label, the row is a group named
+by the label's words (`aria-labelledby`): the field's first `FieldLabel`
+wears the id `Field` gives it (`app/components/field/field-label.ts`). The
+access of an entity is chosen from `app/components/field/access-options.ts`. A button holds only what a button may — `span`s, never a `div` —
+so its name reads the same to anything that reads the page.
+
+A text's editor is a column of Editor.js blocks; each paragraph is a text
+box of several lines named by the text's title, as its field is
+(`app/components/content/editor-text-role-tune.ts`). The name is set while
+the block is composed, before it is in the page, so Editor.js never takes it
+for a change of the text.
 
 ## Why
 

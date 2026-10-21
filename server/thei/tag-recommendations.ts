@@ -15,10 +15,10 @@ import {
   type TagRecommendationRequest,
   type TagSynonymSuggestion,
 } from '#layers/thei/shared/tag-recommendation';
+import { textTerms } from '#layers/thei/shared/search/match';
 import {
   inverseDocumentFrequency,
   normalizeTermText,
-  readTerms,
   termVector,
   type TermCounts,
 } from '#layers/thei/shared/text-terms';
@@ -37,6 +37,8 @@ import { buildTagItems } from './tags';
  */
 
 const INDEX_TTL_MS = 10 * 60_000;
+/** A word in more than this share of the archive sets no tag apart. */
+const COMMON_SHARE = 0.25;
 
 export type TagRecommendationIndex = {
   builtAt: number;
@@ -176,6 +178,11 @@ export function buildTagRecommendationIndex(): TagRecommendationIndex {
       frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
   const idf = (term: string) =>
     inverseDocumentFrequency(counted.length, frequencies.get(term) ?? 0);
+  // A word in a quarter of the archive or more sets no tag apart.
+  const commonIdf = inverseDocumentFrequency(
+    counted.length,
+    counted.length * COMMON_SHARE,
+  );
 
   const documents: TagEvidenceDocument[] = counted.map((document) => ({
     ...document,
@@ -217,7 +224,9 @@ export function buildTagRecommendationIndex(): TagRecommendationIndex {
     builtAt: Date.now(),
     documents,
     byKey: new Map(documents.map((document) => [document.key, document])),
-    profiles: [...tagRows.values()].map((tag) => buildTagProfile(tag, idf)),
+    profiles: [...tagRows.values()].map((tag) =>
+      buildTagProfile(tag, idf, commonIdf),
+    ),
     tagRows,
     idf,
     frequency: (term) => frequencies.get(term) ?? 0,
@@ -230,7 +239,7 @@ function documentTerms(key: string, title: string, text: string) {
   const hash = textHash(`${title}\u0000${text}`);
   const known = termsByDocument.get(key);
   if (known?.hash === hash) return known;
-  const terms = { hash, ...readTerms({ title, text }) };
+  const terms = { hash, ...textTerms({ title, text }) };
   termsByDocument.set(key, terms);
   return terms;
 }
@@ -251,7 +260,7 @@ export async function recommendTagsForDraft(
 ): Promise<TagRecommendation[]> {
   const index = getTagRecommendationIndex();
   const ownerKey = request.owner && tagEntityKey(request.owner);
-  const { counts, surfaces } = readTerms(request);
+  const { counts, surfaces } = textTerms(request);
   const ranked = recommendTags(
     {
       ownerKey,

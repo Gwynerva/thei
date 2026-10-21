@@ -11,7 +11,7 @@ defineProps<{ item: AiSessionItem }>();
 
 <template>
   <TheiLink
-    :to="`/admin/ai/?session=${item.sessionUuid}`"
+    :to="sessionLocation(item.sessionUuid)"
     class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5
       rounded-sm px-2 py-1.5 transition-colors pointer-coarse:min-h-11
       hocus:bg-bg-accent"

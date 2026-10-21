@@ -1,0 +1,8 @@
+format: 1
+revision: 1
+version: 0.0.0-conformance
+title: Conformance — every construct of the format at least once
+language: en
+span:
+  start: 2020-01-01
+  end: 2024-12-31

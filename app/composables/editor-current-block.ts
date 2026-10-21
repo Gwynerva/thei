@@ -38,6 +38,7 @@ import {
   editorBlockOf,
 } from './editor-dom';
 import { hideKeyFromEditor } from './editor-keyboard-boundary';
+import { isImeKey } from './shortcut';
 
 const REDACTOR_SELECTOR = '.codex-editor__redactor';
 const OPEN_MENU_SELECTOR = '.ce-popover--opened';
@@ -278,11 +279,6 @@ export function bindEditorCurrentBlock(
     return root.querySelector(OPEN_MENU_SELECTOR) !== null;
   }
 
-  function composing(event: KeyboardEvent) {
-    // Safari reports the Enter that commits a composition as not composing.
-    return event.isComposing || event.keyCode === 229;
-  }
-
   function modified(event: KeyboardEvent) {
     return event.shiftKey || event.ctrlKey || event.altKey || event.metaKey;
   }
@@ -358,7 +354,7 @@ export function bindEditorCurrentBlock(
     if (
       !last ||
       !editorSelectedBlocksTakeEnter({
-        composing: composing(event),
+        composing: isImeKey(event),
         handled: event.defaultPrevented,
         menuOpen: menuOpen(),
         selectedBlocks: selected.length,
@@ -426,12 +422,12 @@ export function bindEditorCurrentBlock(
     if (event.key !== 'Enter') {
       // The block itself has the focus: a place Editor.js has no caret in,
       // and was never shown a key from before it could take the focus.
-      if (object && place === 'block' && !composing(event))
+      if (object && place === 'block' && !isImeKey(event))
         hideKeyFromEditor(event);
       if (
         event.key === 'Tab' &&
         editorTabMovesFocus({
-          composing: composing(event),
+          composing: isImeKey(event),
           modified: event.ctrlKey || event.altKey || event.metaKey,
           handled: event.defaultPrevented,
           menuOpen: menuOpen(),
@@ -447,7 +443,7 @@ export function bindEditorCurrentBlock(
     const action = editorEnterAction({
       place,
       object,
-      composing: composing(event),
+      composing: isImeKey(event),
       modified: modified(event),
       handled: event.defaultPrevented,
       menuOpen: menuOpen(),

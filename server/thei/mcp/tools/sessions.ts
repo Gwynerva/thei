@@ -51,6 +51,11 @@ function actionLine(row: ReturnType<typeof findAction> & {}): string[] {
     lines.push(
       `  parts: ${parts.map((part) => `${part.id} ${part.state}${part.problem ? ` (${part.problem})` : ''}`).join(', ')}`,
     );
+  // Corrected by the owner: their words stand, the model's are said too.
+  if (row.proposed !== null && row.proposed !== undefined)
+    lines.push(
+      `  corrected by the owner; it proposed: ${actionDef(row.kind).summary(row.proposed as never)}`,
+    );
   if (row.error) lines.push(`  error: ${row.error}`);
   return lines;
 }

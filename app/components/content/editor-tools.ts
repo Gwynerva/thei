@@ -124,6 +124,7 @@ interface ContentToolLabels {
   privateSection: string;
   privateSectionStart: string;
   privateSectionEnd: string;
+  removePrivateSection: string;
   externalLinkError: string;
   refreshExternalLink: string;
   linkNote: string;
@@ -178,6 +179,11 @@ interface EntityLinkToolConfig {
 
 interface PrivateSectionBoundaryToolConfig {
   labels: ContentToolLabels;
+  /**
+   * Makes a section public again, both its edges gone and its blocks kept:
+   * the editor's private sections do it (`editor-private-sections.ts`).
+   */
+  removeSection: (sectionId: string) => void;
 }
 
 interface ExternalLinkToolConfig {
@@ -1651,6 +1657,7 @@ export class PrivateSectionBoundaryTool implements BlockTool {
   private sectionId: string;
   private edge: ContentPrivateSectionEdge;
   private createPair: boolean;
+  private element?: HTMLElement;
 
   constructor(
     private options: ContentToolOptions<
@@ -1684,11 +1691,41 @@ export class PrivateSectionBoundaryTool implements BlockTool {
         : this.labels.privateSectionEnd
     }</span>`;
     element.append(label);
+    this.element = element;
     return element;
   }
 
+  /**
+   * The section and the edge the bracket stands for now. The editor's
+   * private sections keep both on the element as the text changes
+   * (`editor-private-sections.ts`): the edge its place makes — a start is
+   * the first of the pair — and a new id for a pasted copy of a section.
+   */
   save(): ContentPrivateSectionBoundaryData {
-    return { sectionId: this.sectionId, edge: this.edge };
+    const dataset = this.element?.dataset;
+    return {
+      sectionId: dataset?.privateSectionId || this.sectionId,
+      edge:
+        (dataset?.privateSectionEdge ?? this.edge) === 'end' ? 'end' : 'start',
+    };
+  }
+
+  renderSettings() {
+    if (this.options.readOnly) return [];
+    return [
+      {
+        icon: editorIcon('lock-open'),
+        title: this.labels.removePrivateSection,
+        // Editor.js's own Delete is hidden beside it (`editor.css`).
+        name: 'private-section-remove',
+        closeOnActivate: true,
+        // The section stops being private; its blocks stay where they are.
+        onActivate: () =>
+          contentToolConfig(this.options.config).removeSection(
+            this.save().sectionId,
+          ),
+      },
+    ];
   }
 
   private get labels() {
@@ -1726,6 +1763,7 @@ function getLabels(
       privateSection: 'Private section',
       privateSectionStart: 'Start of private section',
       privateSectionEnd: 'End of private section',
+      removePrivateSection: 'Remove private section',
       externalLinkError: 'Could not load link preview',
       refreshExternalLink: 'Refresh link',
       linkNote: 'A note for the link',

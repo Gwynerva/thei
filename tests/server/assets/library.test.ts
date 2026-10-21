@@ -364,6 +364,36 @@ describe('asset library', () => {
         listLibraryAssets({ q }).items.map((i) => i.asset.assetUuid),
       ).toEqual(['b']);
   });
+  it('narrows to the files without a description, counting either way', () => {
+    const family = db
+      .select({ familyUuid: schema.assets.familyUuid })
+      .from(schema.assets)
+      .where(eq(schema.assets.assetUuid, 'a'))
+      .get()!.familyUuid;
+    db.insert(schema.assetDescriptions)
+      .values({
+        familyUuid: family,
+        text: 'The moon over the roofs',
+        updatedAt: 1,
+      })
+      .run();
+    const ids = (described: 'none' | 'some') =>
+      listLibraryAssets({ described }).items.map((i) => i.asset.assetUuid);
+    expect(ids('some')).toEqual(['a']);
+    expect(ids('none')).toEqual(['b']);
+    // Counted with every other filter applied and without its own.
+    expect(listLibraryAssets({ described: 'none' }).facets.described).toEqual({
+      none: 1,
+      some: 1,
+    });
+    // Words alone are no description.
+    db.update(schema.assetDescriptions)
+      .set({ text: '   ' })
+      .where(eq(schema.assetDescriptions.familyUuid, family))
+      .run();
+    expect(ids('some')).toEqual([]);
+  });
+
   it('searches site-defined text without exposing internal previews', () => {
     expect(
       listLibrarySections({ q: 'КОСМОСА' }).items.map((g) => g.id),
@@ -522,10 +552,16 @@ describe('asset library', () => {
         // Files of the diary entry, by kind, and every group anywhere.
         types: { image: 1 },
         anywhere: 7,
+        described: { none: 1, some: 0 },
       });
       expect(
         listLibrarySections({ q: 'concert', source: 'event' }).facets,
-      ).toEqual({ sources: { event: 1 }, types: { image: 1 }, anywhere: 1 });
+      ).toEqual({
+        sources: { event: 1 },
+        types: { image: 1 },
+        anywhere: 1,
+        described: { none: 1, some: 0 },
+      });
       expect(
         listLibrarySections({ source: 'page', q: 'concert' }).items,
       ).toEqual([]);

@@ -8,7 +8,8 @@ const {
   dragHandle = false,
   to,
 } = defineProps<{
-  variant?: 'primary' | 'secondary' | 'delete';
+  /** `raised`: a neutral one on a `bg-bg-3` ground, a card's footer. */
+  variant?: 'primary' | 'secondary' | 'raised' | 'delete';
   size?: 'default' | 'icon-overlay' | 'icon-sm' | 'icon' | 'icon-lg';
   dragHandle?: boolean;
   /**
@@ -22,15 +23,19 @@ const {
 // long as the popup is.
 const variantClasses = {
   primary: `bg-accent/80 text-white
-    disabled:bg-accent/14 disabled:text-text-3
-    hocus:not-disabled:bg-accent popup-open:bg-accent`,
+    off:bg-accent/14 off:text-text-3
+    hocus:not-off:bg-accent popup-open:bg-accent`,
   secondary: `bg-bg-3 text-text-2
-    disabled:bg-bg-3/40 disabled:text-text-3/80
-    hocus:not-disabled:bg-accent/25 hocus:not-disabled:text-accent
+    off:bg-bg-3/40 off:text-text-3/80
+    hocus:not-off:bg-accent/25 hocus:not-off:text-accent
     popup-open:bg-accent/25 popup-open:text-accent`,
-  delete: `bg-bg-3 text-text-2 hocus:not-disabled:text-text-error
-    disabled:bg-bg-3/40 disabled:text-text-3/80
-    hocus:not-disabled:bg-bg-error
+  raised: `bg-bg-4 text-text-2
+    off:bg-bg-4/40 off:text-text-3/80
+    hocus:not-off:bg-accent/25 hocus:not-off:text-accent
+    popup-open:bg-accent/25 popup-open:text-accent`,
+  delete: `bg-bg-3 text-text-2 hocus:not-off:text-text-error
+    off:bg-bg-3/40 off:text-text-3/80
+    hocus:not-off:bg-bg-error
     popup-open:bg-bg-error popup-open:text-text-error`,
 };
 
@@ -51,7 +56,8 @@ const sizeClasses = {
   <component
     :is="to ? TheiLink : 'button'"
     :to
-    class="text-sm transition-colors disabled:cursor-not-allowed"
+    class="text-sm transition-colors disabled:cursor-not-allowed
+      aria-disabled:cursor-default"
     :class="[
       variantClasses[variant],
       sizeClasses[size],

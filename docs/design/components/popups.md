@@ -36,13 +36,17 @@ The complex popups today:
   (`ExternalLinksEditor`), the forms of access links and access keys
   (`AdminShareLinks`, `SettingsApiTokens`), the forms of the AI's memory and
   dictionary (`AiRememberPopup`, `AiTermPopup`), a comment on a proposal
-  (`AiActionRow`), the about page's forms;
+  (`AiActionRow`), asking at a field's ✦ (`AiFieldOffer`), the about page's
+  forms;
 - a text's history in the editor, the date range (`FieldDateRangePopup`), the
   sessions of an entity with their composer (`AiEntityButton`).
 
 A new popup takes the side of the rule its content falls on. A sheet takes the
 width of the screen and up to 85% of its height; what it holds is centred when
 it has a width of its own.
+A sheet never hides what it was opened from: an anchor it would cover is
+scrolled up to just above it — the page, or the modal it is in — so the field
+asked about stays in sight.
 
 ## Rules
 
@@ -63,10 +67,23 @@ it has a width of its own.
   when the window is too short for it. With `none`, the content scrolls
   itself within `--floating-popup-available-height`, as the select's list,
   the ✦ menus (`AiSessionsMenu`) and a proposal at a label do.
+- **Placed, it keeps its side while it stays open.** What it holds may grow —
+  an answer coming into a ✦'s box — and it scrolls in the room that side has
+  rather than jump over its anchor (`usePopupPlacement`). Opened again, it
+  chooses afresh.
 - **Rows of a menu are `popup-item`:** one height, one rounding, one shade
   under the pointer; a row that deletes shades with
   `[--popup-item-hover:var(--color-bg-error)]`. The row Enter would choose is
   ringed (`ring-2 ring-accent/60 ring-inset`), as in the select.
+- **A list searched by typing always rings the row Enter takes.** It is the
+  first from the moment the list has rows, and again after each new answer,
+  so it is never a guess whether Enter picks something. The entity pickers
+  (`app/components/content/ContentEntityRow.vue`, through `useActiveRow` in
+  `app/composables/content-entity-search.ts`) draw it as an outline, which
+  stays visible over a row's picture. A choice pinned at the top of the list
+  is the row Enter takes until something is typed; after that, it is the
+  first match. The link picker rings it only while its search field has the
+  focus, since elsewhere Enter belongs to ✓.
 - **The arrow is on by default.** It points at the middle of the anchor, or,
   for an anchor as wide as the popup, near the edge the popup is aligned to,
   and goes when it would point past the anchor. Turn it off (`:arrow="false"`)
@@ -128,7 +145,9 @@ choice, before the click goes on to wherever it was aimed; and `closed` once
 it has gone. It gives what it holds the room left on the screen as
 `--floating-popup-available-height` and `--floating-popup-available-width`,
 and the anchor's width as `--floating-popup-anchor-width`, for a list as wide
-as the field it opens under. A content that scrolls takes its height from the
+as the field it opens under. Before its room is known it is measured at its
+full width: left to shrink to what it holds, a content sized by its box made
+it a thin, tall strip that turned beside its anchor and stayed squeezed there. A content that scrolls takes its height from the
 first:
 
 ```vue
@@ -171,6 +190,9 @@ The others built on it:
   `app/styles/editor.css` gives it the popup's surface and motion. On a phone
   the block's settings are Editor.js's own sheet, styled as ours; Editor.js
   turns to it at its own layout's width, 650px, a little wider than `sm`.
+  The edge of a private section has "Remove private section" in place of
+  Editor.js's own Delete, which the styles hide beside it: one way out, which
+  takes both edges and keeps the blocks.
 
 ## Why
 

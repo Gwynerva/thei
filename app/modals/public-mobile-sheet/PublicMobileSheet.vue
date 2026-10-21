@@ -45,14 +45,7 @@ function afterLeave() {
  * page that had not moved yet. The address catches up afterwards.
  */
 async function followLink(event: MouseEvent) {
-  if (
-    event.button !== 0 ||
-    event.metaKey ||
-    event.ctrlKey ||
-    event.shiftKey ||
-    event.altKey
-  )
-    return;
+  if (!isPlainClick(event)) return;
   const link = (event.target as Element).closest('a[href]');
   if (
     !(link instanceof HTMLAnchorElement) ||

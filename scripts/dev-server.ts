@@ -8,16 +8,32 @@
 //   bun scripts/dev-server.ts realdata            nuxt dev on 3002, over a
 //                                                 copy of a real backup
 //                                                 (`bun scripts/realdata.ts`)
+//   bun scripts/dev-server.ts lab                 nuxt dev on 3003, the lab
+//                                                 site (`.lab/site/`, see
+//                                                 `tests/lab/`), opened as
+//                                                 http://lab.localhost:3003;
+//                                                 a worktree has its own port
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:net';
+import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { E2E_PORT } from '../tests/e2e/fixture-url';
+import { labPort, paths as labPaths } from '../tests/lab/config';
 
 const targets = {
   playground: { dir: '.playground', port: 3000, fork: true },
   fixture: { dir: 'tests/e2e/fixture', port: E2E_PORT, fork: false },
   realdata: { dir: '.realdata', port: 3002, fork: true },
+  lab: { dir: '.lab/site', port: labPort(), fork: true },
 } as const;
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -54,6 +70,8 @@ if (!target) {
 const host = '127.0.0.1';
 const origin = `http://${host}:${target.port}`;
 const bun = process.execPath;
+/** The sources above, and the target's own config. */
+const targetSources = [...buildSources, `${target.dir}/nuxt.config.ts`];
 
 if (await portTaken(target.port)) {
   const owner = await describeOwner();
@@ -72,7 +90,7 @@ if (process.argv.includes('--build')) {
   // Most of a build is Nitro bundling the server, which takes minutes: build
   // again only when a source has changed since the last one.
   const built = modifiedAt(`${target.dir}/.output/nitro.json`);
-  if (!built || buildSources.some((path) => newerThan(path, built))) {
+  if (!built || targetSources.some((path) => newerThan(path, built))) {
     const build = spawnSync(bun, ['x', 'nuxt', 'build', target.dir], {
       cwd: root,
       stdio: 'inherit',
@@ -81,11 +99,13 @@ if (process.argv.includes('--build')) {
   } else {
     console.log(`The ${name} build is up to date.`);
   }
+  recordRun('build');
   run('node', [`${target.dir}/.output/server/index.mjs`], {
     HOST: host,
     PORT: String(target.port),
   });
 } else {
+  recordRun('dev');
   // The CLI records this server in `.nuxt/nuxt.lock`, which is how the next
   // run recognises it. Left to itself, a second `nuxt dev` stops a server
   // that was started without a terminal and takes its place: `--no-takeover`
@@ -98,6 +118,37 @@ if (process.argv.includes('--build')) {
     // on Windows, where reading an upload's body from it can stall the worker
     // for seconds, every request with it. A port on localhost has no stall.
     ...(process.platform === 'win32' ? { NITRO_NO_UNIX_SOCKET: '1' } : {}),
+  });
+}
+
+/**
+ * The lab site says which server it is and how it runs, while it runs: the
+ * lab reads it to tell its own site from another checkout's on the same
+ * port, and a build from a dev server (`tests/lab/site/server.ts`).
+ */
+function recordRun(mode: 'dev' | 'build') {
+  if (name !== 'lab') return;
+  const file = labPaths.serverRun;
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(
+    file,
+    `${JSON.stringify(
+      {
+        pid: process.pid,
+        port: target.port,
+        mode,
+        checkout: root,
+        startedAt: Date.now(),
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  process.on('exit', () => {
+    try {
+      if (JSON.parse(readFileSync(file, 'utf8')).pid === process.pid)
+        rmSync(file, { force: true });
+    } catch {}
   });
 }
 

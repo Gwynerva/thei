@@ -26,7 +26,6 @@ import { findPageBySlug } from '../../../server/thei/pages/repository/find-by-sl
 import { findPageByUuid } from '../../../server/thei/pages/repository/find-by-id';
 import { findProjectByPublicId } from '../../../server/thei/projects/repository/find-by-public-id';
 import { findProjectByUuid } from '../../../server/thei/projects/repository/find-by-id';
-import { invalidatePublicSearchIndex } from '../../../server/thei/public/search-index';
 import { PROFILE_ID } from '../../../shared/profile';
 import { freshTestDb } from '../../helpers/fresh-db';
 
@@ -45,7 +44,6 @@ const config = {
 beforeEach(async () => {
   context = await freshTestDb();
   config.siteAccessLevel = SiteAccessLevel.Public;
-  invalidatePublicSearchIndex();
   Object.assign(context.server, {
     config,
     projects: {

@@ -1,6 +1,6 @@
 {
   "name": "thei",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "🗃️ Digital archive of your life — a résumé and a diary in one place.",
   "license": "MIT",
   "author": "Gwynerva",
@@ -16,11 +16,12 @@
     "build": "nuxt build .playground",
     "start": "nuxt start .playground",
     "test": "bun vitest",
-    "test:types": "bun vitest --typecheck.enabled --typecheck.only",
+    "test:types": "bun vitest run --typecheck.enabled --typecheck.only --typecheck.tsconfig tests/tsconfig.types.json",
     "test:e2e": "bunx playwright test --config=tests/e2e/playwright.config.ts",
     "e2e:dev": "bun scripts/dev-server.ts fixture",
     "e2e:serve": "bun scripts/dev-server.ts fixture --build",
     "test:release": "bun tests/release/run.ts",
+    "lab": "bun tests/lab/cli.ts",
     "og:gallery": "OG_GALLERY=1 bun vitest run tests/server/og/gallery.test.ts",
     "typecheck": "nuxt typecheck .playground --checker golar",
     "format": "prettier --write .",
@@ -98,7 +99,9 @@
     "prettier-plugin-classnames": "^0.10.4",
     "prettier-plugin-merge": "^0.10.1",
     "prettier-plugin-tailwindcss": "^0.8.1",
+    "tar": "^7.5.13",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "yaml": "^2.9.0"
   }
 }

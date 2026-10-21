@@ -71,6 +71,14 @@ focus-visible:ring-accent`, `ring-inset` where it sits flush in a list.
   [Modals](../components/modals.md)).
 - Whatever closes hands the focus back to what opened it: a select to its
   trigger, a modal to the control that opened it.
+- Keyboard shortcuts go through one helper, `app/composables/shortcut.ts`: a
+  chord by its physical key (`KeyboardEvent.code`) with the platform's own
+  modifier, ⌘ on a Mac and Ctrl elsewhere, so it works on any layout; a key
+  that stands for its character, as "/" does, by what it types. None acts
+  while typing in a field unless it is meant to, nor with a modal in front.
+- The site does not name its keys: no hint, foot or badge says «Ctrl K» or
+  «Enter — open». The keys work for those who know them; the room goes to
+  what is shown.
 
 ## Why
 

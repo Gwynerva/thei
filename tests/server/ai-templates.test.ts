@@ -31,8 +31,13 @@ import {
 import {
   busySubjects,
   coverageOf,
+  holdBatch,
+  rememberAsked,
+  settleTemplateTurn,
 } from '../../server/thei/ai/templates/coverage';
-import { runTemplate } from '../../server/thei/ai/templates/run';
+import { dueNext } from '../../server/thei/ai/templates/continue';
+import { continueRun, runTemplate } from '../../server/thei/ai/templates/run';
+import { messageItem } from '../../server/thei/ai/sessions/view';
 import { TEMPLATE_SOURCES } from '../../server/thei/ai/templates/sources';
 import {
   copyTemplate,
@@ -236,7 +241,7 @@ describe('the built-in checks', () => {
       'Mistakes in the text',
       'File descriptions',
       'Broken links',
-      'Relations and links between entities',
+      'Relations and links',
       'Tag audit',
     ]);
     const keys = Object.keys(findTemplate(id('proofread'))!);
@@ -306,6 +311,27 @@ describe('a run', () => {
 
     expect(await run('proofread')).toBeNull();
     expect(model!.requests).toHaveLength(1);
+    // Nothing new: how much it has looked at, and where it last looked,
+    // with nothing waiting there.
+    const nothing = await runTemplate(id('proofread'));
+    expect(nothing).toEqual({
+      sessionUuid: null,
+      looked: coverageOf(id('proofread')).size,
+      lastSessionUuid: first,
+      lastWaiting: 0,
+    });
+    expect(nothing.looked).toBeGreaterThan(0);
+  });
+
+  it('looks at all of the archive again when asked to', async () => {
+    expect(await run('proofread')).not.toBeNull();
+    expect(await run('proofread')).toBeNull();
+    const requests = model!.requests.length;
+    // Asked to look again, it forgets what it looked at and starts over.
+    const again = await run('proofread', { again: true });
+    expect(again).not.toBeNull();
+    expect(model!.requests.length).toBeGreaterThan(requests);
+    expect(brief(again!)).toContain('Went to the Kuzova islnds');
   });
 
   it('is given, of a text changed since, only the paragraph changed', async () => {
@@ -567,7 +593,7 @@ describe('a ready-made request', () => {
       ['Mistakes in the text', 'proofread'],
       ['File descriptions', 'describe'],
       ['Broken links', 'links'],
-      ['Relations and links between entities', 'graph'],
+      ['Relations and links', 'graph'],
       // A diary entry carries no tags: their audit is not offered on it.
       ['Look over', null],
       ['Project look', null],
@@ -600,6 +626,11 @@ describe('a ready-made request', () => {
       templateId: own.templateId,
       title: 'Look over',
     });
+    // The message says which template its words began from.
+    expect(messageItem(sessionMessages(sessionUuid)[0]!).template).toEqual({
+      title: 'Look over',
+      builtin: false,
+    });
     await expect(runTemplate(own.templateId)).rejects.toThrow(
       /ready-made request/,
     );
@@ -626,8 +657,18 @@ describe('the owner’s words', () => {
     const sessionUuid = await run('proofread', {
       request: 'Only the titles, please.',
     });
-    expect(brief(sessionUuid!)).toContain('asked, in their own words');
+    expect(brief(sessionUuid!)).toContain('wrote, in their own words');
     expect(brief(sessionUuid!)).toContain('Only the titles, please.');
+    // The session shows the owner's message as written, begun from the check.
+    const [first] = sessionMessages(sessionUuid!);
+    expect(first).toMatchObject({
+      role: 'owner',
+      text: 'Only the titles, please.',
+    });
+    expect(messageItem(first!).template).toEqual({
+      title: findTemplate(id('proofread'))!.title,
+      builtin: true,
+    });
     // The tool's answer is the batch: the project's title, no text.
     const told = model!.requests[1]!.body.messages.find(
       (item: any) => item.role === 'tool',
@@ -648,6 +689,20 @@ describe('the owner’s words', () => {
     });
     expect(brief(sessionUuid!)).toContain('Kuzova');
     expect(brief(sessionUuid!)).not.toContain('check_batch');
+  });
+
+  it('are shown as sent even as the check says them; a run without words is a note', async () => {
+    const instruction = findTemplate(id('proofread'))!.instruction;
+    const sent = await run('proofread', { request: instruction });
+    expect(sessionMessages(sent!)[0]).toMatchObject({
+      role: 'owner',
+      text: instruction,
+    });
+    writeDiary(['Another day, with a typo: teh.']);
+    const bare = await run('proofread');
+    const [note] = sessionMessages(bare!);
+    expect(note!.role).toBe('note');
+    expect(messageItem(note!).template).toBeNull();
   });
 
   it('name entities the run is bound to, and only those', async () => {
@@ -1055,7 +1110,8 @@ describe('the files of the archive', () => {
       } as never),
     ).toEqual(['file:af-8', 'file:af-5', 'file:af-4']);
     const sessionUuid = await run('describe', { about: ['asset:a-2'] });
-    expect(findSession(sessionUuid!)!.title).toContain('file-2');
+    // A file named as a field's ✦ names it: by the place it stands in.
+    expect(findSession(sessionUuid!)!.title).toContain('Harbour');
     expect(await subjects('describe')).not.toContain('file:af-2');
     // Asked again, the file is looked at again from the start.
     const again = await run('describe', { about: ['asset:a-2'] });
@@ -1127,5 +1183,149 @@ describe('what changed', () => {
       kinds: ['page'],
     });
     expect(none).toContain('_(nothing)_');
+  });
+});
+
+describe('batches the owner asks for', () => {
+  /** What `check_batch` answered in a run's session, in order. */
+  const batchAnswers = (sessionUuid: string) =>
+    sessionMessages(sessionUuid)
+      .flatMap((message) => message.transcript)
+      .flatMap((turn) =>
+        turn.role === 'tool' && turn.name === 'check_batch'
+          ? [turn.output]
+          : [],
+      );
+
+  it('come one after another in a turn, each looked at once the next is asked', async () => {
+    const subjects = (await due('proofread', { whole: true })).length;
+    expect(subjects).toBeGreaterThan(1);
+    let calls = 0;
+    reply = () =>
+      ++calls <= subjects + 1
+        ? { toolCalls: [{ name: 'check_batch', input: { count: 1 } }] }
+        : { text: 'Looked.' };
+    const sessionUuid = await run('proofread', {
+      request: 'All of it, one thing at a time.',
+    });
+    const answers = batchAnswers(sessionUuid!);
+    expect(answers).toHaveLength(subjects + 1);
+    expect(answers[0]).toMatch(/more of that (is|are) due after this batch/);
+    expect(answers[subjects - 1]).toContain('That is all of it that is due.');
+    expect(answers[subjects]).toContain('Nothing of that is due');
+    expect(coverageOf(id('proofread')).size).toBe(subjects);
+    expect(await due('proofread')).toEqual([]);
+  });
+
+  it('keep, of a run stopped midway, what it proposed something for', async () => {
+    const items = await due('proofread', { whole: true });
+    const sessionUuid = createSession({
+      origin: 'template',
+      templateId: id('proofread'),
+      title: 'Stopped',
+    });
+    const { db, schema } = THEI_SERVER.useDb();
+    db.transaction((tx) =>
+      holdBatch(tx, schema, id('proofread'), sessionUuid, items),
+    );
+    await proposeActions({
+      sessionUuid,
+      actions: [
+        {
+          kind: 'field',
+          target: `project:${PROJECT}`,
+          field: 'summary',
+          value: 'A small harbour.',
+          reason: 'Clearer',
+        } as never,
+      ],
+    });
+    settleTemplateTurn(sessionUuid, false);
+    expect([...coverageOf(id('proofread')).keys()]).toEqual([
+      `fields:project:${PROJECT}`,
+    ]);
+    expect(busySubjects(id('proofread')).size).toBe(0);
+  });
+
+  it('are offered to go on while more is due, and go on in the same session', async () => {
+    let calls = 0;
+    reply = () =>
+      ++calls === 1
+        ? { toolCalls: [{ name: 'check_batch', input: { count: 1 } }] }
+        : { text: 'Looked.' };
+    const sessionUuid = await run('proofread', { request: 'Start with one.' });
+    const offer = () =>
+      sessionMessages(sessionUuid!)
+        .flatMap((message) => message.parts as AiMessagePart[])
+        .find((part) => part.type === 'continue');
+    // What is next, and how much it looked at so far.
+    const first = offer() as { next: number; looked: number };
+    // As many as the model asked for, as the button will say.
+    expect(first.next).toBe(1);
+    expect(first.looked).toBeGreaterThan(0);
+
+    calls = 0;
+    reply = () =>
+      ++calls === 1
+        ? { toolCalls: [{ name: 'check_batch', input: {} }] }
+        : { text: 'Looked at the rest.' };
+    const { messageUuid } = await continueRun(sessionUuid!);
+    expect(messageUuid).toBeTruthy();
+    await turnsSettled();
+    const words = sessionMessages(sessionUuid!).find(
+      (message) => message.messageUuid === messageUuid,
+    )!;
+    expect(words).toMatchObject({ role: 'owner', text: 'Go on' });
+    expect(JSON.stringify(words.transcript)).toContain('check_batch');
+    // Told to take that one batch, of as many as the button promised.
+    expect(JSON.stringify(words.transcript)).toContain('count 1');
+    expect(JSON.stringify(words.transcript)).toContain('Only that batch');
+    expect(await due('proofread')).toEqual([]);
+    // Nothing left: the last answer says all of it was looked at.
+    expect(offer()).toMatchObject({ type: 'continue', next: 0, looked: 0 });
+    expect(await continueRun(sessionUuid!)).toEqual({ messageUuid: null });
+  });
+
+  it('count what is next as it stands, and only what this session looked at', async () => {
+    const subjects = (await due('proofread', { whole: true })).length;
+    expect(subjects).toBeGreaterThan(2);
+    let calls = 0;
+    reply = () =>
+      ++calls === 1
+        ? { toolCalls: [{ name: 'check_batch', input: { count: 1 } }] }
+        : { text: 'Looked.' };
+    const sessionUuid = await run('proofread', { request: 'Start with one.' });
+    expect(await dueNext(sessionUuid!)).toEqual({ next: 1, looked: 1 });
+    // Another run looks at all of the rest but one meanwhile: not counted
+    // here, and what is next is what is left, however many were asked for.
+    const other = createSession({
+      origin: 'template',
+      templateId: id('proofread'),
+      title: 'Another',
+    });
+    const rest = (await due('proofread', { whole: true })).slice(1);
+    const { db, schema } = THEI_SERVER.useDb();
+    db.transaction((tx) => holdBatch(tx, schema, id('proofread'), other, rest));
+    settleTemplateTurn(other, true);
+    rememberAsked(sessionUuid!, { count: 5 });
+    expect(await dueNext(sessionUuid!)).toEqual({ next: 1, looked: 1 });
+  });
+
+  it('are offered to go on after a turn paused at its limits', async () => {
+    // A model that never stops asking runs into the turn's own limit: a
+    // pause, which gets the offer all the same.
+    reply = () => ({
+      toolCalls: [{ name: 'check_batch', input: { count: 1 } }],
+    });
+    const sessionUuid = await run('proofread', { request: 'All of it.' });
+    const parts = sessionMessages(sessionUuid!)
+      .filter((message) => message.role === 'model')
+      .at(-1)!.parts as AiMessagePart[];
+    expect(parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'notice', kind: 'turns' }),
+        expect.objectContaining({ type: 'continue' }),
+      ]),
+    );
   });
 });

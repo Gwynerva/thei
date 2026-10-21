@@ -9,16 +9,12 @@ import { svgNeedsUseSizes } from './svg-raster-input';
 import { eachWithProgress } from './each-with-progress';
 
 /**
- * Videos whose preview frame was not chosen by colour.
- *
- * A preview made since frames were compared records how well its frame
- * shows the video; one made before does not, whatever it shows. The
- * oldest-touched go first, so a pass cut short picks up roughly where it
- * stopped.
+ * Stored videos whose meta has no `key`. The oldest-touched go first, so a
+ * pass cut short picks up roughly where it stopped.
  */
-export async function findVideosWithUnscoredPreviews(): Promise<
-  StoredAssetRecord[]
-> {
+async function findVideosWithout(
+  key: 'previewScore' | 'previewChosen',
+): Promise<StoredAssetRecord[]> {
   const { db, schema } = THEI_SERVER.useDb();
   return await db
     .select()
@@ -27,10 +23,28 @@ export async function findVideosWithUnscoredPreviews(): Promise<
       and(
         eq(schema.assets.type, AssetType.Video),
         isNotNull(schema.assets.settings),
-        sql`json_extract(${schema.assets.meta}, '$.previewScore') IS NULL`,
+        sql`json_extract(${schema.assets.meta}, ${`$.${key}`}) IS NULL`,
       ),
     )
     .orderBy(schema.assets.touchedAt);
+}
+
+/**
+ * Videos whose preview frame was not chosen by colour: a preview made since
+ * frames were compared records how well its frame shows the video; one made
+ * before does not, whatever it shows.
+ */
+export async function findVideosWithUnscoredPreviews() {
+  return await findVideosWithout('previewScore');
+}
+
+/**
+ * Videos whose preview frame was picked here, not chosen by the owner. Until
+ * 0.0.7 their `previewAt` said where the second ffmpeg weighed began, not
+ * the frame it picked there, so a player put at it showed another frame.
+ */
+export async function findVideosWithPickedPreviews() {
+  return await findVideosWithout('previewChosen');
 }
 
 /** Every SVG in the library, whose preview used to be drawn at its own size. */
@@ -104,6 +118,21 @@ export async function refreshVideoPreviews(
 ): Promise<RefreshPreviewsResult> {
   return await refreshPreviews(
     await findVideosWithUnscoredPreviews(),
+    'video(s)',
+    options,
+  );
+}
+
+/**
+ * Picks the preview frame again of every video whose frame was not chosen
+ * by the owner, so that its moment is the frame's. A frame chosen by hand
+ * was always taken at its own moment and is left as it is.
+ */
+export async function refreshPickedVideoPreviews(
+  options: RefreshPreviewsOptions = {},
+): Promise<RefreshPreviewsResult> {
+  return await refreshPreviews(
+    await findVideosWithPickedPreviews(),
     'video(s)',
     options,
   );

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import {
   startFakeModel,
@@ -44,6 +44,9 @@ const TAG = `Winter ${run}`;
 const FACT = 'The route is no secret any more.';
 const SLOGAN = `Walks on ice ${run}`;
 const DESCRIPTION = `A frozen lake at dawn ${run}`;
+const ASKED_SUMMARY = `A walk across the ice, ${run}`;
+const BOTH_TITLE = `Frozen lake walk ${run}`;
+const BOTH_SUMMARY = `Across the frozen lake and back, ${run}`;
 let eventUuid = '';
 /** A picture of the walk, for its description. */
 let fileUuid = '';
@@ -53,6 +56,48 @@ const event = () => `event:${eventUuid}`;
 
 /** The proposals the model makes, by a word of the owner's message. */
 function proposals(said: string): Record<string, unknown>[] | undefined {
+  // Two fields at once: one change, at the form's head.
+  if (said.includes('both at once'))
+    return [
+      {
+        kind: 'update',
+        target: event(),
+        changes: { title: BOTH_TITLE, summary: BOTH_SUMMARY },
+        reason: 'Both, as asked.',
+      },
+    ];
+  // Asked at the dates' ✦: all is well with them, nothing to propose.
+  if (said.includes('the owner asks at its periods')) return undefined;
+  // Asked at the summary's own ✦: its brief says more than the words.
+  if (said.includes('the owner asks at its summary'))
+    return [
+      {
+        kind: 'field',
+        target: event(),
+        field: 'summary',
+        value: ASKED_SUMMARY,
+        reason: 'Shorter.',
+      },
+    ];
+  // Asked from the text's own editor: one edit of the text.
+  if (said.includes('the owner asks at its text'))
+    return [
+      {
+        kind: 'revise',
+        target: event(),
+        text: 'body',
+        mode: 'proofread',
+        reason: 'A pause.',
+        corrections: [
+          {
+            find: 'walk across',
+            replace: 'walk, across',
+            category: 'punctuation',
+            reason: 'A pause.',
+          },
+        ],
+      },
+    ];
   if (said.includes('describe the picture'))
     return [
       {
@@ -164,6 +209,11 @@ function script(request: FakeRequest): FakeTurn {
       text: Array(40).fill('A walk is told word by word.').join(' '),
       delayMs: 150,
     };
+  // Asked at the relations' heading: a long answer, nothing proposed.
+  if (lastOwnerWords(request).includes('the owner asks at its relations'))
+    return {
+      text: 'No relation worth claiming: every other entry the text names is a mention, and a mention stays a link in the text.',
+    };
   const actions = proposals(lastOwnerWords(request));
   if (!actions) return { text: 'Noted.' };
   return { toolCalls: [{ name: 'propose', input: { actions } }] };
@@ -218,7 +268,9 @@ test.beforeAll(async ({ request }) => {
         width: 64,
         height: 48,
         channels: 3,
-        background: { r: run % 256, g: 200, b: 255 },
+        // A colour of this run alone: files are kept by their bytes, and a
+        // picture of an earlier run would come back with its description.
+        background: { r: run % 256, g: (run >> 8) % 256, b: run >> 16 },
       },
     })
       .png()
@@ -286,9 +338,22 @@ async function actionStates(page: Page, sessionUuid: string) {
 const save = (page: Page) =>
   page.getByRole('button', { name: /^(Save|Saved)$/ });
 
-/** The ✦ at a field's label, where what is proposed for the field waits. */
+/**
+ * The ✦ at a field's label while something is proposed for the field: with AI
+ * on it stands there quiet otherwise, asking about the field.
+ */
 const star = (page: Page, place: string) =>
-  page.locator(`[data-ai-field-offer="${place}"]`);
+  page.locator(
+    `[data-ai-field-offer="${place}"][data-ai-field-state="offers"]`,
+  );
+
+/**
+ * A row's undo or way back takes no press in its first half second, so a
+ * double click never applies and undoes at once: waited out, as the row
+ * says it.
+ */
+const settled = (scope: Locator) =>
+  expect(scope.locator('[data-action-settling]')).toHaveCount(0);
 
 /** Opens what waits at a field from the ✦ at its label. */
 async function fieldOffer(page: Page, place: string) {
@@ -318,12 +383,14 @@ test('takes proposals into the form, applied once it is saved', async ({
   const title = await fieldOffer(page, 'field:title');
   await expect(title).toContainText(NEW_TITLE);
   await expectPopupUsable(page, title);
+  // In a form the value is put in its place, saved with the form.
+  await expect(title.locator('[data-action-apply]')).toHaveText('Put in');
   await title.locator('[data-action-apply]').click();
   await expect(page.getByRole('textbox').first()).toHaveValue(NEW_TITLE);
   await expect(title).toHaveCount(0);
   await expect(star(page, 'field:title')).toHaveCount(0);
   await expect(page.locator('[data-toast]')).toContainText(
-    'Taken into the form',
+    /The\sform\schanged/,
   );
   await expect(save(page)).toHaveText('Save');
 
@@ -360,8 +427,9 @@ test('takes proposals into the form, applied once it is saved', async ({
 
   // The text edit waits at its text's label, to be gone through in the
   // editor.
+  // Its card says the correction itself, the old word and the new.
   await expect(await fieldOffer(page, 'text:event-body')).toContainText(
-    '1 correction',
+    'weird',
   );
   await page.keyboard.press('Escape');
 
@@ -384,22 +452,35 @@ test('a proposal changed back by hand is offered again', async ({ page }) => {
   const sessionUuid = await ask(page, 'Propose a summary');
   await openForm(page);
   const offer = await fieldOffer(page, 'field:summary');
+  const summary = page.locator('textarea').first();
+  const before = await summary.inputValue();
   await offer.locator('[data-action-apply]').click();
   await expect(offer).toHaveCount(0);
-  const summary = page.locator('textarea').first();
   await expect(summary).toHaveValue('A walk on the frozen lake.');
-  await summary.fill('A walk.');
+  // Corrected in the form, it is the owner's words now: the ✦ stays quiet.
+  await summary.fill('A walk on the lake.');
+  await expect(
+    page.locator('[data-ai-field-offer="field:summary"]'),
+  ).toHaveAttribute('data-ai-field-state', 'idle');
+  // Changed back by hand, it is offered again.
+  await summary.fill(before);
   await expect(star(page, 'field:summary')).toBeVisible();
 
-  // Declined, and never to be offered again.
-  await (
-    await fieldOffer(page, 'field:summary')
-  )
-    .locator('[data-action-reject]')
-    .click();
+  // Declined, it stays where it stood in its declined state: brought back
+  // from there, then declined for good.
+  const card = await fieldOffer(page, 'field:summary');
+  await card.locator('[data-action-reject]').click();
   await expect(star(page, 'field:summary')).toHaveCount(0);
-  const toast = page.locator('[data-toast]');
-  await toast.getByRole('button', { name: 'Never offer again' }).click();
+  await expect(card.locator('[data-action-restore]')).toBeVisible();
+  await expect(page.locator('[data-toast]')).toBeHidden();
+  // The way back takes no press in its first half second.
+  await settled(card);
+  await card.locator('[data-action-restore]').click();
+  await expect(star(page, 'field:summary')).toBeVisible();
+  await expect(card.locator('[data-action-apply]')).toBeVisible();
+  await settled(card);
+  await card.locator('[data-action-reject]').click();
+  await card.locator('[data-action-never]').click();
   await expect
     .poll(async () => {
       const detail = await (
@@ -424,7 +505,33 @@ test("opens a text edit from its text's label, in the editor", async ({
   const review = page.locator('[data-review]');
   await expect(review).toBeVisible({ timeout: 15_000 });
   await expect(review).toHaveAttribute('data-review-mode', 'ai');
-  await expect(review.locator('.review-mark')).toHaveText('weird');
+  // It opens on what goes and what comes: the new word is the one marked in.
+  await expect(review.locator('.review-mark ins')).toHaveText('weird');
+});
+
+test('the ✦ of a text’s editor asks about it, and its edit opens there', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  await openForm(page);
+  await page.locator('button[data-field]').first().click();
+  const editor = page.locator(
+    'dialog .content-editor [contenteditable="true"]',
+  );
+  await expect(editor.first()).toBeVisible({ timeout: 15_000 });
+  // Left of its history, the ✦ asks about the text in hand.
+  await page.locator('[data-editor-ai]').click();
+  const box = page.locator('[data-floating-popup] [data-editor-ai-ask]');
+  await expect(box).toBeVisible();
+  await expectPopupUsable(page, page.locator('[data-floating-popup]').last());
+  await box.getByRole('button', { name: 'Check for mistakes' }).click();
+  // What it proposes for the text opens on the comparison at once.
+  const review = page.locator('[data-review]');
+  await expect(review).toBeVisible({ timeout: 40_000 });
+  await expect(review).toHaveAttribute('data-review-mode', 'ai');
+  await expect(review.locator('.review-mark ins').first()).toContainText(
+    'walk,',
+  );
 });
 
 test('the ✦ of the form remembers, starts a session and lists them', async ({
@@ -525,6 +632,46 @@ test('the ✦ sends a ready-made request about the entity, and the form stays', 
     expect(sessions.sessions[0]!.origin).toBe('owner');
   } finally {
     await page.request.delete(`/api/admin/ai/templates/${preset.templateId}`);
+  }
+});
+
+test('a ready-made request takes the place of the one before, and Ctrl+Z brings it back', async ({
+  page,
+}) => {
+  const preset = async (title: string, instruction: string) =>
+    (await (
+      await page.request.post('/api/admin/ai/templates', {
+        data: { title, instruction },
+      })
+    ).json()) as { templateId: string };
+  const first = await preset(`First ${run}`, 'Look over the first part.');
+  const second = await preset(`Second ${run}`, 'Look over the second part.');
+  try {
+    await page.setViewportSize(DESKTOP);
+    await openForm(page);
+    await page.locator('[data-ai-entity]').click();
+    const menu = page.locator('[data-ai-entity-menu]');
+    const composer = menu.locator('[data-ai-entity-composer]');
+    const field = composer.locator('[contenteditable="true"]');
+    await field.press('End');
+    await page.keyboard.type(' My own words.');
+    await chooseTemplate(menu, first.templateId);
+    await expect(field).toContainText('Look over the first part.');
+    // The next takes its place; the owner's words and the chip stay.
+    await chooseTemplate(menu, second.templateId);
+    await expect(field).toContainText('Look over the second part.');
+    await expect(field).not.toContainText('the first part');
+    await expect(field).toContainText('My own words.');
+    await expect(composer.locator('[data-mention]')).toHaveCount(1);
+    // One step back is the request before, as it was put in.
+    await field.focus();
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(field).toContainText('Look over the first part.');
+    await expect(field).not.toContainText('the second part');
+    await expect(field).toContainText('My own words.');
+  } finally {
+    for (const { templateId } of [first, second])
+      await page.request.delete(`/api/admin/ai/templates/${templateId}`);
   }
 });
 
@@ -708,10 +855,12 @@ test('a file’s description waits at its label in the file’s window', async (
   await expectPopupUsable(page, offer);
   await offer.locator('[data-action-apply]').click();
   await expect(input).toHaveValue(DESCRIPTION);
-  // Taken into the field, it is applied once the field is saved.
+  // Taken into the field, it is applied once the field is saved — with the
+  // owner's words, corrected there before saving.
   expect(await actionStates(page, sessionUuid)).toEqual({
     describe: 'pending',
   });
+  await input.fill(`${DESCRIPTION}, the ice still grey`);
   await page.locator('[data-file-description-save]').click();
   await expect(page.locator('[data-file-description-notice]')).toHaveText(
     'File description saved',
@@ -720,4 +869,135 @@ test('a file’s description waits at its label in the file’s window', async (
     .poll(() => actionStates(page, sessionUuid))
     .toEqual({ describe: 'applied' });
   await expect(star(page, 'field:description')).toHaveCount(0);
+  const detail = await (
+    await page.request.get(`/api/admin/ai/sessions/${sessionUuid}`)
+  ).json();
+  expect(detail.actions[0]).toMatchObject({
+    payload: { text: `${DESCRIPTION}, the ice still grey` },
+    proposed: { text: DESCRIPTION },
+  });
+});
+
+test('a field’s quiet ✦ asks about the field, and its proposal comes there', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  await openForm(page);
+  const quiet = page.locator('[data-ai-field-offer="field:summary"]');
+  await expect(quiet).toHaveAttribute('data-ai-field-state', 'idle');
+  // A switch's ✦ only brings what was proposed.
+  await expect(page.locator('[data-ai-field-offer="access"]')).toHaveCount(0);
+  await quiet.click();
+  const box = page.locator(
+    '[data-floating-popup] [data-ai-field-ask="field:summary"]',
+  );
+  await expectPopupUsable(page, box);
+  await box.getByRole('button', { name: 'Make it shorter' }).click();
+  // Answered in the background, the proposal takes the box's place.
+  const card = page.locator(
+    '[data-floating-popup] [data-ai-offers="field:summary"]',
+  );
+  await expect(card).toBeVisible({ timeout: 40_000 });
+  // Said word by word over the summary it adds to: the words it brings.
+  await expect(card.locator('[data-change="added"]')).toContainText(
+    `across the ice, ${run}`,
+  );
+  await expect(star(page, 'field:summary')).toBeVisible();
+  // Left as it came: declined, the ✦ is quiet again.
+  await card.locator('[data-action-reject]').click();
+  await expect(quiet).toHaveAttribute('data-ai-field-state', 'idle');
+});
+
+test('a field’s ✦ offers what can find something, and an empty answer stays by it', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  await openForm(page);
+  // The notes hold nothing: nothing to check or mend is offered for them.
+  const notes = page.locator('[data-ai-field-offer$="-notes"]');
+  await notes.click();
+  const notesBox = page.locator(
+    '[data-floating-popup] [data-ai-field-ask$="-notes"]',
+  );
+  await expect(notesBox).toBeVisible();
+  await expect(
+    notesBox.getByRole('button', { name: 'Check for mistakes' }),
+  ).toHaveCount(0);
+  await expect(notesBox.locator('textarea')).toBeVisible();
+  await expect(notesBox.locator('[data-ai-field-empty]')).toHaveText(
+    /^Nothing\shere\syet\sto\scheck\.\sAsk\sin\syour\sown\swords$/,
+  );
+  // Words past what the ask takes are said to be, never cut and sent.
+  await notesBox.locator('textarea').fill('a'.repeat(2001));
+  await expect(notesBox.locator('[data-comment-too-long]')).toHaveText(
+    'At most 2000 characters',
+  );
+  await expect(notesBox.locator('[data-comment-send]')).toBeDisabled();
+  await notesBox.locator('textarea').fill('');
+  await expect(notesBox.locator('[data-comment-too-long]')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(notesBox).toBeHidden();
+
+  // The dates are there to check; the model finds nothing to change.
+  const dates = page.locator('[data-ai-field-offer="periods"]');
+  await dates.click();
+  const box = page.locator(
+    '[data-floating-popup] [data-ai-field-ask="periods"]',
+  );
+  await box.getByRole('button', { name: 'Check the dates' }).click();
+  // The box goes with the answer, which stays beside the ✦ in its words.
+  const said = page.locator('[data-ai-field-said]');
+  await expect(said).toHaveText('Noted.', { timeout: 40_000 });
+  await expect(box).toBeHidden();
+  await expect(dates).toHaveAttribute('data-ai-field-state', 'idle');
+  await expect(said).toHaveAttribute(
+    'aria-label',
+    'Answered, proposing nothing: Noted.',
+  );
+  // A tap on it opens the box again, with the whole answer.
+  await said.click();
+  await expect(box.locator('[data-ai-field-answered]')).toContainText('Noted.');
+  await page.keyboard.press('Escape');
+
+  // On a phone a long answer at a list's heading keeps to the screen.
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.locator('[data-ai-field-offer="relations"]').click();
+  await page
+    .locator('[data-floating-popup] [data-ai-field-ask="relations"]')
+    .getByRole('button', { name: 'Find relations' })
+    .click();
+  await expect(
+    page.locator('[data-ai-field-said]', { hasText: 'No relation worth' }),
+  ).toBeVisible({ timeout: 40_000 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test('a change taken at the form’s head stays there until the form is saved', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  await ask(page, 'Rename it and its gist both at once');
+  await openForm(page);
+  const head = page.locator('[data-ai-offers="form"]');
+  const title = page.getByRole('textbox').first();
+  const before = await title.inputValue();
+  await expect(head.locator('[data-action-apply]')).toHaveText('Put in');
+  await head.locator('[data-action-apply]').click();
+  await expect(title).toHaveValue(BOTH_TITLE);
+  // Its row stays where it stood, says it is in the form, and takes it back
+  // from there: the form under it never moves.
+  await expect(head.locator('[data-action-taken]')).toBeVisible();
+  await expect(page.locator('[data-toast]')).toBeHidden();
+  await settled(head);
+  await head.locator('[data-action-take-back]').click();
+  await expect(title).toHaveValue(before);
+  await expect(head.locator('[data-action-apply]')).toBeVisible();
+  // Declined, it stays too, to be brought back.
+  await settled(head);
+  await head.locator('[data-action-reject]').click();
+  await expect(head.locator('[data-action-restore]')).toBeVisible();
 });

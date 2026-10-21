@@ -98,8 +98,12 @@ const reviewScreen = (page: Page) => page.locator('[data-review]');
 
 /** Takes all of what the version has, and the editor gets it. */
 async function takeAll(page: Page) {
-  await page.locator('[data-review-sure]').click();
-  await page.locator('[data-review-finish]').click();
+  // Nothing taken yet, the finish takes all; then it takes it in.
+  const finish = page.locator('[data-review-finish]');
+  await expect(finish).toHaveText(/^Take all · /);
+  await finish.click();
+  await expect(finish).toHaveText(/^Take · /);
+  await finish.click();
   await expect(reviewScreen(page)).toBeHidden();
 }
 
@@ -314,6 +318,66 @@ test('a text saved elsewhere while this one is written is offered to compare', a
   await takeAll(page);
   expect(await editorText(page)).toContain(there);
   await expect(notice).toBeHidden();
+});
+
+/**
+ * Records every notice of the editor and every draft note of a field that
+ * shows up, for however short a time: a flash is over before an assertion
+ * could look.
+ */
+async function recordNotices(page: Page) {
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    (window as unknown as { __notices: string[] }).__notices = seen;
+    const look = () => {
+      for (const element of document.querySelectorAll(
+        '[data-editor-notice], [data-field-unsaved-draft]',
+      )) {
+        const name =
+          element.getAttribute('data-editor-notice') ?? 'field-draft';
+        if (!seen.includes(name)) seen.push(name);
+      }
+    };
+    new MutationObserver(look).observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+    });
+    look();
+  });
+  return () =>
+    page.evaluate(
+      () => (window as unknown as { __notices: string[] }).__notices,
+    );
+}
+
+test('saving and closing at once flashes no draft and no notice', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  const pageUuid = await createPage(page, 'no-flash');
+  await openPageEditor(page, `/admin/pages/${pageUuid}/edit/`);
+  const seen = await recordNotices(page);
+  const save = page.locator('[data-editor-save]');
+
+  // A draft on the server, then more typed and saved before the pause
+  // after typing would send it: the draft there is older than the save.
+  await typeInEditor(page, ` Kept as a draft ${Date.now()}`);
+  await waitForDraft(page);
+  await typeInEditor(page, ' and saved at once');
+  await expect(save).toHaveText('Save');
+  await save.click();
+  await expect(save).toHaveText('Saved');
+  // Saved again in the same sitting, the text saved first now the server's.
+  await typeInEditor(page, ' and again');
+  await expect(save).toHaveText('Save');
+  await save.click();
+  await expect(save).toHaveText('Saved');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('dialog .content-editor')).toBeHidden();
+  // The field looks again once the editor has gone: long enough to see it.
+  await page.waitForTimeout(1500);
+  expect(await seen()).toEqual([]);
 });
 
 test('a form with unsaved changes asks before the tab closes', async ({

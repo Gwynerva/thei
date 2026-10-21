@@ -7,6 +7,8 @@ useSiteAnalytics({
   analytics: computed(() => publicAdmin.value.analytics),
   enabled: computed(() => !isAdmin.value),
 });
+// A find of the search lands on its place in the text.
+useSearchLanding();
 const stickyHeader = useStickyHeaderContext();
 // Anchors land below the sticky bars; the header row is the SSR fallback.
 const rootStyle = computed(() => ({
@@ -39,6 +41,9 @@ useHead({
     <PublicShareBanner />
     <TheiLoadingIndicator />
     <slot></slot>
+    <!-- Opened only by a hand on the page: nothing of it is drawn on the
+         server. -->
+    <ClientOnly><SearchPopup /></ClientOnly>
   </div>
 </template>
 

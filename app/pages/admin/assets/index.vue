@@ -3,7 +3,9 @@ import { AssetType } from '#layers/thei/shared/asset';
 import {
   assetLibraryWhereFromQuery,
   assetLibraryWhereQuery,
+  isAssetLibraryDescribed,
   type AssetLibraryAssetsResponse,
+  type AssetLibraryDescribed,
   type AssetLibraryWhere,
 } from '#layers/thei/shared/asset-library';
 import { libraryAssetDetailsModal } from '../../../modals/asset-library/details-modal';
@@ -28,6 +30,9 @@ const query = computed(() => {
       ? (value.type as AssetType)
       : undefined,
     ...assetLibraryWhereQuery(assetLibraryWhereFromQuery(value)),
+    described: isAssetLibraryDescribed(value.described)
+      ? value.described
+      : undefined,
     page: Number(value.page ?? 1),
   };
 });
@@ -46,6 +51,11 @@ const where = computed({
       ...assetLibraryWhereQuery(value),
     }),
 });
+const described = computed({
+  get: () => query.value.described ?? '',
+  set: (value: AssetLibraryDescribed | '') =>
+    update({ described: value || undefined }),
+});
 function resetFilters() {
   clearTimeout(timer);
   search.value = '';
@@ -54,6 +64,7 @@ function resetFilters() {
     type: undefined,
     source: undefined,
     usage: undefined,
+    described: undefined,
   });
 }
 function update(values: Record<string, string | undefined>) {
@@ -79,7 +90,7 @@ onMounted(() => {
 </script>
 <template>
   <StickyGlassHeader width="var(--width-wide)"
-    ><h1 class="flex items-center gap-xs py-sm text-xl font-bold">
+    ><h1 class="flex items-center gap-xs py-sm text-lg font-bold sm:text-xl">
       <Icon name="gallery" />{{ phrase.asset_library }}
     </h1></StickyGlassHeader
   >
@@ -91,6 +102,7 @@ onMounted(() => {
       v-model:search="search"
       v-model:type="type"
       v-model:where="where"
+      v-model:described="described"
       :facets="data?.facets"
     />
     <div v-if="error" class="mt-md text-text-error">
@@ -139,7 +151,7 @@ onMounted(() => {
     </div>
     <template v-else-if="status !== 'pending' && !error">
       <EmptyState
-        v-if="query.q || query.type || where !== 'all'"
+        v-if="query.q || query.type || where !== 'all' || described"
         icon="face-dead"
         :title="phrase.asset_library_empty"
         :description="phrase.admin_search_no_results_description"

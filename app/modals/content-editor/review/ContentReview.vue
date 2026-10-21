@@ -12,6 +12,7 @@ import ModalContainer from '#layers/thei/app/modals/ModalContainer.vue';
 import ModalHeaderButton from '#layers/thei/app/modals/ModalHeaderButton.vue';
 import FloatingPopup from '#layers/thei/app/components/FloatingPopup.vue';
 import { registerDismissLayer } from '#layers/thei/app/composables/modal';
+import { scrollIntoSight } from '#layers/thei/app/modals/layer-motion';
 import ReviewDocument from './ReviewDocument.vue';
 import ReviewList from './ReviewList.vue';
 import ReviewPartCard from './ReviewPartCard.vue';
@@ -84,6 +85,15 @@ const sure = computed(() => pending.value.filter(takenAsSure));
 /** An edit with nothing it could take that way — a new order — offers none. */
 const offersSure = computed(() => open.value.some(takenAsSure));
 const words = computed(() => phrase.value.ai_review_modes[props.mode]);
+/**
+ * The finish's word: an AI's edit taken in the text's editor is put into
+ * the text, which changes once the editor is saved — elsewhere it is applied.
+ */
+function finishWord(count: number) {
+  return props.mode === 'ai' && props.target === 'editor'
+    ? phrase.value.ai_review_put(count)
+    : words.value.apply(count);
+}
 
 const summary = computed(() => {
   const left = pending.value;
@@ -137,13 +147,27 @@ async function focusPart(id: string | undefined) {
   }
   const anchor = documentView.value?.anchorOf(id);
   if (!anchor) return;
-  anchor.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  scrollIntoSight(anchor);
   opening = setTimeout(() => {
     if (current.value !== id) return;
     cardAnchor.value = documentView.value?.anchorOf(id) ?? anchor;
     cardOpen.value = true;
   }, SCROLL_SETTLES);
 }
+
+/**
+ * Opened on a long text, the first change may stand far below the top: it
+ * is brought into sight at once, so what «accept the sure ones» takes is
+ * seen before it is taken. Its card stays closed until it is chosen.
+ */
+onMounted(async () => {
+  await nextTick();
+  await new Promise(requestAnimationFrame);
+  if (view.value === 'list') return;
+  const first = reachable()[0];
+  const anchor = first ? documentView.value?.anchorOf(first.id) : undefined;
+  if (anchor) scrollIntoSight(anchor, { instant: true, covered: 0 });
+});
 
 /**
  * The parts the way goes through: in the text, those it shows a mark of —
@@ -213,6 +237,8 @@ const finishOpen = ref(false);
  * parts still waiting, it asks first.
  */
 function finish() {
+  // Nothing taken yet: the finish first takes the sure ones, as it says.
+  if (!accepted.value.length && sure.value.length) return acceptSure();
   if (!accepted.value.length) close();
   else if (pending.value.length) finishOpen.value = true;
   else done();
@@ -404,8 +430,10 @@ onBeforeUnmount(removeDismissLayer);
               ><Icon name="chevron-right"
             /></Button>
             <span class="flex-1"></span>
+            <!-- Beside the finish once something is taken; before that the
+                 finish itself takes the sure ones. -->
             <Button
-              v-if="offersSure"
+              v-if="offersSure && accepted.length"
               variant="secondary"
               class="flex h-8 items-center gap-1 px-2 text-sm
                 pointer-coarse:h-11"
@@ -427,8 +455,10 @@ onBeforeUnmount(removeDismissLayer);
               >
                 <Icon v-if="busy" name="loading" />{{
                   accepted.length
-                    ? words.apply(accepted.length)
-                    : phrase.ai_review_close
+                    ? finishWord(accepted.length)
+                    : sure.length
+                      ? words.take_sure(sure.length)
+                      : phrase.ai_review_close
                 }}
               </Button>
             </span>
@@ -486,7 +516,7 @@ onBeforeUnmount(removeDismissLayer);
             class="flex h-8 items-center text-sm pointer-coarse:h-11"
             data-review-finish-apply
             @click="done"
-            >{{ words.apply(accepted.length) }}</Button
+            >{{ finishWord(accepted.length) }}</Button
           >
           <Button
             variant="secondary"

@@ -286,6 +286,7 @@ const { guardClick } = useDragSort(panel, {
       icon="arrow-cycle"
       :title="phrase.related_entities"
       :description="phrase.related_entities_hint"
+      ai="relations"
       class="mb-md"
     >
       <template #action>

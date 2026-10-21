@@ -14,11 +14,13 @@ import {
   containsPhrase,
   inverseDocumentFrequency,
   normalizeTermText,
-  readTerms,
-  stemTerm,
   termVector,
-  wordTokens,
 } from '../../shared/text-terms';
+import {
+  textTerms as readTerms,
+  textWords,
+  wordTerm as stemTerm,
+} from '../../shared/search/match';
 
 const flat = () => 1;
 
@@ -75,7 +77,11 @@ function corpus(entries: Entry[]) {
 
 describe('text terms', () => {
   it('reads words, not characters, and folds ё', () => {
-    expect(wordTokens('Ёжик said: «AI»!')).toEqual(['ежик', 'said', 'ai']);
+    expect(textWords('Ёжик said: «AI»!').map(({ word }) => word)).toEqual([
+      'ежик',
+      'said',
+      'ai',
+    ]);
   });
 
   it('finds a phrase only where it stands on its own', () => {
@@ -139,6 +145,35 @@ describe('tag name in the text', () => {
         'Поезда, вокзалы, гостиницы и дороги',
       ),
     ).toBe(0.5);
+  });
+
+  it('never recognizes a tag by the filler words of its description', () => {
+    expect(
+      textScore(
+        'Нижний Новгород',
+        'Было холодно, и том, как мы шли, я помню всё',
+        'Город на Волге — история о том, как всё было',
+      ),
+    ).toBe(0);
+  });
+
+  it('never recognizes a tag by words most of the archive holds', () => {
+    const common = (term: string) => (term === stemTerm('город') ? 1 : 3);
+    expect(
+      tagTextSignal(
+        buildTagProfile(
+          {
+            tagUuid: 't',
+            title: 'Нижний Новгород',
+            description: 'Город, ярмарка и закат',
+          },
+          common,
+          1,
+        ),
+        draftText('Город, ярмарка и закат'),
+        common,
+      )?.terms,
+    ).toEqual(['ярмарка', 'закат']);
   });
 });
 

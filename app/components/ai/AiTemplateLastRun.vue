@@ -19,10 +19,7 @@ const running = computed(
 <template>
   <TheiLink
     v-if="running && template.lastSession"
-    :to="{
-      path: '/admin/ai/',
-      query: { session: template.lastSession.sessionUuid },
-    }"
+    :to="sessionLocation(template.lastSession.sessionUuid)"
     class="inline-flex items-center gap-1 text-text-2 underline
       decoration-text-2/35 underline-offset-2 transition hocus:text-accent"
   >
@@ -30,10 +27,7 @@ const running = computed(
   </TheiLink>
   <TheiLink
     v-else-if="template.lastSession"
-    :to="{
-      path: '/admin/ai/',
-      query: { session: template.lastSession.sessionUuid },
-    }"
+    :to="sessionLocation(template.lastSession.sessionUuid)"
     class="inline-flex items-center gap-1 text-text-2 underline
       decoration-text-2/35 underline-offset-2 transition hocus:text-accent"
     data-template-last

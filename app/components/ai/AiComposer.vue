@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import type { ReferenceElement } from '@floating-ui/vue';
-import type { ContentEntityType } from '#layers/thei/shared/content-link';
 import type { ContentLinkPick } from '#layers/thei/app/components/content/link-picker/types';
 import { typedLines } from '#layers/thei/shared/ai-message-text';
 import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';
@@ -13,7 +12,10 @@ import type {
   AiComposerFile,
   AiMentionItem,
 } from '#layers/thei/app/composables/ai-session';
-import { runEditCommand } from '#layers/thei/app/components/content/editor-edit-commands';
+import {
+  runEditCommand,
+  selectRange,
+} from '#layers/thei/app/components/content/editor-edit-commands';
 import { typedAt } from '#layers/thei/app/composables/at-trigger';
 import { rangeAnchor } from '#layers/thei/app/composables/popup-placement';
 
@@ -335,6 +337,8 @@ function insertBreak() {
 
 function keydown(event: KeyboardEvent) {
   if (event.isComposing) return;
+  // Enter with Alt, Ctrl or Cmd held sends nothing: the browser keeps it.
+  if (event.altKey || event.ctrlKey || event.metaKey) return;
   if (event.key === 'Enter') {
     event.preventDefault();
     // A phone's keyboard has no Shift to hold: its Enter starts a line, and
@@ -539,34 +543,112 @@ function caretAtEnd(element: HTMLElement) {
 
 /** The words a ready-made request put in last, while they stand as put. */
 let prefilled: string | undefined;
+/** What that request put in at the end of the field, to take it out again. */
+let prefilledTail = '';
+
+/** A piece of the field's words, and where a place in it stands in the field. */
+interface WordPiece {
+  text: string;
+  at: (offset: number) => [Node, number];
+}
+
+/**
+ * The field's words in order, the chips aside, read as `serialize` reads
+ * them: a `<br>` or a `<div>` the browser typed a line with is a line.
+ */
+function wordPieces(element: HTMLElement): WordPiece[] {
+  const pieces: WordPiece[] = [];
+  const beside = (node: Node, after: boolean): [Node, number] => [
+    node.parentNode!,
+    [...node.parentNode!.childNodes].indexOf(node as ChildNode) + +after,
+  ];
+  const walk = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      pieces.push({
+        text: (node as Text).data.replace(/\u00a0/g, ' '),
+        at: (offset) => [node, offset],
+      });
+      return;
+    }
+    if (
+      !(node instanceof HTMLElement) ||
+      node.classList.contains(MENTION_CLASS)
+    )
+      return;
+    if (node.tagName === 'BR') {
+      pieces.push({ text: '\n', at: (offset) => beside(node, offset > 0) });
+      return;
+    }
+    if (node.tagName === 'DIV' || node.tagName === 'P')
+      pieces.push({
+        text: '\n',
+        at: (offset) => (offset ? [node, 0] : beside(node, false)),
+      });
+    for (const child of node.childNodes) walk(child);
+  };
+  for (const child of element.childNodes) walk(child);
+  return pieces;
+}
+
+/** The last `length` characters of the words, as a range of the field. */
+function lastOfWords(pieces: WordPiece[], length: number): Range | undefined {
+  const last = pieces.at(-1);
+  if (!last) return undefined;
+  let rest = length;
+  for (let index = pieces.length - 1; index >= 0; index--) {
+    const piece = pieces[index]!;
+    if (rest > piece.text.length) {
+      rest -= piece.text.length;
+      continue;
+    }
+    const range = document.createRange();
+    range.setStart(...piece.at(piece.text.length - rest));
+    range.setEnd(...last.at(last.text.length));
+    return range;
+  }
+  return undefined;
+}
 
 /**
  * Words put in for the owner to go on with — a ready-made request's: into
  * an empty field as they are, after what is there on a line of their own,
- * or in place of another request's words the owner has not touched. Typed
- * in as one edit, so Ctrl+Z takes them back.
+ * or in place of another request's words the owner has not touched — the
+ * owner's own words before them and the chips after them staying where
+ * they are. Typed in as one edit, so Ctrl+Z takes them back, and the
+ * request's words before them with it.
  */
 function prefill(text: string, templateId?: string) {
   const element = field.value;
   if (!element || !text) return;
-  const isChip = (node: Node) =>
-    node instanceof HTMLElement && node.classList.contains(MENTION_CLASS);
-  const wordNodes = () =>
-    [...element.childNodes].filter((node) => !isChip(node));
-  const words = () =>
-    wordNodes()
-      .map((node) => node.textContent ?? '')
-      .join('')
-      .trim();
-  // Another request's words, as they were put in: this one takes their place.
-  if (prefilled !== undefined && words() === prefilled.trim())
-    for (const node of wordNodes()) node.remove();
-  caretAtEnd(element);
+  const pieces = wordPieces(element);
+  const words = pieces.map((piece) => piece.text).join('');
+  // Another request's words, as they were put in, take this one's place —
+  // the line breaks before them too.
+  const replaces =
+    prefilled !== undefined &&
+    words.trim() === prefilled &&
+    words.endsWith(prefilledTail);
+  const before = replaces
+    ? words.slice(0, words.length - prefilledTail.length).replace(/\n+$/, '')
+    : words;
+  const range = replaces
+    ? lastOfWords(pieces, words.length - before.length)
+    : undefined;
+  if (range) {
+    element.focus();
+    selectRange(range);
+  } else caretAtEnd(element);
   // After words, on a line of their own; after chips alone, beside them.
-  const typed = words() ? `\n\n${text}` : text;
-  if (!runEditCommand('insertText', typed))
+  const typed = before.trim() ? `\n\n${text}` : text;
+  if (!runEditCommand('insertText', typed)) {
+    range?.deleteContents();
     element.append(document.createTextNode(typed));
-  prefilled = words();
+  }
+  const now = wordPieces(element)
+    .map((piece) => piece.text)
+    .join('');
+  prefilled = now.trim();
+  prefilledTail = now.endsWith(typed) ? typed : text;
   updateEmpty();
   if (templateId) template.value = templateId;
 }

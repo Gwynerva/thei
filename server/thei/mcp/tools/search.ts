@@ -1,73 +1,105 @@
 import type { McpServer } from '@modelcontextprotocol/server';
-import { READS } from '../annotations';
 import { z } from 'zod';
-import { dayInput } from '../inputs';
 import {
-  normalizeTermText,
-  stemTerm,
-  wordTokens,
-} from '#layers/thei/shared/text-terms';
+  SEARCH_KINDS,
+  type SearchFind,
+  type SearchHit,
+  type SearchKind,
+  type SearchResponse,
+} from '#layers/thei/shared/search/api';
+import type { SearchSegment } from '#layers/thei/shared/search/snippet';
+import { EXACT_DATE_PRECISION } from '#layers/thei/shared/date-precision';
+import { READS } from '../annotations';
+import { dayInput } from '../inputs';
 import type { McpCallContext } from '../context';
-import { documentTouches, loadDocuments, type McpDocument } from '../documents';
-import { ENTITY_KINDS } from '../../entity-kinds';
+import { freshSearchIndex } from '../../search/indexer';
+import { runSearch } from '../../search/query';
 import { formatPeriod } from '../render';
 import { guardTool, McpToolError, toolResult } from '../result';
 
-const EXCERPT_RADIUS = 90;
-
 /**
- * Words, not characters: every form of a word counts as the word, as the
- * site's own search reads Russian and English. A phrase in quotes must stand
- * as it is.
+ * The site's search, as the owner searches it: every kind, private notes and
+ * diary included, through the same index and the same words as the search
+ * page. The answer is text grouped by kind — each entity by its ref, each
+ * place it was found at by what it is and its ids — so a model opens exactly
+ * the part it needs. No structured copy beside it (`../result.ts`).
  */
-function readQuery(query: string) {
-  const phrases = [...query.matchAll(/"([^"]+)"/g)].map((match) =>
-    normalizeTermText(match[1]!.trim()),
-  );
-  const rest = query.replace(/"[^"]*"/g, ' ');
-  const stems = [...new Set(wordTokens(rest).map(stemTerm))];
-  return { phrases, stems };
+const KIND_HEADINGS: Record<SearchKind, string> = {
+  project: 'Projects',
+  'project-section': 'Project sections',
+  event: 'Events',
+  'diary-entry': 'Diary',
+  page: 'Pages',
+  file: 'Files',
+  tag: 'Tags',
+  profile: 'Profile',
+};
+
+function marked(segments: SearchSegment[]): string {
+  return segments
+    .map((segment) => (segment.mark ? `[${segment.text}]` : segment.text))
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-function excerpt(text: string, query: string): string {
-  const normalized = normalizeTermText(text);
-  let index = -1;
-  for (const token of wordTokens(query)) {
-    const stem = stemTerm(token);
-    index = normalized.indexOf(stem.length >= 3 ? stem : token);
-    if (index >= 0) break;
-  }
-  if (index < 0) index = 0;
-  const start = Math.max(0, index - EXCERPT_RADIUS);
-  const end = Math.min(text.length, index + EXCERPT_RADIUS);
-  return `${start > 0 ? '…' : ''}${text.slice(start, end).replace(/\s+/g, ' ').trim()}${end < text.length ? '…' : ''}`;
+/** A ref as the other tools take it: a diary entry by its day, a file by its id. */
+function refOfHit(hit: SearchHit): string {
+  if (hit.kind === 'diary-entry') return `diary-entry:${hit.date ?? hit.title}`;
+  if (hit.kind === 'file' && hit.file)
+    return `file:${assetIdOf(hit.file.assetUuid)}`;
+  return hit.ref;
 }
 
-function score(
-  document: McpDocument,
-  query: ReturnType<typeof readQuery>,
-): number {
-  const text = normalizeTermText(document.text);
-  if (query.phrases.some((phrase) => !text.includes(phrase))) return 0;
-  if (!query.stems.length) return query.phrases.length ? 1 : 0;
-  const stems = stemsOf(document);
-  const found = query.stems.filter((stem) => stems.has(stem)).length;
-  if (!found) return 0;
-  const titleStems = new Set(wordTokens(document.title).map(stemTerm));
-  const inTitle = query.stems.filter((stem) => titleStems.has(stem)).length;
-  // Every word found beats any title bonus: a search is for all of them.
-  return found * 10 + inTitle * 3 + (found === query.stems.length ? 100 : 0);
+/** A file named by its slug in a text, as the library's id. */
+function assetIdOf(value: string): string {
+  const { rawDb } = THEI_SERVER.useDb();
+  const row = rawDb
+    .prepare('SELECT assetUuid FROM assets WHERE assetUuid = ? OR slug = ?')
+    .get(value, value) as { assetUuid: string } | undefined;
+  return row?.assetUuid ?? value;
 }
 
-/** A record's stems, worked out once for as long as the record is kept. */
-const stemCache = new WeakMap<McpDocument, Set<string>>();
-function stemsOf(document: McpDocument): Set<string> {
-  let stems = stemCache.get(document);
-  if (!stems) {
-    stems = new Set(wordTokens(document.text).map(stemTerm));
-    stemCache.set(document, stems);
-  }
-  return stems;
+function findLine(find: SearchFind): string {
+  const where = [
+    find.where,
+    find.label ? `«${find.label}»` : '',
+    find.place?.section ? `section project-section:${find.place.section}` : '',
+    find.place?.block ? `block ${find.place.block}` : '',
+    find.place?.file ? `file ${assetIdOf(find.place.file)}` : '',
+  ]
+    .filter(Boolean)
+    .join(', ');
+  const words = marked(find.segments);
+  return `  ${where}${words ? `: ${words}` : ' (another name, never shown)'}`;
+}
+
+function hitLines(hit: SearchHit): string[] {
+  // Written as every period a model reads is, though a hit's says no doubt.
+  const when = hit.period
+    ? formatPeriod({ ...hit.period, ...EXACT_DATE_PRECISION, label: '' })
+    : hit.kind !== 'diary-entry' && hit.date
+      ? hit.date
+      : '';
+  const title =
+    hit.kind === 'diary-entry'
+      ? ''
+      : ` — ${hit.title || hit.file?.extension.toUpperCase() || ''}`;
+  const parent = hit.parent ? `, of «${hit.parent.title}»` : '';
+  return [
+    `- ${refOfHit(hit)}${title}${parent}${when ? ` (${when})` : ''}${hit.access ? ` [${hit.access}]` : ''}`,
+    ...hit.finds.map(findLine),
+    ...(hit.more ? [`  … ${hit.more} more places`] : []),
+  ];
+}
+
+function counts(response: SearchResponse): string {
+  return SEARCH_KINDS.filter((kind) => response.facets.kinds[kind])
+    .map(
+      (kind) =>
+        `${KIND_HEADINGS[kind].toLowerCase()} ${response.facets.kinds[kind]}`,
+    )
+    .join(', ');
 }
 
 export function registerSearchTool(server: McpServer, context: McpCallContext) {
@@ -77,15 +109,20 @@ export function registerSearchTool(server: McpServer, context: McpCallContext) {
     {
       title: 'Search the site',
       description:
-        'Full-text search over every entity, diary entries and private ' +
-        'notes included. Every form of a word counts as the word; put a ' +
-        'phrase in double quotes to find it as written. Results come best ' +
-        'first, each with a ref, the words around what matched and the ' +
-        "entity's keywords: open in full only what you need.",
+        'Full-text search over everything the owner wrote, every kind, ' +
+        'private notes and diary included, as the site’s own search finds ' +
+        'it: every form of a word counts as the word, and a phrase in double ' +
+        'quotes must stand as written. A query that names a day finds the ' +
+        'diary of that day; a day filter takes whatever of a life overlaps it. ' +
+        'Results come grouped by kind, best first; each ' +
+        'entity by its ref, and each place it was found at — a section, a ' +
+        'block, a file — with its ids and the words around the find. Open in ' +
+        'full only what you need. With one kind, results come a page at a ' +
+        'time by offset and limit.',
       inputSchema: z.object({
         query: z.string().min(1).describe('Words to find'),
         kinds: z
-          .array(z.enum(ENTITY_KINDS))
+          .array(z.enum(SEARCH_KINDS))
           .optional()
           .describe('Only these kinds; all of them when left out'),
         from: dayInput
@@ -94,52 +131,74 @@ export function registerSearchTool(server: McpServer, context: McpCallContext) {
         to: dayInput
           .optional()
           .describe('Only what falls on or before this day'),
-        offset: z.number().int().min(0).optional(),
-        limit: z.number().int().min(1).max(50).optional(),
+        offset: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe('With one kind: where the page starts'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .optional()
+          .describe(
+            'With one kind: how many; otherwise how many of each kind (5)',
+          ),
       }),
       annotations: READS,
     },
     ({ query, kinds, from, to, offset, limit }) =>
-      guardTool(() => {
-        const parsed = readQuery(query);
-        if (!parsed.stems.length && !parsed.phrases.length)
+      guardTool(async () => {
+        if (!/[\p{L}\p{N}]/u.test(query))
           throw new McpToolError('The query holds no words to look for.');
-        const found = loadDocuments(kinds?.length ? kinds : ENTITY_KINDS)
-          .filter((document) => documentTouches(document, from, to))
-          .map((document) => ({ document, score: score(document, parsed) }))
-          .filter((result) => result.score > 0)
-          .sort(
-            (a, b) =>
-              b.score - a.score || b.document.updatedAt - a.document.updatedAt,
-          );
-        const start = offset ?? 0;
-        const page = found.slice(start, start + (limit ?? 20));
-        const results = page.map(({ document }) => ({
-          ref: document.ref,
-          kind: document.kind,
-          title: document.title,
-          ...(document.access ? { access: document.access } : {}),
-          ...(document.periods?.length
-            ? { when: document.periods.map(formatPeriod).join('; ') }
-            : {}),
-          excerpt: excerpt(document.text, query),
-          keywords: document.keywords,
-        }));
-        const next =
-          start + page.length < found.length ? start + page.length : null;
-        return toolResult(
-          results.length
-            ? [
-                `${found.length} found; showing ${start + 1}–${start + page.length}${next !== null ? ` (next offset: ${next})` : ''}`,
-                ...results.map(
-                  (result) =>
-                    `- ${result.ref} — ${result.title}${'when' in result ? ` (${result.when})` : ''}${result.access && result.access !== 'public' ? ` [${result.access}]` : ''}\n  ${result.excerpt}${result.keywords.length ? `\n  keywords: ${result.keywords.join(', ')}` : ''}`,
-                ),
-              ].join('\n')
-            : found.length
-              ? `The offset ${start} is past the end: ${found.length} found.`
-              : 'Nothing found.',
+        await freshSearchIndex();
+        const wanted = [...new Set(kinds ?? [])];
+        const one = wanted.length === 1 ? wanted[0] : undefined;
+        const response = await runSearch({
+          q: query,
+          audience: 'owner',
+          ...(one
+            ? { kind: one, offset: offset ?? 0, limit: limit ?? 20 }
+            : { groupSize: limit ?? 5 }),
+          ...(from ? { from } : {}),
+          ...(to ? { to } : {}),
+        });
+        const groups = response.groups.filter(
+          (group) => !wanted.length || wanted.includes(group.kind),
         );
+        const total = one
+          ? (response.facets.kinds[one] ?? 0)
+          : groups.reduce((sum, group) => sum + group.total, 0);
+        if (!total) return toolResult('Nothing found.');
+        const start = one ? (offset ?? 0) : 0;
+        if (one && !groups.length)
+          return toolResult(
+            `The offset ${start} is past the end: ${total} found.`,
+          );
+        const shown = groups.reduce((sum, group) => sum + group.hits.length, 0);
+        const lines = [
+          `${total} found${response.keyboard ? ` for «${response.keyboard}» (the query as typed on the other keyboard)` : ''}: ${counts(response)}`,
+          // Not every word together: say so, or a model reads these as
+          // holding them all.
+          ...(response.partial
+            ? [
+                'No result holds every word: these hold some of them, those holding more first.',
+              ]
+            : []),
+        ];
+        for (const group of groups) {
+          lines.push(`## ${KIND_HEADINGS[group.kind]}`);
+          for (const hit of group.hits) lines.push(...hitLines(hit));
+          if (!one && group.total > group.hits.length)
+            lines.push(
+              `  (${group.total - group.hits.length} more: ask with kinds: ["${group.kind}"])`,
+            );
+        }
+        if (one && start + shown < total)
+          lines.push(`next offset: ${start + shown}`);
+        return toolResult(lines.join('\n'));
       }),
   );
 }

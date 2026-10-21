@@ -335,10 +335,15 @@ describe('the list of sessions', () => {
     insertMessage(db, schema, titled, { role: 'owner', text: 'Совсем другое' });
     const found = (q: string) =>
       listSessions({ q }).sessions.map((session) => session.sessionUuid);
-    expect(found('ЁЛКА')).toEqual([titled]);
+    // Every form of a word finds the word, and words are found apart.
+    expect(found('ЁЛКА').sort()).toEqual([titled, talked].sort());
+    expect(found('ёлку').sort()).toEqual([titled, talked].sort());
     expect(found('елка на  новый')).toEqual([titled]);
+    expect(found('новый ёлка')).toEqual([titled]);
     expect(found('цитату')).toEqual([talked]);
-    expect(found('ёлку')).toEqual([talked]);
+    expect(found('нашел цитата')).toEqual([talked]);
+    // Never inside another word.
+    expect(found('итат')).toEqual([]);
     expect(found('nothing of the kind')).toEqual([]);
   });
 

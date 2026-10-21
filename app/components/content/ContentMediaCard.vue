@@ -64,6 +64,7 @@ const framed = computed(
           publicText(asset.alt) ||
           phrase.asset
         "
+        data-opens-viewer
         @click="$emit('open')"
       ></button>
       <!-- The file's size beside the edit button, as a tile shows it: what a

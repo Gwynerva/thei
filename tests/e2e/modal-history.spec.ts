@@ -122,6 +122,54 @@ test('Escape undoes the same single step as Back', async ({
   await expect(libraryScreen(page)).toBeVisible();
 });
 
+test('a layer covered or closed never hides the focus it holds', async ({
+  page,
+  request,
+}) => {
+  // The browser refuses `aria-hidden` over the focused element and only says
+  // so in its own log; every such attempt is noted here instead.
+  await page.addInitScript(() => {
+    const hidden: string[] = [];
+    (window as unknown as { hiddenFocus: string[] }).hiddenFocus = hidden;
+    const set = Element.prototype.setAttribute;
+    Element.prototype.setAttribute = function (name, value) {
+      const focused = document.activeElement;
+      if (
+        name === 'aria-hidden' &&
+        String(value) === 'true' &&
+        focused &&
+        focused !== document.body &&
+        this.contains(focused)
+      )
+        hidden.push(this.getAttribute('data-modal-layer') ?? this.tagName);
+      return set.call(this, name, value);
+    };
+  });
+  const stored = await storeAsset(request, '#43a268');
+  await openWizard(page);
+
+  // Pressed, the button keeps the focus as its layer gives way to the next.
+  await pickScreen(page).click();
+  await chooseFromLibrary(page, stored);
+  await expect(variantScreen(page)).toBeVisible();
+  await topModal(page).getByRole('button', { name: 'Close dialog' }).click();
+  await expect(variantScreen(page)).toHaveCount(0);
+  // Whatever is left of the flow goes one step at a time.
+  await expect(async () => {
+    if (await page.locator('dialog[open]').count())
+      await page.keyboard.press('Escape');
+    await expect(page.locator('dialog[open]')).toHaveCount(0, {
+      timeout: 500,
+    });
+  }).toPass();
+
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { hiddenFocus: string[] }).hiddenFocus,
+    ),
+  ).toEqual([]);
+});
+
 test('going back from Reuse and uploading instead still delivers the asset', async ({
   page,
 }) => {

@@ -1,22 +1,27 @@
 import type { H3Event } from 'h3';
 import { getHeader } from 'h3';
 import { inArray, sql } from 'drizzle-orm';
-import { getRequestIp, getRequestMeta, type RequestMeta } from '../request';
+import { isAdminRequestPath } from '../../../shared/public-view';
+import {
+  getRequestIp,
+  getRequestMeta,
+  getRequestPath,
+  type RequestMeta,
+} from '../request';
 import { EntityPrefix, generateUniqueId } from '../entity-id';
 import {
-  cleanupExpiredTokenAliases,
   clearTokenCookie,
   createToken,
   getTokenCookie,
-  resolveToken,
+  hashSessionToken,
+  rotatedToken,
   setTokenCookie,
-  tokenAliases,
 } from './token';
 import {
   dbSnapshotInterval,
   maxDbSessions,
+  previousTokenGrace,
   sessionDuration,
-  tokenAliasLifetime,
   tokenRotationInterval,
 } from './const';
 
@@ -31,10 +36,33 @@ export interface AdminSessionData {
   ip?: string;
   ua?: string;
   meta: RequestMeta;
-  token: string;
+  /** The hash of the session's token (`hashSessionToken`), never the token. */
+  tokenHash: string;
   tokenCreatedAt: number;
+  /**
+   * The hash of the token the last rotation replaced. The response that
+   * carried the new one may never have reached the browser, so this one is
+   * still accepted until the new one has been seen
+   * (`rotateAdminSessionTokenIfNeeded`).
+   */
+  previousTokenHash?: string;
+  /**
+   * Set when the new token is first seen: the previous one is accepted until
+   * then, for requests the browser sent before the new cookie arrived.
+   */
+  previousTokenExpiresAt?: number;
+  /**
+   * The salt the current token was made from the previous one with
+   * (`rotatedToken`), kept until the browser has shown the current token:
+   * meanwhile a request with the previous one is sent the current one again.
+   */
+  tokenSalt?: string;
 }
 
+/**
+ * Active sessions by the hash of their token: of the current one, and of the
+ * previous one while it may still be accepted.
+ */
 export const memorySessions = new Map<string, AdminSessionData>();
 export const toSnapshotSessions = new Map<string, AdminSessionData>();
 
@@ -57,28 +85,67 @@ export function cloneSession(session: AdminSessionData): AdminSessionData {
   return structuredClone(session);
 }
 
-export function markSessionForSnapshot(session: AdminSessionData) {
+function markSessionForSnapshot(session: AdminSessionData) {
   toSnapshotSessions.set(session.sessionUuid, cloneSession(session));
 }
 
+export function rememberSessionInMemory(session: AdminSessionData) {
+  memorySessions.set(session.tokenHash, session);
+  if (session.previousTokenHash !== undefined)
+    memorySessions.set(session.previousTokenHash, session);
+}
+
 function removeSessionFromMemory(session: AdminSessionData) {
-  const tokens = new Set([session.token]);
-  for (const [token, memorySession] of memorySessions) {
-    if (memorySession.sessionUuid !== session.sessionUuid) continue;
-    tokens.add(token);
-    memorySessions.delete(token);
-  }
-  for (const [oldToken, alias] of tokenAliases) {
-    if (tokens.has(oldToken) || tokens.has(alias.token)) {
-      tokenAliases.delete(oldToken);
-    }
+  for (const [tokenHash, memorySession] of memorySessions) {
+    if (memorySession.sessionUuid === session.sessionUuid)
+      memorySessions.delete(tokenHash);
   }
 }
 
-export function expireAdminSession(
-  session: AdminSessionData,
-  now = Date.now(),
-) {
+function forgetPreviousToken(session: AdminSessionData) {
+  if (session.previousTokenHash === undefined) return;
+  memorySessions.delete(session.previousTokenHash);
+  delete session.previousTokenHash;
+  delete session.previousTokenExpiresAt;
+  delete session.tokenSalt;
+}
+
+/**
+ * The session a token opens, by its hash: by its current token, or by the
+ * previous one while that is still accepted. A previous token past its time
+ * is forgotten.
+ */
+function findSessionByTokenHash(tokenHash: string, now: number) {
+  const session = memorySessions.get(tokenHash);
+  if (!session || tokenHash === session.tokenHash) return session;
+  if (tokenHash !== session.previousTokenHash) {
+    memorySessions.delete(tokenHash);
+    return undefined;
+  }
+  if (
+    session.previousTokenExpiresAt === undefined ||
+    now < session.previousTokenExpiresAt
+  )
+    return session;
+  forgetPreviousToken(session);
+  markSessionForSnapshot(session);
+  return undefined;
+}
+
+/**
+ * Writes the sessions at once. A write that fails is logged, and what it
+ * could not store waits for the next snapshot: a change of a session never
+ * fails the request that made it.
+ */
+function writeSessionsNow(failure: string) {
+  try {
+    flushSessionsToDb();
+  } catch (error) {
+    THEI_SERVER.console.tag('Sessions').error(failure, error);
+  }
+}
+
+function expireAdminSession(session: AdminSessionData, now = Date.now()) {
   if (session.state !== 'active' || now < session.expiresAt) return false;
   session.state = 'destroyed';
   removeSessionFromMemory(session);
@@ -86,7 +153,7 @@ export function expireAdminSession(
   return true;
 }
 
-export async function expireAdminSessions(
+export function expireAdminSessions(
   sessions: Iterable<AdminSessionData>,
   now = Date.now(),
 ) {
@@ -97,7 +164,7 @@ export async function expireAdminSessions(
     seen.add(session.sessionUuid);
     changed = expireAdminSession(session, now) || changed;
   }
-  if (changed) await flushSessionsToDb();
+  if (changed) writeSessionsNow('Could not write the expired admin sessions.');
   return changed;
 }
 
@@ -125,38 +192,41 @@ export async function createAdminSession(event: H3Event) {
       ip,
       ua,
     }),
-    token,
+    tokenHash: hashSessionToken(token),
     tokenCreatedAt: now,
   };
 
-  memorySessions.set(token, session);
+  rememberSessionInMemory(session);
   markSessionForSnapshot(session);
   setTokenCookie(event, token);
 
-  await flushSessionsToDb();
+  flushSessionsToDb();
 
   return session;
 }
 
-export async function destroyAdminSession(token: string) {
-  token = resolveToken(token);
-  const session = memorySessions.get(token);
-
-  if (!session) {
-    return;
-  }
-
+function destroySession(session: AdminSessionData) {
   session.state = 'destroyed';
   session.lastUsedAt = Date.now();
 
   markSessionForSnapshot(session);
   removeSessionFromMemory(session);
 
-  await flushSessionsToDb();
+  writeSessionsNow('Could not write a destroyed admin session.');
+}
+
+/** Ends an active session by its id. Returns whether there was one. */
+export function destroyAdminSession(sessionUuid: string) {
+  for (const session of memorySessions.values()) {
+    if (session.sessionUuid !== sessionUuid) continue;
+    destroySession(session);
+    return true;
+  }
+  return false;
 }
 
 /** Destroy every other in-memory session while keeping the request session alive. */
-export async function destroyOtherAdminSessions(currentSessionUuid: string) {
+export function destroyOtherAdminSessions(currentSessionUuid: string) {
   const now = Date.now();
   const seen = new Set<string>();
   let changed = false;
@@ -173,57 +243,80 @@ export async function destroyOtherAdminSessions(currentSessionUuid: string) {
     removeSessionFromMemory(session);
     changed = true;
   }
-  if (changed) await flushSessionsToDb();
+  if (changed)
+    writeSessionsNow('Could not write the destroyed admin sessions.');
   return changed;
 }
 
-export async function destroyCurrentAdminSession(event: H3Event) {
+export function destroyCurrentAdminSession(event: H3Event) {
   const token = getTokenCookie(event);
 
   if (!token) {
     return;
   }
 
-  await destroyAdminSession(token);
+  const session = findSessionByTokenHash(hashSessionToken(token), Date.now());
+  if (session) destroySession(session);
   clearTokenCookie(event);
 }
 
-export async function rotateAdminSessionTokenIfNeeded(
+/**
+ * Rotates the session's token once a day, through the cookie of the response.
+ *
+ * That response may never reach the browser: a reload, a navigation or a
+ * closed tab aborts it, and the browser keeps the token it had. So the
+ * replaced token stays on the session as `previousTokenHash`, and a request
+ * that still carries it is accepted and answered with the current cookie
+ * again — made anew from the token it carries, since only the hashes are
+ * kept (`rotatedToken`). Once the current token comes back, the previous one
+ * is accepted for `previousTokenGrace` more, for requests already on their
+ * way, and then forgotten. Only then may the token rotate again, so the
+ * browser always holds one of the two. Returns whether the token was rotated.
+ */
+function rotateAdminSessionTokenIfNeeded(
   event: H3Event,
   token: string,
+  tokenHash: string,
   session: AdminSessionData,
+  now: number,
 ) {
-  const now = Date.now();
-
-  if (now - session.tokenCreatedAt < tokenRotationInterval) {
-    return session;
+  if (tokenHash !== session.tokenHash) {
+    // Once the current token has been seen there is no salt: the browser
+    // holds the current token, and this request set out before its cookie
+    // arrived.
+    if (session.tokenSalt !== undefined)
+      setTokenCookie(event, rotatedToken(token, session.tokenSalt));
+    return false;
   }
 
-  if (token !== session.token) {
-    return session;
+  if (session.previousTokenHash !== undefined) {
+    if (session.previousTokenExpiresAt === undefined) {
+      session.previousTokenExpiresAt = now + previousTokenGrace;
+      delete session.tokenSalt;
+    } else if (now >= session.previousTokenExpiresAt)
+      forgetPreviousToken(session);
   }
 
-  const oldToken = token;
-  const newToken = createToken();
+  if (
+    session.previousTokenHash !== undefined ||
+    now - session.tokenCreatedAt < tokenRotationInterval
+  )
+    return false;
 
-  session.token = newToken;
+  const tokenSalt = createToken();
+  const newToken = rotatedToken(token, tokenSalt);
+
+  session.previousTokenHash = tokenHash;
+  session.tokenHash = hashSessionToken(newToken);
+  session.tokenSalt = tokenSalt;
   session.tokenCreatedAt = now;
   session.lastUsedAt = now;
 
-  memorySessions.set(newToken, session);
-
-  tokenAliases.set(oldToken, {
-    token: newToken,
-    expiresAt: now + tokenAliasLifetime,
-  });
-
-  memorySessions.delete(oldToken);
-
-  markSessionForSnapshot(session);
+  memorySessions.set(session.tokenHash, session);
 
   setTokenCookie(event, newToken);
 
-  return session;
+  return true;
 }
 
 export async function getCurrentAdminSession(event: H3Event) {
@@ -231,87 +324,78 @@ export async function getCurrentAdminSession(event: H3Event) {
     return;
   }
 
-  cleanupExpiredTokenAliases();
-
-  let token = getTokenCookie(event);
+  const token = getTokenCookie(event);
 
   if (!token) {
     return;
   }
 
-  token = resolveToken(token);
-
-  const session = memorySessions.get(token);
-
-  if (!session) {
-    clearTokenCookie(event);
-    return;
-  }
-
   const now = Date.now();
+  const tokenHash = hashSessionToken(token);
+  const session = findSessionByTokenHash(tokenHash, now);
+
+  // A token no session knows leaves the cookie alone: a request the browser
+  // held back past the grace of a rotation still carries the previous token,
+  // and clearing the cookie would throw away the current one it holds now.
+  if (!session) return;
 
   if (now >= session.expiresAt) {
     expireAdminSession(session, now);
-    await flushSessionsToDb();
+    writeSessionsNow('Could not write an expired admin session.');
     clearTokenCookie(event);
     return;
   }
 
-  const currentSession = await rotateAdminSessionTokenIfNeeded(
-    event,
-    token,
-    session,
-  );
+  // A new token is written at once, before anything is awaited: a restart
+  // before the next snapshot would bring back the old one, which the browser
+  // has replaced.
+  if (rotateAdminSessionTokenIfNeeded(event, token, tokenHash, session, now)) {
+    markSessionForSnapshot(session);
+    writeSessionsNow('Could not write a rotated session token.');
+  }
 
   const ip = getRequestIp(event);
   const ua = getHeader(event, 'user-agent');
 
-  const needMetaUpdate = currentSession.ip !== ip || currentSession.ua !== ua;
+  const needMetaUpdate = session.ip !== ip || session.ua !== ua;
 
-  currentSession.ip = ip;
-  currentSession.ua = ua;
+  session.ip = ip;
+  session.ua = ua;
 
   if (needMetaUpdate) {
-    currentSession.meta = await getRequestMeta({
+    session.meta = await getRequestMeta({
       ip,
       ua,
     });
   }
 
-  if (
-    event.path.startsWith('/admin/') ||
-    event.path.startsWith('/api/admin/')
-  ) {
+  if (isAdminRequestPath(getRequestPath(event))) {
     // Admin session is actually used
-    currentSession.lastUsedAt = now;
-    currentSession.expiresAt = now + sessionDuration;
+    session.lastUsedAt = now;
+    session.expiresAt = now + sessionDuration;
   }
 
-  markSessionForSnapshot(currentSession);
+  markSessionForSnapshot(session);
 
-  return currentSession;
+  return session;
 }
 
 //
 // Flushing sessions to the database
 //
 
-let flushRunning = false;
+/**
+ * Writes the sessions changed since the last write. Synchronous, so it can
+ * run while the process exits. Sessions a failed write could not store wait
+ * for the next one.
+ */
+export function flushSessionsToDb() {
+  if (toSnapshotSessions.size === 0) return;
 
-export async function flushSessionsToDb() {
-  if (flushRunning) {
-    return;
-  }
-
-  flushRunning = true;
+  const pendingSessions = [...toSnapshotSessions.values()];
+  toSnapshotSessions.clear();
 
   try {
-    const pendingSessions = [...toSnapshotSessions.values()].map(cloneSession);
-
-    for (const session of pendingSessions) {
-      toSnapshotSessions.delete(session.sessionUuid);
-    }
-
     const { db, schema } = THEI_SERVER.useDb();
     db.transaction((transaction) => {
       for (const session of pendingSessions) {
@@ -349,12 +433,36 @@ export async function flushSessionsToDb() {
           .run();
       }
     });
-  } finally {
-    flushRunning = false;
+  } catch (error) {
+    for (const session of pendingSessions) {
+      if (!toSnapshotSessions.has(session.sessionUuid))
+        toSnapshotSessions.set(session.sessionUuid, session);
+    }
+    throw error;
   }
 }
 
-export async function loopAdminSessionSnapshotJob() {
-  await flushSessionsToDb();
+export function loopAdminSessionSnapshotJob() {
+  try {
+    flushSessionsToDb();
+  } catch (error) {
+    THEI_SERVER.console
+      .tag('Sessions')
+      .error('Could not write the admin sessions.', error);
+  }
   setTimeout(loopAdminSessionSnapshotJob, dbSnapshotInterval);
+}
+
+/**
+ * Writes what changed since the last snapshot — the last uses and expiries —
+ * when the server stops. A new token is already written when it is made.
+ */
+export function flushSessionsBeforeExit() {
+  try {
+    flushSessionsToDb();
+  } catch (error) {
+    THEI_SERVER.console
+      .tag('Sessions')
+      .error('Could not write the admin sessions before exit.', error);
+  }
 }

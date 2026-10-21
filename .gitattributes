@@ -1,2 +1,10 @@
 # Keep every text file in the repository and working tree in LF format.
 * text=auto eol=lf
+
+# The README's banner is of no use to a site: kept out of the archive of a
+# release tag, which is what an instance installs.
+/.github/readme-banner.png export-ignore
+
+# The lab is for developing Thei, never for a site.
+/tests/lab export-ignore
+/.lab export-ignore

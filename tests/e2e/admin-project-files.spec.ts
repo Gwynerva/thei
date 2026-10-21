@@ -146,11 +146,12 @@ test('a duplicate settled by its variant goes on to its title, and Back leaves i
   // The same bytes again, as another file: a duplicate, settled by choosing
   // the variant already stored.
   await pick(page, 'Add File', 'again.png', buffer);
-  // The file as it is is the stored one.
+  // The file as it is is the stored one, handed over at once: its
+  // description is the library's to keep.
   const next = uploadControls(page).next;
-  await expect(next).toBeEnabled({ timeout: 20_000 });
+  await expect(next).toHaveText('Done', { timeout: 20_000 });
+  await expect(next).toBeEnabled();
   await next.click();
-  await skipDescription(page);
 
   const title = modal(page).getByRole('textbox', {
     name: 'Title',

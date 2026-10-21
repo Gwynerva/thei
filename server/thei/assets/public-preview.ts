@@ -3,8 +3,9 @@ import { AssetType } from '#layers/thei/shared/asset';
 import type { StoredAssetRecord } from './storage';
 
 /**
- * The file a `?preview=1` request gets: the asset's preview, or, for an
- * image that has none, the image itself.
+ * The file a `?preview=…` request gets: the asset's preview, or, for an
+ * image that has none, the image itself. Whatever the value says, it only
+ * moves the address when the preview changes (`publicPreviewToken`).
  *
  * An image is what its preview would be made from, only larger, so it can
  * stand in for one. That is what happens when a preview is itself placed as
@@ -16,7 +17,8 @@ export async function resolvePublicAssetVariant(
   event: H3Event,
   asset: StoredAssetRecord,
 ): Promise<StoredAssetRecord> {
-  if (getQuery(event).preview !== '1') return asset;
+  const token = getQuery(event).preview;
+  if (typeof token !== 'string' || !token) return asset;
   if (asset.type !== AssetType.Image && asset.type !== AssetType.Video) {
     throw createError({ statusCode: 404 });
   }

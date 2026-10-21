@@ -1,0 +1,46 @@
+/* What every fixture shares. The page is one column of sections with even
+   gaps, so the page itself gives the probe nothing to find: only what a
+   fixture marks with data-expect, and its decoys, are under test. */
+* {
+  box-sizing: border-box;
+}
+html {
+  background: #fff;
+  color: #111;
+}
+body {
+  margin: 0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 24px;
+  font:
+    16px/20px Arial,
+    Helvetica,
+    sans-serif;
+}
+p,
+h1,
+h2,
+h3,
+ul,
+ol {
+  margin: 0;
+}
+ul {
+  padding: 0;
+  list-style: none;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+/* A control big enough for a finger, so decoys stay quiet on a phone. */
+.ctl {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+}

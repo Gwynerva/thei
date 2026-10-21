@@ -1,0 +1,130 @@
+{
+  "schema": 2,
+  "job": "diary-today.novice",
+  "review": "R1",
+  "kind": "fresh",
+  "attempts": {
+    "dd": "1020-090000-dd",
+    "pl": "1020-090500-pl"
+  },
+  "overall": "I managed to write the day, but on the phone I looked for a long time for where to start: the button hides in the menu, and the menu itself is tiny. On the computer a label ran over the button and I doubted I was pressing the right thing.",
+  "scores": {
+    "findability": {
+      "dd": 8,
+      "pl": 5
+    },
+    "proximity": {
+      "dd": 8,
+      "pl": 6
+    },
+    "feedback": {
+      "dd": 9,
+      "pl": 9
+    },
+    "control": {
+      "dd": 9,
+      "pl": 9
+    },
+    "wording": {
+      "dd": 9,
+      "pl": 9
+    },
+    "trust": {
+      "dd": 8,
+      "pl": 8
+    },
+    "consistency": {
+      "dd": 8,
+      "pl": 7
+    },
+    "errors": {
+      "dd": null,
+      "pl": null
+    },
+    "phone": {
+      "pl": 6
+    },
+    "tidiness": {
+      "dd": 6,
+      "pl": 8
+    }
+  },
+  "why": {
+    "findability": "On the phone an entry can only be started from the menu, which one would not guess.",
+    "tidiness": "A label runs over the “New entry” button."
+  },
+  "probe": {
+    "overlap:k3f9a2x7qd": {
+      "verdict": "confirmed",
+      "why": "In the close-up the label’s text lies over the button."
+    },
+    "near-miss:b7c2d9e0wf": {
+      "verdict": "dismissed",
+      "why": "A pixel and a half does not show; the paragraphs look straight."
+    },
+    "small-target:d4e5f6a7b8": {
+      "verdict": "confirmed",
+      "why": "The menu button is clearly smaller than a finger."
+    }
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "serious",
+      "criterion": "tidiness",
+      "attempt": "1020-090000-dd",
+      "step": 2,
+      "shot": "shots/02-new-entry.marked.png",
+      "where": "The middle of the screen, the “New entry” button.",
+      "text": "The field label runs over the button; its letters lie on top of it.",
+      "expected": "The label above the button, with a gap.",
+      "fix": "Move the button below the label, or drop the label.",
+      "probe": [
+        "overlap:k3f9a2x7qd"
+      ]
+    },
+    {
+      "id": "F2",
+      "severity": "minor",
+      "criterion": "phone",
+      "attempt": "1020-090500-pl",
+      "step": 2,
+      "shot": "shots/02-find-it-in-the-menu.marked.png",
+      "where": "The header, the menu button.",
+      "text": "The menu button is small; I hit it on the second try.",
+      "expected": "A button easy to hit with a finger.",
+      "fix": "Make the menu button larger.",
+      "probe": [
+        "small-target:d4e5f6a7b8"
+      ]
+    },
+    {
+      "id": "F3",
+      "severity": "serious",
+      "criterion": "findability",
+      "attempt": "1020-090500-pl",
+      "step": 2,
+      "shot": "shots/02-find-it-in-the-menu.png",
+      "where": "The dashboard on the phone: no “New entry” button on the screen.",
+      "text": "I could not find where to start the day’s entry until I opened the menu at random.",
+      "expected": "A “New entry” button right on the dashboard, as on the computer.",
+      "fix": "Show “New entry” on the dashboard on the phone too."
+    }
+  ],
+  "previous": [],
+  "liked": [
+    "The entry was saved at once, and it showed."
+  ],
+  "filesRead": [
+    "jobs/diary-today.novice/reviews/R1/brief.md",
+    "jobs/diary-today.novice/attempts/1020-090000-dd/shots/01-open-the-dashboard.marked.png",
+    "jobs/diary-today.novice/attempts/1020-090000-dd/shots/02-new-entry.marked.png",
+    "jobs/diary-today.novice/attempts/1020-090000-dd/shots/03-write-and-save.marked.png",
+    "jobs/diary-today.novice/attempts/1020-090000-dd/crops/02-overlap-k3f9a2x7.png",
+    "jobs/diary-today.novice/attempts/1020-090500-pl/shots/01-open-the-dashboard.marked.png",
+    "jobs/diary-today.novice/attempts/1020-090500-pl/shots/02-find-it-in-the-menu.marked.png",
+    "jobs/diary-today.novice/attempts/1020-090500-pl/shots/02-find-it-in-the-menu.png",
+    "jobs/diary-today.novice/attempts/1020-090500-pl/shots/03-write-and-save.marked.png",
+    "jobs/diary-today.novice/attempts/1020-090500-pl/crops/02-small-target-d4e5f6a7.png"
+  ]
+}

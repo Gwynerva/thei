@@ -38,6 +38,7 @@ vi.mock('../../server/thei/public/entities', async () => ({
     rows.map(({ tag, ...counts }: any) => ({ ...tag, ...counts })),
   ),
   buildPublicTags: vi.fn(async (tags) => tags),
+  buildPublicTagRows: vi.fn(async (tags) => tags),
 }));
 let context: Awaited<ReturnType<typeof freshTestDb>>;
 let handle: ReturnType<typeof toWebHandler>;
@@ -114,12 +115,11 @@ describe('SQL pagination', () => {
       total: 900,
       page: 2,
       pageCount: 45,
-      pageSize: 20,
     });
-    expect(result.items.map((row: any) => row.href)).toEqual(
+    expect(result.groups[0].hits.map((row: any) => row.href)).toEqual(
       Array.from({ length: 20 }, (_, i) => String(i + 20).padStart(4, '0')),
     );
-    expect(result.tags).toEqual([
+    expect(result.facets.tags).toEqual([
       expect.objectContaining({
         count: 900,
         tag: expect.objectContaining({ slug: 'tag' }),

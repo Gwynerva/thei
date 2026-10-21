@@ -295,3 +295,62 @@ test('a section is removed from its modal', async ({ page }) => {
   await expect(block(page).getByRole('tab').nth(0)).toContainText('2');
   await expect(save(page)).toBeVisible();
 });
+
+test('a saved section opens its own page from its modal, a new one has no way there yet', async ({
+  page,
+}) => {
+  // A phone: the header holds the title and its squares on one line.
+  await page.setViewportSize({ width: 375, height: 812 });
+  const stamp = Date.now();
+  await openEditForm(page, await createProject(page, stamp, false));
+  await expect(saved(page)).toBeVisible();
+  const dialog = page.locator('dialog[open]').last();
+  // The phrase carries non-breaking spaces.
+  const viewOnSite = /^View\son\sSite$/;
+  const eye = dialog.getByRole('link', { name: viewOnSite });
+
+  // A section added here has no page until it is saved and opened again.
+  await page.getByRole('button', { name: 'Add section' }).click();
+  await expect(
+    dialog.getByRole('button', { name: 'Save', exact: true }),
+  ).toBeVisible();
+  await expect(eye).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Close dialog' }).click();
+  await expect(page.locator('dialog[open]')).toHaveCount(0);
+
+  await rows(page).nth(0).locator('[data-section-open]').click();
+  const href = `/projects/sectioned-sec${stamp}/sections/one-one${stamp}/`;
+  await expect(eye).toHaveAttribute('href', href);
+  await expect(eye).toHaveAttribute('data-title-popup', viewOnSite);
+
+  // The eye leads the header's squares, where an action is easiest to
+  // reach, and delete follows; all of them on the title's line and inside
+  // the screen.
+  const squares = eye.locator('xpath=..');
+  expect(
+    await squares
+      .locator(':scope > *')
+      .evaluateAll((elements) =>
+        elements.map((element) =>
+          element.getAttribute('aria-label')?.replace(/\s/g, ' '),
+        ),
+      ),
+  ).toEqual(['View on Site', 'Delete section', 'Close dialog', 'Save']);
+  const boxes = await squares.evaluate((group) =>
+    [group.parentElement!.firstElementChild!, ...group.children]
+      .map((element) => element.getBoundingClientRect())
+      .filter((box) => box.width > 0)
+      .map(({ top, bottom, left, right }) => ({ top, bottom, left, right })),
+  );
+  expect(boxes.length).toBeGreaterThanOrEqual(4);
+  const middle = (boxes[1]!.top + boxes[1]!.bottom) / 2;
+  for (const box of boxes) {
+    expect(Math.abs((box.top + box.bottom) / 2 - middle)).toBeLessThan(1);
+    expect(box.left).toBeGreaterThanOrEqual(0);
+    expect(box.right).toBeLessThanOrEqual(375);
+  }
+
+  await eye.click();
+  await expect(page).toHaveURL(new RegExp(`${href}$`));
+  await expect(page.locator('h1')).toContainText(String(stamp));
+});

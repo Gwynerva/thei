@@ -18,10 +18,16 @@ import { buildProjectSectionUrl } from '#layers/thei/shared/project-url';
 import LinkField from '../../components/LinkField.vue';
 import { projectContentItemDeleteModal } from './project-content-item-delete-modal';
 import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
+import type { FormNeed } from '#layers/thei/app/composables/form-needs';
 
 type ModalData = {
   projectHumanReadableSlug: string;
   projectPublicId: string;
+  /**
+   * The project's address as it was last saved, where its sections' pages
+   * are: the form's may be one not stored yet — a public ID just rolled.
+   */
+  savedProject: { humanReadableSlug: string; publicId: string };
   item?: ProjectSectionItem;
   /**
    * Hands the section over to the project form, which saves itself when
@@ -29,6 +35,12 @@ type ModalData = {
    * and closing is a decision of its own.
    */
   onSave: (item: ProjectSectionItem) => void;
+  /**
+   * Whether the section the project form holds — the one handed over last,
+   * or opened — is stored as it is: the form does not save itself for it
+   * while anything else waits, nor before the project is made.
+   */
+  stored: () => boolean;
   /**
    * How many more times each file would be placed in the project, were this
    * section saved as it stands: the editor counts a file's uses with it.
@@ -73,6 +85,15 @@ const pendingPeriod = ref<Period>();
 const editedPeriodIndex = ref<number>();
 const modalContainer =
   useTemplateRef<InstanceType<typeof ModalContainer>>('modalContainer');
+const headerRow = useTemplateRef<HTMLElement>('headerRow');
+/**
+ * Saved: nothing here waits to be handed over, and what the project form
+ * holds of the section is stored. Handed over to a form that waits on
+ * something else, it is not saved yet.
+ */
+const isSaved = computed(
+  () => exists.value && !isDirty.value && props.modalData.stored(),
+);
 const hasBody = computed(() => !isContentEmpty(item.value.content?.data));
 const bannerAssetUuid = computed({
   get: () => item.value.bannerAssetUuid ?? null,
@@ -83,12 +104,31 @@ const bannerAssetUuid = computed({
 function bannerUsageDelta() {
   return props.modalData.usageDelta(buildItem());
 }
-/** A section says something with a body, its dates, or both. */
-const canSave = computed(
-  () =>
-    isDirty.value &&
-    Boolean(item.value.title.trim()) &&
-    (item.value.periods.length > 0 || hasBody.value),
+/**
+ * What the section still needs before it can be saved: its title, and
+ * something to say — a body, its dates, or both.
+ */
+const needs = useFormNeeds(
+  () => {
+    const list: FormNeed[] = [];
+    if (!item.value.title.trim())
+      list.push({ key: 'title', label: phrase.value.content_section_title });
+    if (!item.value.periods.length && !hasBody.value)
+      list.push({
+        key: 'body-or-periods',
+        label: phrase.value.form_either(
+          phrase.value.section_periods,
+          phrase.value.content_section_content,
+        ),
+      });
+    return list;
+  },
+  {
+    root: () => modalContainer.value?.root,
+    header: () => headerRow.value,
+    ready: () => !exists.value || isDirty.value,
+    save: handOver,
+  },
 );
 
 useModalCloseGuard(
@@ -150,9 +190,10 @@ watch(periodPopupOpen, (isOpen) => {
  * project could save it straight away.
  */
 function saveAfterContentEdit() {
-  if (exists.value) save();
+  if (exists.value) needs.submit();
 }
 
+/** The save itself; a press or Ctrl+S comes to it through `needs.submit`. */
 function handOver() {
   const built = buildItem();
   props.modalData.onSave(built);
@@ -184,16 +225,6 @@ function buildItem(): ProjectSectionItem {
   };
 }
 
-function save() {
-  if (canSave.value) handOver();
-}
-
-useSaveShortcut(save, {
-  canSave,
-  root: () => modalContainer.value?.root,
-  exclusive: true,
-});
-
 function createInitialItem(data: ModalData): SectionDraft {
   return {
     sectionUuid: data.item?.sectionUuid,
@@ -219,26 +250,23 @@ function sectionLinkDescription(slug: string, publicId: string) {
 }
 
 /**
- * While a section that already exists on the site is open, the admin bar's
- * eye leads to its own public page rather than to the project's. It uses the
- * address the section was opened with: an unsaved edit of the slug has no
- * page yet.
+ * The way to the section's own page, for a section that already exists on the
+ * site. It uses the address the section was opened with, in the project as
+ * last saved: an unsaved edit of the slug has no page yet, and the page finds
+ * a section by its id and leads on to its address of the moment. A section
+ * added here gets one once it is opened again.
  */
-useRegisterAdminBarContextButton(
-  computed(() => {
-    const opened = props.modalData.item;
-    if (!opened?.sectionUuid || !props.modalData.projectPublicId)
-      return undefined;
-    return {
-      to: {
-        href: sectionLinkDescription(opened.humanReadableSlug, opened.publicId),
-        external: true,
-      },
-      icon: 'visibility',
-      title: phrase.value.view_content_section,
-    };
-  }),
-);
+const pageUrl = computed(() => {
+  const opened = props.modalData.item;
+  const project = props.modalData.savedProject;
+  if (!opened?.sectionUuid || !project.publicId) return;
+  return buildProjectSectionUrl(
+    project.humanReadableSlug,
+    project.publicId,
+    opened.humanReadableSlug,
+    opened.publicId,
+  );
+});
 
 function removePeriod(index: number) {
   item.value.periods = item.value.periods.filter((_, i) => i !== index);
@@ -256,13 +284,19 @@ async function deleteItem() {
 <template>
   <ModalContainer ref="modalContainer" class="max-w-160">
     <template #header>
-      <div class="flex items-center gap-sm p-sm">
+      <div ref="headerRow" class="flex items-center gap-sm p-sm">
         <ModalTitle
           :icon="entityTypeIcon('project-section')"
           :title="phrase.content_section"
           class="flex-1"
         />
         <div class="flex items-center gap-xs">
+          <ModalHeaderButton
+            v-if="pageUrl"
+            icon="visibility"
+            :label="phrase.view_content_section"
+            :to="pageUrl"
+          />
           <AiEntityButton />
           <ModalHeaderButton
             v-if="exists"
@@ -276,21 +310,27 @@ async function deleteItem() {
             :label="phrase.close_modal"
             @click="closeModal"
           />
+          <!-- «Saved» and its check only once the project stored what was
+               handed over. -->
           <ModalHeaderButton
             variant="accent"
+            phone-icon="save"
+            :phone-done="isSaved"
             :label="phrase.save"
-            :disabled="!canSave"
-            @click="save"
+            :disabled="exists && !isDirty"
+            :reason="needs.reason.value"
+            @click="needs.submit()"
           >
-            {{ isDirty || !exists ? phrase.save : phrase.saved }}
+            {{ isSaved ? phrase.saved : phrase.save }}
           </ModalHeaderButton>
         </div>
       </div>
+      <HeaderErrorLine inset v-bind="needs.line.value" />
     </template>
 
     <div class="flex flex-col gap-md p-sm">
       <AiFormOffers />
-      <Field ai="field:title">
+      <Field ai="field:title" need="title">
         <div class="flex items-center justify-between gap-sm">
           <FieldLabel required>{{ phrase.content_section_title }}</FieldLabel>
           <span :data-title-popup="phrase.content_section_private_hint">
@@ -317,7 +357,7 @@ async function deleteItem() {
         <FieldLabel>{{ phrase.content_section_summary }}</FieldLabel>
         <FieldTextarea v-model="item.summary" />
       </Field>
-      <Field ai="periods">
+      <Field ai="periods" need="body-or-periods">
         <div class="flex items-center justify-between gap-sm">
           <FieldLabel>{{ phrase.section_periods }}</FieldLabel>
           <div ref="periodPopupAnchor">
@@ -366,7 +406,7 @@ async function deleteItem() {
         </div>
       </Field>
 
-      <Field>
+      <Field need="body-or-periods">
         <FieldLabel>{{ phrase.content_section_content }}</FieldLabel>
         <FieldContentEditor
           v-model="item.content"

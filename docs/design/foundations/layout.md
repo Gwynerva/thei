@@ -73,6 +73,8 @@ and under the sign-in, install, update and OAuth pages.
 - Label and value pairs stack on a phone; nothing is squeezed into narrow
   columns side by side.
 - Sticky headers and footers stay one slim row: on a phone they eat the view.
+  A sticky header's title is `text-lg` on a phone and `text-xl` from `sm:`,
+  and its Save is a square with a floppy disk (see [Buttons](../components/buttons.md)).
 - A word that does not fit gives way to its icon, as the tabs of
   `app/components/UnderlineTabs.vue` and a `collapsible` select do, still named
   in full for a screen reader and in a hint.

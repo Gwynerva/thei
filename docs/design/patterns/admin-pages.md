@@ -10,9 +10,24 @@ rather than from a switch.
 ## Headers
 
 - A form's header is a sticky glass row (`StickyGlassHeader`): the icon and
-  the title, then the controls, then the main action. The settings and "about
-  me" pages use `app/components/admin/AdminSaveHeader.vue`, whose button says
-  "Save" while there are changes and "Saved" when there are none.
+  the title, then the controls, then the main action. The forms of the
+  entities, the settings and "about me" use
+  `app/components/admin/AdminSaveHeader.vue`, whose button says "Create" for
+  something not made yet, "Save" while there are changes and "Saved" when
+  there are none.
+- Save stays at the top, at the end of the header, on every screen: on a
+  phone it is a square with a floppy disk (`app/components/admin/AdminSaveButton.vue`),
+  so the title and the header's squares keep to one row.
+- Under the header, a line says why a save failed or cannot be made
+  (`app/components/HeaderErrorLine.vue`, a modal's too): it fades in, wraps
+  as long as its words need with its cross at the end, and comes back for a
+  new press once closed. What a form still needs is said there after a press
+  of its Save or Ctrl+S (see [Buttons](../components/buttons.md)), shortly
+  enough to stay a line or two on a phone.
+- Every button of a header is one size: the ✦, delete and any other icon
+  are `Button`'s `size="icon"` squares, and Save is as tall, a square too on
+  a phone. A header's delete is never a padded text-size button. Under a finger
+  they grow together, to `size-11`.
 - Status is an icon with a hint; words only for what is urgent. Counts say
   what there is, without noise.
 - One control per meaning.
@@ -73,7 +88,8 @@ rather than from a switch.
   button that creates it (`app/components/admin/AdminEmptyList.vue`).
 - A search that finds nothing shows `face-dead`, says that nothing matched and
   offers to clear the search. The public site's `PublicEmptyState` uses the
-  same face.
+  same face; its `icon` says what else is missing — `tune`, the icon of the
+  filters themselves, where the search has nothing to narrow its results by.
 
 ## Suggest in place
 

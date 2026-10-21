@@ -3,6 +3,7 @@ import {
   messageBody,
   messageContent,
   messageExternalLinkUrls,
+  plainMarkdown,
   typedLines,
 } from '../../shared/ai-message-text';
 
@@ -117,5 +118,30 @@ describe('the words the owner typed', () => {
     expect(typedLines('a\\\nb')).toBe('a\\\nb');
     expect(typedLines('  just words  ')).toBe('just words');
     expect(typedLines('\n\n')).toBe('');
+  });
+});
+
+describe('the plain words of a text', () => {
+  const text = [
+    '## Found *two*',
+    'A [project](thei:project/p-1) and C# \\*notes\\*,',
+    'one line\\',
+    'and the next.',
+    '',
+    '- An item',
+    '> A quote',
+    '::media[A picture]{asset="a-1"}',
+  ].join('\n');
+
+  it('read on one line, a link by its words and every mark dropped', () => {
+    expect(plainMarkdown(text)).toBe(
+      'Found two A project and C# notes, one line and the next. An item A quote',
+    );
+  });
+
+  it('keep their lines apart when asked', () => {
+    expect(plainMarkdown(text, true)).toBe(
+      'Found two\nA project and C# notes,\none line\nand the next.\nAn item\nA quote',
+    );
   });
 });

@@ -52,6 +52,7 @@ const { viewable, mode, resolvedTitle, details, actionIcon } =
           :target="mode === 'link' && viewable ? '_blank' : undefined"
           :rel="mode === 'link' ? 'noopener noreferrer' : undefined"
           :download="mode === 'link' && !viewable ? '' : undefined"
+          :data-opens-viewer="mode === 'open' ? '' : undefined"
           class="truncate text-left font-semibold tracking-tight text-text-1
             no-underline transition-colors outline-none"
           :class="

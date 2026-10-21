@@ -113,11 +113,12 @@ async function load(options: { fresh?: boolean } = {}) {
 }
 
 async function more() {
-  if (next.value === undefined) return;
+  const after = next.value;
+  if (after === undefined) return;
   const ticket = reading;
-  try {
+  await aiAttempt(async () => {
     const page = await $fetch<AiSessionListResponse>('/api/admin/ai/sessions', {
-      query: params(next.value),
+      query: params(after),
     });
     if (ticket !== reading) return;
     const known = new Set(sessions.value.map((item) => item.sessionUuid));
@@ -127,9 +128,7 @@ async function more() {
     ];
     next.value = page.next;
     readMore = true;
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  }
+  });
 }
 
 let typing: ReturnType<typeof setTimeout> | undefined;
@@ -141,17 +140,31 @@ watch([filter, () => props.modelReady, () => props.about?.ref], () =>
   load({ fresh: true }),
 );
 
-// The list follows what happens in sessions without a stream of its own.
-let timer: ReturnType<typeof setInterval> | undefined;
+// The list follows what happens in sessions without a stream of its own:
+// every few seconds, and sooner while one of them answers, so it stops
+// saying «working» soon after the answer has come.
+let timer: ReturnType<typeof setTimeout> | undefined;
+let following = false;
 function stopFollowing() {
-  if (timer) clearInterval(timer);
+  following = false;
+  if (timer) clearTimeout(timer);
   timer = undefined;
 }
+function followOn() {
+  if (!following) return;
+  const answering = sessions.value.some((item) => item.state === 'running');
+  timer = setTimeout(
+    async () => {
+      if (document.visibilityState === 'visible') await load();
+      followOn();
+    },
+    answering ? 1500 : 5000,
+  );
+}
 onMounted(() => {
+  following = true;
   void load();
-  timer = setInterval(() => {
-    if (document.visibilityState === 'visible') void load();
-  }, 5000);
+  followOn();
 });
 onBeforeUnmount(() => {
   stopFollowing();
@@ -399,9 +412,18 @@ const spending = computed(() => {
           class="mx-1 mt-1.5"
           @reset-search="resetSearch"
         />
-        <p v-else class="px-2 pt-md text-center text-sm text-text-3">
-          {{ phrase.ai_sessions_empty }}
-        </p>
+        <!-- None yet: an invitation to the first, as every empty list
+             has — on a phone this list is all the page shows at first. -->
+        <AdminEmptyList
+          v-else
+          icon="ai-chat"
+          :title="phrase.ai_sessions_empty"
+          :description="phrase.ai_sessions_empty_description"
+          create-to="/admin/ai/?session=new"
+          :create-label="phrase.ai_session_new"
+          class="mx-1 mt-1.5"
+          data-sessions-empty
+        />
       </template>
       <button
         v-if="next !== undefined"

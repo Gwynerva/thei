@@ -103,7 +103,9 @@ async function restart() {
   <div>
     <StickyGlassHeader width="var(--width-wide)" :error="error">
       <div class="flex items-center justify-between gap-xs py-xs">
-        <h1 class="flex min-w-0 items-center gap-xs text-xl font-bold">
+        <h1
+          class="flex min-w-0 items-center gap-xs text-lg font-bold sm:text-xl"
+        >
           <Icon name="refresh" class="shrink-0" />
           <span class="truncate">{{ phrase.admin_updates }}</span>
         </h1>

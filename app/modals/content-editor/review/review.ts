@@ -20,6 +20,7 @@ import {
   type ReviewPart,
   type ReviewView,
 } from '#layers/thei/shared/content-review';
+import { browserStorage } from '#layers/thei/app/composables/browser-storage';
 
 /** What each kind of part is drawn with. */
 const KIND_ICONS: Record<ReviewPart['kind'], IconName> = {
@@ -155,23 +156,23 @@ export function reviewChangesLine(part: ReviewPart): string {
 const VIEW_KEY = 'thei-review-view';
 
 /** The owner's way of going through an edit, kept in this browser for all. */
+/**
+ * Until the owner picks one: what goes and what comes, so a correction is
+ * seen with what it replaces — a letter changed is no change to the eye
+ * when only the corrected words are shown.
+ */
+const DEFAULT_VIEW: ReviewView = 'diff';
+
 export function storedReviewView(): ReviewView {
-  try {
-    const value = localStorage.getItem(VIEW_KEY);
-    return REVIEW_VIEWS.includes(value as ReviewView)
-      ? (value as ReviewView)
-      : 'read';
-  } catch {
-    return 'read';
-  }
+  const value = browserStorage.read(VIEW_KEY);
+  return REVIEW_VIEWS.includes(value as ReviewView)
+    ? (value as ReviewView)
+    : DEFAULT_VIEW;
 }
 
+/** A browser that keeps nothing simply asks again next time. */
 export function storeReviewView(view: ReviewView) {
-  try {
-    localStorage.setItem(VIEW_KEY, view);
-  } catch {
-    // A browser that keeps nothing simply asks again next time.
-  }
+  browserStorage.write(VIEW_KEY, view);
 }
 
 /** The owner's word on an edit's parts so far, as its action keeps it. */

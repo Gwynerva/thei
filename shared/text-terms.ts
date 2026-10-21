@@ -1,100 +1,26 @@
-import { stemEnglish } from './language/stemmers/english';
-import { stemRussian } from './language/stemmers/russian';
-
 /**
- * Words as a comparison of texts sees them.
- *
- * Text is read in words, not characters, so a short word never matches inside
- * a longer one, and every word is reduced to its stem, so the forms of a word
- * count as the word. Russian and English words each go through their own
- * stemmer whatever the site's language, because a life is rarely written in
- * one language only; any other word is kept as it is.
+ * Texts compared as wholes: a text as a vector of its terms, how alike two
+ * are, a phrase standing whole in a text. The terms themselves are read by
+ * the language packs (`textTerms`, `shared/search/match.ts`).
  */
 
-/** Case, compatibility forms and «ё» set aside. */
+/**
+ * Case, compatibility forms and «ё» set aside, for comparing: never stored —
+ * the keys the database keeps are `shared/identity-key.ts`'s. Lower case by
+ * Unicode's own rules, never the server's locale.
+ */
 export function normalizeTermText(value: string): string {
-  return value.normalize('NFKC').toLocaleLowerCase().replaceAll('ё', 'е');
+  return value.normalize('NFKC').toLowerCase().replaceAll('ё', 'е');
 }
 
-let segmenter: Intl.Segmenter | undefined;
-
-/** The words of a text, normalized, in order. */
-export function wordTokens(text: string): string[] {
-  segmenter ??= new Intl.Segmenter(undefined, { granularity: 'word' });
-  const tokens: string[] = [];
-  for (const { segment, isWordLike } of segmenter.segment(
-    normalizeTermText(text),
-  )) {
-    if (isWordLike) tokens.push(segment);
-  }
-  return tokens;
-}
-
-const CYRILLIC_WORD = /^[а-я]+$/u;
-const LATIN_WORD = /^[a-z]+$/u;
-const POSSESSIVE = /['’]s?$/u;
-const STEM_CACHE_LIMIT = 100_000;
-const stems = new Map<string, string>();
-
-/** The stem of a normalized word. */
-export function stemTerm(token: string): string {
-  const cached = stems.get(token);
-  if (cached !== undefined) return cached;
-  const word = token.replace(POSSESSIVE, '');
-  const stem =
-    word.length < 3
-      ? word
-      : CYRILLIC_WORD.test(word)
-        ? russianStem(word)
-        : LATIN_WORD.test(word)
-          ? stemEnglish(word)
-          : word;
-  if (stems.size >= STEM_CACHE_LIMIT) stems.clear();
-  stems.set(token, stem);
-  return stem;
-}
-
-/**
- * Snowball leaves a vowel at the end of some stems and not of others of the
- * same word — «косплей» is «коспл», «косплея» is «коспле»; «музей», «музея»
- * likewise. Dropping what vowels remain at the end brings them together.
- */
-function russianStem(word: string) {
-  const stem = stemRussian(word);
-  const trimmed = stem.replace(/[аеиоуыэюяйь]+$/u, '');
-  return trimmed.length >= 2 ? trimmed : stem;
-}
-
-/** How often each stem occurs. */
+/** How often each term occurs. */
 export type TermCounts = Map<string, number>;
 
 export type TextTerms = {
   counts: TermCounts;
-  /** The first word each stem was met as, to show a person what matched. */
+  /** The first word each term was met as, to show a person what matched. */
   surfaces: Map<string, string>;
 };
-
-/**
- * The terms of a text. A title says more about a text than any sentence in
- * it, so its words count `titleWeight` times.
- */
-export function readTerms(
-  { title, text }: { title: string; text: string },
-  titleWeight = 2,
-): TextTerms {
-  const counts: TermCounts = new Map();
-  const surfaces = new Map<string, string>();
-  const add = (source: string, weight: number) => {
-    for (const token of wordTokens(source)) {
-      const stem = stemTerm(token);
-      counts.set(stem, (counts.get(stem) ?? 0) + weight);
-      if (!surfaces.has(stem)) surfaces.set(stem, token);
-    }
-  };
-  add(title, titleWeight);
-  add(text, 1);
-  return { counts, surfaces };
-}
 
 /** A text as a unit-length vector of TF-IDF weights. */
 export type TermVector = Map<string, number>;

@@ -1,6 +1,14 @@
 import type { IconName } from '#thei/icons';
-import type { AiActionItem, AiSessionItem } from '#layers/thei/shared/ai';
-import { stripMarks } from '#layers/thei/shared/content-edit-markdown/patch-core';
+import type {
+  AiActionItem,
+  AiEntityRef,
+  AiSessionItem,
+} from '#layers/thei/shared/ai';
+import { plainMarkdown } from '#layers/thei/shared/ai-message-text';
+import {
+  contentPlainText,
+  type ContentOutputData,
+} from '#layers/thei/shared/content';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 import { isContentEntityType } from '#layers/thei/shared/content-link';
 
@@ -86,6 +94,112 @@ export function fieldValueWords(value: unknown): string {
     return phrase.value.ai_action_flag[value ? 'on' : 'off'];
   if (Array.isArray(value)) return value.map(String).join(', ');
   return value === null || value === undefined ? '' : publicText(String(value));
+}
+
+/** Fields whose words a change writes in editing Markdown. */
+const MARKDOWN_FIELDS = new Set(['content', 'body', 'notes', 'about']);
+
+/** A text as a form keeps it: its blocks. */
+function isStoredText(value: unknown): value is { data: ContentOutputData } {
+  const data = (value as { data?: { blocks?: unknown } } | null)?.data;
+  return Boolean(data && Array.isArray(data.blocks));
+}
+
+/** An item of a list by the first of its words that it has. */
+function itemWords(item: unknown, keys: readonly string[]): string {
+  if (typeof item === 'string') return publicText(item);
+  const record = (item ?? {}) as Record<string, unknown>;
+  const words = keys
+    .map((key) => record[key])
+    .find((word) => typeof word === 'string' && word.trim());
+  return words ? publicText(String(words)) : '';
+}
+
+/** A relation by the entity it leads to: as a form keeps it, or by its ref. */
+export function relationWords(
+  item: unknown,
+  refs: Record<string, AiEntityRef>,
+): string {
+  const relation = (item ?? {}) as {
+    ref?: string;
+    entityType?: string;
+    entityId?: string;
+    title?: string;
+    date?: string;
+  };
+  if (relation.title)
+    return aiEntityName({ type: relation.entityType, title: relation.title });
+  if (relation.date)
+    return aiEntityName({ type: 'diary-entry', title: relation.date });
+  const end = relation.ref
+    ? refs[relation.ref]
+    : Object.values(refs).find(
+        (ref) =>
+          ref.type === relation.entityType && ref.id === relation.entityId,
+      );
+  return end ? aiEntityName(end) : '';
+}
+
+/**
+ * A field's value as a card says it, in the shape a proposal gives it or a
+ * form keeps it, named as a change names the field: a text by its first
+ * words; a list item by item — a file by its title or caption, the others
+ * counted, a link by its name or note else its address, a tag or a section
+ * by its title, a relation by what it leads to, a status by its words; a
+ * picture of its own said to be there; access by its name; an address as
+ * typed. The owner's words formatted, as everywhere they are shown.
+ */
+export function fieldSaid(
+  field: string,
+  value: unknown,
+  options: { entity?: string; refs?: Record<string, AiEntityRef> } = {},
+): string | string[] {
+  const said = phrase.value;
+  if (value === null || value === undefined) return '';
+  if (isStoredText(value))
+    return publicText(
+      clipped(contentPlainText(value.data).replace(/\s+/g, ' ').trim(), 200),
+    );
+  if (
+    typeof value === 'string' &&
+    (MARKDOWN_FIELDS.has(field) ||
+      (field === 'description' && options.entity === 'project'))
+  )
+    return publicText(plainWords(value, 200));
+  if (field === 'slug' || field === 'publicId') return String(value);
+  if (field === 'access')
+    return (
+      said.ai_action_access[value as keyof typeof said.ai_action_access] ??
+      String(value)
+    );
+  if (field === 'icon' || field === 'banner' || field === 'favicon')
+    return value ? said.ai_action_flag.on : '';
+  // A project's button as its form keeps it, and its status lines: words.
+  if (field === 'actionText' && typeof value === 'object')
+    return publicText(String((value as { text?: unknown }).text ?? ''));
+  if (
+    field === 'statuses' &&
+    !Array.isArray(value) &&
+    typeof value === 'object'
+  )
+    return Object.values(value).map((text) => publicText(String(text)));
+  if (!Array.isArray(value))
+    return typeof value === 'object' ? '' : fieldValueWords(value);
+  if (field === 'files' || field === 'showcaseFiles') {
+    const named = value
+      .map((item) => itemWords(item, ['title', 'caption']))
+      .filter(Boolean);
+    const unnamed = value.length - named.length;
+    return [...named, ...(unnamed ? [said.content_file_count(unnamed)] : [])];
+  }
+  return value
+    .map((item) =>
+      field === 'relations'
+        ? relationWords(item, options.refs ?? {})
+        : itemWords(item, ['title', 'name', 'note', 'text']) ||
+          String((item as { url?: unknown } | null)?.url ?? ''),
+    )
+    .filter(Boolean);
 }
 
 /**
@@ -186,13 +300,20 @@ export function compactAmount(value: number): string {
   return formatCompactNumber(value, language.value.code);
 }
 
+/** Words cut at `max`, an ellipsis saying so. */
+function clipped(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
 /** The words of editing Markdown, its marks and addresses dropped, on one line. */
 export function plainWords(markdown: string, max = 400): string {
-  const line = stripMarks(markdown)
-    .replace(/^#+\s*/gm, '')
-    .replace(/^\s*[-*>]\s+/gm, '')
-    .replace(/::\w+(\[[^\]]*\])?\{[^}]*\}/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return line.length > max ? `${line.slice(0, max - 1)}…` : line;
+  return clipped(plainMarkdown(markdown), max);
+}
+
+/**
+ * The words of editing Markdown as lines: a heading and the paragraph after
+ * it stay apart, the marks and addresses dropped. For a text shown whole.
+ */
+export function plainLines(markdown: string, max = 600): string {
+  return clipped(plainMarkdown(markdown, true), max);
 }

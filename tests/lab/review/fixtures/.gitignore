@@ -1,0 +1,9 @@
+# `make.ts` writes `runs/`. Running `lab jobs --pending`, `lab validate` or
+# `lab report` over it by hand adds review folders, validations and a
+# report, which are not part of the fixture.
+runs/*/report/
+runs/*/jobs/*/reviews/*
+!runs/fixture/jobs/diary-today.novice/reviews/R1/
+!runs/fixture/jobs/find-and-read.guest/reviews/R1/
+!runs/fixture/jobs/find-and-read.guest/reviews/R2/
+runs/*/jobs/*/reviews/*/validation.json

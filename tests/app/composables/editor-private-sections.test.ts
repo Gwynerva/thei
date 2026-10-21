@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createEditorPrivateSections } from '../../../app/composables/editor-private-sections';
+import {
+  createEditorPrivateSections,
+  editorPrivateSectionArrivals,
+  editorPrivateSectionEdgesToKeep,
+  editorPrivateSectionRanges,
+  editorPrivateSectionStepOver,
+} from '../../../app/composables/editor-private-sections';
 
 interface SectionEdge {
   sectionId: string;
@@ -76,12 +82,21 @@ function createEditor(initial: MockBlock[] = []) {
     needToFocus?: boolean;
   }> = [];
   const moves: Array<[toIndex: number, fromIndex: number]> = [];
+  const deletions: string[] = [];
+  /** Where the caret was put, by block and place. */
+  const carets: Array<[id: string, position?: string]> = [];
   let nextId = 0;
   const editor = {
-    caret: { setToBlock: () => true },
+    caret: {
+      setToBlock(target: MockBlock, position?: string) {
+        carets.push([target.id, position]);
+        return true;
+      },
+    },
     blocks: {
       getBlocksCount: () => blocks.length,
       getBlockByIndex: (index: number) => blocks[index],
+      getById: (id: string) => blocks.find((block) => block.id === id) ?? null,
       getBlockIndex: (id: string) =>
         blocks.findIndex((block) => block.id === id),
       insert(
@@ -105,7 +120,11 @@ function createEditor(initial: MockBlock[] = []) {
         insertions.push({ type, index, needToFocus });
         return inserted;
       },
-      delete: (index: number) => blocks.splice(index, 1),
+      delete(index: number) {
+        const deleted = blocks.splice(index, 1);
+        deletions.push(...deleted.map((item) => item.id));
+        return deleted;
+      },
       // Editor.js's own order: where to, then which.
       move(toIndex: number, fromIndex: number) {
         moves.push([toIndex, fromIndex]);
@@ -119,7 +138,22 @@ function createEditor(initial: MockBlock[] = []) {
     blocks,
     insertions,
     moves,
+    deletions,
+    carets,
     order: () => blocks.map((block) => block.id),
+    /** The text as the stored edges read it: `[id`, `]id`, or the block's id. */
+    outline: () =>
+      blocks.map((item) => {
+        const bracket = item.holder.querySelector('[data-private-section-id]');
+        if (!bracket) return item.id;
+        const edge = bracket.dataset.privateSectionEdge === 'end' ? ']' : '[';
+        return `${edge}${bracket.dataset.privateSectionId}`;
+      }),
+    /** The ids of the blocks marked as inside a section. */
+    members: () =>
+      blocks
+        .filter((item) => item.holder.dataset.privateSectionMember === 'true')
+        .map((item) => item.id),
   };
 }
 
@@ -266,5 +300,290 @@ describe('Editor.js private section moves', () => {
 
     expect(privateSections.handleChange(moved(s2, 3, 2))).toBe(false);
     expect(order()).toEqual(['p0', 's1', 'p1', 'e1', 'p2', 's2', 'p3', 'e2']);
+  });
+});
+
+describe('Editor.js private section edges', () => {
+  it('puts back an edge moved past its partner, and refuses the drag', () => {
+    const { editor, blocks, order, members } = createEditor(twoSections());
+    const privateSections = createEditorPrivateSections(editor as never);
+    // The end of the first section above its start would read as a section
+    // around "Before", and leave "Inside one" public.
+    expect(privateSections.canMove(3, 0)).toBe(false);
+    expect(privateSections.canMove(3, 1)).toBe(false);
+
+    const e1 = blocks[3]!;
+    editor.blocks.move(1, 3);
+    expect(privateSections.handleChange(moved(e1, 3, 1))).toBe(false);
+    expect(order()).toEqual(['p0', 's1', 'p1', 'e1', 'p2', 's2', 'p3', 'e2']);
+    expect(members()).toEqual(['p1', 'p3']);
+  });
+
+  it('removes a section a move left empty at once, both edges together', () => {
+    const { editor, blocks, order, members, outline } =
+      createEditor(twoSections());
+    const privateSections = createEditorPrivateSections(editor as never);
+    // The only block of the first section, dragged into the second.
+    expect(privateSections.canMove(2, 5)).toBe(true);
+    const p1 = blocks[2]!;
+    editor.blocks.move(5, 2);
+
+    expect(privateSections.handleChange(moved(p1, 2, 5))).toBe(true);
+    expect(order()).toEqual(['p0', 'p2', 's2', 'p1', 'p3', 'e2']);
+    expect(members()).toEqual(['p1', 'p3']);
+    expect(outline()).toEqual(['p0', 'p2', '[two', 'p1', 'p3', ']two']);
+    // Their removal is reported in the next batch, and is not a change.
+    expect(
+      privateSections.handleChange([
+        removed(block('s1', { sectionId: 'one', edge: 'start' })),
+        removed(block('e1', { sectionId: 'one', edge: 'end' })),
+      ]),
+    ).toBe(false);
+  });
+
+  it('removes a section whose only block was deleted', () => {
+    const { editor, blocks, order } = createEditor(twoSections());
+    const privateSections = createEditorPrivateSections(editor as never);
+    const [p1] = blocks.splice(2, 1);
+
+    expect(privateSections.handleChange(removed(p1!))).toBe(true);
+    expect(order()).toEqual(['p0', 'p2', 's2', 'p3', 'e2']);
+  });
+
+  it('keeps a section made in this sitting when it is left empty', () => {
+    const start = block('start', {
+      sectionId: 'fresh',
+      edge: 'start',
+      createPair: true,
+    });
+    const { editor, blocks, order } = createEditor([block('p0'), start]);
+    const privateSections = createEditorPrivateSections(editor as never);
+    privateSections.handleChange(added(start));
+    const [line] = blocks.splice(2, 1);
+
+    expect(privateSections.handleChange(removed(line!))).toBe(true);
+    expect(order()).toEqual(['p0', 'start', 'inserted-1']);
+  });
+
+  it('shrinks a section by its end, letting the block it leaves go public', () => {
+    const { editor, blocks, order } = createEditor(twoSections());
+    const privateSections = createEditorPrivateSections(editor as never);
+    // A deliberate move of the edge itself, past the only block.
+    const e1 = blocks[3]!;
+    editor.blocks.move(2, 3);
+
+    expect(privateSections.handleChange(moved(e1, 3, 2))).toBe(true);
+    expect(order()).toEqual(['p0', 'p1', 'p2', 's2', 'p3', 'e2']);
+  });
+
+  it('takes the settled partner of a removed edge, never the first block with its id', () => {
+    const { editor, blocks, order, outline, members } =
+      createEditor(twoSections());
+    const privateSections = createEditorPrivateSections(editor as never);
+    // A copy of the first section pasted at the end, under its old id.
+    blocks.push(
+      block('c-start', { sectionId: 'one', edge: 'start' }),
+      block('c-inside'),
+      block('c-end', { sectionId: 'one', edge: 'end' }),
+    );
+    expect(
+      privateSections.handleChange(blocks.slice(8).map((item) => added(item))),
+    ).toBe(true);
+    const copy = outline()[8]!.slice(1);
+    expect(copy).not.toBe('one');
+    expect(outline().slice(8)).toEqual([`[${copy}`, 'c-inside', `]${copy}`]);
+    expect(members()).toEqual(['p1', 'p3', 'c-inside']);
+
+    // Deleting the copy's start takes the copy's end, not the original's.
+    const [cStart] = blocks.splice(8, 1);
+    expect(privateSections.handleChange(removed(cStart!))).toBe(true);
+    expect(order()).toEqual([
+      'p0',
+      's1',
+      'p1',
+      'e1',
+      'p2',
+      's2',
+      'p3',
+      'e2',
+      'c-inside',
+    ]);
+    expect(members()).toEqual(['p1', 'p3']);
+  });
+
+  it('removes the partner of a removed edge and keeps the blocks between', () => {
+    const { blocks, order, members, editor } = createEditor(twoSections());
+    const privateSections = createEditorPrivateSections(editor as never);
+    const [s2] = blocks.splice(5, 1);
+
+    expect(privateSections.handleChange(removed(s2!))).toBe(true);
+    expect(order()).toEqual(['p0', 's1', 'p1', 'e1', 'p2', 'p3']);
+    expect(members()).toEqual(['p1']);
+  });
+
+  it('makes a section public from its menu: both edges go, as a change, and the caret goes inside', () => {
+    const { editor, blocks, order, members, carets } =
+      createEditor(twoSections());
+    const privateSections = createEditorPrivateSections(editor as never);
+    const [s2, e2] = [blocks[5]!, blocks[7]!];
+
+    privateSections.removeSection('two');
+    expect(order()).toEqual(['p0', 's1', 'p1', 'e1', 'p2', 'p3']);
+    expect(carets).toEqual([['p3', 'start']]);
+    // The owner's removals: a change, and nothing else goes with them.
+    expect(privateSections.handleChange([removed(s2), removed(e2)])).toBe(true);
+    expect(order()).toEqual(['p0', 's1', 'p1', 'e1', 'p2', 'p3']);
+    expect(members()).toEqual(['p1']);
+
+    // A section gone already is left alone.
+    privateSections.removeSection('two');
+    expect(order()).toEqual(['p0', 's1', 'p1', 'e1', 'p2', 'p3']);
+  });
+});
+
+describe('pasted private sections', () => {
+  it('drops an edge pasted without its partner', () => {
+    const { editor, blocks, order, deletions } = createEditor(twoSections());
+    const privateSections = createEditorPrivateSections(editor as never);
+    const lone = block('lone', { sectionId: 'one', edge: 'start' });
+    blocks.splice(5, 0, lone);
+
+    expect(privateSections.handleChange(added(lone))).toBe(true);
+    expect(deletions).toEqual(['lone']);
+    expect(order()).toEqual(['p0', 's1', 'p1', 'e1', 'p2', 's2', 'p3', 'e2']);
+  });
+
+  it('undoes a section pasted inside another, keeping its blocks there', () => {
+    const { editor, blocks, order, members } = createEditor(twoSections());
+    const privateSections = createEditorPrivateSections(editor as never);
+    const pasted = [
+      block('c-start', { sectionId: 'one', edge: 'start' }),
+      block('c-inside'),
+      block('c-end', { sectionId: 'one', edge: 'end' }),
+    ];
+    blocks.splice(7, 0, ...pasted);
+
+    expect(
+      privateSections.handleChange(pasted.map((item) => added(item))),
+    ).toBe(true);
+    expect(order()).toEqual([
+      'p0',
+      's1',
+      'p1',
+      'e1',
+      'p2',
+      's2',
+      'p3',
+      'c-inside',
+      'e2',
+    ]);
+    expect(members()).toEqual(['p1', 'p3', 'c-inside']);
+  });
+
+  it('removes a pasted section with nothing in it', () => {
+    const { editor, blocks, order } = createEditor(twoSections());
+    const privateSections = createEditorPrivateSections(editor as never);
+    const pasted = [
+      block('c-start', { sectionId: 'one', edge: 'start' }),
+      block('c-end', { sectionId: 'one', edge: 'end' }),
+    ];
+    blocks.push(...pasted);
+
+    privateSections.handleChange(pasted.map((item) => added(item)));
+    expect(order()).toEqual(['p0', 's1', 'p1', 'e1', 'p2', 's2', 'p3', 'e2']);
+  });
+});
+
+describe('moves told while a whole text comes in', () => {
+  it('holds them, and puts back an invalid one once the text is in', () => {
+    const { editor, blocks, order } = createEditor(twoSections());
+    const privateSections = createEditorPrivateSections(editor as never);
+    const s1 = blocks[1]!;
+    editor.blocks.move(6, 1);
+    privateSections.holdMoves(moved(s1, 1, 6));
+    expect(order()).toEqual(['p0', 'p1', 'e1', 'p2', 's2', 'p3', 's1', 'e2']);
+
+    expect(privateSections.releaseMoves()).toBe(false);
+    expect(order()).toEqual(['p0', 's1', 'p1', 'e1', 'p2', 's2', 'p3', 'e2']);
+    expect(privateSections.releaseMoves()).toBe(false);
+  });
+
+  it('keeps a valid one, and only the moves', () => {
+    const { editor, blocks, order } = createEditor(twoSections());
+    const privateSections = createEditorPrivateSections(editor as never);
+    const p2 = blocks[4]!;
+    editor.blocks.move(2, 4);
+    privateSections.holdMoves([moved(p2, 4, 2), removed(blocks[1]!)]);
+
+    expect(privateSections.releaseMoves()).toBe(true);
+    expect(order()).toEqual(['p0', 's1', 'p2', 'p1', 'e1', 's2', 'p3', 'e2']);
+  });
+});
+
+describe('private section helpers', () => {
+  const edge = (id: string, sectionId: string) => ({ id, sectionId });
+  const layout = [
+    { id: 'p0' },
+    edge('s1', 'one'),
+    { id: 'p1' },
+    edge('e1', 'one'),
+    { id: 'p2' },
+    edge('s2', 'two'),
+    edge('x', 'stray'),
+    { id: 'p3' },
+    edge('e2', 'two'),
+  ];
+
+  it('reads strays as plain blocks', () => {
+    expect(editorPrivateSectionRanges(layout)).toEqual([
+      { sectionId: 'one', start: 1, end: 3 },
+      { sectionId: 'two', start: 5, end: 8 },
+    ]);
+  });
+
+  it('keeps the edges of a section a selection covers in part', () => {
+    expect(
+      editorPrivateSectionEdgesToKeep(layout, new Set(['p0', 's1', 'p1'])),
+    ).toEqual(['s1']);
+    expect(
+      editorPrivateSectionEdgesToKeep(
+        layout,
+        new Set(['p0', 's1', 'p1', 'e1', 'p2']),
+      ),
+    ).toEqual([]);
+    // A stray is never taken by the keyboard either.
+    expect(
+      editorPrivateSectionEdgesToKeep(layout, new Set(['s2', 'x', 'p3', 'e2'])),
+    ).toEqual(['x']);
+  });
+
+  it('steps over edges to the nearest block', () => {
+    expect(editorPrivateSectionStepOver(layout, 1, -1)).toBe(0);
+    expect(editorPrivateSectionStepOver(layout, 5, 1)).toBe(7);
+    expect(editorPrivateSectionStepOver(layout, 8, 1)).toBeUndefined();
+    expect(
+      editorPrivateSectionStepOver([edge('s', 'a')], 0, -1),
+    ).toBeUndefined();
+  });
+
+  it('turns pasted edges into a section, or drops them', () => {
+    const pasted = [
+      ...layout.slice(0, 4),
+      edge('c1', 'one'),
+      { id: 'c' },
+      edge('c2', 'one'),
+      edge('lone', 'two'),
+      ...layout.slice(4),
+    ];
+    expect(
+      editorPrivateSectionArrivals(pasted, new Set(['c1', 'c2', 'lone'])),
+    ).toEqual({ pairs: [['c1', 'c2']], dropped: ['lone'] });
+    const inside = [...layout.slice(0, 2), edge('c1', 'q'), edge('c2', 'q')];
+    expect(
+      editorPrivateSectionArrivals(
+        [...inside, ...layout.slice(2)],
+        new Set(['c1', 'c2']),
+      ),
+    ).toEqual({ pairs: [], dropped: ['c1', 'c2'] });
   });
 });

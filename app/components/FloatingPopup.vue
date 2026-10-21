@@ -9,6 +9,7 @@ import {
   POPUP_ARROW_TIP,
   usePopupPlacement,
 } from '#layers/thei/app/composables/popup-placement';
+import { scrollMotion } from '#layers/thei/app/modals/layer-motion';
 
 defineOptions({ inheritAttrs: false });
 
@@ -279,6 +280,33 @@ watch(
   { immediate: true },
 );
 
+/**
+ * A sheet never hides what it was opened from: an anchor it would cover is
+ * scrolled up to just above it, so the owner still sees the field asked
+ * about. Measured from the sheet's height, as it stands once it has come up.
+ */
+function liftAnchor(element: HTMLElement) {
+  const anchor = props.anchor;
+  if (!(anchor instanceof Element)) return;
+  const sheetTop = window.innerHeight - element.offsetHeight;
+  const room = Number.parseFloat(getComputedStyle(element).fontSize) || 16;
+  const below = anchor.getBoundingClientRect().bottom - (sheetTop - room);
+  if (below <= 0) return;
+  // The box it scrolls in: a modal's, or the page.
+  let box: Element | Window = window;
+  for (let node = anchor.parentElement; node; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node);
+    if (
+      (overflowY === 'auto' || overflowY === 'scroll') &&
+      node.scrollHeight > node.clientHeight
+    ) {
+      box = node;
+      break;
+    }
+  }
+  box.scrollBy({ top: below, behavior: scrollMotion() });
+}
+
 // Opened once drawn where it stands: until then it may still be hidden as
 // its anchor was when it last closed, and nothing hidden takes the focus.
 let whenPositioned: (() => void) | undefined;
@@ -297,7 +325,7 @@ watch(
       update();
       if (!isPositioned.value)
         await new Promise<void>((resolve) => (whenPositioned = resolve));
-    }
+    } else liftAnchor(element);
     if (!open.value || !floatingElement.value) return;
     await nextTick();
     emit('opened');
@@ -368,9 +396,15 @@ defineExpose({ element: floatingElement });
               : [
                   'fixed rounded-normal border',
                   'max-w-[calc(100dvw-var(--spacing-window)-var(--spacing-window))]',
+                  // Measured first at its full width, before the room is
+                  // known: left to shrink to its content, a content that
+                  // sizes itself by its box (`@container`) would make it a
+                  // thin, tall strip, too tall for above or below — and a
+                  // popup beside its anchor near the window's edge would
+                  // stay squeezed there for good.
                   fitContent
                     ? 'w-fit'
-                    : 'w-[min(var(--floating-popup-max-width),var(--floating-popup-available-width))]',
+                    : 'w-[min(var(--floating-popup-max-width),var(--floating-popup-available-width,100dvw))]',
                 ]
           "
         >

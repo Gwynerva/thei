@@ -1,3 +1,4 @@
+import { sessionModel } from '../../thei/ai/model/settings';
 import { aiWaiting } from '../../thei/ai/sessions/view';
 
 export default defineEventHandler(async () => {
@@ -13,6 +14,9 @@ export default defineEventHandler(async () => {
     // Whether anything about AI is shown: with it off, the admin pages ask
     // nothing about it.
     aiEnabled,
+    // Whether the site's own model answers: a ✦ that asks it is shown only
+    // then.
+    aiModelReady: aiEnabled && Boolean(sessionModel()),
     // What waits for the owner in sessions: actions and questions.
     aiWaiting: aiEnabled ? aiWaiting() : 0,
   };

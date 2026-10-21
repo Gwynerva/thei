@@ -3,6 +3,7 @@ import type { RelationEntityType } from '../relation';
 import type { ProofreadCategory, TidyCommentKind } from '../ai-revise';
 import type { AiActionKind } from '../ai-actions';
 import type { ContentFileSkip } from '../content-file-placement';
+import type { SearchFindWhere, SearchKind } from '../search/api';
 
 export const languagesInfo = {
   en: 'English',
@@ -12,6 +13,21 @@ export const languagesInfo = {
 export const languageCodes = Object.keys(languagesInfo) as LanguageCode[];
 
 export type LanguageCode = keyof typeof languagesInfo;
+
+/** The kinds of field a ✦ offers ready requests for. */
+export type AiFieldAskKind =
+  | 'title'
+  | 'summary'
+  | 'description'
+  | 'synonyms'
+  | 'slogan'
+  | 'reminder'
+  | 'periods'
+  | 'tags'
+  | 'relations'
+  | 'text'
+  | 'file'
+  | 'other';
 
 export type LanguageSizeUnits = {
   b: string;
@@ -120,7 +136,22 @@ export type LanguagePhrases = {
   asset_library_more: string;
   asset_library_insert: string;
   asset_library_usage: string;
+  /** The library's filter by description: its name and its choices. */
+  asset_library_described: string;
+  asset_library_described_any: string;
+  asset_library_described_none: string;
+  asset_library_described_some: string;
   asset_used_elsewhere: string;
+  /** The visitor's window: the group of what the file is. */
+  asset_about: string;
+  /**
+   * A file named by what it is, when it has no title: a PDF document, a ZIP
+   * archive; `other` by its extension.
+   */
+  asset_format: (
+    kind: 'pdf' | 'zip' | 'table' | 'text' | 'markdown' | 'html' | 'other',
+    extension: string,
+  ) => string;
   asset_library_properties: string;
   asset_library_settings: string;
   asset_recipe_original: string;
@@ -159,6 +190,13 @@ export type LanguagePhrases = {
   asset_library_held_by_ai_line: string;
   asset_open_place: (title: string) => string;
   asset_open_variant: string;
+  asset_preview_frame: string;
+  asset_preview_frame_auto: string;
+  asset_preview_frame_take: (time: string) => string;
+  asset_preview_frame_take_hint: string;
+  asset_preview_frame_seek: string;
+  asset_preview_frame_error: string;
+  asset_preview_frame_partial: (count: number) => string;
   asset_description_save: string;
   asset_description_saved: string;
   asset_description_conflict: string;
@@ -216,6 +254,8 @@ export type LanguagePhrases = {
   profile_facts: string;
   profile_facts_hint: string;
   profile_custom_facts: string;
+  /** What is wrong with a fact left half written, said after the facts' name. */
+  profile_fact_incomplete: string;
   profile_nickname: string;
   profile_birth_date: string;
   profile_field: string;
@@ -334,6 +374,7 @@ export type LanguagePhrases = {
   llms_txt_diary: string;
   llms_txt_tags: string;
   llms_txt_pages: string;
+  llms_txt_search: string;
   llms_txt_sitemap: string;
   llms_txt_markdown_title: string;
   llms_txt_markdown: string;
@@ -358,9 +399,59 @@ export type LanguagePhrases = {
   search_tag_exclude: (tag: string) => string;
   search_tag_remove: (tag: string) => string;
   search_reset_filters: string;
+  search_filter_remove: (filter: string) => string;
   search_results_count: (projects: number, events: number) => string;
   search_empty: string;
   search_empty_description: string;
+  /** A kind of result, one of it: «Проект». */
+  search_kind: (kind: SearchKind) => string;
+  /** A kind of result, as a group of them: «Проекты». */
+  search_kind_group: (kind: SearchKind) => string;
+  /** Where in a result a find stands. */
+  search_where: (where: SearchFindWhere) => string;
+  search_where_section: (title: string) => string;
+  search_access_private: string;
+  search_access_link: string;
+  search_access_private_short: string;
+  search_access_link_short: string;
+  search_edit: string;
+  search_more_finds: (count: number) => string;
+  search_fewer_finds: string;
+  search_all_of_kind: (count: number) => string;
+  search_all_results: (count: number) => string;
+  search_show_results: (count: number) => string;
+  search_keyboard: (read: string) => string;
+  search_partial: string;
+  search_building: (percent: number) => string;
+  search_failed: string;
+  search_busy: string;
+  search_quick_hint: string;
+  search_years: string;
+  search_sort: string;
+  search_sort_best: string;
+  search_sort_new: string;
+  search_sort_old: string;
+  search_dated: (
+    by: 'added' | 'shown' | 'last-used' | 'first-used',
+    day: string,
+  ) => string;
+  search_no_filters: string;
+  search_year_count: (year: number, count: number) => string;
+  search_recent: string;
+  search_history: string;
+  search_history_clear: string;
+  search_actions: string;
+  search_action_diary_today: string;
+  search_action_diary_today_new: string;
+  search_action_diary_day: (day: string) => string;
+  search_action_diary_day_new: (day: string) => string;
+  search_action_edit: (title: string) => string;
+  search_action_view: (title: string) => string;
+  search_action_section: string;
+  search_action_new_project: (title: string) => string;
+  search_action_new_event: (title: string) => string;
+  search_action_new_page: (title: string) => string;
+  search_action_ask_ai: (text: string) => string;
   forbidden_title: string;
   forbidden_description: string;
   not_found_title: string;
@@ -420,12 +511,16 @@ export type LanguagePhrases = {
   site_url: string;
   site_url_hint: string;
   site_url_invalid: string;
+  /** The same, shortly, after the field's label in a form's line. */
+  site_url_invalid_short: string;
   site_url_rebuild_pending: (base: string) => string;
   site_url_robots_title: string;
   site_url_robots_hint: string;
   analytics: string;
   analytics_description: string;
   analytics_invalid: string;
+  /** The same, shortly, after the field's label in a form's line. */
+  analytics_invalid_short: string;
   analytics_google_tag: string;
   analytics_google_tag_hint: string;
   analytics_google_verification: string;
@@ -798,6 +893,16 @@ export type LanguagePhrases = {
   tag_public_id_taken: string;
   tag_icon_not_found: string;
   create: string;
+  /** Why a form cannot be saved yet: the required fields left empty, by their labels. */
+  form_required_missing: (fields: string[]) => string;
+  /** The same, the first fields named and the others counted. */
+  form_required_missing_more: (fields: string[], more: number) => string;
+  /** The cross that hides a form's error line under its header. */
+  form_error_dismiss: string;
+  /** Two fields either of which will do, by their labels. */
+  form_either: (first: string, second: string) => string;
+  /** The fields filled in a way that cannot be saved, by their labels. */
+  form_fields_to_correct: (fields: string[]) => string;
   edit_project: string;
   view_project: string;
   unsaved_changes_confirm: string;
@@ -857,6 +962,8 @@ export type LanguagePhrases = {
   project_action_background_repeat_y: string;
   project_action_background_repeat_both: string;
   project_action_issues: string;
+  /** What the button still needs, after its section's name: «provide …». */
+  project_action_needs: (issues: string) => string;
   project_action_issue_text: string;
   project_action_issue_text_length: (max: number) => string;
   project_action_issue_url: string;
@@ -980,6 +1087,7 @@ export type LanguagePhrases = {
   content_private_section: string;
   content_private_section_start: string;
   content_private_section_end: string;
+  content_private_section_remove: string;
   content_editor_i18n: EditorJsPhrases;
   content_asset_pick_error: string;
   content_media_pending_confirm: string;
@@ -1020,6 +1128,8 @@ export type LanguagePhrases = {
   diary_content_hint: string;
   diary_date_already_taken: string;
   diary_date_taken_open: string;
+  /** What is wrong with a day that already holds an entry, said after its label. */
+  diary_date_taken: string;
   diary_seo_title: string;
   diary_seo_description: string;
   diary_entry_seo_description: (date: string) => string;
@@ -1355,7 +1465,18 @@ export type LanguagePhrases = {
   /** The grid of blocks the "+" opens. */
   content_block_toolbox: string;
   ai_template_run: string;
+  /** A check with nothing to look at, and nothing looked at before either. */
   ai_template_nothing_new: (title: string) => string;
+  /** A check with nothing new: all of it looked at, so many of its subjects. */
+  ai_template_looked_all: (
+    title: string,
+    looked: number,
+    key: import('../ai-template').AiBuiltinTemplateKey,
+  ) => string;
+  /** Where a check with nothing new last looked, while proposals wait there. */
+  ai_template_last_open: string;
+  /** A check with nothing new looks at all of it again, from the start. */
+  ai_template_again: string;
   ai_template_nothing_here: (title: string) => string;
   ai_template_edit: string;
   ai_template_running: string;
@@ -1393,8 +1514,15 @@ export type LanguagePhrases = {
   /** The dashboard's group of sessions done within the week. */
   ai_session_recent: string;
   ai_session_waiting: (count: number) => string;
+  /** A new session sent, until it opens. */
+  ai_session_starting: string;
   ai_sessions_archive_note: string;
   ai_sessions_empty: string;
+  /** Under it: what a session is, in a newcomer's words. */
+  ai_sessions_empty_description: string;
+  /** A session's long list of what it is about, shown a few at first. */
+  ai_session_about_more: (count: number) => string;
+  ai_session_about_less: string;
   ai_sessions_more: string;
   ai_sessions_back: string;
   ai_no_model_title: string;
@@ -1449,6 +1577,75 @@ export type LanguagePhrases = {
   >;
   ai_notice_connection: string;
   ai_comment_on: (what: string) => string;
+  /** The hint of a proposed description's file, which opens its window. */
+  ai_action_open_file: string;
+  /** The ✦ of a field, asking about it: its hint and its box. */
+  ai_field_ask: (field: string) => string;
+  ai_field_ask_placeholder: string;
+  /** The ✦ of a text's editor: its name, what it asks about, its field. */
+  ai_editor_ask: string;
+  ai_editor_ask_about: (title: string) => string;
+  ai_editor_ask_placeholder: string;
+  /** Answered with no edit of the text to go through. */
+  ai_editor_ask_nothing: string;
+  /** While the model answers what a field was asked. */
+  ai_field_asking: string;
+  /** The model answered a field's ask, proposing nothing. */
+  ai_field_ask_nothing: string;
+  /** The link to the session of a field's ask. */
+  ai_field_ask_open: string;
+  /** Ready requests of a field's ✦, by field. */
+  /** A field's ready requests, by the kind of field. */
+  ai_field_ask_quick: Record<AiFieldAskKind, readonly string[]>;
+  /** An empty field with nothing to offer but the owner's own words. */
+  ai_field_ask_empty: string;
+  /** Those that only mend what is there: offered once the field holds something. */
+  ai_field_ask_quick_filled: Partial<Record<AiFieldAskKind, readonly string[]>>;
+  /** Correcting a proposal's words before applying it. */
+  ai_action_edit: string;
+  ai_action_edit_cancel: string;
+  /** Kept and applied as corrected. */
+  ai_action_edit_apply: string;
+  /** Kept as corrected, for a bundle's foot to apply. */
+  ai_action_edit_save: string;
+  /** A proposal whose words the owner corrected. */
+  ai_action_corrected: string;
+  /** What the model had proposed, in a hint. */
+  ai_action_model_words: (words: string) => string;
+  /** What each of a proposal's texts is, when it carries several. */
+  ai_action_text_roles: Record<
+    | 'description'
+    | 'text'
+    | 'fact'
+    | 'word'
+    | 'meaning'
+    | 'tag'
+    | 'note'
+    | 'note-this'
+    | 'note-other',
+    string
+  >;
+  /** The header of the owner's message begun from a template or a check. */
+  ai_message_template: (title: string) => string;
+  /** The header of the owner's words asked at a field's ✦. */
+  ai_message_field: (field: string) => string;
+  /** What the owner says, and the button says, to go on with a check's run. */
+  ai_continue_text: string;
+  /** The button to go on, when fewer than a whole batch remain. */
+  ai_continue_more: (
+    count: number,
+    key?: import('../ai-template').AiBuiltinTemplateKey,
+  ) => string;
+  /** How much a check has looked at in its session, beside its button to go on. */
+  ai_continue_looked: (
+    count: number,
+    key?: import('../ai-template').AiBuiltinTemplateKey,
+  ) => string;
+  ai_continue_hint: string;
+  /** Gone on with a check that had nothing left. */
+  ai_continue_nothing: string;
+  /** Under a check's last answer: all of what it checks was looked at. */
+  ai_continue_done: string;
   ai_answer_to: (question: string) => string;
   ai_composer_placeholder: string;
   ai_composer_running: string;
@@ -1500,6 +1697,8 @@ export type LanguagePhrases = {
       accept: string;
       keep: string;
       sure: string;
+      /** The finish while nothing is taken yet: take the sure ones, so many. */
+      take_sure: (count: number) => string;
       was: string;
       will: string;
       accepted: string;
@@ -1509,6 +1708,8 @@ export type LanguagePhrases = {
       finish_hint: string;
     }
   >;
+  /** A text edit's parts put into the editor's text, which is saved after. */
+  ai_review_put: (count: number) => string;
   ai_review_finish_editor: string;
   ai_review_close: string;
   ai_review_go_on: string;
@@ -1590,10 +1791,21 @@ export type LanguagePhrases = {
   ai_memory_allow: string;
   ai_memory_forgotten: string;
   ai_memory_restore: string;
+  /** The hint of a proposal's accept in a form: what it does there. */
   ai_offer_take: string;
+  /**
+   * A form's accept, by what it does to the form: a value put in place,
+   * items added to a list, or taken from it. In a session it is «Apply».
+   */
+  ai_offer_put: Record<'put' | 'add' | 'remove', string>;
   ai_offer_in_session: string;
   ai_offer_taken: string;
+  /** A file's description put in its field, in the file's window. */
+  ai_offer_taken_file: string;
   ai_offer_take_back: string;
+  ai_offer_take_back_hint: string;
+  /** A proposal at the form's head taken into the form, not saved yet. */
+  ai_offer_taken_row: string;
   ai_offer_chip: (label: string) => string;
   /** The ✦ at a field's label: what an AI proposes for the field. */
   ai_field_offers: (count: number) => string;
@@ -1651,7 +1863,6 @@ export type LanguagePhrases = {
   >;
   ai_action_and: string;
   ai_action_term_keep: string;
-  ai_action_facts: (count: number) => string;
   ai_action_card_title: (count: number) => string;
   ai_action_apply: string;
   ai_action_apply_count: (count: number) => string;
@@ -1685,8 +1896,6 @@ export type LanguagePhrases = {
   ai_action_atomic_hint: string;
   ai_action_unticked_hint: string;
   ai_action_final_note: string;
-  ai_action_by_ai: string;
-  ai_action_corrections: (count: number) => string;
   /** Links that lead nowhere, mended: the action, and how many. */
   ai_action_relink: string;
   ai_action_relinks: (count: number) => string;
@@ -1697,9 +1906,7 @@ export type LanguagePhrases = {
   ai_review_link_none: string;
   /** A mended link whose link leads elsewhere since. */
   ai_review_link_changed: string;
-  ai_action_unsure_count: (count: number) => string;
   ai_action_order: string;
-  ai_action_order_parts: (count: number) => string;
   ai_action_relations: Record<'related' | 'depends-on' | 'affects', string>;
   ai_action_relation_removed: string;
   ai_action_write_modes: Record<'new' | 'append' | 'replace', string>;
@@ -1740,23 +1947,46 @@ export type LanguagePhrases = {
     string
   >;
   ai_action_flag: Record<'on' | 'off', string>;
+  /** A value a proposal empties, where its new value would stand. */
+  ai_action_cleared: string;
+  /** The parts of a text edit its card does not show. */
+  ai_action_more: (count: number) => string;
+  /** A dictionary word's note and forms, as a change of them names them. */
+  ai_action_term_note: string;
+  ai_action_term_forms: string;
   ai_action_create: Record<
     'project' | 'project-section' | 'event' | 'diary-entry' | 'page' | 'tag',
     string
   >;
   ai_action_parts: Record<'sections' | 'tags' | 'relations', string>;
   ai_action_access: Record<'public' | 'link-only' | 'private', string>;
-  ai_action_update_fields: (fields: string) => string;
   ai_toast_declined: (count: number) => string;
   ai_toast_never: string;
   ai_toast_comment_sent: string;
-  ai_toast_answer_sent: string;
   ai_toast_pinned: string;
   ai_toast_unpinned: string;
   ai_toast_undone: string;
+  /** Applied from a card or all the sure ones of a session at once. */
+  ai_toast_applied: (count: number) => string;
+  ai_session_waiting_next: string;
+  /** Applies the sure proposals of a session; the rest wait. */
+  ai_session_apply_sure: (count: number) => string;
+  ai_session_apply_sure_hint: string;
   ai_toast_restored: string;
+  /** Bringing back what was said never to offer again: that goes too. */
+  ai_action_restore_never: string;
+  /** Short words on a proposal's buttons; the whole meaning is in the hint. */
+  ai_action_restore_short: string;
+  /** Said once a request from a form's ✦ menu proposes something in it. */
+  ai_entity_offer_at: (field: string) => string;
+  ai_entity_offer_came: string;
+  /** Several came at once: how many, the first of them a click away. */
+  ai_entity_offers_came: (count: number) => string;
+  ai_entity_offer_show: string;
   ai_comment_label: string;
   ai_comment_placeholder: string;
+  /** Past the length the field takes: what it takes. */
+  ai_comment_too_long: (max: number) => string;
   ai_comment_quick: [string, string];
   ai_model_states: Record<
     'ready' | 'off' | 'none' | 'no-key' | 'no-address' | 'no-model' | 'budget',
@@ -1797,8 +2027,9 @@ export type LanguagePhrases = {
   ai_model_limit_tokens: string;
   ai_model_limit_tokens_link: string;
   ai_model_limit_invalid: string;
+  /** This month's spending, as the sessions' list says it: compact amounts. */
   ai_model_usage_line: (month: string, spent: string, limit: string) => string;
-  ai_model_average: (thousands: string) => string;
+  ai_model_average: (amount: string) => string;
   ai_model_check: string;
   ai_model_check_outcomes: Record<
     'ok' | 'key' | 'model' | 'address' | 'busy' | 'error',

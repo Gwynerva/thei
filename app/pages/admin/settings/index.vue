@@ -11,6 +11,7 @@ import {
   normalizeAnalyticsValue,
   type SiteAnalyticsSettings,
 } from '#layers/thei/shared/analytics';
+import type { FormNeed } from '#layers/thei/app/composables/form-needs';
 definePageMeta({ layout: 'admin' });
 await useAdminTabTitle(computed(() => phrase.value.site_settings));
 const initial = await useRequestFetch()<SiteSettingsData>(
@@ -80,25 +81,47 @@ const analyticsErrors = computed(() =>
     ]),
   ),
 );
-const analyticsValid = computed(() =>
-  Object.values(analyticsErrors.value).every((error) => !error),
-);
 const siteUrlError = computed(() =>
   normalizeSiteUrl(data.value.siteUrl) === undefined
     ? phrase.value.site_url_invalid
     : undefined,
 );
-const canSave = computed(
-  () =>
-    isDirty.value &&
-    !saving.value &&
-    Boolean(data.value.secretPhrase.trim()) &&
-    !siteUrlError.value &&
-    analyticsValid.value &&
-    data.value.password === confirmPassword.value,
+/** What the settings still need before they can be saved, in the page's order. */
+const needs = useFormNeeds(
+  () => {
+    const list: FormNeed[] = [];
+    if (siteUrlError.value)
+      list.push({
+        key: 'site-url',
+        label: phrase.value.site_url,
+        problem: phrase.value.site_url_invalid_short,
+      });
+    for (const field of analyticsFields)
+      if (analyticsErrors.value[field.key])
+        list.push({
+          key: `analytics-${field.key}`,
+          label: field.label(),
+          problem: phrase.value.analytics_invalid_short,
+        });
+    if (!data.value.secretPhrase.trim())
+      list.push({ key: 'secret-phrase', label: phrase.value.secret_phrase });
+    if (data.value.password !== confirmPassword.value)
+      list.push(
+        confirmPassword.value
+          ? {
+              key: 'repeat-password',
+              label: phrase.value.repeat_password,
+              problem: phrase.value.profile_password_mismatch,
+            }
+          : { key: 'repeat-password', label: phrase.value.repeat_password },
+      );
+    return list;
+  },
+  { ready: () => isDirty.value && !saving.value, save, error },
 );
+useLeaveGuard({ dirty: () => isDirty.value });
+/** The save itself; a press or Ctrl+S comes to it through `needs.submit`. */
 async function save() {
-  if (!canSave.value) return;
   saving.value = true;
   error.value = undefined;
   try {
@@ -117,7 +140,6 @@ async function save() {
     saving.value = false;
   }
 }
-useSavedForm(isDirty, save, canSave);
 </script>
 <template>
   <div>
@@ -125,12 +147,33 @@ useSavedForm(isDirty, save, canSave);
       :title="phrase.site_settings"
       icon="cog"
       :dirty="isDirty"
-      :saving="saving"
-      :can-save="canSave"
-      :error="error"
-      @save="save"
+      :saving
+      :needs
     />
     <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
+      <div>
+        <SectionHeader
+          icon="sparkles"
+          :title="phrase.ai_page"
+          :description="phrase.ai_settings_link"
+          class="mb-md"
+          data-settings-ai
+        >
+          <template #action>
+            <TheiLink
+              to="/admin/ai/?tab=connection"
+              class="flex h-10 items-center gap-xs rounded-normal bg-bg-3 px-md
+                text-sm font-semibold text-text-2 transition hocus:bg-bg-accent
+                hocus:text-accent"
+            >
+              {{ phrase.ai_open_page }}<Icon name="chevron-right" />
+            </TheiLink>
+          </template>
+        </SectionHeader>
+        <!-- The switch itself too, first on the page: with AI off, its ✦
+             gone, this is where a person looks for it. -->
+        <AiSwitch />
+      </div>
       <fieldset :disabled="saving" class="flex min-w-0 flex-col gap-lg">
         <div>
           <SectionHeader
@@ -162,7 +205,7 @@ useSavedForm(isDirty, save, canSave);
                   },
                 }"
             /></Field>
-            <Field
+            <Field need="site-url"
               ><FieldLabel>{{ phrase.site_url }}</FieldLabel
               ><FieldInput
                 v-model="data.siteUrl"
@@ -197,7 +240,10 @@ useSavedForm(isDirty, save, canSave);
             :description="phrase.analytics_description"
             class="mb-md"
           /><Box class="grid gap-md p-sm sm:grid-cols-2 sm:p-md">
-            <Field v-for="field in analyticsFields" :key="field.key"
+            <Field
+              v-for="field in analyticsFields"
+              :key="field.key"
+              :need="`analytics-${field.key}`"
               ><FieldLabel>{{ field.label() }}</FieldLabel
               ><FieldInput
                 v-model="data.analytics[field.key]"
@@ -215,7 +261,7 @@ useSavedForm(isDirty, save, canSave);
             :title="phrase.admin_data"
             class="mb-md"
           /><Box class="flex flex-col gap-md p-sm sm:p-md">
-            <Field
+            <Field need="secret-phrase"
               ><FieldLabel required>{{ phrase.secret_phrase }}</FieldLabel
               ><FieldInput
                 v-model="data.secretPhrase"
@@ -233,7 +279,7 @@ useSavedForm(isDirty, save, canSave);
                   phrase.profile_password_hint
                 }}</FieldHint></Field
               >
-              <Field
+              <Field need="repeat-password"
                 ><FieldLabel>{{ phrase.repeat_password }}</FieldLabel
                 ><FieldInput
                   v-model="confirmPassword"
@@ -268,25 +314,6 @@ useSavedForm(isDirty, save, canSave);
           :description="phrase.backups_description"
           class="mb-md"
         /><SettingsBackupBox />
-      </div>
-      <div>
-        <SectionHeader
-          icon="sparkles"
-          :title="phrase.ai_page"
-          :description="phrase.ai_settings_link"
-          class="mb-md"
-        >
-          <template #action>
-            <TheiLink
-              to="/admin/ai/?tab=connection"
-              class="flex h-10 items-center gap-xs rounded-normal bg-bg-3 px-md
-                text-sm font-semibold text-text-2 transition hocus:bg-bg-accent
-                hocus:text-accent"
-            >
-              {{ phrase.ai_open_page }}<Icon name="chevron-right" />
-            </TheiLink>
-          </template>
-        </SectionHeader>
       </div>
     </div>
   </div>

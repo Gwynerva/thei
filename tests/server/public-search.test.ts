@@ -1,58 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ProjectEventAccessLevel } from '../../shared/access-level';
 import {
   countPublicSearchFilters,
-  normalizePublicSearchText,
   parsePublicSearchFilters,
   publicSearchQuery,
 } from '../../shared/public-search';
 import {
-  buildPublicSearchIndex,
-  comparePublicSearchDocuments,
-  searchPublicDocuments,
-  type PublicSearchDocument,
-} from '../../server/thei/public/search-index';
+  catalogueEntries,
+  filterCatalogue,
+} from '../../server/thei/search/catalogue';
+import {
+  closeSearchStore,
+  rebuildSearchIndex,
+  useSearchStore,
+} from '../../server/thei/search/indexer';
+import { runSearch } from '../../server/thei/search/query';
 import { freshTestDb } from '../helpers/fresh-db';
-
-function doc(
-  uuid: string,
-  patch: Partial<PublicSearchDocument> = {},
-): PublicSearchDocument {
-  return {
-    type: 'project',
-    uuid,
-    access: ProjectEventAccessLevel.Public,
-    showcase: false,
-    cv: false,
-    sortDate: '2026-01-01',
-    createdAt: 0,
-    tagUuids: [],
-    text: uuid,
-    ...patch,
-  };
-}
-
-const filters = parsePublicSearchFilters({});
-const tagUuidsBySlug = new Map([
-  ['web', 't-web'],
-  ['game', 't-game'],
-]);
-
-function search(
-  documents: PublicSearchDocument[],
-  query: Record<string, unknown>,
-  isAdmin = false,
-) {
-  const { page: _page, ...parsed } = parsePublicSearchFilters(query);
-  return searchPublicDocuments(
-    {
-      documents: [...documents].sort(comparePublicSearchDocuments),
-      tagUuidsBySlug,
-    },
-    parsed,
-    isAdmin,
-  ).documents.map((document) => document.uuid);
-}
+import { serverRepositories } from '../helpers/server-repositories';
 
 describe('public search filters in the URL', () => {
   it('parses and serializes without defaults', () => {
@@ -62,6 +26,7 @@ describe('public search filters in the URL', () => {
       showcase: '1',
       tags: 'web,web,game',
       exclude: 'game,old',
+      year: '2024',
       page: '3',
     });
     expect(parsed).toEqual({
@@ -71,6 +36,7 @@ describe('public search filters in the URL', () => {
       cv: false,
       tags: ['web', 'game'],
       exclude: ['old'],
+      year: 2024,
       page: 3,
     });
     expect(publicSearchQuery(parsed, parsed.page)).toEqual({
@@ -79,116 +45,182 @@ describe('public search filters in the URL', () => {
       showcase: '1',
       tags: 'web,game',
       exclude: 'old',
+      year: '2024',
       page: '3',
     });
+    const { page: _page, ...filters } = parsePublicSearchFilters({});
     expect(publicSearchQuery(filters)).toEqual({});
-    expect(countPublicSearchFilters(parsed)).toBe(5);
+    expect(countPublicSearchFilters(parsed)).toBe(6);
   });
 
-  it('drops project-only filters for events', () => {
+  it('takes every kind the search finds, and nothing else', () => {
+    expect(parsePublicSearchFilters({ type: 'diary-entry' }).type).toBe(
+      'diary-entry',
+    );
+    expect(parsePublicSearchFilters({ type: 'file' }).type).toBe('file');
+    expect(parsePublicSearchFilters({ type: 'nonsense' }).type).toBeUndefined();
+    expect(parsePublicSearchFilters({ year: '24' }).year).toBeUndefined();
+  });
+
+  it('drops project-only filters for any other kind', () => {
     expect(
       parsePublicSearchFilters({ type: 'event', showcase: '1', cv: '1' }),
     ).toMatchObject({ type: 'event', showcase: false, cv: false });
+    expect(
+      parsePublicSearchFilters({ type: 'page', showcase: '1' }),
+    ).toMatchObject({ showcase: false });
   });
 });
 
-describe('public search documents', () => {
-  const documents = [
-    doc('old-event', { type: 'event', sortDate: '2020-05-01' }),
-    doc('new-event', { type: 'event', sortDate: '2026-05-01' }),
-    doc('best', { showcase: true, sortDate: '2019-01-01', cv: true }),
-    doc('mid-project', { sortDate: '2024-01-01', tagUuids: ['t-web'] }),
-    doc('private', {
+describe('the catalogue', () => {
+  let context: Awaited<ReturnType<typeof freshTestDb>>;
+  const row = { summary: '', createdAt: 1, updatedAt: 1 };
+
+  beforeEach(async () => {
+    context = await freshTestDb();
+    Object.assign(context.server, serverRepositories);
+    const project = (uuid: string, patch: Record<string, unknown>) =>
+      context.insert('projects', {
+        ...row,
+        projectUuid: uuid,
+        publicId: uuid,
+        humanReadableSlug: uuid,
+        title: uuid,
+        access: ProjectEventAccessLevel.Public,
+        ...patch,
+      });
+    const event = (
+      uuid: string,
+      endDate: string,
+      patch: Record<string, unknown> = {},
+    ) => {
+      context.insert('events', {
+        ...row,
+        eventUuid: uuid,
+        publicId: uuid,
+        humanReadableSlug: uuid,
+        title: uuid,
+        access: ProjectEventAccessLevel.Public,
+        ...patch,
+      });
+      context.insert('periods', {
+        ownerType: 'event',
+        ownerId: uuid,
+        sortOrder: 0,
+        startDate: endDate,
+        endDate,
+        precision: 'exact',
+        precisionNote: '',
+        label: '',
+      });
+    };
+    project('best', { showcase: 1, cv: 1 });
+    project('mid-project', { createdAt: Date.parse('2024-01-01') });
+    project('private', {
       access: ProjectEventAccessLevel.Private,
-      sortDate: '2027-01-01',
-    }),
-    doc('hidden-link', { access: ProjectEventAccessLevel.LinkOnly }),
-  ];
+      createdAt: Date.parse('2027-01-01'),
+    });
+    project('hidden-link', { access: ProjectEventAccessLevel.LinkOnly });
+    event('old-event', '2020-05-01');
+    event('new-event', '2026-05-01');
+    for (const [uuid, slug] of [
+      ['t-web', 'web'],
+      ['t-game', 'game'],
+    ])
+      context.insert('tags', {
+        tagUuid: uuid!,
+        title: slug!,
+        normalizedTitle: slug!,
+        slug: slug!,
+        publicId: slug!,
+        updatedAt: 1,
+      });
+    context.insert('tag-usages', {
+      tagUuid: 't-web',
+      containerType: 'project',
+      containerId: 'mid-project',
+      sortOrder: 0,
+    });
+    context.insert('tag-usages', {
+      tagUuid: 't-game',
+      containerType: 'project',
+      containerId: 'mid-project',
+      sortOrder: 1,
+    });
+    context.insert('tag-usages', {
+      tagUuid: 't-web',
+      containerType: 'event',
+      containerId: 'new-event',
+      sortOrder: 0,
+    });
+  });
+
+  afterEach(async () => {
+    closeSearchStore();
+    await context.close();
+  });
+
+  const list = (query: Record<string, unknown>, isAdmin = false) => {
+    const { page: _page, ...filters } = parsePublicSearchFilters(query);
+    return filterCatalogue(catalogueEntries(isAdmin), filters).entries.map(
+      (entry) => entry.uuid,
+    );
+  };
 
   it('puts showcase projects first, then everything newest first', () => {
-    expect(search(documents, {})).toEqual([
+    expect(list({})).toEqual(['best', 'new-event', 'mid-project', 'old-event']);
+    expect(list({}, true)[1]).toBe('private');
+  });
+
+  it('filters by type, showcase and CV', () => {
+    expect(list({ type: 'event' })).toEqual(['new-event', 'old-event']);
+    expect(list({ showcase: '1' })).toEqual(['best']);
+    expect(list({ cv: '1', type: 'project' })).toEqual(['best']);
+  });
+
+  it('requires included tags and rejects excluded ones', () => {
+    expect(list({ tags: 'web' })).toEqual(['new-event', 'mid-project']);
+    expect(list({ tags: 'web,game' })).toEqual(['mid-project']);
+    expect(list({ exclude: 'game' })).toEqual([
+      'best',
+      'new-event',
+      'old-event',
+    ]);
+    expect(list({ tags: 'unknown' })).toEqual([
       'best',
       'new-event',
       'mid-project',
       'old-event',
     ]);
-    expect(search(documents, {}, true)[1]).toBe('private');
   });
 
-  it('matches every query word, ignoring case and ё', () => {
-    const texts = [
-      doc('a', { text: normalizePublicSearchText('Зелёный сад web') }),
-      doc('b', { text: normalizePublicSearchText('Сад камней') }),
-    ];
-    expect(search(texts, { q: 'САД зеленый' })).toEqual(['a']);
-    expect(search(texts, { q: '  сад ' })).toEqual(['a', 'b']);
-  });
-
-  it('filters by type, showcase and CV', () => {
-    expect(search(documents, { type: 'event' })).toEqual([
-      'new-event',
-      'old-event',
-    ]);
-    expect(search(documents, { showcase: '1' })).toEqual(['best']);
-    expect(search(documents, { cv: '1', type: 'project' })).toEqual(['best']);
-  });
-
-  it('requires included tags and rejects excluded ones', () => {
-    const tagged = [
-      doc('both', { tagUuids: ['t-web', 't-game'] }),
-      doc('web', { tagUuids: ['t-web'], sortDate: '2025-01-01' }),
-      doc('none', { sortDate: '2024-01-01' }),
-    ];
-    expect(search(tagged, { tags: 'web' })).toEqual(['both', 'web']);
-    expect(search(tagged, { tags: 'web,game' })).toEqual(['both']);
-    expect(search(tagged, { exclude: 'game' })).toEqual(['web', 'none']);
-    expect(search(tagged, { tags: 'unknown' })).toEqual([
-      'both',
-      'web',
-      'none',
-    ]);
-  });
-});
-
-describe('public search index', () => {
   it('finds projects and events by the readable part of their URL', async () => {
-    const context = await freshTestDb();
-    try {
-      const { db, schema } = context;
-      const row = {
-        summary: '',
-        access: ProjectEventAccessLevel.Public,
-        createdAt: 1,
-        updatedAt: 1,
-      };
-      db.insert(schema.projects)
-        .values({
-          ...row,
-          projectUuid: 'project',
-          publicId: 'prj001',
-          humanReadableSlug: 'green-garden',
-          title: 'Сад',
-        })
-        .run();
-      db.insert(schema.events)
-        .values({
-          ...row,
-          eventUuid: 'event',
-          publicId: 'evt001',
-          humanReadableSlug: 'stone-garden',
-          title: 'Камни',
-        })
-        .run();
-      const { documents } = buildPublicSearchIndex();
-
-      expect(search(documents, { q: 'garden' }).sort()).toEqual([
-        'event',
-        'project',
-      ]);
-      expect(search(documents, { q: 'green garden' })).toEqual(['project']);
-      expect(search(documents, { q: 'stone-garden' })).toEqual(['event']);
-    } finally {
-      await context.close();
-    }
+    context.rawDb
+      .prepare(
+        "UPDATE projects SET humanReadableSlug = 'green-garden', title = 'Сад' WHERE projectUuid = 'mid-project'",
+      )
+      .run();
+    context.rawDb
+      .prepare(
+        "UPDATE events SET humanReadableSlug = 'stone-garden', title = 'Камни' WHERE eventUuid = 'old-event'",
+      )
+      .run();
+    Object.assign(context.server, {
+      console: {
+        log() {},
+        warn() {},
+        error() {},
+        tag: () => ({ log() {}, warn() {}, error() {} }),
+      },
+    });
+    useSearchStore(':memory:');
+    await rebuildSearchIndex();
+    const titles = async (q: string) =>
+      (await runSearch({ q, audience: 'public' })).groups
+        .flatMap((group) => group.hits.map((hit) => hit.title))
+        .sort();
+    expect(await titles('garden')).toEqual(['Камни', 'Сад']);
+    expect(await titles('green garden')).toEqual(['Сад']);
+    expect(await titles('stone-garden')).toEqual(['Камни']);
   });
 });

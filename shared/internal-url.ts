@@ -5,6 +5,7 @@ import {
   publicIdFromProjectSectionUrlPart,
   publicIdFromProjectUrlPart,
 } from './project-url';
+import { escapeRegExp } from './language/general-normalize';
 import { normalizeBasePath, withoutSiteBase } from './site-url';
 import { publicIdFromTagUrlPart } from './tag-url';
 
@@ -141,8 +142,4 @@ function decodeSegment(segment: string) {
   } catch {
     return segment;
   }
-}
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 }

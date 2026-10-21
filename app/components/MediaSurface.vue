@@ -235,7 +235,12 @@ defineExpose({ play, pause });
   inherits: false;
   initial-value: 0px;
 }
-.media-backdrop {
+/*
+ * Defaults a parent may override (`PublicHeroBanner`): weightless, so that
+ * its `:deep()` wins whichever stylesheet loads last, and unlayered, so that
+ * they still beat the utilities.
+ */
+:where(.media-backdrop) {
   --media-backdrop-blur: var(--blur-3xl);
   --tw-blur: blur(var(--media-backdrop-blur));
   /* Keep the transparent fringe of the filter beyond the clipped frame. */

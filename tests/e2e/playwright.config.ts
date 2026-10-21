@@ -24,7 +24,9 @@ export default defineConfig({
     cwd: fileURLToPath(new URL('../..', import.meta.url)),
     url: `${E2E_ORIGIN}/test-fixture.json`,
     reuseExistingServer: true,
-    timeout: 300_000,
+    // A production build of the whole layer: five minutes and more on a
+    // machine that is building something else too.
+    timeout: 600_000,
     stdout: 'ignore',
     stderr: 'pipe',
   },

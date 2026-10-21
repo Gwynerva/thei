@@ -11,6 +11,12 @@ const props = defineProps<{
   entityName?: string;
   linkDescription: (slug: string, publicId: string) => string;
   publicIdError?: string;
+  /**
+   * What the form calls the link by in its needs (`useFormNeeds`): the
+   * address is `<need>-slug`, the public ID `<need>-public-id`, each marked
+   * at its own label.
+   */
+  need?: string;
 }>();
 
 const entityName = computed(() => props.entityName ?? phrase.value.project);
@@ -30,8 +36,8 @@ const linkDescription = computed(() =>
   <Field class="w-full">
     <FieldLabel>{{ phrase.public_link(entityName) }}</FieldLabel>
     <div class="flex flex-wrap gap-md">
-      <div class="min-w-50 flex-1">
-        <FieldLabel class="mb-xs text-sm font-normal text-text-2">
+      <Field :need="need && `${need}-slug`" class="min-w-50 flex-1">
+        <FieldLabel class="text-sm font-normal text-text-2">
           {{ phrase.human_readable_url }}
         </FieldLabel>
         <SlugInput
@@ -40,10 +46,10 @@ const linkDescription = computed(() =>
           :source="title"
           :label="phrase.human_readable_url"
         />
-      </div>
-      <div class="min-w-50 flex-1">
+      </Field>
+      <Field :need="need && `${need}-public-id`" class="min-w-50 flex-1">
         <FieldLabel
-          class="mb-xs text-sm font-normal text-text-2"
+          class="text-sm font-normal text-text-2"
           :on-activate="() => undefined"
         >
           {{ phrase.public_id }}
@@ -75,7 +81,7 @@ const linkDescription = computed(() =>
             <Icon name="dice" class="scale-125" />
           </Button>
         </div>
-      </div>
+      </Field>
     </div>
     <FieldHint>{{ linkDescription }}</FieldHint>
   </Field>

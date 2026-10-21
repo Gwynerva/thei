@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { createServer, type IncomingHttpHeaders, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -92,7 +93,91 @@ export type FakeModelOptions = {
    * client is expected to ask again without it.
    */
   refuseThinking?: boolean;
+  /**
+   * Think, as Anthropic's newer models do: every answer begins with a
+   * thinking block whose signature binds it to what came before it — the
+   * instructions, the tools as a set, every earlier message, and the
+   * thinking block before it. Sent back over anything else, it is refused
+   * with the service's own 400; a leading run of blocks may be left out.
+   */
+  signThinking?: boolean;
 };
+
+/** What a thinking block was thought over, as a service binds it. */
+function boundTo(body: any, messages: unknown[]): string {
+  const system = Array.isArray(body.system)
+    ? body.system.map((block: { text?: string }) => block.text ?? '').join('\n')
+    : String(body.system ?? '');
+  const tools = ((body.tools ?? []) as any[])
+    .map((tool) => [tool.name, tool.description, tool.input_schema])
+    .sort((left, right) => String(left[0]).localeCompare(String(right[0])));
+  const plain = (messages as { role: string; content: unknown }[]).map(
+    (message) => ({
+      role: message.role,
+      content: (typeof message.content === 'string'
+        ? [{ type: 'text', text: message.content }]
+        : (message.content as Record<string, unknown>[])
+      )
+        .filter(
+          (block) =>
+            block.type !== 'thinking' && block.type !== 'redacted_thinking',
+        )
+        .map(({ cache_control: _marker, ...block }) => block),
+    }),
+  );
+  return createHash('sha256')
+    .update(JSON.stringify([system, tools, plain]))
+    .digest('hex');
+}
+
+/** The thinking blocks a request carries, in order, with where each is. */
+function thinkingIn(messages: any[]) {
+  const found: { at: string; message: number; signature: string }[] = [];
+  messages.forEach((message, index) => {
+    if (!Array.isArray(message.content)) return;
+    message.content.forEach((block: any, position: number) => {
+      if (block?.type === 'thinking')
+        found.push({
+          at: `messages.${index}.content.${position}`,
+          message: index,
+          signature: String(block.signature ?? ''),
+        });
+    });
+  });
+  return found;
+}
+
+/** Where a request sends back thinking it was not thought over, if anywhere. */
+function unboundThinking(body: any): string | undefined {
+  const blocks = thinkingIn(body.messages ?? []);
+  for (const [index, block] of blocks.entries()) {
+    let sealed: { over?: string; after?: string | null };
+    try {
+      sealed = JSON.parse(Buffer.from(block.signature, 'base64').toString());
+    } catch {
+      return `${block.at}: Invalid \`signature\` in \`thinking\` block.`;
+    }
+    const before = blocks[index - 1];
+    const over = boundTo(body, body.messages.slice(0, block.message));
+    if (
+      sealed.over !== over ||
+      (before ? before.signature !== sealed.after : false)
+    )
+      return `${block.at}: Invalid \`signature\` in \`thinking\` block. The block is bound to a different conversation. Remove the block, or set \`thinking.block_binding.prefix_mismatch_behavior\` to "drop_block". That setting requires the \`thinking-binding-controls-2026-08-01\` value in the \`anthropic-beta\` header.`;
+  }
+  return undefined;
+}
+
+/** A signature for thinking done over this request. */
+function signThinking(body: any): string {
+  const blocks = thinkingIn(body.messages ?? []);
+  return Buffer.from(
+    JSON.stringify({
+      over: boundTo(body, body.messages ?? []),
+      after: blocks.at(-1)?.signature ?? null,
+    }),
+  ).toString('base64');
+}
 
 /** Whether a body carries a content block of one of these types anywhere. */
 function carriesBlock(value: unknown, types: readonly string[]): boolean {
@@ -222,6 +307,20 @@ export async function startFakeModel(
         );
         return;
       }
+      if (options.signThinking && api === 'anthropic') {
+        const unbound = unboundThinking(body);
+        if (unbound) {
+          refused.push(fake);
+          response.writeHead(400, { 'content-type': 'application/json' });
+          response.end(
+            JSON.stringify({
+              type: 'error',
+              error: { type: 'invalid_request_error', message: unbound },
+            }),
+          );
+          return;
+        }
+      }
       requests.push(fake);
       void turnFor(fake, requests.length - 1).then((turn) =>
         answer(turn, fake, response),
@@ -265,6 +364,10 @@ export async function startFakeModel(
     };
     if (request.api === 'anthropic') {
       const stop = turn.stop ?? (calls.length ? 'tool_use' : 'end_turn');
+      /** The answer's thinking, signed over what it was thought over. */
+      const signature = options.signThinking
+        ? signThinking(request.body)
+        : undefined;
       if (!stream) {
         response.writeHead(200, { 'content-type': 'application/json' });
         response.end(
@@ -274,6 +377,9 @@ export async function startFakeModel(
             role: 'assistant',
             model: request.body.model,
             content: [
+              ...(signature
+                ? [{ type: 'thinking', thinking: '', signature }]
+                : []),
               ...(turn.text ? [{ type: 'text', text: turn.text }] : []),
               ...calls.map((call) => ({
                 type: 'tool_use',
@@ -318,6 +424,20 @@ export async function startFakeModel(
       });
       let index = 0;
       try {
+        if (signature) {
+          send('content_block_start', {
+            type: 'content_block_start',
+            index,
+            content_block: { type: 'thinking', thinking: '', signature: '' },
+          });
+          send('content_block_delta', {
+            type: 'content_block_delta',
+            index,
+            delta: { type: 'signature_delta', signature },
+          });
+          send('content_block_stop', { type: 'content_block_stop', index });
+          index++;
+        }
         if (turn.text) {
           send('content_block_start', {
             type: 'content_block_start',

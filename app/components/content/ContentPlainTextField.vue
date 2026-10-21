@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { normalizeContentAttachmentPaste } from './content-attachment';
+import { flattenToPlainText } from './editor-edit-commands';
 
 defineOptions({ inheritAttrs: false });
 
@@ -22,13 +23,13 @@ const emit = defineEmits<{
 
 const root = useTemplateRef<HTMLElement>('root');
 
-// Captions are prose too, so they get the same typing shorthands as a field.
-useSmartTypography(() => (props.editable ? root.value : undefined));
-
 function sync() {
   if (!root.value) return;
-  const value = root.value.textContent ?? '';
-  if (root.value.querySelector('*')) replaceWithPlainText(root.value, value);
+  // Markup that got in goes as one step of Ctrl+Z; the line break a browser
+  // leaves in an emptied field is let be until the blur.
+  const value = root.value.querySelector(':not(br)')
+    ? flattenToPlainText(root.value)
+    : (root.value.textContent ?? '');
   if (value !== props.modelValue) emit('update:modelValue', value);
 }
 
@@ -87,41 +88,6 @@ function onBlur() {
   const value = root.value.textContent ?? '';
   if (root.value.querySelector('*')) root.value.textContent = value;
   if (value !== props.modelValue) emit('update:modelValue', value);
-}
-
-function replaceWithPlainText(element: HTMLElement, text: string) {
-  const selection = window.getSelection();
-  const selectionIsInside = Boolean(
-    selection?.anchorNode &&
-    selection.focusNode &&
-    element.contains(selection.anchorNode) &&
-    element.contains(selection.focusNode),
-  );
-  const anchorOffset = selectionIsInside
-    ? textOffset(element, selection!.anchorNode!, selection!.anchorOffset)
-    : 0;
-  const focusOffset = selectionIsInside
-    ? textOffset(element, selection!.focusNode!, selection!.focusOffset)
-    : 0;
-
-  element.textContent = text;
-  if (!selectionIsInside || !selection) return;
-
-  const textNode =
-    element.firstChild ?? element.appendChild(document.createTextNode(''));
-  selection.setBaseAndExtent(
-    textNode,
-    Math.min(anchorOffset, text.length),
-    textNode,
-    Math.min(focusOffset, text.length),
-  );
-}
-
-function textOffset(root: HTMLElement, node: Node, offset: number) {
-  const range = document.createRange();
-  range.selectNodeContents(root);
-  range.setEnd(node, offset);
-  return range.toString().length;
 }
 
 onMounted(() => {

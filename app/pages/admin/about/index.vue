@@ -12,6 +12,7 @@ import StatusHistoryField from '#layers/thei/app/components/settings/StatusHisto
 import { canonicalizeContentData } from '#layers/thei/shared/content';
 import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import type { FormNeed } from '#layers/thei/app/composables/form-needs';
 import { namedExternalLinkListItems } from '#layers/thei/shared/external-link';
 import { PROFILE_ID } from '#layers/thei/shared/profile';
 import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
@@ -59,13 +60,25 @@ const savedStatuses = computed<StatusHistoryItem[]>(
 const pageDetails = ref<ProfilePageLink[]>(initial.pinnedPages);
 const saving = ref(false);
 const error = ref<string>();
-const canSave = computed(
-  () =>
-    isDirty.value &&
-    !saving.value &&
-    Boolean(data.value.displayName.trim()) &&
-    data.value.facts.every((f) => f.name.trim() && f.value.trim()),
+/** What the profile still needs before it can be saved, in the page's order. */
+const needs = useFormNeeds(
+  () => {
+    const list: FormNeed[] = [];
+    if (!data.value.displayName.trim())
+      list.push({ key: 'name', label: phrase.value.profile_name });
+    if (
+      data.value.facts.some((fact) => !fact.name.trim() || !fact.value.trim())
+    )
+      list.push({
+        key: 'facts',
+        label: phrase.value.profile_custom_facts,
+        problem: phrase.value.profile_fact_incomplete,
+      });
+    return list;
+  },
+  { ready: () => isDirty.value && !saving.value, save, error },
 );
+useLeaveGuard({ dirty: () => isDirty.value });
 const oldAvatars = computed(() =>
   avatars.items.value.filter(
     (a) =>
@@ -100,8 +113,8 @@ const usageDelta = computed(() => {
     add(avatars.items.value.find((a) => a.id === id)?.assetUuid, -1);
   return addStatusUsageDelta(delta, data.value, savedStatuses.value);
 });
+/** The save itself; a press or Ctrl+S comes to it through `needs.submit`. */
 async function save() {
-  if (!canSave.value) return;
   saving.value = true;
   error.value = undefined;
   try {
@@ -133,7 +146,6 @@ async function save() {
     saving.value = false;
   }
 }
-useSavedForm(isDirty, save, canSave);
 const factAnchor = useTemplateRef<HTMLElement>('factAnchor');
 const factOpen = ref(false);
 const factName = ref('');
@@ -169,10 +181,8 @@ const birthDateMax = new Date();
       :title="phrase.about_me"
       icon="person"
       :dirty="isDirty"
-      :saving="saving"
-      :can-save="canSave"
-      :error="error"
-      @save="save"
+      :saving
+      :needs
       ><AiEntityButton
     /></AdminSaveHeader>
     <fieldset
@@ -183,7 +193,7 @@ const birthDateMax = new Date();
       <AiFormOffers />
       <Box class="flex flex-col gap-md p-sm sm:p-md">
         <div class="grid gap-md sm:grid-cols-2">
-          <Field
+          <Field need="name"
             ><FieldLabel required>{{ phrase.profile_name }}</FieldLabel
             ><FieldInput v-model="data.displayName" /></Field
           ><Field ai="field:slogan"
@@ -271,7 +281,7 @@ const birthDateMax = new Date();
         :add-label="phrase.profile_new_status"
         :empty-label="phrase.profile_empty"
       />
-      <section>
+      <section data-need="facts">
         <SectionHeader
           icon="list-unordered"
           :title="phrase.profile_facts"

@@ -8,9 +8,8 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { zipSync } from 'fflate';
 import sharp from 'sharp';
-import { createOriginalAssetSettings } from '../../shared/asset-upload-settings';
-import { buildUploadHeaders } from '../../shared/api/asset-upload-headers';
 import { expectPopupUsable } from './helpers/popup';
+import { uploadFile } from './helpers/upload';
 
 test.use({
   storageState: fileURLToPath(
@@ -24,23 +23,7 @@ interface Stored {
   size: number;
 }
 
-/** A file stored as is; a line of its own makes its bytes new on every run. */
-async function upload(
-  api: APIRequestContext,
-  extension: string,
-  bytes: Uint8Array,
-): Promise<Stored> {
-  const response = await api.post('/api/admin/assets', {
-    headers: buildUploadHeaders({
-      settings: createOriginalAssetSettings(),
-      extension,
-    }),
-    data: Buffer.from(bytes),
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  return response.json();
-}
-
+/** A text's bytes; a line of its own makes them new on every run. */
 const utf8 = (text: string) => new TextEncoder().encode(text);
 const fresh = () => `\n<!-- ${randomUUID()} -->\n`;
 
@@ -73,7 +56,7 @@ test('a text in the library opens as its words, in the encoding it was written i
   const cp1251 = [
     0xcf, 0xf0, 0xe8, 0xe2, 0xe5, 0xf2, 0x2c, 0x20, 0xec, 0xe8, 0xf0,
   ];
-  const file = await upload(
+  const file = await uploadFile<Stored>(
     request,
     'txt',
     new Uint8Array([...cp1251, ...utf8(`\n${randomUUID()}`)]),
@@ -148,7 +131,7 @@ test('a Markdown file reads as a page, and its HTML runs nothing', async ({
     '![точка](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==)',
     fresh(),
   ].join('\n');
-  const file = await upload(request, 'md', utf8(markdown));
+  const file = await uploadFile<Stored>(request, 'md', utf8(markdown));
   const preview = await view(page, file, 'md');
   const article = preview.locator('[data-file-preview-markdown]');
   await expect(article.locator('h1')).toHaveText('Поход');
@@ -188,7 +171,7 @@ test('a CSV file is a table, in the delimiter it is written with', async ({
   request,
 }) => {
   const csv = `Дата;Место;Заметка\n2024-07-01;Суоярви;"старт; дождь"\n2024-07-02;"Порог ""Бесовец""";"обнос\nполдня"\n${randomUUID()};;\n`;
-  const file = await upload(request, 'csv', utf8(csv));
+  const file = await uploadFile<Stored>(request, 'csv', utf8(csv));
   const preview = await view(page, file, 'csv');
   const table = preview.locator('[data-file-preview-table]');
   await expect(table.locator('th')).toHaveText(['Дата', 'Место', 'Заметка']);
@@ -211,7 +194,7 @@ test('an HTML report runs in a sandbox that is no part of the site', async ({
     try { mark('parent', parent.document.title ? 'reached' : 'reached'); } catch { mark('parent', 'blocked'); }
     try { mark('cookie', document.cookie === undefined ? 'none' : 'read'); } catch { mark('cookie', 'blocked'); }
   </script>${fresh()}</body></html>`;
-  const file = await upload(request, 'html', utf8(html));
+  const file = await uploadFile<Stored>(request, 'html', utf8(html));
   const preview = await view(page, file, 'html');
   const frame = preview.locator('[data-file-preview-page]');
   await expect(frame).toHaveAttribute('sandbox', /allow-scripts/);
@@ -243,7 +226,7 @@ test('an archive is a file explorer, and its files open in the window', async ({
     'old.zip': zipSync({ 'inner.txt': utf8('inner') }),
     'Заметки.txt': utf8(`Шесть дней по Шуе.\n${randomUUID()}`),
   });
-  const file = await upload(request, 'zip', archive);
+  const file = await uploadFile<Stored>(request, 'zip', archive);
   const preview = await view(page, file, 'zip', { inWindow: true });
   const explorer = preview.locator('[data-file-preview-zip]');
   const list = preview.locator('[data-archive-list]');
@@ -303,7 +286,7 @@ test('the path of an archive folds into a list of its folders on a phone', async
     'Поход по Шуе в июле/фотографии с маршрута/второй день/порог.txt':
       utf8(randomUUID()),
   });
-  const file = await upload(request, 'zip', archive);
+  const file = await uploadFile<Stored>(request, 'zip', archive);
   const preview = await view(page, file, 'zip', { inWindow: true });
   const list = preview.locator('[data-archive-list]');
   for (const folder of [
@@ -334,7 +317,7 @@ test('a large text shows its start and says how much of it', async ({
 }) => {
   const line = 'день за днём по реке, от порога к порогу\n';
   const text = `${randomUUID()}\n${line.repeat(Math.ceil((1.3 * 1024 * 1024) / line.length))}`;
-  const file = await upload(request, 'log', utf8(text));
+  const file = await uploadFile<Stored>(request, 'log', utf8(text));
   const preview = await view(page, file, 'log');
   await expect(preview).toContainText('The first 1');
   const shown = await preview.locator('[data-file-preview-text]').textContent();
@@ -346,7 +329,7 @@ test('a file of no known kind is shown when its bytes are text', async ({
   page,
   request,
 }) => {
-  const notes = await upload(
+  const notes = await uploadFile<Stored>(
     request,
     'nfo',
     utf8(`Release notes\n${randomUUID()}`),
@@ -355,7 +338,7 @@ test('a file of no known kind is shown when its bytes are text', async ({
     'data-file-preview-view',
     'text',
   );
-  const binary = await upload(
+  const binary = await uploadFile<Stored>(
     request,
     'bin',
     new Uint8Array([0, 1, 2, 3, 0, 255, ...utf8(randomUUID())]),
@@ -380,7 +363,7 @@ test('a PDF opens in the browser viewer where there is one', async ({
   const pdf = utf8(
     `%PDF-1.1\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%${randomUUID()}\n%%EOF\n`,
   );
-  const file = await upload(request, 'pdf', pdf);
+  const file = await uploadFile<Stored>(request, 'pdf', pdf);
   const preview = await view(page, file, 'pdf');
   const viewer = await page.evaluate(() => navigator.pdfViewerEnabled);
   if (viewer) {

@@ -113,6 +113,27 @@ describe('tags', () => {
     );
     expect(ranked.map((tag) => tag.title)).toEqual(['Vue', 'Other', 'Third']);
   });
+
+  it('ranks tags as a picker ranks entities', () => {
+    const tags = [
+      { title: 'Косплей', publicId: 'a1', slug: 'cosplay' },
+      {
+        title: 'Шлем',
+        publicId: 'a2',
+        slug: 'helmet',
+        synonyms: ['косплей-шлем'],
+      },
+      { title: 'Ткани', publicId: 'a3', slug: 'fabric' },
+    ];
+    expect(rankTagSearch(tags, 'косплея').map((tag) => tag.title)).toEqual([
+      'Косплей',
+      'Шлем',
+    ]);
+    // A piece inside a word is the last resort.
+    expect(rankTagSearch(tags, 'кан').map((tag) => tag.title)).toEqual([
+      'Ткани',
+    ]);
+  });
 });
 
 describe('tag accent', () => {

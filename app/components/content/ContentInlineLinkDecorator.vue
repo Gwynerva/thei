@@ -89,58 +89,63 @@ function applyRuntimeState(
   observer?.takeRecords();
 }
 
+/** An attribute set to a value, or taken off, only when it differs. */
+function setAttribute(element: HTMLElement, name: string, value?: string) {
+  if (value === undefined) {
+    if (element.hasAttribute(name)) element.removeAttribute(name);
+  } else if (element.getAttribute(name) !== value)
+    element.setAttribute(name, value);
+}
+
+/** A style property set, or taken off, only when it differs. */
+function setStyle(element: HTMLElement, property: string, value?: string) {
+  if (element.style.getPropertyValue(property) === (value ?? '')) return;
+  if (value === undefined) element.style.removeProperty(property);
+  else element.style.setProperty(property, value);
+}
+
+/**
+ * What a link shows of its target, written only where it differs: in the
+ * editor, every attribute written wakes Editor.js to read the whole text.
+ */
 function writeRuntimeState(
   link: HTMLAnchorElement,
   reference: ContentLinkReference,
   resolved: ResolvedContentLink,
 ) {
-  link.dataset.contentLinkState = resolved.state;
-  delete link.dataset.contentLinkIcon;
-  delete link.dataset.contentLinkMedia;
-  link.style.removeProperty('--content-link-icon');
-  link.style.removeProperty('--content-link-media');
-  link.style.removeProperty('--content-link-media-size');
-  link.style.removeProperty('--content-link-accent');
+  setAttribute(link, 'data-content-link-state', resolved.state);
+  let picture: string | undefined;
+  let size: string | undefined;
+  let accent: string | undefined;
+  let favicon: string | undefined;
 
   if (resolved.state === 'broken' || resolved.state === 'restricted') {
-    link.setAttribute('aria-invalid', 'true');
-    if (reference.kind === 'entity') {
-      link.removeAttribute('href');
-      link.removeAttribute('target');
-      link.removeAttribute('rel');
-    } else if ('href' in resolved && resolved.href) {
+    setAttribute(link, 'aria-invalid', 'true');
+    if (reference.kind === 'entity')
+      for (const name of ['href', 'target', 'rel']) setAttribute(link, name);
+    else if ('href' in resolved && resolved.href)
       setNavigation(link, resolved.href);
+  } else {
+    setAttribute(link, 'aria-invalid');
+    setNavigation(link, resolved.href);
+    if (resolved.kind === 'entity') {
+      // Every entity has a picture — its icon, the first of its body, or one
+      // drawn for it. It lines the chip's left edge, and its accent tints the
+      // chip.
+      picture = mediaUrl(resolved.media);
+      if (picture) size = chipEdgeSize(resolved.media);
+      accent = imageAccentCssColor(resolved.media?.accent);
+    } else {
+      // A link elsewhere shows the site's favicon, on a surface kept neutral.
+      favicon = mediaUrl(resolved.iconMedia);
     }
-    return;
   }
-
-  link.removeAttribute('aria-invalid');
-  setNavigation(link, resolved.href);
-  if (resolved.kind === 'entity') {
-    // Every entity has a picture — its icon, the first of its body, or one
-    // drawn for it. It lines the chip's left edge, and its accent tints the
-    // chip.
-    const picture = mediaUrl(resolved.media);
-    if (picture) {
-      link.dataset.contentLinkMedia = '';
-      link.style.setProperty('--content-link-media', picture);
-      link.style.setProperty(
-        '--content-link-media-size',
-        chipEdgeSize(resolved.media),
-      );
-    }
-    link.style.setProperty(
-      '--content-link-accent',
-      imageAccentCssColor(resolved.media?.accent),
-    );
-    return;
-  }
-  // A link elsewhere shows the site's favicon, on a surface kept neutral.
-  const favicon = mediaUrl(resolved.iconMedia);
-  if (favicon) {
-    link.dataset.contentLinkIcon = 'image';
-    link.style.setProperty('--content-link-icon', favicon);
-  }
+  setAttribute(link, 'data-content-link-media', picture ? '' : undefined);
+  setStyle(link, '--content-link-media', picture);
+  setStyle(link, '--content-link-media-size', size);
+  setStyle(link, '--content-link-accent', accent);
+  setAttribute(link, 'data-content-link-icon', favicon ? 'image' : undefined);
+  setStyle(link, '--content-link-icon', favicon);
 }
 
 /**
@@ -171,18 +176,37 @@ function setNavigation(link: HTMLAnchorElement, href: string) {
     link.dataset.contentLink === 'entity'
       ? link.dataset.entityFragment
       : undefined;
-  link.href = sitePath(withLinkFragment(href, fragment));
-  link.target = '_blank';
-  link.rel = 'noopener noreferrer';
+  setAttribute(link, 'href', sitePath(withLinkFragment(href, fragment)));
+  setAttribute(link, 'target', '_blank');
+  setAttribute(link, 'rel', 'noopener noreferrer');
+}
+
+/** Markup a node is or holds, looked for in what came and went. */
+const MARKUP = 'a[data-content-link], abbr[data-content-hint]';
+
+/**
+ * Whether a change touched a link or a hint: words typed, the editor's own
+ * marks drawn round the caret, ask for nothing.
+ */
+function concernsMarkup(record: MutationRecord) {
+  if (record.type === 'attributes') return true;
+  return [...record.addedNodes, ...record.removedNodes].some(
+    (node) =>
+      node instanceof Element &&
+      (node.matches(MARKUP) || Boolean(node.querySelector(MARKUP))),
+  );
 }
 
 function attach(root: HTMLElement | null) {
   observer?.disconnect();
   observer = undefined;
   if (!root) return;
-  observer = new MutationObserver(() => void hydrateLinks());
-  // A link changes its target in place when the editor rewrites it; the
-  // attributes it is made of are watched along with the nodes.
+  observer = new MutationObserver((records) => {
+    if (records.some(concernsMarkup)) void hydrateLinks();
+  });
+  // A link changes its target in place when the editor rewrites it, and a
+  // hint what it says; the attributes they are made of are watched along
+  // with the nodes.
   observer.observe(root, {
     childList: true,
     subtree: true,
@@ -193,6 +217,7 @@ function attach(root: HTMLElement | null) {
       'data-entity-id',
       'data-entity-fragment',
       'data-content-note',
+      'data-content-hint',
     ],
   });
   void hydrateLinks();

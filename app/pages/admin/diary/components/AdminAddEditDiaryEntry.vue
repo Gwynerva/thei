@@ -10,6 +10,8 @@ import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { toDateString } from '#layers/thei/shared/date-range';
 import { diaryDeleteModal } from '../composables';
 import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
+import type { FormNeed } from '#layers/thei/app/composables/form-needs';
+import { accessOptions } from '#layers/thei/app/components/field/access-options';
 
 const { diaryUuid } = defineProps<{ diaryUuid?: string }>();
 
@@ -71,14 +73,6 @@ const isDirty = computed(
 // them too, and its first save hands them over.
 provideContentOwner('diary-entry', () => diaryUuid);
 useLeaveGuard({ dirty: () => isDirty.value });
-const isValid = computed(() =>
-  Boolean(
-    diaryData.value.date &&
-    diaryData.value.access &&
-    !isContentEmpty(diaryData.value.content?.data),
-  ),
-);
-
 /**
  * The days that already hold an entry.
  *
@@ -96,6 +90,31 @@ const occupiedBy = computed(() => {
   return entry && entry.diaryUuid !== diaryUuid ? entry : undefined;
 });
 
+/** What the entry still needs before it can be saved, in the form's order. */
+const needs = useFormNeeds(
+  () => {
+    const list: FormNeed[] = [];
+    const date = phrase.value.diary_date;
+    if (!diaryData.value.date) list.push({ key: 'date', label: date });
+    else if (occupiedBy.value)
+      list.push({
+        key: 'date',
+        label: date,
+        problem: phrase.value.diary_date_taken,
+      });
+    if (!diaryData.value.access)
+      list.push({ key: 'access', label: phrase.value.diary_access });
+    if (isContentEmpty(diaryData.value.content?.data))
+      list.push({ key: 'content', label: phrase.value.diary_content });
+    return list;
+  },
+  {
+    ready: () => !saving.value && (!isEdit.value || isDirty.value),
+    save,
+    error: headerError,
+  },
+);
+
 if (isEdit.value) {
   const data = await useRequestFetch()<DiaryGetResponse>(
     `/api/admin/diary/${diaryUuid}`,
@@ -112,8 +131,8 @@ if (isEdit.value) {
   formVersion.value = data.version;
 }
 
+/** The save itself; a press or Ctrl+S comes to it through `needs.submit`. */
 async function save() {
-  if (saving.value || !isValid.value || occupiedBy.value) return;
   saving.value = true;
   headerError.value = undefined;
   try {
@@ -140,7 +159,7 @@ async function save() {
       isEdit.value && refreshTakenDates(),
     ]);
     if (!isEdit.value)
-      await navigateTo(`/admin/diary/${result.diaryUuid}/edit/`, {
+      await navigateTo(sitePath(`/admin/diary/${result.diaryUuid}/edit/`), {
         external: true,
       });
   } finally {
@@ -148,13 +167,6 @@ async function save() {
   }
 }
 
-useSaveShortcut(save, {
-  canSave: () =>
-    !saving.value &&
-    isValid.value &&
-    !occupiedBy.value &&
-    (!isEdit.value || isDirty.value),
-});
 await useAdminTabTitle(
   computed(() =>
     isEdit.value ? phrase.value.edit_diary_entry : phrase.value.new_diary_entry,
@@ -177,7 +189,8 @@ const CONTENT_FIELDS = ['content', 'notes'];
 
 /** Saving from inside the editor saves the entry too; see the event form. */
 function saveAfterContentEdit() {
-  if (saving.value || !isValid.value || !isEdit.value || !isDirty.value) return;
+  if (saving.value || needs.blocked.value || !isEdit.value || !isDirty.value)
+    return;
   if (!changedOnlyIn(diaryPayload(), savedSnapshot.value, CONTENT_FIELDS))
     return;
   void save();
@@ -188,7 +201,7 @@ function emptyData(): DiaryEditData {
     // A new entry is about today until told otherwise, which is what makes
     // one quick enough to write on the way past — the writer's today, not
     // UTC's, or a late evening east of Greenwich would date it yesterday.
-    date: toDateString(new Date()),
+    date: dateFromQuery() ?? toDateString(new Date()),
     access: ProjectEventAccessLevel.Public,
     content: null,
     relations: [],
@@ -233,41 +246,23 @@ useRegisterAdminBarContextButton(
 </script>
 
 <template>
-  <StickyGlassHeader width="var(--width-wide)" :error="headerError">
-    <div class="flex items-center justify-between gap-xs py-xs">
-      <div class="flex min-w-0 items-center gap-xs text-xl font-bold">
-        <Icon name="thought" />
-        <span class="truncate">{{
-          isEdit ? phrase.edit_diary_entry : phrase.new_diary_entry
-        }}</span>
-      </div>
-      <div class="flex items-center gap-xs">
-        <AiEntityButton />
-        <Button
-          v-if="isEdit"
-          variant="delete"
-          :data-title-popup="phrase.delete"
-          @click="deleteEntry"
-        >
-          <Icon name="delete" />
-        </Button>
-        <Button
-          class="font-semibold"
-          :disabled="saving || !isValid || !!occupiedBy || (isEdit && !isDirty)"
-          @click="save"
-        >
-          <Icon v-if="saving" name="loading" class="mr-xs" />
-          {{ isEdit ? (isDirty ? phrase.save : phrase.saved) : phrase.create }}
-        </Button>
-      </div>
-    </div>
-  </StickyGlassHeader>
+  <AdminSaveHeader
+    :title="isEdit ? phrase.edit_diary_entry : phrase.new_diary_entry"
+    icon="thought"
+    :dirty="isDirty"
+    :saving
+    :creating="!isEdit"
+    :deletable="isEdit"
+    :needs
+    @delete="deleteEntry"
+    ><AiEntityButton
+  /></AdminSaveHeader>
 
   <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
     <AiFormOffers />
     <Box class="flex flex-col gap-md p-sm sm:p-md">
       <div class="flex flex-wrap gap-md">
-        <Field class="min-w-50 flex-1">
+        <Field need="date" class="min-w-50 flex-1">
           <FieldLabel required>{{ phrase.diary_date }}</FieldLabel>
           <FieldDatePicker
             v-model="diaryData.date"
@@ -286,25 +281,16 @@ useRegisterAdminBarContextButton(
             <span>{{ phrase.diary_date_taken_open }}</span>
           </TheiLink>
         </Field>
-        <Field ai="access" class="min-w-50">
+        <Field ai="access" need="access" class="min-w-50">
           <FieldLabel required>{{ phrase.diary_access }}</FieldLabel>
           <FieldOptions
             v-model="diaryData.access"
             direction="row"
-            :options="{
-              [ProjectEventAccessLevel.Public]: {
-                icon: 'lock-open',
-                title: phrase.public,
-              },
-              [ProjectEventAccessLevel.Private]: {
-                icon: 'lock-close',
-                title: phrase.private,
-              },
-            }"
+            :options="accessOptions(phrase, false)"
           />
         </Field>
       </div>
-      <Field>
+      <Field need="content">
         <FieldLabel required>{{ phrase.diary_content }}</FieldLabel>
         <FieldContentEditor
           v-model="diaryData.content"

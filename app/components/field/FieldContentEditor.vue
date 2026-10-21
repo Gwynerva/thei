@@ -127,7 +127,13 @@ const ai = useEntityAi();
 const field = useFieldAi();
 watchEffect((onCleanup) => {
   if (field && props.contentSlot)
-    onCleanup(field.claim(`text:${props.contentSlot}`, openEditor));
+    onCleanup(
+      field.claim(
+        `text:${props.contentSlot}`,
+        openEditor,
+        () => summary.value.blockCount > 0,
+      ),
+    );
 });
 const { engaged, events: mediaEvents } = useMediaInteraction();
 </script>

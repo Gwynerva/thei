@@ -6,9 +6,12 @@ import {
   type MaybeRefOrGetter,
 } from 'vue';
 import {
+  editCommandRunning,
   runEditCommand,
   selectRange,
+  TYPED_BY_COMMAND,
 } from '#layers/thei/app/components/content/editor-edit-commands';
+import { caretIn } from './editor-inline-dom';
 
 /**
  * Typing shorthands that turn into real typography as they are typed.
@@ -108,6 +111,10 @@ export function bindSmartTypography(
 
   function onBeforeInput(event: Event) {
     const input = event as InputEvent;
+    if (input.defaultPrevented) {
+      pending = undefined;
+      return;
+    }
     if (input.inputType !== 'deleteContentBackward') {
       // Anything else — typing, pasting, a forward delete — ends the window in
       // which the last replacement can be taken back.
@@ -127,6 +134,9 @@ export function bindSmartTypography(
     // for someone typing, or it would immediately forget the replacement it
     // was announcing and there would be nothing left to take back.
     if (announcing) return;
+    // Nor is a command of Thei's — a paste written in, a word put back into
+    // its markup — typing: what it types, it tells by itself.
+    if (editCommandRunning()) return;
     const input = event as InputEvent;
     if (input.inputType !== 'insertText') {
       if (!input.inputType?.startsWith('insert')) pending = undefined;
@@ -137,6 +147,12 @@ export function bindSmartTypography(
 
   // Many phone keyboards compose every word: the rules run once a word is
   // composed, never inside a composition, which they would break.
+  // Letters an editor's rule wrote in place of the browser's typing — at the
+  // edge of a link, say — are typed all the same.
+  function onTypedByCommand() {
+    pending = applyReplacement(element, rules);
+  }
+
   function onCompositionEnd() {
     pending = applyReplacement(element, rules);
   }
@@ -145,17 +161,21 @@ export function bindSmartTypography(
     pending = undefined;
   }
 
-  element.addEventListener('beforeinput', onBeforeInput);
+  // Ahead of the editor's own rules for the same keys: Backspace right after
+  // a replacement takes it back before anything else is made of it.
+  element.addEventListener('beforeinput', onBeforeInput, true);
   element.addEventListener('input', onInput);
+  element.addEventListener(TYPED_BY_COMMAND, onTypedByCommand);
   element.addEventListener('compositionend', onCompositionEnd);
-  element.addEventListener('blur', onSelectionChange);
+  element.addEventListener('focusout', onSelectionChange);
   element.addEventListener('pointerdown', onSelectionChange);
 
   return () => {
-    element.removeEventListener('beforeinput', onBeforeInput);
+    element.removeEventListener('beforeinput', onBeforeInput, true);
     element.removeEventListener('input', onInput);
+    element.removeEventListener(TYPED_BY_COMMAND, onTypedByCommand);
     element.removeEventListener('compositionend', onCompositionEnd);
-    element.removeEventListener('blur', onSelectionChange);
+    element.removeEventListener('focusout', onSelectionChange);
     element.removeEventListener('pointerdown', onSelectionChange);
   };
 }
@@ -173,7 +193,7 @@ function applyReplacement(
     return edit;
   }
 
-  const point = caretTextNode();
+  const point = caretTextNode(element);
   if (!point) return undefined;
   const { node, offset } = point;
   const edit = smartTypographyEdit((node.data ?? '').slice(0, offset), rules);
@@ -197,7 +217,7 @@ function undoReplacement(
     return true;
   }
 
-  const point = caretTextNode();
+  const point = caretTextNode(element);
   if (!point) return false;
   const { node, offset } = point;
   const end = pending.start + pending.replacement.length;
@@ -284,24 +304,21 @@ function notifyInput(element: TypographyTarget) {
   }
 }
 
-function caretTextNode(): { node: Text; offset: number } | undefined {
-  const selection = document.getSelection();
-  if (!selection || !selection.isCollapsed || selection.rangeCount === 0)
-    return undefined;
-  const range = selection.getRangeAt(0);
-  const node = range.startContainer;
-  if (node.nodeType !== Node.TEXT_NODE) return undefined;
-  return { node: node as Text, offset: range.startOffset };
+/** The text node a collapsed caret in the element stands in, and where. */
+function caretTextNode(
+  element: HTMLElement,
+): { node: Text; offset: number } | undefined {
+  const range = caretIn(element, { collapsed: true });
+  const node = range?.startContainer;
+  if (!range || !(node instanceof Text)) return undefined;
+  return { node, offset: range.startOffset };
 }
 
 function placeCaret(node: Text, offset: number) {
-  const selection = document.getSelection();
-  if (!selection) return;
   const range = document.createRange();
   range.setStart(node, Math.min(offset, node.length));
   range.collapse(true);
-  selection.removeAllRanges();
-  selection.addRange(range);
+  selectRange(range);
 }
 
 /**

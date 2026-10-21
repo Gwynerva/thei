@@ -321,4 +321,71 @@ describe('files made ready for a model', () => {
       'audio',
     ]);
   });
+
+  it('shows a video by its new frame once another is chosen', async () => {
+    const red = join(context.directory, 'red.png');
+    await sharp({
+      create: { width: 40, height: 30, channels: 3, background: '#cc0000' },
+    })
+      .png()
+      .toFile(red);
+    const byExtension = context.server.assets.filePath;
+    Object.assign(context.server.assets, {
+      filePath: (hash: string, extension: string) =>
+        hash === 'h-red' ? red : byExtension(hash, extension),
+    });
+    const insert = context.rawDb.prepare(
+      `INSERT INTO assets (assetUuid, slug, extension, familyUuid, contentHash, settingsKey, settings, type, size, touchedAt, meta)
+       VALUES (?, ?, ?, 'af-film', ?, ?, ?, ?, 900, 1, '{}')`,
+    );
+    const preview = (assetUuid: string) =>
+      context.rawDb
+        .prepare(
+          `INSERT INTO "asset-usages" (assetUuid, containerType, containerId, role) VALUES (?, 'asset', 'a-film', 'preview')`,
+        )
+        .run(assetUuid);
+    insert.run(
+      'a-film',
+      'film',
+      'wav',
+      'h-film',
+      'original',
+      '{"type":"original"}',
+      'video',
+    );
+    insert.run(
+      'a-film-green',
+      'film-green',
+      'png',
+      'h-green',
+      'preview',
+      null,
+      'image',
+    );
+    insert.run(
+      'a-film-red',
+      'film-red',
+      'png',
+      'h-red',
+      'preview',
+      null,
+      'image',
+    );
+    preview('a-film-green');
+    const frame = async () => {
+      const [block] = (await shown('a-film', 'film.mp4')).get('a-film')!;
+      return block && 'data' in block ? block.data : undefined;
+    };
+    const green = await frame();
+    expect(green).toBeDefined();
+    expect(await frame()).toBe(green);
+
+    context.rawDb
+      .prepare(`DELETE FROM "asset-usages" WHERE assetUuid = 'a-film-green'`)
+      .run();
+    preview('a-film-red');
+    const chosen = await frame();
+    expect(chosen).toBeDefined();
+    expect(chosen).not.toBe(green);
+  });
 });

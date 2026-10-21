@@ -26,7 +26,9 @@ function dayOf(item: DiaryListItem) {
 <template>
   <StickyGlassHeader width="var(--width-wide)">
     <div class="flex items-center justify-between gap-xs py-xs">
-      <div class="flex min-w-0 items-center gap-xs text-xl font-bold">
+      <div
+        class="flex min-w-0 items-center gap-xs text-lg font-bold sm:text-xl"
+      >
         <Icon name="thought" class="shrink-0" />
         <span class="truncate">{{ phrase.admin_diary }}</span>
       </div>
@@ -114,7 +116,7 @@ function dayOf(item: DiaryListItem) {
         <template #size>{{ humanSize(item.totalSize) }}</template>
         <template #action>
           <TheiLink
-            :to="buildDiaryUrl(item.date)"
+            :to="sitePath(buildDiaryUrl(item.date))"
             external
             :data-title-popup="phrase.diary_entry"
             :aria-label="phrase.diary_entry"

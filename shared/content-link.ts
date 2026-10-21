@@ -156,17 +156,21 @@ export type ContentLinkResolver = (
   reference: ContentLinkReference,
 ) => Promise<ResolvedContentLink>;
 
-const INLINE_TAGS = new Set([
-  'a',
-  'b',
-  'strong',
-  'i',
-  'em',
-  's',
-  'strike',
-  'abbr',
-  'br',
-]);
+/** The tags of inline markup a stored text holds, besides a line break. */
+const STORED_INLINE_TAGS = ['a', 'b', 'strong', 'i', 'em', 's', 'abbr'];
+
+/** What the normalizer takes in: the stored tags, the browser's `strike`, a break. */
+const INLINE_TAGS = new Set([...STORED_INLINE_TAGS, 'strike', 'br']);
+
+/**
+ * A tag of stored inline markup or a line break, as a normalized text
+ * writes them: the one tokenizer of the normalizer and of the editing
+ * Markdown (`content-edit-markdown/inline.ts`).
+ */
+export const CONTENT_INLINE_TOKEN = new RegExp(
+  String.raw`<br\s*\/?>|<\/?(?:${STORED_INLINE_TAGS.join('|')})(?:\s[^>]*)?>`,
+  'gi',
+);
 
 /** The markup of words a caret can stand inside of: all of it but a break. */
 export const CONTENT_INLINE_MARKUP_SELECTOR = [...INLINE_TAGS]
@@ -195,63 +199,79 @@ export function contentInlineLinkSanitizeConfig() {
  */
 export function normalizeContentInlineHtml(value: unknown): string {
   if (typeof value !== 'string') return '';
+  // Whether each link and hint open was kept: one dropped takes its closing
+  // tag with it, which would otherwise close an outer one early.
+  const kept: Record<'a' | 'abbr', boolean[]> = { a: [], abbr: [] };
   const sanitized = value
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<\/?([a-z][\w-]*)\b([^>]*)>/gi, (source, rawName, rawAttrs) => {
       const name = String(rawName).toLowerCase();
       if (!INLINE_TAGS.has(name)) return '';
       const tag = INLINE_TAG_ALIASES[name] ?? name;
-      if (source.startsWith('</')) return tag === 'br' ? '' : `</${tag}>`;
+      if (source.startsWith('</')) {
+        if (tag === 'a' || tag === 'abbr')
+          return kept[tag].pop() ? `</${tag}>` : '';
+        return tag === 'br' ? '' : `</${tag}>`;
+      }
       if (tag === 'abbr') {
         const hint = parseHtmlAttributes(String(rawAttrs))['data-content-hint'];
         // A hint with nothing to say is not a hint; the text survives, the
         // markup does not.
+        kept.abbr.push(Boolean(hint?.trim()));
         return hint?.trim()
           ? `<abbr data-content-hint="${escapeAttribute(hint.trim())}">`
           : '';
       }
       if (tag !== 'a') return tag === 'br' ? '<br>' : `<${tag}>`;
-
-      const attributes = parseHtmlAttributes(String(rawAttrs));
-      const kind = attributes['data-content-link'];
-      const entityType = attributes['data-entity-type'];
-      const entityId = attributes['data-entity-id']?.trim();
-      // A note is committed whole from its popup, never typed into the text
-      // being normalized, so its ending can be settled right here.
-      const note = normalizeCaptionText(
-        attributes['data-content-note']?.trim() ?? '',
-      );
-      const noteAttribute = note
-        ? ` data-content-note="${escapeAttribute(note)}"`
-        : '';
-      if (kind === 'entity' && isContentEntityType(entityType) && entityId) {
-        const fragment = normalizeLinkFragment(
-          attributes['data-entity-fragment'],
-        );
-        const fragmentAttribute = fragment
-          ? ` data-entity-fragment="${escapeAttribute(fragment)}"`
-          : '';
-        return `<a data-content-link="entity" data-entity-type="${entityType}" data-entity-id="${escapeAttribute(entityId)}"${fragmentAttribute}${noteAttribute}>`;
-      }
-
-      const href = attributes.href;
-      if (href) {
-        try {
-          const url = normalizeExternalLinkUrl(href);
-          return `<a href="${escapeAttribute(url)}" data-content-link="external"${noteAttribute}>`;
-        } catch {
-          if (href.startsWith('/') && !href.startsWith('//'))
-            return `<a href="${escapeAttribute(href)}">`;
-        }
-      }
-      return '<a>';
+      const link = linkOpening(String(rawAttrs));
+      kept.a.push(Boolean(link));
+      return link;
     });
   return normalizeInlineWhitespace(sanitized);
 }
 
-const HORIZONTAL_SPACE_SOURCE = String.raw`(?:[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]|&(?:nbsp|#0*160|#x0*a0);)`;
+/**
+ * A link's opening tag as stored: to an entity, to another site, or to a
+ * relative address. A link to none of them is no link; its text survives.
+ */
+function linkOpening(rawAttrs: string): string {
+  const attributes = parseHtmlAttributes(rawAttrs);
+  const kind = attributes['data-content-link'];
+  const entityType = attributes['data-entity-type'];
+  const entityId = attributes['data-entity-id']?.trim();
+  // A note is committed whole from its popup, never typed into the text
+  // being normalized, so its ending can be settled right here.
+  const note = normalizeCaptionText(
+    attributes['data-content-note']?.trim() ?? '',
+  );
+  const noteAttribute = note
+    ? ` data-content-note="${escapeAttribute(note)}"`
+    : '';
+  if (kind === 'entity' && isContentEntityType(entityType) && entityId) {
+    const fragment = normalizeLinkFragment(attributes['data-entity-fragment']);
+    const fragmentAttribute = fragment
+      ? ` data-entity-fragment="${escapeAttribute(fragment)}"`
+      : '';
+    return `<a data-content-link="entity" data-entity-type="${entityType}" data-entity-id="${escapeAttribute(entityId)}"${fragmentAttribute}${noteAttribute}>`;
+  }
+
+  const href = attributes.href;
+  if (href) {
+    try {
+      const url = normalizeExternalLinkUrl(href);
+      return `<a href="${escapeAttribute(url)}" data-content-link="external"${noteAttribute}>`;
+    } catch {
+      if (href.startsWith('/') && !href.startsWith('//'))
+        return `<a href="${escapeAttribute(href)}">`;
+    }
+  }
+  return '';
+}
+
+/** The characters that are a space between words on one line. */
+export const HORIZONTAL_SPACE_CHARACTERS = String.raw`\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000`;
+const HORIZONTAL_SPACE_SOURCE = `(?:[${HORIZONTAL_SPACE_CHARACTERS}]|&(?:nbsp|#0*160|#x0*a0);)`;
 const HORIZONTAL_SPACE_RUN = new RegExp(`${HORIZONTAL_SPACE_SOURCE}+`, 'gi');
-const INLINE_TOKEN = /<br>|<\/?(?:a|b|strong|i|em|s|abbr)(?:\s[^>]*)?>/gi;
 
 export function normalizeContentText(value: unknown): string {
   if (typeof value !== 'string') return '';
@@ -268,11 +288,11 @@ function normalizeInlineWhitespace(html: string): string {
   const stack: InlineFrame[] = [];
   let cursor = 0;
 
-  for (const match of html.matchAll(INLINE_TOKEN)) {
+  for (const match of html.matchAll(CONTENT_INLINE_TOKEN)) {
     const index = match.index ?? 0;
     appendTextAtoms(atoms, html.slice(cursor, index), stack);
     const token = match[0];
-    if (/^<br>$/i.test(token)) {
+    if (/^<br/i.test(token)) {
       atoms.push({ kind: 'break', stack: [...stack] });
     } else if (/^<\//.test(token)) {
       const tag = token.slice(2, -1).toLowerCase();

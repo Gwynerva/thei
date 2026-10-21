@@ -3,7 +3,6 @@ import { resolveEntityIconMedia } from '../../../thei/media/generated-icon';
 import { contentPlainText } from '#layers/thei/shared/content';
 import type { DiaryListResponse } from '#layers/thei/shared/api/diary';
 import {
-  normalizeAdminSearchText,
   paginateAdminEntities,
   resolveAdminPagination,
   type AdminEntityListOrder,
@@ -92,9 +91,7 @@ export default defineEventHandler(async (event): Promise<DiaryListResponse> => {
     return { items: entries.map(asRow), ...pagination };
   }
 
-  const result = normalizeAdminSearchText(q)
-    ? searchEntries()
-    : await listEntries();
+  const result = q.trim() ? searchEntries() : await listEntries();
   const uuids = result.items.map((item) => item.diaryUuid);
   if (!uuids.length) return { ...result, items: [] };
 

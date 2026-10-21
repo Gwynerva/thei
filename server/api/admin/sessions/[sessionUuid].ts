@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
       return toPublicAdminSession(session, currentSession?.sessionUuid);
     }
     case 'DELETE': {
-      destroyAdminSession(session.token);
+      destroyAdminSession(session.sessionUuid);
       return;
     }
   }

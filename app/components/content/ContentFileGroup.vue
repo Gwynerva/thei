@@ -152,6 +152,7 @@ function rowButtonClass(item: ContentFileGroupItem) {
         v-for="entry in entries"
         :key="entry.id"
         :data-drag-id="editable ? entry.id : undefined"
+        :data-file="entry.item?.asset.assetUuid"
         class="group/file flex min-w-0 items-start gap-1"
         :class="{ 'pr-xs': editable }"
         data-file-group-entry

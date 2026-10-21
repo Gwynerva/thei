@@ -7,8 +7,8 @@ import {
 
 /**
  * What a relation says, as one line under the other end's name: the
- * relation's word when it has a direction — "Influences", "Depends" — run
- * into the reason, "Influences · gave it its maps". A plain relation says
+ * relation's word when it has a direction — "Affects", "Depends on" — run
+ * into the reason, "Affects · gave it its maps". A plain relation says
  * no word at all: the block it is in already says "related".
  *
  * Inline all through, so the caller cuts it as a line: `truncate` in a chip,

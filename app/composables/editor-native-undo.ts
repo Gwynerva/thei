@@ -1,4 +1,10 @@
-import { editableFieldOf } from '#layers/thei/app/components/content/editor-edit-commands';
+import { editCommandRunning } from '#layers/thei/app/components/content/editor-edit-commands';
+import {
+  editableFieldOf,
+  KEY_DELETION_INPUTS,
+  lettersBefore,
+} from './editor-inline-dom';
+import { historyKey } from './shortcut';
 /**
  * Ctrl+Z in the editor undoes what is safe to undo, and nothing else.
  *
@@ -24,17 +30,10 @@ import { editableFieldOf } from '#layers/thei/app/components/content/editor-edit
 export type NativeEditKind =
   'typing' | 'drag-delete' | 'drop-insert' | 'command-text' | 'other';
 
-const TYPING_INPUTS = new Set([
+const TYPING_INPUTS = new Set<string>([
   'insertText',
   'insertCompositionText',
-  'deleteContentBackward',
-  'deleteContentForward',
-  'deleteWordBackward',
-  'deleteWordForward',
-  'deleteSoftLineBackward',
-  'deleteSoftLineForward',
-  'deleteHardLineBackward',
-  'deleteHardLineForward',
+  ...KEY_DELETION_INPUTS,
 ]);
 
 export function nativeEditKind(
@@ -118,15 +117,7 @@ export class NativeUndoLedger {
   }
 }
 
-type HistoryKey = 'undo' | 'redo';
-
-/** Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z and Ctrl+Y, by the key's place, any layout. */
-export function historyKey(event: KeyboardEvent): HistoryKey | undefined {
-  if (!(event.ctrlKey || event.metaKey) || event.altKey) return undefined;
-  if (event.code === 'KeyZ') return event.shiftKey ? 'redo' : 'undo';
-  if (event.code === 'KeyY' && event.ctrlKey && !event.shiftKey) return 'redo';
-  return undefined;
-}
+type HistoryKey = NonNullable<ReturnType<typeof historyKey>>;
 
 /**
  * Watches the editor in `root` and guards Ctrl+Z in all of `scope` — the
@@ -146,14 +137,9 @@ export function bindEditorNativeUndo(
   let caretBefore: number | undefined;
   let announced = false;
 
-  function fieldOf(node: Node | null) {
-    const field = editableFieldOf(node);
-    return field && root.contains(field) ? field : undefined;
-  }
-
   /** A change inside a field still in the text: one the history may meet. */
   function touchesField(record: MutationRecord) {
-    const field = fieldOf(record.target);
+    const field = editableFieldOf(record.target, root);
     return Boolean(field?.isConnected);
   }
 
@@ -172,14 +158,12 @@ export function bindEditorNativeUndo(
     if (records.some(touchesField)) ledger.fence();
   }
 
-  function caretIn(field: HTMLElement | undefined) {
+  /** Where the caret is in a field, by the letters before it. */
+  function lettersToCaret(field: HTMLElement | undefined) {
     const selection = window.getSelection();
     if (!field || !selection?.focusNode || !field.contains(selection.focusNode))
       return undefined;
-    const range = document.createRange();
-    range.selectNodeContents(field);
-    range.setEnd(selection.focusNode, selection.focusOffset);
-    return range.toString().length;
+    return lettersBefore(field, selection.focusNode, selection.focusOffset);
   }
 
   function inEditor(target: EventTarget | null) {
@@ -218,7 +202,7 @@ export function bindEditorNativeUndo(
     }
     announced = true;
     caretBefore = inEditor(event.target)
-      ? caretIn(fieldOf(event.target as Node))
+      ? lettersToCaret(editableFieldOf(event.target as Node, root))
       : undefined;
   }
 
@@ -230,9 +214,12 @@ export function bindEditorNativeUndo(
     observer.takeRecords();
     unclaimed = [];
     const inputType = (event as InputEvent).inputType ?? '';
-    const wasAnnounced = announced;
+    // A command run in place of a key's edit, which was stopped, is a step
+    // of its own: the key announced an edit that never came.
+    const byCommand = editCommandRunning();
+    const wasAnnounced = announced && !byCommand;
     announced = false;
-    const before = caretBefore;
+    const before = byCommand ? undefined : caretBefore;
     caretBefore = undefined;
     if (!inEditor(event.target)) {
       if (inputType !== 'historyUndo' && inputType !== 'historyRedo')
@@ -244,10 +231,10 @@ export function bindEditorNativeUndo(
     if (inputType === 'historyUndo') ledger.undone();
     else if (inputType === 'historyRedo') ledger.redone();
     else {
-      const field = fieldOf(event.target as Node);
+      const field = editableFieldOf(event.target as Node, root);
       ledger.edit(nativeEditKind(inputType, wasAnnounced), field, {
         before,
-        after: caretIn(field),
+        after: lettersToCaret(field),
       });
     }
     expected = undefined;

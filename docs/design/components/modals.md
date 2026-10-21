@@ -20,7 +20,8 @@ The header:
 
 - One slim row: the kind's icon and the title, then icon buttons, then the main
   action (Save, Done) in the accent. On a phone it holds the title and one or
-  two controls; nothing more.
+  two controls; nothing more. Save is a square with a floppy disk there
+  (`ModalHeaderButton`'s `phoneIcon`).
 - Say what is open: its kind, by its icon, and its name. The rest of what
   makes a modal informative — when, who, the cost, a source, the counts of
   what it holds — goes at the top of the body, not into the sticky row.
@@ -55,7 +56,10 @@ Closing:
   nothing more. A card standing in another's place, as the review of a text
   does in its editor's, is left by that click instead (`ModalContainer`'s
   `dismiss`).
-- A modal holding unsaved work asks before it closes.
+- A modal holding unsaved work asks before it closes. Unsaved work is what
+  is on the screen: a text's editor reads its text before it decides, so a
+  word typed a moment ago — before Editor.js has told of it — asks too, and
+  Ctrl+S then Escape saves it and closes without asking.
 - Deleting an entity is confirmed against its name in
   `app/modals/DeleteConfirmationPane.vue`.
 
@@ -120,8 +124,11 @@ Motion:
 - `app/components/Modal.vue` holds one `<dialog>`, opened with `showModal()`
   so it is in the top layer, and its layers: one per open modal, and the wait
   of a flow between two steps. Only the top one is shown, except while one
-  fades in over another; the ones beneath are `inert`. The dialog closes
-  once the last layer has faded out.
+  fades in over another; the ones beneath are `inert` and `aria-hidden`.
+  Before a layer is hidden so — covered, or leaving — the focus it holds goes
+  to the dialog, and from there to the new top layer or, once the dialog
+  closes, back to what opened it. The dialog closes once the last layer has
+  faded out.
 - `app/composables/modal.ts` opens them — `openModal(descriptor, data)` puts
   the modal on the stack at once and resolves with its result — keeps the
   stack, ties it to browser history, and keeps the dismiss layers: an open
@@ -222,7 +229,8 @@ Popups opened inside a modal join its `<dialog>` by themselves; see
   answers down and checks that each frame shows its title at once and that,
   frame by frame, the dialog never closes or lets the page through mid-flow.
 - `tests/e2e/modal-history.spec.ts` checks in a browser that Back closes one
-  nested modal per press and that Escape undoes the same single step.
+  nested modal per press, that Escape undoes the same single step, and that
+  no layer covered or closed is hidden while it holds the focus.
 - `tests/e2e/popups.spec.ts` checks that pickers open inside their modal.
 - A new modal is looked at in the browser at 375 px and on a desktop, in both
   themes.

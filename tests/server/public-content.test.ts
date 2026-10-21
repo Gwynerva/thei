@@ -356,6 +356,8 @@ describe('public content media previews', () => {
             height: 1080,
             hasAudio: true,
             accent: { hue: 214, chroma: 0.15 },
+            previewAt: 12.4,
+            previewChosen: true,
           },
         },
       ],
@@ -419,8 +421,9 @@ describe('public content media previews', () => {
       assetUrl: '/projects/project-Project/content/project-video.mp4',
       media: {
         src: '/projects/project-Project/content/project-video.mp4',
+        // A video's still moves with its frame, chosen here by hand.
         previewSrc:
-          '/projects/project-Project/content/project-video.mp4?preview=1',
+          '/projects/project-Project/content/project-video.mp4?preview=c12.4',
       },
     });
   });

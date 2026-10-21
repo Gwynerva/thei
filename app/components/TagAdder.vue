@@ -9,6 +9,7 @@ import {
   cleanTagTitle,
   normalizeTagTitle,
   TAG_SEARCH_LIMIT,
+  TAG_TITLE_MAX_LENGTH,
 } from '#layers/thei/shared/tag';
 import type { TagRecommendationReason } from '#layers/thei/shared/tag-recommendation';
 import { moveItemById } from '#layers/thei/app/composables/drag-sort';
@@ -228,6 +229,7 @@ function recommendationPopup(tag: RecommendedTag) {
         v-model="query"
         type="text"
         autocomplete="off"
+        :maxlength="TAG_TITLE_MAX_LENGTH"
         :aria-label="phrase.tag_search_placeholder"
         :placeholder="phrase.tag_search_placeholder"
         class="field-sizing-content max-w-full min-w-28 self-stretch

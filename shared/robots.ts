@@ -11,6 +11,8 @@ export const ROBOTS_DISALLOWED = [
   '/test/',
   '/api/',
   '/share/',
+  // Not a search's results: they say `noindex` themselves, which a crawler
+  // turned away at the door would never read.
 ];
 
 /**

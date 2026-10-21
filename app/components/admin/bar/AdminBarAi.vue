@@ -2,13 +2,30 @@
 import type { AiSessionItem } from '#layers/thei/shared/ai';
 
 /**
- * The ✦ of the admin bar, from any admin page: how much waits for the
- * owner, and in its menu the sessions that wait and a new session — about
- * the entity whose form is open, or about nothing in particular.
+ * The ✦ of the admin bar, from any page: how much waits for the owner, and
+ * in its menu the sessions that wait and a new session — about the entity
+ * whose form is open, or whose public page this is, or about nothing in
+ * particular.
  */
 const waiting = useAiWaiting();
 const inHand = useAiEntitiesInHand();
-const entity = computed(() => inHand.value.at(-1));
+const route = useRoute();
+
+/** On a public page, the entity it shows: read as the page changes. */
+const onPage = ref<{ ref: string; title: string } | null>(null);
+watch(
+  () => route.path,
+  async (path) => {
+    onPage.value = null;
+    if (!import.meta.client || path.startsWith('/admin/')) return;
+    const read = await $fetch<{
+      entity: { ref: string; title: string } | null;
+    }>('/api/admin/ai/entity-at', { query: { path } }).catch(() => null);
+    if (route.path === path) onPage.value = read?.entity ?? null;
+  },
+  { immediate: true },
+);
+const entity = computed(() => inHand.value.at(-1) ?? onPage.value ?? undefined);
 
 const button = ref<HTMLElement>();
 const open = ref(false);

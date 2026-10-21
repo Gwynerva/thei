@@ -213,7 +213,20 @@ The video's `meta.previewAt` records the seconds the frame was taken from, and
 `meta.previewScore` its score. A video without a score has a preview chosen
 by an older version; the update task
 `update/tasks/0.0.2-video-preview-frames.ts` remakes those while the site is
-closed for the update, and the library's file card can remake one by hand.
+closed for the update.
+
+The owner may also choose the frame by hand, in the file's window: the frame
+the player stands at is taken exactly (`extractVideoThumbnail` with `at`, a
+seek and one frame, no `thumbnail` filter; the seek starts a frame early, as
+the video's `fps` says, since a paused player shows the frame that began at
+the moment or before it), still scored, for every video of
+the family, each from its own bytes so a crop or a turn keeps its own picture
+(`chooseVideoPreviewFrame` in `server/thei/assets/storage.ts`, in the video
+lane). `meta.previewChosen` marks it: a remade preview keeps the moment, and a
+variant made later takes the same one. Choosing "automatically" again drops
+the mark and picks as on upload. The public poster's address carries the
+frame in `?preview=` (`publicPreviewToken` in `server/thei/assets/urls.ts`),
+so a browser that kept the old still for a day asks for the new one.
 
 An SVG's preview is drawn at the preview's own size (`svgDensityFor` in
 `server/thei/assets/svg-density.ts`), not at the size of its units, and

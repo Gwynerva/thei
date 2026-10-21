@@ -1,0 +1,103 @@
+[
+  {
+    "n": 1,
+    "label": "Home",
+    "action": "open",
+    "url": "http://lab.localhost:3003/",
+    "sinceStartMs": 400,
+    "shot": "shots/01-home.png",
+    "marked": "shots/01-home.marked.png",
+    "answer": {
+      "firstFeedbackMs": 90,
+      "answerMs": 400
+    },
+    "probe": {
+      "counts": {},
+      "fps": []
+    }
+  },
+  {
+    "n": 2,
+    "label": "Find “seedlings”",
+    "action": "click",
+    "url": "http://lab.localhost:3003/search/?q=seedlings",
+    "sinceStartMs": 800,
+    "shot": "shots/02-find-seedlings.png",
+    "marked": "shots/02-find-seedlings.marked.png",
+    "target": {
+      "name": "Search",
+      "box": {
+        "x": 160,
+        "y": 520,
+        "width": 220,
+        "height": 44
+      },
+      "inView": true
+    },
+    "pointer": {
+      "from": [
+        640,
+        400
+      ],
+      "to": [
+        270,
+        542
+      ],
+      "travelPx": 396
+    },
+    "answer": {
+      "firstFeedbackMs": 90,
+      "answerMs": 400
+    },
+    "probe": {
+      "counts": {
+        "near-miss": 1
+      },
+      "fps": [
+        "near-miss:0a1b2c3d4e"
+      ]
+    }
+  },
+  {
+    "n": 3,
+    "label": "Open the section",
+    "action": "click",
+    "url": "http://lab.localhost:3003/projects/greenhouse/sections/seedlings/",
+    "sinceStartMs": 1200,
+    "shot": "shots/03-open-the-section.png",
+    "marked": "shots/03-open-the-section.marked.png",
+    "target": {
+      "name": "Open",
+      "box": {
+        "x": 160,
+        "y": 520,
+        "width": 220,
+        "height": 44
+      },
+      "inView": true
+    },
+    "pointer": {
+      "from": [
+        270,
+        542
+      ],
+      "to": [
+        270,
+        542
+      ],
+      "travelPx": 0
+    },
+    "answer": {
+      "firstFeedbackMs": 90,
+      "answerMs": 400
+    },
+    "probe": {
+      "counts": {
+        "overlap": 1
+      },
+      "fps": [
+        "overlap:1b2c3d4e5f"
+      ]
+    }
+  }
+]

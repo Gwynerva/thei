@@ -18,6 +18,11 @@ import { AssetType } from '#layers/thei/shared/asset';
  * size never waits behind a whole encode.
  */
 const IMAGE_CONCURRENCY = Math.max(1, Math.min(cpus().length - 1, 3));
+/**
+ * One: choosing a family's poster frame relies on it (`chooseVideoPreviewFrame`
+ * runs as one job, and a variant commits inside its own). Raised, a family
+ * would need a lock of its own, taken after the lane.
+ */
 const VIDEO_CONCURRENCY = 1;
 const AUDIO_CONCURRENCY = 1;
 const PROBE_CONCURRENCY = 2;

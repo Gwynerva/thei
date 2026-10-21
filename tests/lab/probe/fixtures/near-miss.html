@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>near-miss</title>
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      .bar {
+        height: 28px;
+        padding: 4px;
+        background: #dde;
+      }
+      .tile {
+        width: 64px;
+        height: 40px;
+        background: #ede;
+      }
+      .chip {
+        width: 64px;
+        height: 28px;
+        background: #def;
+      }
+      .card {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 8px;
+        background: #eef;
+      }
+      .icon {
+        width: 24px;
+        height: 24px;
+        background: #88a;
+      }
+      .title {
+        height: 20px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- A bar two pixels off the left edge of the one above; the next, 16 px
+         in, is indented on purpose. -->
+    <section
+      style="display: flex; flex-direction: column; gap: 8px; width: 300px"
+    >
+      <div id="n-full" data-expect="near-miss" class="bar">A full bar</div>
+      <div
+        id="n-off"
+        data-expect="near-miss"
+        class="bar"
+        style="width: 250px; margin-left: 2px"
+      >
+        A bar two pixels off
+      </div>
+      <div class="bar" style="width: 250px; margin-left: 16px">
+        A bar indented on purpose
+      </div>
+    </section>
+
+    <!-- Two tiles in a row, one a pixel and a half lower. -->
+    <section style="display: flex; align-items: flex-start; gap: 8px">
+      <div id="n-a" data-expect="near-miss" class="tile">One</div>
+      <div
+        id="n-b"
+        data-expect="near-miss"
+        class="tile"
+        style="margin-top: 1.5px"
+      >
+        Two
+      </div>
+    </section>
+
+    <!-- Repeated cards: the third card's title sits 2 px lower. -->
+    <section
+      style="display: grid; grid-template-columns: repeat(3, 96px); gap: 8px"
+    >
+      <div class="card">
+        <div class="icon"></div>
+        <div id="n-card1" data-expect="near-miss" class="title">Alpha</div>
+      </div>
+      <div class="card">
+        <div class="icon"></div>
+        <div class="title">Beta</div>
+      </div>
+      <div class="card">
+        <div class="icon"></div>
+        <div
+          id="n-card3"
+          data-expect="near-miss"
+          class="title"
+          style="margin-top: 2px"
+        >
+          Gamma
+        </div>
+      </div>
+    </section>
+
+    <!-- Decoy: repeated cards whose centred labels differ in width. -->
+    <section
+      style="display: grid; grid-template-columns: repeat(3, 96px); gap: 8px"
+    >
+      <div class="card" style="align-items: center">
+        <div class="icon"></div>
+        <div class="title">BIN</div>
+      </div>
+      <div class="card" style="align-items: center">
+        <div class="icon"></div>
+        <div class="title">PDF</div>
+      </div>
+      <div class="card" style="align-items: center">
+        <div class="icon"></div>
+        <div class="title">MD</div>
+      </div>
+    </section>
+
+    <!-- Decoy: a subpixel difference. -->
+    <section style="display: flex; align-items: flex-start; gap: 8px">
+      <div class="tile">Three</div>
+      <div class="tile" style="margin-top: 0.3px">Four</div>
+    </section>
+
+    <!-- Decoy: a transformed item. -->
+    <section
+      style="display: flex; flex-direction: column; gap: 8px; width: 300px"
+    >
+      <div class="bar">Still</div>
+      <div class="bar" style="transform: translateX(2px)">
+        Nudged by a hover
+      </div>
+    </section>
+
+    <!-- Decoy: centred items of different widths. -->
+    <section
+      style="
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        width: 300px;
+      "
+    >
+      <div class="bar" style="width: 300px">Centred, wide</div>
+      <div class="bar" style="width: 297px">Centred, a little narrower</div>
+    </section>
+
+    <!-- Decoy: a row aligned by its baseline. -->
+    <section style="display: flex; align-items: baseline; gap: 8px">
+      <span style="font-size: 28px; line-height: 32px">Big</span>
+      <span>small</span>
+      <svg width="16" height="16" viewBox="0 0 16 16">
+        <rect width="16" height="16" fill="#48c" />
+      </svg>
+    </section>
+
+    <!-- Decoy: a row that wraps. -->
+    <section style="display: flex; flex-wrap: wrap; gap: 8px; width: 220px">
+      <div class="chip">1</div>
+      <div class="chip">2</div>
+      <div class="chip">3</div>
+      <div class="chip">4</div>
+      <div class="chip">5</div>
+      <div class="chip">6</div>
+      <div class="chip">7</div>
+    </section>
+
+    <!-- Decoy: rows whose dates follow names of different lengths. -->
+    <section
+      style="display: flex; flex-direction: column; gap: 4px; width: 300px"
+    >
+      <div class="row"><span>Short</span><span>2026</span></div>
+      <div class="row"><span>A longer name</span><span>2026</span></div>
+      <div class="row"><span>Mid name x</span><span>2026</span></div>
+    </section>
+
+    <!-- Decoy: a link inside running words. -->
+    <p style="width: 300px">
+      Words with <a href="#x">a link</a> inside them, and more words after.
+    </p>
+  </body>
+</html>

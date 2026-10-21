@@ -1,8 +1,9 @@
 <script lang="ts" setup>
 import { normalizeHeadingText } from '#layers/thei/shared/terminal-punctuation';
-import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
+import { accessOptions } from '#layers/thei/app/components/field/access-options';
 import { isContentEmpty } from '#layers/thei/shared/content';
 import type { PageEditData } from '#layers/thei/shared/page';
+import type { FormNeed } from '#layers/thei/app/composables/form-needs';
 import type {
   PageGetResponse,
   PageSaveResponse,
@@ -32,6 +33,8 @@ const registeredSlugs = ref<string[]>([]);
 const initialSlug = ref('');
 const slugSynchronized = ref(true);
 const savedSnapshot = ref(JSON.stringify(payload()));
+// Begun from the quick search: the query is the title, as if typed.
+if (!isEdit.value && titleFromQuery()) data.value.title = titleFromQuery();
 /**
  * When the entity last changed, as the form read it. A save names it, and
  * one over a change made elsewhere since — another tab, an AI client — is
@@ -137,19 +140,43 @@ const slugTaken = computed(() =>
     initialSlug.value || undefined,
   ),
 );
+/** What the page still needs before it can be saved, in the form's order. */
+const needs = useFormNeeds(
+  () => {
+    const page = data.value;
+    const list: FormNeed[] = [];
+    if (!page.title.trim())
+      list.push({ key: 'title', label: phrase.value.page_title });
+    if (!page.access)
+      list.push({ key: 'access', label: phrase.value.page_access });
+    if (!page.summary.trim())
+      list.push({ key: 'summary', label: phrase.value.page_summary });
+    const slug = phrase.value.page_slug;
+    if (!page.slug.trim()) list.push({ key: 'slug', label: slug });
+    else if (slugInvalid.value)
+      list.push({
+        key: 'slug',
+        label: slug,
+        problem: phrase.value.page_slug_invalid,
+      });
+    else if (slugTaken.value)
+      list.push({
+        key: 'slug',
+        label: slug,
+        problem: phrase.value.page_slug_already_taken,
+      });
+    if (isContentEmpty(page.content?.data))
+      list.push({ key: 'content', label: phrase.value.page_content });
+    return list;
+  },
+  {
+    ready: () => !saving.value && (!isEdit.value || dirty.value),
+    save,
+    error,
+  },
+);
 const canSave = computed(
-  () =>
-    !saving.value &&
-    Boolean(
-      data.value.title.trim() &&
-      data.value.summary.trim() &&
-      data.value.slug.trim() &&
-      data.value.access &&
-      !isContentEmpty(data.value.content?.data) &&
-      !slugInvalid.value &&
-      !slugTaken.value,
-    ) &&
-    (!isEdit.value || dirty.value),
+  () => !saving.value && !needs.blocked.value && (!isEdit.value || dirty.value),
 );
 
 // The public page lives at the saved address, not at whatever is being typed.
@@ -192,8 +219,8 @@ watch(
   },
 );
 
+/** The save itself; a press or Ctrl+S comes to it through `needs.submit`. */
 async function save() {
-  if (!canSave.value) return;
   saving.value = true;
   error.value = undefined;
   serverSlugError.value = undefined;
@@ -226,7 +253,7 @@ async function save() {
     markSaved();
     await refreshNuxtData('admin-bar');
     if (!isEdit.value)
-      await navigateTo(`/admin/pages/${result.pageUuid}/edit/`, {
+      await navigateTo(sitePath(`/admin/pages/${result.pageUuid}/edit/`), {
         external: true,
       });
   } catch (caught) {
@@ -282,7 +309,6 @@ function emptyData(): PageEditData {
   };
 }
 
-useSaveShortcut(save, { canSave });
 await useAdminTabTitle(
   computed(() =>
     isEdit.value ? phrase.value.edit_page : phrase.value.new_page,
@@ -291,38 +317,23 @@ await useAdminTabTitle(
 </script>
 
 <template>
-  <StickyGlassHeader width="var(--width-wide)" :error="error">
-    <div class="flex items-center justify-between gap-xs py-xs">
-      <div class="flex min-w-0 items-center gap-xs text-xl font-bold">
-        <Icon name="page" />
-        <span class="truncate">{{
-          isEdit ? phrase.edit_page : phrase.new_page
-        }}</span>
-      </div>
-      <div class="flex items-center gap-xs">
-        <AiEntityButton />
-        <Button
-          v-if="isEdit"
-          variant="delete"
-          :aria-label="phrase.delete"
-          :data-title-popup="phrase.delete"
-          @click="remove"
-        >
-          <Icon name="delete" />
-        </Button>
-        <Button class="font-semibold" :disabled="!canSave" @click="save">
-          <Icon v-if="saving" name="loading" class="mr-xs" />
-          {{ isEdit ? (dirty ? phrase.save : phrase.saved) : phrase.create }}
-        </Button>
-      </div>
-    </div>
-  </StickyGlassHeader>
+  <AdminSaveHeader
+    :title="isEdit ? phrase.edit_page : phrase.new_page"
+    icon="page"
+    :dirty
+    :saving
+    :creating="!isEdit"
+    :deletable="isEdit"
+    :needs
+    @delete="remove"
+    ><AiEntityButton
+  /></AdminSaveHeader>
 
   <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
     <AiFormOffers />
     <Box class="flex flex-col gap-md p-sm sm:p-md">
       <div class="flex flex-col gap-md sm:flex-row">
-        <Field ai="field:title" class="min-w-0 flex-1">
+        <Field ai="field:title" need="title" class="min-w-0 flex-1">
           <FieldLabel required>{{ phrase.page_title }}</FieldLabel>
           <FieldInput
             v-model="data.title"
@@ -334,30 +345,17 @@ await useAdminTabTitle(
           <FieldHint>{{ phrase.page_title_hint }}</FieldHint>
         </Field>
 
-        <Field ai="access" class="min-w-50">
+        <Field ai="access" need="access" class="min-w-50">
           <FieldLabel required>{{ phrase.page_access }}</FieldLabel>
           <FieldOptions
             v-model="data.access"
             direction="row"
-            :options="{
-              [ProjectEventAccessLevel.Public]: {
-                icon: 'lock-open',
-                title: phrase.public,
-              },
-              [ProjectEventAccessLevel.LinkOnly]: {
-                icon: 'lock-partial',
-                title: phrase.link_only,
-              },
-              [ProjectEventAccessLevel.Private]: {
-                icon: 'lock-close',
-                title: phrase.private,
-              },
-            }"
+            :options="accessOptions(phrase)"
           />
         </Field>
       </div>
 
-      <Field ai="field:summary">
+      <Field ai="field:summary" need="summary">
         <FieldLabel required>{{ phrase.page_summary }}</FieldLabel>
         <FieldTextarea
           v-model="data.summary"
@@ -369,7 +367,7 @@ await useAdminTabTitle(
       </Field>
 
       <div class="flex flex-col gap-md sm:flex-row">
-        <Field class="min-w-0 flex-1">
+        <Field need="slug" class="min-w-0 flex-1">
           <FieldLabel required>{{ phrase.page_slug }}</FieldLabel>
           <SlugInput
             v-model="data.slug"
@@ -412,7 +410,7 @@ await useAdminTabTitle(
         </Field>
       </div>
 
-      <Field>
+      <Field need="content">
         <FieldLabel required>{{ phrase.page_content }}</FieldLabel>
         <FieldContentEditor
           v-model="data.content"

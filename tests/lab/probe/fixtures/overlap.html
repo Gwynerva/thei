@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>overlap</title>
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      .tile {
+        position: relative;
+        display: block;
+        width: 44px;
+        height: 44px;
+        overflow: hidden;
+        border: 2px solid #fff;
+        border-radius: 8px;
+      }
+      .tile + .tile {
+        margin-left: -8px;
+      }
+      .tile img {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Two paragraphs, the second pulled up into the first. -->
+    <section style="width: 320px">
+      <p id="o-first" data-expect="overlap">Words of the first paragraph</p>
+      <p id="o-second" data-expect="overlap" style="margin-top: -12px">
+        Words of the second one
+      </p>
+    </section>
+
+    <!-- A button that rides up onto a caption. -->
+    <section style="width: 320px">
+      <p id="o-caption" data-expect="overlap">
+        A caption the button rides up on
+      </p>
+      <button
+        id="o-button"
+        data-expect="overlap"
+        class="ctl"
+        style="position: relative; top: -14px"
+      >
+        Press
+      </button>
+    </section>
+
+    <!-- Lines of one heading set closer than their letters are tall. -->
+    <h2
+      id="o-tight"
+      data-expect="overlap"
+      style="width: 150px; font-size: 24px; line-height: 12px"
+    >
+      A heading set far too tight
+    </h2>
+
+    <!-- Decoy: a hero title laid over its banner. -->
+    <section style="position: relative; width: 320px">
+      <img
+        alt="Banner"
+        src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        style="display: block; width: 320px; height: 120px; object-fit: cover"
+      />
+      <h1
+        style="
+          position: absolute;
+          left: 12px;
+          bottom: 8px;
+          font-size: 22px;
+          line-height: 26px;
+          color: #fff;
+        "
+      >
+        A hero title over its banner
+      </h1>
+    </section>
+
+    <!-- Decoy: a badge on an avatar. -->
+    <section>
+      <span style="position: relative; display: inline-block">
+        <img
+          alt="Avatar"
+          width="40"
+          height="40"
+          src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+          style="display: block; border-radius: 50%"
+        />
+        <span
+          style="
+            position: absolute;
+            right: -6px;
+            top: -6px;
+            padding: 0 5px;
+            border-radius: 8px;
+            background: #e33;
+            color: #fff;
+            font-size: 11px;
+            line-height: 16px;
+          "
+          >3</span
+        >
+      </span>
+    </section>
+
+    <!-- Decoy: a stack of tiles, each laid over the one before. -->
+    <section style="display: flex">
+      <a href="#a" class="tile" aria-label="First">
+        <img
+          alt=""
+          src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        />
+      </a>
+      <a href="#b" class="tile" aria-label="Second">
+        <img
+          alt=""
+          src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+        />
+      </a>
+      <a href="#c" class="tile" aria-label="Third">
+        <img
+          alt=""
+          src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        />
+      </a>
+    </section>
+
+    <!-- Decoy: lines with a line height of exactly one. -->
+    <p style="width: 200px; line-height: 1">
+      Several lines of text that wrap with a line height of exactly one, which
+      is tight but fine
+    </p>
+
+    <!-- Decoy: a sticky header with text scrolled under it. -->
+    <section
+      id="scroller"
+      style="width: 300px; height: 96px; overflow: auto; border: 1px solid #ccc"
+    >
+      <div
+        style="
+          position: sticky;
+          top: 0;
+          padding: 4px;
+          background: #fff;
+          font-weight: bold;
+        "
+      >
+        Sticky header
+      </div>
+      <p style="padding: 4px">
+        Line after line of text that scrolls under the sticky header above it
+        and keeps going for a while, longer than the box can hold at once, so
+        that it has to scroll.
+      </p>
+    </section>
+
+    <!-- Decoy: an open popup over text. -->
+    <section style="position: relative; width: 300px">
+      <p>
+        Text that an open popup lies over, as popups do, with a few more words
+        under it.
+      </p>
+      <div
+        data-floating-popup
+        style="
+          position: absolute;
+          left: 40px;
+          top: 4px;
+          z-index: 20;
+          padding: 6px 10px;
+          border: 1px solid #888;
+          background: #fff;
+        "
+      >
+        <button class="ctl">Popup item</button>
+      </div>
+    </section>
+
+    <!-- Decoy: a link that wraps and an icon, both inside running words. -->
+    <p style="width: 300px">
+      Running words with
+      <a href="#x">a link that wraps across the end of a line</a> and an icon
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 20 20"
+        style="vertical-align: -4px"
+      >
+        <circle cx="10" cy="10" r="8" fill="#48c" />
+      </svg>
+      inside them.
+    </p>
+
+    <script>
+      document.getElementById('scroller').scrollTop = 30;
+    </script>
+  </body>
+</html>

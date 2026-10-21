@@ -134,6 +134,9 @@ async function openEditor(page: Page, html: string, blocks: object[] = []) {
       reminder: '',
       notes: null,
     },
+    // Making the page is the test's setting, not what it tests: a server busy
+    // after the specs before may take longer than an action's 5 s.
+    timeout: 30_000,
   });
   const result = await response.json();
   expect(result.type, JSON.stringify(result)).toBe('success');
@@ -293,8 +296,13 @@ test('a row is chosen whole at once, and the path leads back to the search', asy
   await linkLastWords(page, 'project'.length);
 
   await field(page).fill(project.title);
-  await expect(picker(page).locator('[role="option"]').first()).toContainText(
-    project.title,
+  const first = picker(page).locator('[role="option"]').first();
+  await expect(first).toContainText(project.title);
+  // The row Enter takes is ringed before any arrow is pressed.
+  await expect(first).toHaveAttribute('data-active', 'true');
+  await expect(field(page)).toHaveAttribute(
+    'aria-activedescendant',
+    (await first.getAttribute('id'))!,
   );
   await page.keyboard.press('Enter');
   // The level shows, the whole chosen and ✓ waiting.
@@ -838,6 +846,400 @@ test('→ at the last letter of bold or a hint steps out of it, ← at its first
   const [block] = await stored(['paragraph']);
   expect(block!.data.text).toContain('«<abbr');
   expect(block!.data.text).toContain('<b>bold</b>да');
+});
+
+test('the markup the caret is in is ringed, and words typed beside it go outside it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openEditor(
+    page,
+    'Say <b>bold</b>N1 and <a href="https://noted.example/">a <i>nested</i> link</a>',
+  );
+  const rings = page.locator(
+    'dialog .content-inline-ring:not(.content-inline-ring--leaving)',
+  );
+  const bold = paragraph(page).locator('b');
+
+  // Before the words, outside any markup: no ring.
+  await paragraph(page).click();
+  await page.keyboard.press('Home');
+  await expect(rings).toHaveCount(0);
+
+  // In the italic inside the link: both are ringed.
+  await caretIn(page, 'dialog .ce-paragraph a i', 'end');
+  await expect(rings).toHaveCount(2);
+
+  // In the bold, then out of it by →: the ring goes.
+  await caretIn(page, 'dialog .ce-paragraph b', 'end');
+  await expect(rings).toHaveCount(1);
+  await page.keyboard.press('ArrowRight');
+  await expect(rings).toHaveCount(0);
+
+  // Right after it, at the start of the words that follow, as the ring
+  // says: what is typed there is no part of it.
+  await page.evaluate(() => {
+    const after = document.querySelector('dialog .ce-paragraph b')!
+      .nextSibling as Text;
+    const range = document.createRange();
+    range.setStart(after, 0);
+    range.collapse(true);
+    const selection = getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+  await expect(rings).toHaveCount(0);
+  await page.keyboard.type('X');
+  await expect(bold).toHaveText('bold');
+  await expect(paragraph(page)).toContainText('boldXN1');
+
+  // Out of the text, no ring.
+  await caretIn(page, 'dialog .ce-paragraph b', 'end');
+  await expect(rings).toHaveCount(1);
+  await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+  await expect(rings).toHaveCount(0);
+});
+
+test('each edge of markup takes an arrow press of its own, in and out', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openEditor(
+    page,
+    'aa <b>bold</b>XY <a href="https://noted.example/">link</a> zz',
+  );
+  const rings = page.locator(
+    'dialog .content-inline-ring:not(.content-inline-ring--leaving)',
+  );
+  const bold = paragraph(page).locator('b');
+  const link = paragraph(page).locator('a');
+  /** The words the caret is in and its place in them, or the element's. */
+  const where = () =>
+    page.evaluate(() => {
+      const selection = getSelection()!;
+      const node = selection.focusNode!;
+      const name =
+        node.nodeType === Node.TEXT_NODE
+          ? (node as Text).data.trim()
+          : node.nodeName;
+      return `${name}@${selection.focusOffset}`;
+    });
+  async function press(key: string, at: string, ringed: number) {
+    await page.keyboard.press(key);
+    expect(await where()).toBe(at);
+    await expect(rings).toHaveCount(ringed);
+  }
+
+  await paragraph(page).click();
+  await page.evaluate(() => {
+    const after = document.querySelector('dialog .ce-paragraph b')!
+      .nextSibling as Text;
+    const range = document.createRange();
+    range.setStart(after, 2);
+    range.collapse(true);
+    const selection = getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+  // Leftward: the place after the bold, into it, then its letters; at its
+  // first, the place inside, then out before it.
+  await press('ArrowLeft', 'XY@1', 0);
+  await press('ArrowLeft', 'XY@0', 0);
+  await press('ArrowLeft', 'bold@4', 1);
+  await press('ArrowLeft', 'bold@3', 1);
+  await press('ArrowLeft', 'bold@2', 1);
+  await press('ArrowLeft', 'bold@1', 1);
+  await press('ArrowLeft', 'bold@0', 1);
+  await page.keyboard.press('ArrowLeft');
+  await expect(rings).toHaveCount(0);
+  // Typed there, outside it, as the ring says.
+  await page.keyboard.type('Z');
+  await expect(bold).toHaveText('bold');
+  // Rightward: into it before any letter is passed.
+  await page.keyboard.press('ArrowRight');
+  await expect(rings).toHaveCount(1);
+  await page.keyboard.type('Y');
+  await expect(bold).toHaveText('Ybold');
+
+  // At the end inside a link, what is typed goes into it, though the
+  // browser keeps clear of a link's edge.
+  await caretIn(page, 'dialog .ce-paragraph a', 'end');
+  await expect(rings).toHaveCount(1);
+  await page.keyboard.type('s');
+  await expect(link).toHaveText('links');
+  await page.keyboard.press('ArrowRight');
+  await expect(rings).toHaveCount(0);
+  await page.keyboard.type('!');
+  await expect(link).toHaveText('links');
+  const nbsp = String.fromCharCode(160);
+  expect(
+    ((await paragraph(page).textContent()) ?? '').split(nbsp).join(' '),
+  ).toBe('aa ZYboldXY links! zz');
+});
+
+test('markup emptied by Backspace waits for its words, and one more Backspace lets it go', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const { save, stored } = await openEditor(page, 'Say <b>bold</b>');
+  const bold = paragraph(page).locator('b');
+  const kept = page.locator('dialog .content-inline-kept');
+  const html = () => paragraph(page).innerHTML();
+
+  // By the keys, as a person gets there: Editor.js reads the caret its way.
+  await paragraph(page).click();
+  await page.keyboard.press('End');
+  for (let step = 0; step < 4; step++) await page.keyboard.press('Backspace');
+  // Nothing of it is in the text, and the caret says it waits.
+  await expect(bold).toHaveCount(0);
+  await expect(kept).toBeVisible();
+  // What is typed goes back into it, dressed in nothing else.
+  await page.keyboard.type('new');
+  await expect(bold).toHaveText('new');
+  await expect(kept).toHaveCount(0);
+  expect(await html()).not.toContain('<font');
+
+  // Back step by step to the bold as it was, never into nonsense.
+  let restored = false;
+  for (let step = 0; step < 12 && !restored; step++) {
+    await page.keyboard.press('Control+z');
+    restored = (await html()).includes('<b>bold</b>');
+  }
+  expect(restored).toBe(true);
+
+  // Emptied again, one more Backspace lets it go and deletes nothing else.
+  await page.keyboard.press('End');
+  for (let step = 0; step < 4; step++) await page.keyboard.press('Backspace');
+  await expect(kept).toBeVisible();
+  await page.keyboard.press('Backspace');
+  await expect(kept).toHaveCount(0);
+  await page.keyboard.type('x');
+  await expect(bold).toHaveCount(0);
+  const nbsp = String.fromCharCode(160);
+  expect(((await paragraph(page).textContent()) ?? '').replace(nbsp, ' ')).toBe(
+    'Say x',
+  );
+
+  await save.click();
+  await expect(save).toHaveText('Saved');
+  const [block] = await stored(['paragraph']);
+  expect(block!.data.text).not.toContain('<b>');
+});
+
+test('the last Delete of an emptied mark at the edge of a block joins no blocks', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openEditor(page, '<i>Hi</i>', [
+    { type: 'paragraph', data: { text: 'Next line' } },
+  ]);
+  const blocks = page.locator('dialog .content-editor .ce-paragraph');
+  const kept = page.locator('dialog .content-inline-kept');
+  await blocks.first().click();
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Delete');
+  await page.keyboard.press('Delete');
+  await expect(kept).toBeVisible();
+  // Editor.js would take this one to join the next block to this one.
+  await page.keyboard.press('Delete');
+  await expect(kept).toHaveCount(0);
+  await expect(blocks).toHaveCount(2);
+  await expect(blocks.nth(1)).toHaveText('Next line');
+});
+
+test('the last Backspace of an emptied mark beside a private edge is the mark’s', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openEditor(page, 'Before', [
+    {
+      type: 'privateSectionBoundary',
+      data: { sectionId: 'one', edge: 'start' },
+    },
+    { type: 'paragraph', data: { text: '<i>Hi</i>' } },
+    { type: 'privateSectionBoundary', data: { sectionId: 'one', edge: 'end' } },
+    { type: 'paragraph', data: { text: 'After' } },
+  ]);
+  const blocks = page.locator('dialog .content-editor .ce-paragraph');
+  const kept = page.locator('dialog .content-inline-kept');
+  await blocks.nth(1).click();
+  await page.keyboard.press('End');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Backspace');
+  await expect(kept).toBeVisible();
+  // The edge would take it to step the caret out of the section.
+  await page.keyboard.press('Backspace');
+  await expect(kept).toHaveCount(0);
+  await page.keyboard.type('x');
+  await expect(blocks.nth(1)).toHaveText('x');
+  await expect(blocks.first()).toHaveText('Before');
+  await expect(
+    page.locator('dialog .content-editor [data-private-section-id]'),
+  ).toHaveCount(2);
+});
+
+test('a line with a link pasted into a link keeps that link whole', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openEditor(
+    page,
+    'See <a href="https://outer.example/">Alpha Beta</a> end',
+  );
+  await paragraph(page).click();
+  await page.evaluate(() => {
+    const text = document.querySelector('dialog .ce-paragraph a')!.firstChild!;
+    const range = document.createRange();
+    range.setStart(text, 'Alpha'.length);
+    range.collapse(true);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    const data = new DataTransfer();
+    data.setData('text/plain', 'Gamma more');
+    data.setData(
+      'text/html',
+      '<a href="https://inner.example/">Gamma</a> more',
+    );
+    text.parentElement!.dispatchEvent(
+      new ClipboardEvent('paste', {
+        clipboardData: data,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+  const links = paragraph(page).locator('a');
+  await expect(links).toHaveCount(1);
+  await expect(links).toHaveText('AlphaGamma more Beta');
+  await expect(links).toHaveAttribute('href', 'https://outer.example/');
+});
+
+test('markup made or written into inside bold stays inside the bold', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const { save, stored } = await openEditor(
+    page,
+    'Say <b>one two <a href="https://noted.example/">link</a></b> end',
+  );
+  const html = () => paragraph(page).innerHTML();
+  await paragraph(page).click();
+
+  // A hint on a word of the bold: the browser would split the bold round it.
+  await page.evaluate(() => {
+    const text = document.querySelector('dialog .ce-paragraph b')!.firstChild!;
+    const range = document.createRange();
+    range.setStart(text, 7);
+    range.collapse(true);
+    const selection = getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+  for (let step = 0; step < 3; step++)
+    await page.keyboard.press('Shift+ArrowLeft');
+  await page
+    .locator('.ce-popover--opened [data-item-name="contentHint"]')
+    .click();
+  await page.keyboard.type('a number');
+  await page.keyboard.press('Enter');
+  await expect(paragraph(page).locator('b abbr')).toHaveText('two');
+  expect(await html()).not.toContain('</b><abbr');
+
+  // Letters typed at the end of the link inside the bold: into the link,
+  // still in the bold, and three dots are an ellipsis as anywhere.
+  await caretIn(page, 'dialog .ce-paragraph a', 'end');
+  await page.keyboard.type('s...');
+  await expect(paragraph(page).locator('b a')).toHaveText('links…');
+
+  // A line pasted in the middle of the bold goes into it.
+  await page.evaluate(() => {
+    const text = document.querySelector('dialog .ce-paragraph b')!.firstChild!;
+    const range = document.createRange();
+    range.setStart(text, 4);
+    range.collapse(true);
+    const selection = getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    const data = new DataTransfer();
+    data.setData('text/plain', 'pasted ');
+    text.parentElement!.dispatchEvent(
+      new ClipboardEvent('paste', {
+        clipboardData: data,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+  await expect(paragraph(page).locator('b').first()).toContainText(
+    'one pasted two',
+  );
+  expect(await paragraph(page).locator('b').count()).toBe(1);
+
+  await save.click();
+  await expect(save).toHaveText('Saved');
+  const [block] = await stored(['paragraph']);
+  expect(block!.data.text).toMatch(
+    /^Say <b>one pasted <abbr data-content-hint="a number">two<\/abbr> <a [^>]+>links…<\/a><\/b> end$/,
+  );
+});
+
+test('a link typed over or emptied keeps its address and takes what is typed', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openEditor(
+    page,
+    'Read <a href="https://noted.example/">site</a> and <abbr data-content-hint="a short word">hint</abbr>',
+  );
+  const link = paragraph(page).locator('a');
+  const hint = paragraph(page).locator('abbr');
+  const kept = page.locator('dialog .content-inline-kept');
+
+  await paragraph(page).click();
+  // Its words selected and typed over: the new ones go into it, letter by
+  // letter, though the browser keeps clear of a link's end.
+  await page.evaluate(() => {
+    const anchor = document.querySelector('dialog .ce-paragraph a')!;
+    (anchor.closest('[contenteditable="true"]') as HTMLElement).focus();
+    const range = document.createRange();
+    range.selectNodeContents(anchor);
+    const selection = getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+  await page.keyboard.type('page');
+  await expect(link).toHaveText('page');
+  await expect(link).toHaveAttribute('href', 'https://noted.example/');
+
+  // Emptied, it waits; typed into, it is back with its address.
+  for (let step = 0; step < 4; step++) await page.keyboard.press('Backspace');
+  await expect(link).toHaveCount(0);
+  await expect(kept).toBeVisible();
+  await page.keyboard.type('notes');
+  await expect(link).toHaveText('notes');
+  await expect(link).toHaveAttribute('href', 'https://noted.example/');
+  // → steps out; what follows is no part of it.
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.type(' too');
+  await expect(link).toHaveText('notes');
+
+  // A hint keeps what it says the same way.
+  await caretIn(page, 'dialog .ce-paragraph abbr', 'end');
+  for (let step = 0; step < 4; step++) await page.keyboard.press('Backspace');
+  await expect(kept).toBeVisible();
+  await page.keyboard.type('word');
+  await expect(hint).toHaveText('word');
+  await expect(hint).toHaveAttribute('data-content-hint', 'a short word');
+
+  // Emptied, then left: the caret moved away lets it go.
+  for (let step = 0; step < 4; step++) await page.keyboard.press('Backspace');
+  await expect(kept).toBeVisible();
+  await page.keyboard.press('ArrowLeft');
+  await expect(kept).toHaveCount(0);
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.type('s');
+  await expect(hint).toHaveCount(0);
 });
 
 test('a click past the end of bold at the end of a line puts the caret outside it', async ({

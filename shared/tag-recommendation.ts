@@ -1,12 +1,11 @@
 import type { MediaDescriptor } from './media';
 import type { RelationEndpoint } from './relation';
 import type { TagContainerType, TagItem } from './tag';
+import { saysLittle, textWords } from './search/match';
 import {
   containsPhrase,
   cosineSimilarity,
   normalizeTermText,
-  stemTerm,
-  wordTokens,
   type TermCounts,
   type TermVector,
 } from './text-terms';
@@ -127,7 +126,11 @@ export type TagProfile = {
    * things — «C++, .NET & API» — is split into them.
    */
   names: TagNamePart[][];
-  /** The rarest words of the description, not already in the name. */
+  /**
+   * The rarest words of the description, not already in the name — never a
+   * word that says little («как», «было») or one most texts hold: a tag is
+   * not recognized by the words of every text.
+   */
   descriptionStems: string[];
   /** Each stem as the tag itself writes it, to name a match found by stem. */
   words: Map<string, string>;
@@ -143,7 +146,7 @@ function nameParts(name: string): TagNamePart[] {
     .map((part) => normalizeTermText(part).trim())
     .filter(Boolean)
     .map((part) => ({
-      stems: [...new Set(wordTokens(part).map(stemTerm))].filter(
+      stems: [...new Set(textWords(part).map(({ term }) => term))].filter(
         (stem) => stem.length > 1,
       ),
       // A name made of more than words is also looked for as it is written.
@@ -160,6 +163,8 @@ export function buildTagProfile(
     synonyms?: string[];
   },
   idf: (term: string) => number,
+  /** Words this common or more — a quarter of the archive — say nothing of it. */
+  commonIdf = 0,
 ): TagProfile {
   const aliases = [...tag.title.matchAll(NAME_ALIAS)].map((match) => match[1]!);
   // A synonym is a name like any other: found in a text, it counts in full.
@@ -172,16 +177,18 @@ export function buildTagProfile(
     .filter((parts) => parts.length);
   const nameStems = new Set(names.flat().flatMap((part) => part.stems));
   const words = new Map<string, string>();
-  for (const token of wordTokens(
+  for (const { word, term } of textWords(
     [tag.title, ...(tag.synonyms ?? []), tag.description ?? ''].join(' '),
-  )) {
-    const stem = stemTerm(token);
-    if (!words.has(stem)) words.set(stem, token);
-  }
+  ))
+    if (!words.has(term)) words.set(term, word);
   const descriptionStems = [
-    ...new Set(wordTokens(tag.description ?? '').map(stemTerm)),
+    ...new Set(
+      textWords(tag.description ?? '')
+        .filter(({ word }) => !saysLittle(word))
+        .map(({ term }) => term),
+    ),
   ]
-    .filter((stem) => stem.length > 2 && !nameStems.has(stem))
+    .filter((stem) => !nameStems.has(stem) && idf(stem) > commonIdf)
     .sort((left, right) => idf(right) - idf(left))
     .slice(0, TAG_RECOMMENDATION.descriptionTerms);
   return {

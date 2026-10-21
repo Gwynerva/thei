@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, or } from 'drizzle-orm';
 import type { AiRevisePart } from '#layers/thei/shared/ai-actions';
 import type { EntityKey } from '../../entity-kinds';
 
@@ -70,7 +70,11 @@ export function neverOffered(fingerprints: string[]): Set<string> {
   );
 }
 
-/** Of these fingerprints, the ones declined in a session that still lives. */
+/**
+ * Of these fingerprints, the ones declined in a session that still lives —
+ * or applied there with the owner's words in place of the model's: those
+ * are not offered again either.
+ */
 export function declinedLately(fingerprints: string[]): Set<string> {
   if (!fingerprints.length) return new Set();
   const { db, schema } = THEI_SERVER.useDb();
@@ -80,7 +84,13 @@ export function declinedLately(fingerprints: string[]): Set<string> {
       .from(schema.aiActions)
       .where(
         and(
-          eq(schema.aiActions.state, 'rejected'),
+          or(
+            eq(schema.aiActions.state, 'rejected'),
+            and(
+              eq(schema.aiActions.state, 'applied'),
+              isNotNull(schema.aiActions.proposed),
+            ),
+          ),
           inArray(schema.aiActions.fingerprint, fingerprints),
         ),
       )

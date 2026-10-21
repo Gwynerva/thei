@@ -1,0 +1,5 @@
+# The lab's data, whose bytes are what its tests read: an archive in a format
+# of its own (Lab Markdown), pages measured to the pixel, generated runs.
+tests/lab/archive/conformance/archive/
+tests/lab/probe/fixtures/
+tests/lab/review/fixtures/

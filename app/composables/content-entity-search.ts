@@ -92,28 +92,47 @@ export function useContentEntitySearch(options: {
 }
 
 /**
- * The row the arrow keys are on in a picker's list: none until they are
- * used, and Enter then takes the first. A new answer starts it over; the
- * mouse takes the row it is over, a finger only what it taps.
+ * The row Enter takes in a picker's list, ringed as the select's option is:
+ * the first, or the one `start` names, and again after every new answer.
+ * `start` may name none (-1): rows offered with nothing typed wait for the
+ * keys or the pointer to choose one. The arrows walk it; the mouse takes the
+ * row it is over, a finger only what it taps.
  */
-export function useActiveRow(count: () => number, reset: WatchSource) {
+export function useActiveRow(
+  count: () => number,
+  reset: WatchSource,
+  start: () => number = () => 0,
+) {
   const listId = useId();
-  const activeIndex = ref(-1);
-  watch(reset, () => (activeIndex.value = -1));
+  const index = ref(start());
+  watch(reset, () => (index.value = start()));
+
+  /**
+   * A row of the list while it has any, unless none is chosen yet; -1 while
+   * it is empty or nothing is chosen.
+   */
+  const activeIndex = computed(() => {
+    const total = count();
+    if (!total || index.value < 0) return -1;
+    return Math.min(index.value, total - 1);
+  });
 
   const optionId = (index: number) => `${listId}-${index}`;
 
   function move(step: number) {
     const total = count();
     if (!total) return;
-    activeIndex.value = (activeIndex.value + step + total) % total;
+    // From none, down goes to the first row and up to the last.
+    const from =
+      activeIndex.value < 0 ? (step > 0 ? -1 : 0) : activeIndex.value;
+    index.value = (((from + step) % total) + total) % total;
     document
-      .getElementById(optionId(activeIndex.value))
+      .getElementById(optionId(index.value))
       ?.scrollIntoView({ block: 'nearest' });
   }
 
-  function pointAt(event: PointerEvent, index: number) {
-    if (event.pointerType === 'mouse') activeIndex.value = index;
+  function pointAt(event: PointerEvent, row: number) {
+    if (event.pointerType === 'mouse') index.value = row;
   }
 
   return {
@@ -123,7 +142,7 @@ export function useActiveRow(count: () => number, reset: WatchSource) {
     move,
     pointAt,
     /** The row Enter takes. */
-    current: () => Math.max(0, activeIndex.value),
+    current: () => activeIndex.value,
   };
 }
 

@@ -1,21 +1,23 @@
-import { normalizeTermText } from './text-terms';
-
-export type PublicSearchType = 'project' | 'event';
+import { SEARCH_KINDS, type SearchKind } from './search/api';
+import { SEARCH_QUERY_MAX_LENGTH } from './search/tokens';
 
 export interface PublicSearchFilters {
   q: string;
-  /** Both kinds when absent. */
-  type?: PublicSearchType;
-  /** Project-only filters; they rule events out while active. */
+  /** One of the kinds the search finds; every kind when absent. */
+  type?: SearchKind;
+  /** Project-only filters; they rule every other kind out while active. */
   showcase: boolean;
   cv: boolean;
   /** Tag slugs every result must have. */
   tags: string[];
   /** Tag slugs no result may have. */
   exclude: string[];
+  /** Only what falls in this year. */
+  year?: number;
+  /** Found things read by their days, newest or oldest first, rather than best first. */
+  sort?: 'new' | 'old';
 }
 
-export const PUBLIC_SEARCH_QUERY_MAX_LENGTH = 200;
 export const PUBLIC_SEARCH_DEBOUNCE_MS = 450;
 
 function queryString(value: unknown): string {
@@ -23,30 +25,45 @@ function queryString(value: unknown): string {
   return typeof first === 'string' ? first : '';
 }
 
+/** The most tags a search narrows by, each way, and the longest slug read. */
+export const PUBLIC_SEARCH_TAGS_MAX = 10;
+const PUBLIC_SEARCH_SLUG_MAX_LENGTH = 200;
+
+/**
+ * The tags of an address, each once: the same few on the page and on the
+ * server, so a long list costs nothing to look up.
+ */
 function slugList(value: unknown): string[] {
   return [
     ...new Set(
       queryString(value)
         .split(',')
         .map((slug) => slug.trim())
-        .filter(Boolean),
+        .filter((slug) => slug && slug.length <= PUBLIC_SEARCH_SLUG_MAX_LENGTH),
     ),
-  ];
+  ].slice(0, PUBLIC_SEARCH_TAGS_MAX);
 }
 
 export function parsePublicSearchFilters(
   query: Record<string, unknown>,
 ): PublicSearchFilters & { page: number } {
   const type = queryString(query.type);
+  const known = (SEARCH_KINDS as readonly string[]).includes(type);
+  const projects = !known || type === 'project';
   const tags = slugList(query.tags);
   const page = Number(queryString(query.page));
+  const year = Number(queryString(query.year));
   return {
-    q: queryString(query.q).slice(0, PUBLIC_SEARCH_QUERY_MAX_LENGTH),
-    ...(type === 'project' || type === 'event' ? { type } : {}),
-    showcase: type !== 'event' && queryString(query.showcase) === '1',
-    cv: type !== 'event' && queryString(query.cv) === '1',
+    q: queryString(query.q).slice(0, SEARCH_QUERY_MAX_LENGTH),
+    ...(known ? { type: type as SearchKind } : {}),
+    showcase: projects && queryString(query.showcase) === '1',
+    cv: projects && queryString(query.cv) === '1',
     tags,
     exclude: slugList(query.exclude).filter((slug) => !tags.includes(slug)),
+    ...(Number.isInteger(year) && year > 999 && year < 10000 ? { year } : {}),
+    ...(queryString(query.sort) === 'new' || queryString(query.sort) === 'old'
+      ? { sort: queryString(query.sort) as 'new' | 'old' }
+      : {}),
     page: Number.isInteger(page) && page > 1 ? page : 1,
   };
 }
@@ -57,7 +74,7 @@ export function publicSearchQuery(
   page = 1,
 ): Record<string, string> {
   const q = filters.q.trim();
-  const projects = filters.type !== 'event';
+  const projects = !filters.type || filters.type === 'project';
   return {
     ...(q ? { q } : {}),
     ...(filters.type ? { type: filters.type } : {}),
@@ -65,6 +82,8 @@ export function publicSearchQuery(
     ...(projects && filters.cv ? { cv: '1' } : {}),
     ...(filters.tags.length ? { tags: filters.tags.join(',') } : {}),
     ...(filters.exclude.length ? { exclude: filters.exclude.join(',') } : {}),
+    ...(filters.year ? { year: String(filters.year) } : {}),
+    ...(filters.sort ? { sort: filters.sort } : {}),
     ...(page > 1 ? { page: String(page) } : {}),
   };
 }
@@ -76,16 +95,10 @@ export function countPublicSearchFilters(filters: PublicSearchFilters) {
     (filters.showcase ? 1 : 0) +
     (filters.cv ? 1 : 0) +
     filters.tags.length +
-    filters.exclude.length
+    filters.exclude.length +
+    (filters.year ? 1 : 0) +
+    (filters.sort ? 1 : 0)
   );
-}
-
-export function normalizePublicSearchText(value: string): string {
-  return normalizeTermText(value);
-}
-
-export function publicSearchTokens(q: string): string[] {
-  return normalizePublicSearchText(q).split(/\s+/u).filter(Boolean);
 }
 
 /**

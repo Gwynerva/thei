@@ -21,7 +21,9 @@ const list = computed<ProjectListResponse | undefined>(() => data.value);
 <template>
   <StickyGlassHeader width="var(--width-wide)">
     <div class="flex items-center justify-between gap-xs py-xs">
-      <div class="flex min-w-0 items-center gap-xs text-xl font-bold">
+      <div
+        class="flex min-w-0 items-center gap-xs text-lg font-bold sm:text-xl"
+      >
         <Icon name="project" class="shrink-0" />
         <span class="truncate">{{ phrase.admin_projects }}</span>
       </div>
@@ -129,7 +131,11 @@ const list = computed<ProjectListResponse | undefined>(() => data.value);
         <template #size>{{ humanSize(project.totalSize) }}</template>
         <template #action>
           <TheiLink
-            :to="buildProjectUrl(project.humanReadableSlug, project.publicId)"
+            :to="
+              sitePath(
+                buildProjectUrl(project.humanReadableSlug, project.publicId),
+              )
+            "
             external
             :data-title-popup="phrase.view_project"
             :aria-label="phrase.view_project"

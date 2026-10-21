@@ -1,0 +1,24 @@
+[
+  {
+    "at": "2026-10-19T18:40:00.000Z",
+    "text": "A search result’s heading wraps onto a second line instead of being cut off.",
+    "jobs": [
+      "find-and-read.guest"
+    ],
+    "variants": [
+      "pl"
+    ],
+    "commit": "291db93c"
+  },
+  {
+    "at": "2026-10-20T10:40:00.000Z",
+    "text": "“New entry” moved from the menu onto the dashboard on phones.",
+    "jobs": [
+      "diary-today.novice"
+    ],
+    "variants": [
+      "pl"
+    ],
+    "commit": "c81a2f1f"
+  }
+]

@@ -49,7 +49,7 @@ export async function getPublicAdminSessions(
     sessionsByUuid.set(session.sessionUuid, session);
   }
 
-  await expireAdminSessions(sessionsByUuid.values());
+  expireAdminSessions(sessionsByUuid.values());
 
   const sessions = [...sessionsByUuid.values()].map((session) =>
     toPublicAdminSession(cloneSession(session), currentSessionUuid),

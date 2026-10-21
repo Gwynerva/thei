@@ -1,0 +1,13 @@
+{
+  "jobId": "diary-today.novice",
+  "study": "fixture",
+  "scenario": "diary-today",
+  "scenarioTitle": "Write today’s entry",
+  "persona": "novice",
+  "lens": "persona",
+  "role": "owner",
+  "required": [
+    "dd",
+    "pl"
+  ]
+}

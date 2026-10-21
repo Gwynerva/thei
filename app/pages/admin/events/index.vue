@@ -18,7 +18,9 @@ const list = computed<EventListResponse | undefined>(() => data.value);
 <template>
   <StickyGlassHeader width="var(--width-wide)">
     <div class="flex items-center justify-between gap-xs py-xs">
-      <div class="flex min-w-0 items-center gap-xs text-xl font-bold">
+      <div
+        class="flex min-w-0 items-center gap-xs text-lg font-bold sm:text-xl"
+      >
         <Icon name="event" class="shrink-0" />
         <span class="truncate">{{ phrase.admin_events }}</span>
       </div>
@@ -114,7 +116,7 @@ const list = computed<EventListResponse | undefined>(() => data.value);
         <template #size>{{ humanSize(item.totalSize) }}</template>
         <template #action>
           <TheiLink
-            :to="buildEventUrl(item.humanReadableSlug, item.publicId)"
+            :to="sitePath(buildEventUrl(item.humanReadableSlug, item.publicId))"
             external
             :data-title-popup="phrase.view_event"
             :aria-label="phrase.view_event"

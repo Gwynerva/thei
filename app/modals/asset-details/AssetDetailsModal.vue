@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type {
   AssetReplaceResult,
+  AssetVariantInfo,
   AssetVariantsResponse,
 } from '#layers/thei/shared/api/asset';
 import { mapAssetVariantToReplaceResult } from '#layers/thei/app/composables/asset-wizard';
@@ -9,6 +10,7 @@ import ModalWaiting from '#layers/thei/app/modals/ModalWaiting.vue';
 import {
   archivedOriginalFromMeta,
   type ArchivedOriginalFileMeta,
+  type VideoAssetMeta,
 } from '#layers/thei/shared/asset';
 import AssetModal from '#layers/thei/app/modals/asset-modal/AssetModal.vue';
 import AssetModalButton from '#layers/thei/app/modals/asset-modal/AssetModalButton.vue';
@@ -16,6 +18,7 @@ import AssetModalFileInfo from '#layers/thei/app/modals/asset-modal/AssetModalFi
 import AssetModalPreviewAudio from '#layers/thei/app/modals/asset-modal/AssetModalPreviewAudio.vue';
 import AssetModalPreviewMedia from '#layers/thei/app/modals/asset-modal/AssetModalPreviewMedia.vue';
 import AssetPanelSection from '#layers/thei/app/modals/asset-modal/AssetPanelSection.vue';
+import AssetPreviewFrameSection from '#layers/thei/app/modals/asset-modal/AssetPreviewFrameSection.vue';
 import ModalHeaderButton from '#layers/thei/app/modals/ModalHeaderButton.vue';
 import type { IconName } from '#thei/icons';
 import FilePreviewContent from '#layers/thei/app/components/file-preview/FilePreviewContent.vue';
@@ -77,11 +80,23 @@ const mediaPreview =
 
 const given = props.modalData.asset;
 const fetched = shallowRef<AssetReplaceResult>();
+/** The file as a frame taken in this window left it. */
+const taken = shallowRef<AssetReplaceResult>();
 const loadFailure = ref('');
+/** The background read of a video's meta came back with none. */
+const metaUnread = ref(false);
 /** The file, once known; the window and its fields are there before it. */
-const asset = computed(() => ('assetUrl' in given ? given : fetched.value));
+const asset = computed(
+  () =>
+    taken.value ?? fetched.value ?? ('assetUrl' in given ? given : undefined),
+);
 
-async function load() {
+/**
+ * Reads the file. A place that keeps it whole but for its meta — a text's
+ * video, whose still the window says how it was taken — is read in the
+ * background, and nothing is said if that fails.
+ */
+async function load(quiet = false) {
   loadFailure.value = '';
   try {
     const family = await $fetch<AssetVariantsResponse>(
@@ -91,15 +106,35 @@ async function load() {
       (variant) => variant.assetUuid === given.assetUuid,
     );
     if (stored) fetched.value = mapAssetVariantToReplaceResult(stored);
-    else loadFailure.value = phrase.value.asset_library_missing;
+    else if (!quiet) loadFailure.value = phrase.value.asset_library_missing;
+    else metaUnread.value = true;
   } catch (error) {
+    if (quiet) {
+      metaUnread.value = true;
+      return;
+    }
     loadFailure.value = errorMessage(
       error,
       phrase.value.upload_error_load_variants,
     );
   }
 }
-if (!('assetUrl' in given) && import.meta.client) void load();
+if (import.meta.client) {
+  if (!('assetUrl' in given)) void load();
+  else if (given.media?.kind === 'video' && given.meta === undefined)
+    void load(true);
+}
+const videoMeta = computed(() =>
+  asset.value?.media?.kind === 'video'
+    ? (asset.value.meta as VideoAssetMeta | null | undefined)
+    : undefined,
+);
+function takeVariants(variants: AssetVariantInfo[]) {
+  const shown = variants.find(
+    (variant) => variant.assetUuid === given.assetUuid,
+  );
+  if (shown) taken.value = mapAssetVariantToReplaceResult(shown);
+}
 
 const title = ref(props.modalData.initialTitle ?? '');
 const caption = ref(props.modalData.initialCaption ?? '');
@@ -230,6 +265,7 @@ useSaveShortcut(confirm, {
         :extension="asset.extension"
         :src="previewSrc"
         :poster="videoPosterOf(asset.media)"
+        :poster-at="videoMeta?.previewAt"
         :has-audio="asset.media?.hasAudio"
       />
       <AssetModalPreviewAudio
@@ -356,6 +392,19 @@ useSaveShortcut(confirm, {
             global
           />
         </AssetPanelSection>
+
+        <!-- The video's still is the file's too, for all its variants. -->
+        <AssetPreviewFrameSection
+          v-if="asset?.media?.kind === 'video'"
+          :asset-uuid="asset.assetUuid"
+          :poster="videoPosterOf(asset.media)"
+          :preview-at="videoMeta?.previewAt"
+          :chosen="videoMeta?.previewChosen"
+          :pending="videoMeta === undefined && !metaUnread"
+          :current-time="mediaPreview?.playbackTime"
+          @chosen="takeVariants"
+          @seek="mediaPreview?.seek($event)"
+        />
       </div>
     </template>
 

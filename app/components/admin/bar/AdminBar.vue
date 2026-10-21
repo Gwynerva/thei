@@ -26,6 +26,12 @@ const route = useRoute();
 const registeredContextButton = useAdminBarContextButton();
 
 const historyBuffer = useContentHistoryBuffer();
+const { base: siteBase } = useSiteUrl();
+
+// The admin has no header of the site: the quick search opens from here.
+// A public page has its own search icon, and the bar no second one.
+const { show: showSearch } = useSiteSearch();
+const inAdmin = computed(() => route.path.startsWith('/admin/'));
 
 /**
  * Text an editor wrote while the server could not be reached waits in this
@@ -47,6 +53,7 @@ onBeforeUnmount(() => window.removeEventListener('online', sendUnsyncedTexts));
 async function signOut() {
   // Nothing typed may stay behind in the browser after signing out: it is sent
   // first, and what cannot be sent is given up only when the owner agrees.
+  // What the owner searched for goes too.
   const unsynced = await sendUnsyncedTexts().catch(
     () => historyBuffer.list().length,
   );
@@ -58,6 +65,7 @@ async function signOut() {
   await $fetch('/api/admin/session', { method: 'DELETE' });
   for (const entry of historyBuffer.list())
     historyBuffer.remove(entry.field, entry.writer);
+  forgetOwnerSearchHistory(siteBase);
   await navigateTo(sitePath('/sign-in/'), { external: true });
 }
 
@@ -255,6 +263,21 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
         </nav>
 
         <div class="flex min-w-0 items-stretch">
+          <button
+            v-if="inAdmin"
+            type="button"
+            :data-title-popup="phrase.search"
+            :aria-label="phrase.search"
+            v-bind="{ [SITE_SEARCH_ANCHOR]: '' }"
+            class="flex h-full shrink-0 cursor-pointer items-center
+              bg-transparent px-2 opacity-80 transition max-xs:px-1.5 sm:px-3
+              popup-open:bg-accent/25 popup-open:opacity-100 hocus:bg-accent/25
+              hocus:opacity-100"
+            @click="showSearch($event.currentTarget as HTMLElement)"
+          >
+            <Icon name="search" class="shrink-0 text-xl max-xs:text-lg" />
+          </button>
+
           <AdminBarButton
             to="/admin/about/"
             :label="publicText(publicAdmin.displayName)"

@@ -228,6 +228,16 @@ test('a free crop is taken on request, and the picture can be turned', async ({
   await expect(frame).toHaveAccessibleName(/×/);
   await expect(useResult).toBeEnabled({ timeout: 20_000 });
   await useResult.click();
+  // The last screen shows the file taken, not the source under its frame;
+  // Back brings the frame back as it was.
+  await expect(page.locator('[data-upload-screen="describe"]')).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(frame).toHaveCount(0);
+  await page.locator('[data-upload-back]').click();
+  await expect(frame).toBeVisible();
+  await expect(useResult).toBeEnabled({ timeout: 20_000 });
+  await useResult.click();
   await skipDescription(page);
   await expect(page.locator('[data-result]')).toContainText('assetUuid');
 
@@ -457,7 +467,51 @@ test('a video variant is made as a job the editor follows', async ({
   await expect(next).toBeEnabled();
   expect(polls.length).toBeGreaterThan(0);
   await next.click();
-  await skipDescription(page);
+  // Under its description, the video's still, chosen automatically.
+  const still = page.locator(
+    '[data-upload-screen="describe"] [data-asset-preview-frame]',
+  );
+  await expect(still).toHaveAttribute('data-asset-preview-frame-state', 'auto');
+  await expect(
+    still.locator('[data-asset-preview-frame-auto]'),
+  ).toHaveAttribute('aria-pressed', 'true');
+  // Going on without a description only lets «Done» go on: the still stays
+  // at hand until then.
+  const {
+    done,
+    description,
+    skipDescription: withoutDescription,
+  } = uploadControls(page);
+  await expect(done).toBeDisabled();
+  await withoutDescription.click();
+  await expect(withoutDescription).toHaveAttribute('aria-pressed', 'true');
+  await expect(still).toBeVisible();
+  await expect(done).toBeEnabled();
+  // A still taken meanwhile keeps the choice: it is the same file.
+  await page
+    .getByRole('slider', { name: 'Playback position' })
+    .evaluate((element) => {
+      const input = element as HTMLInputElement;
+      input.value = '0.5';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  await still.locator('[data-asset-preview-frame-take]').click();
+  await expect(still).toHaveAttribute(
+    'data-asset-preview-frame-state',
+    'chosen',
+  );
+  await expect(withoutDescription).toHaveAttribute('aria-pressed', 'true');
+  await expect(done).toBeEnabled();
+  // It is offered only while the field is empty: words take it away, and
+  // with it the choice made.
+  await description.fill('A test clip');
+  await expect(withoutDescription).toHaveCount(0);
+  await description.fill('');
+  await expect(withoutDescription).toHaveAttribute('aria-pressed', 'false');
+  await expect(done).toBeDisabled();
+  await withoutDescription.click();
+  await done.click();
   await expect(page.locator('[data-result]')).toContainText('assetUuid');
   const [stored] = JSON.parse(
     (await page.locator('[data-result]').textContent())!,
@@ -468,6 +522,7 @@ test('a video variant is made as a job the editor follows', async ({
   const { asset } = await usages.json();
   expect(asset.extension).toBe('webm');
   expect(asset.settings.type).toBe('video-transform');
+  expect(asset.meta.previewChosen).toBe(true);
 });
 
 test('the quality bar walks its stops from the keyboard and by a tap', async ({
@@ -505,4 +560,59 @@ test('the quality bar walks its stops from the keyboard and by a tap', async ({
   await page.mouse.click(box.x + (box.width * 2.5) / 6, box.y + box.height / 2);
   await expect(bar).toHaveAttribute('aria-valuetext', 'Medium');
   await expect(useResult).toBeEnabled({ timeout: 20_000 });
+});
+
+test('a placed file changed to itself is handed back with no description asked', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const created = await page.request.post('/api/admin/projects', {
+    data: {
+      title: `Placed ${stamp}`,
+      summary: 'A project with a placed file.',
+      access: 'public',
+      humanReadableSlug: 'placed',
+      publicId: `placed${stamp}`,
+      showcase: false,
+      cv: false,
+      descriptionContent: {
+        data: { blocks: [{ type: 'paragraph', data: { text: 'Placed.' } }] },
+      },
+    },
+  });
+  const projectUuid = (await created.json()).projectUuid as string;
+  await page.goto(`/admin/projects/${projectUuid}/edit/`);
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-nuxt-hydrated',
+    'true',
+  );
+
+  // Placed in the showcase: a new upload, so its description is asked for.
+  await page
+    .getByRole('button', { name: 'Add to Showcase', exact: true })
+    .click();
+  await page.locator('dialog[open] input[type=file]').setInputFiles({
+    name: 'placed.png',
+    mimeType: 'image/png',
+    buffer: await photo(320, 240),
+  });
+  const { next } = uploadControls(page);
+  await expect(next).toHaveText('Next');
+  await next.click();
+  await skipDescription(page);
+  const caption = page
+    .locator('dialog[open]')
+    .last()
+    .getByRole('textbox', { name: 'Caption', exact: true });
+  await expect(caption).toBeVisible({ timeout: 20_000 });
+
+  // «Change», then the file as it is: already stored, it is handed back at
+  // once, and the details come back with no editor left over them.
+  await page.locator('dialog[open] [data-asset-replace]').click();
+  await expect(page.locator('[data-upload-screen="root"]')).toBeVisible();
+  await expect(next).toHaveText('Done');
+  await expect(next).toBeEnabled({ timeout: 20_000 });
+  await next.click();
+  await expect(caption).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('[data-upload-screen]')).toHaveCount(0);
 });

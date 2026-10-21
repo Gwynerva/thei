@@ -1,11 +1,13 @@
 <script lang="ts" setup>
-import type {
-  AiActionItem,
-  AiMessageItem,
-  AiMessagePart,
-  AiStep,
+import {
+  AI_PAUSES,
+  type AiActionItem,
+  type AiMessageItem,
+  type AiMessagePart,
+  type AiStep,
 } from '#layers/thei/shared/ai';
 import { messageBody } from '#layers/thei/shared/ai-message-text';
+import { placeLabel } from '#layers/thei/shared/ai-field-ask';
 
 /**
  * One message of a session. The owner's is a bubble on the right — what it
@@ -23,6 +25,8 @@ const props = defineProps<{
   answerable?: boolean;
   /** Any action of the session, by id: what a comment is about. */
   actionOf?: (actionUuid: string) => AiActionItem | undefined;
+  /** The session's last message, with no turn running: a check may go on. */
+  last?: boolean;
 }>();
 const emit = defineEmits<{
   answer: [question: string, text: string];
@@ -67,6 +71,16 @@ function partsOf<T extends AiMessagePart['type']>(type: T) {
 const steps = computed(() => partsOf('steps').flatMap((part) => part.steps));
 const question = computed(() => partsOf('question')[0]);
 const notices = computed(() => partsOf('notice'));
+/**
+ * A check that looked at all there was says so under its last answer; one
+ * with more to look at goes on from the strip over the composer.
+ */
+const lookedAtAll = computed(
+  () =>
+    props.last &&
+    props.answerable &&
+    partsOf('continue').some((part) => !part.next),
+);
 const comment = computed(() => partsOf('comment')[0]);
 /** What a comment is about, in a few words: the kind and what it is on. */
 const commentAbout = computed(() => {
@@ -75,6 +89,22 @@ const commentAbout = computed(() => {
   if (!action) return phrase.value.ai_action_comment;
   return phrase.value.ai_comment_on(actionLabel(action));
 });
+
+/** The field the owner's words were asked at, by its ✦. */
+const fieldAbout = computed(() => {
+  const part = partsOf('field')[0];
+  if (!part) return '';
+  return phrase.value.ai_message_field(
+    placeLabel(part.place, part.ref, phrase.value),
+  );
+});
+
+/** The template the owner's words began from, named as now. */
+const templateAbout = computed(() =>
+  props.message.template
+    ? phrase.value.ai_message_template(publicText(props.message.template.title))
+    : '',
+);
 
 /** What the model did on the way, said once per kind of step. */
 const stepLine = computed(() => {
@@ -159,7 +189,7 @@ const NOTICE_ICONS = {
   model: 'warning',
   refused: 'warning',
   length: 'warning',
-  turns: 'warning',
+  turns: 'pause-circle',
   error: 'warning',
 } as const;
 
@@ -194,6 +224,33 @@ function answer(text: string) {
         data-title-popup-clip
         >{{ commentAbout }}</span
       >
+    </p>
+    <!-- Asked at a field's ✦: which field. -->
+    <p
+      v-else-if="fieldAbout"
+      class="flex items-center gap-1 text-xs text-text-2"
+      :data-title-popup="fieldAbout"
+      data-title-popup-clipped
+      data-message-field
+    >
+      <Icon name="sparkles" class="shrink-0" /><span
+        class="truncate"
+        data-title-popup-clip
+        >{{ fieldAbout }}</span
+      >
+    </p>
+    <!-- Begun from a ready-made request: which, as the picker names it. -->
+    <p
+      v-else-if="templateAbout"
+      class="flex items-center gap-1 text-xs text-text-2"
+      :data-title-popup="templateAbout"
+      data-title-popup-clipped
+      data-message-template
+    >
+      <Icon
+        :name="message.template?.builtin ? 'list-check' : 'template'"
+        class="shrink-0"
+      /><span class="truncate" data-title-popup-clip>{{ templateAbout }}</span>
     </p>
     <AiMessageFiles :files="message.files" />
     <ContentRenderer
@@ -323,13 +380,21 @@ function answer(text: string) {
     <div
       v-for="(notice, index) in notices"
       :key="index"
-      class="flex items-start gap-2.5 rounded-normal border
-        border-border-warning bg-bg-warning px-3 py-2.5 text-sm leading-snug"
+      class="flex items-start gap-2.5 rounded-normal border px-3 py-2.5 text-sm
+        leading-snug"
+      :class="
+        AI_PAUSES.has(notice.kind)
+          ? 'border-border-1 bg-bg-2'
+          : 'border-border-warning bg-bg-warning'
+      "
       :data-notice="notice.kind"
     >
       <Icon
         :name="NOTICE_ICONS[notice.kind] ?? 'warning'"
-        class="mt-0.5 shrink-0 text-text-warning"
+        class="mt-0.5 shrink-0"
+        :class="
+          AI_PAUSES.has(notice.kind) ? 'text-text-2' : 'text-text-warning'
+        "
       />
       <div class="flex min-w-0 flex-col gap-1.5">
         <span>{{ phrase.ai_notices[notice.kind] }}</span>
@@ -349,6 +414,15 @@ function answer(text: string) {
         >
       </div>
     </div>
+    <!-- After a pause too: a check that has looked at all there was. -->
+    <p
+      v-if="lookedAtAll"
+      class="flex items-center gap-1.5 text-sm text-text-2"
+      data-message-done
+    >
+      <Icon name="check" class="shrink-0" />
+      {{ phrase.ai_continue_done }}
+    </p>
   </div>
 
   <p

@@ -4,7 +4,7 @@ import {
   type ContentOutputData,
 } from '#layers/thei/shared/content';
 import type { Period } from '#layers/thei/shared/period';
-import { stemTerm, wordTokens } from '#layers/thei/shared/text-terms';
+import { saysLittle, textWords } from '#layers/thei/shared/search/match';
 import { readPeriodsOf } from '../periods';
 import { PROFILE_ID } from '#layers/thei/shared/profile';
 import {
@@ -60,94 +60,6 @@ export interface McpDocument {
 const LEAD_LENGTH = 240;
 /** Keywords told of each entity. */
 const KEYWORDS = 8;
-/** Shorter words say little on their own: prepositions, pronouns. */
-const MIN_KEYWORD_LENGTH = 4;
-/**
- * Words that say nothing of what a text is about, for an archive still too
- * small for their frequency to rule them out. Stems of the normalized forms.
- */
-const STOP_WORDS = new Set(
-  [
-    'который',
-    'которая',
-    'которые',
-    'этого',
-    'этот',
-    'этой',
-    'этом',
-    'этих',
-    'было',
-    'была',
-    'были',
-    'будет',
-    'очень',
-    'тоже',
-    'также',
-    'когда',
-    'потом',
-    'сейчас',
-    'просто',
-    'только',
-    'можно',
-    'нужно',
-    'чтобы',
-    'если',
-    'даже',
-    'всего',
-    'всех',
-    'себя',
-    'меня',
-    'тебя',
-    'него',
-    'своей',
-    'свой',
-    'того',
-    'тому',
-    'есть',
-    'вообще',
-    'ещё',
-    'уже',
-    'тогда',
-    'там',
-    'тут',
-    'that',
-    'this',
-    'with',
-    'from',
-    'have',
-    'were',
-    'will',
-    'would',
-    'there',
-    'their',
-    'about',
-    'which',
-    'what',
-    'when',
-    'into',
-    'than',
-    'then',
-    'them',
-    'they',
-    'been',
-    'also',
-    'just',
-    'some',
-    'more',
-    'very',
-    'around',
-    'after',
-    'before',
-    'could',
-    'should',
-    'other',
-    'these',
-    'those',
-    'where',
-    'while',
-  ].map((word) => stemTerm(word.replaceAll('ё', 'е'))),
-);
-
 /** A word in more than this share of the archive sets nothing apart. */
 const COMMON_SHARE = 0.25;
 
@@ -471,14 +383,11 @@ function buildDocuments(): McpDocument[] {
  * told in the form the record itself uses most.
  */
 function withDigests(drafts: Draft[]): McpDocument[] {
-  const tokensOf = drafts.map((draft) => wordTokens(draft.text));
+  const wordsOf = drafts.map((draft) => textWords(draft.text));
+  const tokensOf = wordsOf.map((words) => words.map(({ word }) => word));
   const documentFrequency = new Map<string, number>();
-  const stemsOf = tokensOf.map((tokens) => {
-    const stems = tokens.map((token) =>
-      token.length >= MIN_KEYWORD_LENGTH && !STOP_WORDS.has(stemTerm(token))
-        ? stemTerm(token)
-        : '',
-    );
+  const stemsOf = wordsOf.map((words) => {
+    const stems = words.map(({ word, term }) => (saysLittle(word) ? '' : term));
     for (const stem of new Set(stems))
       if (stem)
         documentFrequency.set(stem, (documentFrequency.get(stem) ?? 0) + 1);

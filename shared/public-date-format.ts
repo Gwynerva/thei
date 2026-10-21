@@ -33,12 +33,14 @@ export function formatAbsolutePublicDate(
 
 /**
  * Tidies a range Intl has written: an em dash, no year abbreviation. The
- * abbreviation is "г." after a year, never the end of "авг.".
+ * abbreviation is "г." after a year, never the end of "авг.". The spaces
+ * around Intl's dash depend on its ICU — plain in a browser, thin in a newer
+ * Node — so any of them is one space, or the server and the page disagree.
  */
 function tidyRange(text: string): string {
   return text
     .replaceAll(/(?<=\d)\s*г\./g, '')
-    .replaceAll(' – ', ' — ')
+    .replaceAll(/\s+–\s+/g, ' — ')
     .trim();
 }
 

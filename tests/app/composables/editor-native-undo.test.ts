@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  historyKey,
   NativeUndoLedger,
   nativeEditKind,
 } from '../../../app/composables/editor-native-undo';
+import { historyKey } from '../../../app/composables/shortcut';
 
 /**
  * The count of what the browser's Ctrl+Z may safely take back in the
@@ -93,22 +93,34 @@ describe('nativeEditKind', () => {
 });
 
 describe('historyKey', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
   const key = (init: Partial<KeyboardEvent>) =>
     historyKey({
       ctrlKey: false,
       metaKey: false,
       altKey: false,
       shiftKey: false,
+      isComposing: false,
+      keyCode: 0,
       code: '',
       ...init,
     } as KeyboardEvent);
 
   it('reads undo and redo by the key’s place, on any layout', () => {
     expect(key({ ctrlKey: true, code: 'KeyZ' })).toBe('undo');
-    expect(key({ metaKey: true, code: 'KeyZ' })).toBe('undo');
     expect(key({ ctrlKey: true, shiftKey: true, code: 'KeyZ' })).toBe('redo');
     expect(key({ ctrlKey: true, code: 'KeyY' })).toBe('redo');
     expect(key({ code: 'KeyZ' })).toBeUndefined();
     expect(key({ ctrlKey: true, altKey: true, code: 'KeyZ' })).toBeUndefined();
+  });
+
+  it('takes the platform’s modifier, as every shortcut does', () => {
+    expect(key({ metaKey: true, code: 'KeyZ' })).toBeUndefined();
+    vi.stubGlobal('navigator', { platform: 'MacIntel' });
+    expect(key({ metaKey: true, code: 'KeyZ' })).toBe('undo');
+    expect(key({ metaKey: true, shiftKey: true, code: 'KeyZ' })).toBe('redo');
+    expect(key({ metaKey: true, code: 'KeyY' })).toBeUndefined();
+    expect(key({ ctrlKey: true, code: 'KeyZ' })).toBeUndefined();
   });
 });

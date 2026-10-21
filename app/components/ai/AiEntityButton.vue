@@ -115,13 +115,56 @@ async function send(
 
 /** Stops a session answering; the list says so once it has stopped. */
 async function stop(sessionUuid: string) {
-  try {
+  await aiAttempt(async () => {
     await aiApi.stop(sessionUuid);
     void ai?.refresh();
-  } catch (caught) {
-    showToast(errorMessage(caught, phrase.value.ai_error));
-  }
+  });
 }
+
+/**
+ * Once what was sent from the menu proposes something here, the menu gives
+ * way — over the form it would hide the very field — and says where the
+ * proposal waits, a click away.
+ */
+watch(waiting, (now, before) => {
+  if (!open.value || !sent.value || now <= before) return;
+  open.value = false;
+  const place = ai?.offers.value.at(-1)?.place;
+  // What belongs to the whole form waits at its head: brought into view,
+  // with no toast laid over it.
+  if (place === 'form') {
+    void nextTick(() =>
+      document
+        .querySelector('[data-ai-offers="form"]')
+        ?.scrollIntoView({ block: 'center' }),
+    );
+    return;
+  }
+  const star = place
+    ? document.querySelector<HTMLElement>(
+        `[data-ai-field-offer="${CSS.escape(place)}"]`,
+      )
+    : null;
+  const name = star && fieldLabelWords(star);
+  // Several at once are counted; «Показать» goes to the latest of them.
+  const came = now - before;
+  showToast(
+    came > 1
+      ? phrase.value.ai_entity_offers_came(came)
+      : name
+        ? phrase.value.ai_entity_offer_at(name)
+        : phrase.value.ai_entity_offer_came,
+    star
+      ? {
+          label: phrase.value.ai_entity_offer_show,
+          run: () => {
+            star.scrollIntoView({ block: 'center' });
+            if (star.dataset.aiFieldState === 'offers') star.click();
+          },
+        }
+      : undefined,
+  );
+});
 
 // What the session proposes reaches the form's labels as it is made.
 watch(
@@ -157,6 +200,7 @@ function openFull() {
         ref="trigger"
         variant="secondary"
         size="icon"
+        class="pointer-coarse:size-11"
         :aria-label="phrase.ai_entity_menu(kindName)"
         :data-title-popup="phrase.ai_entity_menu(kindName)"
         aria-haspopup="dialog"
@@ -227,10 +271,7 @@ function openFull() {
           data-ai-entity-sent
         >
           <TheiLink
-            :to="{
-              path: '/admin/ai/',
-              query: { session: sentSession.sessionUuid },
-            }"
+            :to="sessionLocation(sentSession.sessionUuid)"
             class="flex min-h-9 min-w-0 flex-1 items-center gap-xs px-2 py-1.5
               text-sm pointer-coarse:min-h-11"
             :data-title-popup="sessionTitle(sentSession)"

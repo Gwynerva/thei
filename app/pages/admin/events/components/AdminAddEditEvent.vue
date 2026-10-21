@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { normalizeHeadingText } from '#layers/thei/shared/terminal-punctuation';
-import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
+import { accessOptions } from '#layers/thei/app/components/field/access-options';
 import {
   analyzeContentData,
   isContentEmpty,
@@ -13,10 +13,8 @@ import type {
 } from '#layers/thei/shared/api/event';
 import type { ProjectEditData } from '#layers/thei/shared/admin/project';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
-import {
-  DEFAULT_PROJECT_ACTION,
-  projectActionValidationError,
-} from '#layers/thei/shared/project-action';
+import { DEFAULT_PROJECT_ACTION } from '#layers/thei/shared/project-action';
+import type { FormNeed } from '#layers/thei/app/composables/form-needs';
 import { eventDataInjectionKey } from '../composables';
 import {
   projectDataInjectionKey,
@@ -90,6 +88,8 @@ const isEdit = computed(() => Boolean(eventUuid));
 provideContentOwner('event', () => eventUuid);
 const saving = ref(false);
 const savedSnapshot = ref(JSON.stringify(eventPayload()));
+// Begun from the quick search: the query is the title, as if typed.
+if (!isEdit.value && titleFromQuery()) eventData.value.title = titleFromQuery();
 /**
  * When the entity last changed, as the form read it. A save names it, and
  * one over a change made elsewhere since — another tab, an AI client — is
@@ -113,16 +113,36 @@ useLeaveGuard({
   dirty: () => isDirty.value,
   pendingUploads: () => pendingUploads.value,
 });
-const isValid = computed(() =>
-  Boolean(
-    eventData.value.title.trim() &&
-    eventData.value.summary.trim() &&
-    eventData.value.publicId.trim() &&
-    eventData.value.access &&
-    eventData.value.periods.length &&
-    !isContentEmpty(eventData.value.content?.data) &&
-    !projectActionValidationError(eventData.value.action),
-  ),
+/** What the event still needs before it can be saved, in the form's order. */
+const needs = useFormNeeds(
+  () => {
+    const data = eventData.value;
+    const list: FormNeed[] = [];
+    if (!data.title.trim())
+      list.push({ key: 'title', label: phrase.value.event_title });
+    if (!data.access)
+      list.push({ key: 'access', label: phrase.value.event_access });
+    if (!data.summary.trim())
+      list.push({ key: 'summary', label: phrase.value.event_summary });
+    if (!data.periods.length)
+      list.push({ key: 'periods', label: phrase.value.event_periods });
+    if (isContentEmpty(data.content?.data))
+      list.push({ key: 'content', label: phrase.value.event_content });
+    if (!data.publicId.trim())
+      list.push({ key: 'link-public-id', label: phrase.value.public_id });
+    const action = actionNeed(
+      phrase.value,
+      data.action,
+      phrase.value.event_action,
+    );
+    if (action) list.push(action);
+    return list;
+  },
+  {
+    ready: () => !saving.value && (!isEdit.value || isDirty.value),
+    save,
+    error: headerError,
+  },
 );
 
 if (isEdit.value) {
@@ -188,8 +208,8 @@ watch(
   },
 );
 
+/** The save itself; a press or Ctrl+S comes to it through `needs.submit`. */
 async function save() {
-  if (saving.value || !isValid.value) return;
   saving.value = true;
   headerError.value = undefined;
   try {
@@ -216,7 +236,7 @@ async function save() {
     markSaved();
     await refreshNuxtData('admin-bar');
     if (!isEdit.value)
-      await navigateTo(`/admin/events/${result.eventUuid}/edit/`, {
+      await navigateTo(sitePath(`/admin/events/${result.eventUuid}/edit/`), {
         external: true,
       });
   } finally {
@@ -224,10 +244,6 @@ async function save() {
   }
 }
 
-useSaveShortcut(save, {
-  canSave: () =>
-    !saving.value && isValid.value && (!isEdit.value || isDirty.value),
-});
 await useAdminTabTitle(
   computed(() =>
     isEdit.value ? phrase.value.edit_event : phrase.value.new_event,
@@ -303,7 +319,8 @@ function eventPayload(): EventEditData {
 const CONTENT_FIELDS = ['content', 'descriptionContent', 'notes'];
 
 function saveAfterContentEdit() {
-  if (saving.value || !isValid.value || !isEdit.value || !isDirty.value) return;
+  if (saving.value || needs.blocked.value || !isEdit.value || !isDirty.value)
+    return;
   if (!changedOnlyIn(eventPayload(), savedSnapshot.value, CONTENT_FIELDS))
     return;
   void save();
@@ -356,41 +373,23 @@ function clone<T>(value: T): T {
 </script>
 
 <template>
-  <StickyGlassHeader width="var(--width-wide)" :error="headerError">
-    <div class="flex items-center justify-between gap-xs py-xs">
-      <div class="flex min-w-0 items-center gap-xs text-xl font-bold">
-        <Icon name="event" />
-        <span class="truncate">{{
-          isEdit ? phrase.edit_event : phrase.new_event
-        }}</span>
-      </div>
-      <div class="flex items-center gap-xs">
-        <AiEntityButton />
-        <Button
-          v-if="isEdit"
-          variant="delete"
-          :data-title-popup="phrase.delete"
-          @click="deleteEvent"
-        >
-          <Icon name="delete" />
-        </Button>
-        <Button
-          class="font-semibold"
-          :disabled="saving || !isValid || (isEdit && !isDirty)"
-          @click="save"
-        >
-          <Icon v-if="saving" name="loading" class="mr-xs" />
-          {{ isEdit ? (isDirty ? phrase.save : phrase.saved) : phrase.create }}
-        </Button>
-      </div>
-    </div>
-  </StickyGlassHeader>
+  <AdminSaveHeader
+    :title="isEdit ? phrase.edit_event : phrase.new_event"
+    icon="event"
+    :dirty="isDirty"
+    :saving
+    :creating="!isEdit"
+    :deletable="isEdit"
+    :needs
+    @delete="deleteEvent"
+    ><AiEntityButton
+  /></AdminSaveHeader>
 
   <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
     <AiFormOffers />
     <Box class="flex flex-col gap-md p-sm sm:p-md">
       <div class="flex flex-wrap gap-md">
-        <Field ai="field:title" class="min-w-50 flex-1">
+        <Field ai="field:title" need="title" class="min-w-50 flex-1">
           <FieldLabel required>{{ phrase.event_title }}</FieldLabel>
           <FieldInput
             v-model="eventData.title"
@@ -401,34 +400,21 @@ function clone<T>(value: T): T {
           />
           <FieldHint>{{ phrase.event_title_hint }}</FieldHint>
         </Field>
-        <Field ai="access" class="min-w-50">
+        <Field ai="access" need="access" class="min-w-50">
           <FieldLabel required>{{ phrase.event_access }}</FieldLabel>
           <FieldOptions
             v-model="eventData.access"
             direction="row"
-            :options="{
-              [ProjectEventAccessLevel.Public]: {
-                icon: 'lock-open',
-                title: phrase.public,
-              },
-              [ProjectEventAccessLevel.LinkOnly]: {
-                icon: 'lock-partial',
-                title: phrase.link_only,
-              },
-              [ProjectEventAccessLevel.Private]: {
-                icon: 'lock-close',
-                title: phrase.private,
-              },
-            }"
+            :options="accessOptions(phrase)"
           />
         </Field>
       </div>
-      <Field ai="field:summary">
+      <Field ai="field:summary" need="summary">
         <FieldLabel required>{{ phrase.event_summary }}</FieldLabel>
         <FieldTextarea v-model="eventData.summary" required />
         <FieldHint>{{ phrase.event_summary_hint }}</FieldHint>
       </Field>
-      <Field ai="periods">
+      <Field ai="periods" need="periods">
         <FieldLabel required>{{ phrase.event_periods }}</FieldLabel>
         <FieldDateRanges v-model="eventData.periods" />
         <FieldHint>{{ phrase.event_periods_hint }}</FieldHint>
@@ -436,7 +422,7 @@ function clone<T>(value: T): T {
           phrase.event_periods_empty
         }}</FieldHint>
       </Field>
-      <Field>
+      <Field need="content">
         <FieldLabel required>{{ phrase.event_content }}</FieldLabel>
         <FieldContentEditor
           v-model="eventData.content"
@@ -447,6 +433,7 @@ function clone<T>(value: T): T {
         <FieldHint>{{ phrase.event_content_hint }}</FieldHint>
       </Field>
       <LinkField
+        need="link"
         v-model:title="eventData.title"
         v-model:human-readable-slug="eventData.humanReadableSlug"
         v-model:public-id="eventData.publicId"

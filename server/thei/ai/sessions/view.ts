@@ -15,14 +15,14 @@ import {
   type AiEntityRef,
   type AiEntityType,
   type AiMessageItem,
+  type AiMessagePart,
   type AiSessionDetail,
   type AiSessionItem,
   type AiSessionListResponse,
   type AiSessionOrigin,
   type AiSessionOverview,
 } from '#layers/thei/shared/ai';
-import type { Database } from 'better-sqlite3';
-import { normalizeTermText } from '#layers/thei/shared/text-terms';
+import { useWordsSql, WORDS_SQL } from '../../search/words-sql';
 import {
   entityFace,
   findEntity,
@@ -34,10 +34,13 @@ import { neverOffered } from '../actions/declined';
 import { findActions, sessionActions } from '../actions/rows';
 import { fileRef, isFileKey, type ActionTarget } from '../actions/target';
 import { fileOfFamily } from '../../assets/descriptions';
-import { AssetType } from '#layers/thei/shared/asset';
+import { assetKindName } from '#layers/thei/shared/asset-format-label';
+import { humanSize } from '#layers/thei/shared/human-size';
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
 import type { ActionRow } from '../actions/types';
 import { undoState } from '../actions/undo';
+import { findTemplate } from '../templates/store';
+import { fieldNamesOf } from '../forms/keys';
 import { messageFromMarkdown } from '../../mcp/text-input';
 import { writingOf } from './bus';
 import { libraryFile, messageFiles } from './files';
@@ -77,12 +80,14 @@ function refsIn(payload: unknown): Record<string, AiEntityRef> {
     add?: { ref?: unknown }[];
     remove?: { ref?: unknown }[];
     fields?: { relations?: { ref?: unknown }[] };
+    changes?: { relations?: { ref?: unknown }[] };
   };
   if (typeof data.other === 'string') named.add(data.other);
   for (const item of [
     ...(data.add ?? []),
     ...(data.remove ?? []),
     ...(Array.isArray(data.fields?.relations) ? data.fields.relations : []),
+    ...(Array.isArray(data.changes?.relations) ? data.changes.relations : []),
   ])
     if (typeof item?.ref === 'string') named.add(item.ref);
   const refs: Record<string, AiEntityRef> = {};
@@ -141,6 +146,16 @@ function sessionItem(row: SessionRow, about: AiEntityRef[]): AiSessionItem {
   };
 }
 
+/** The ready-made request an owner's message began from, as it is called now. */
+function templateOf(parts: readonly AiMessagePart[]) {
+  const part = parts.find((item) => item.type === 'template');
+  const template =
+    part?.type === 'template' ? findTemplate(part.templateId) : undefined;
+  return template
+    ? { title: template.title, builtin: Boolean(template.builtin) }
+    : null;
+}
+
 export function messageItem(row: MessageRow): AiMessageItem {
   // A message being written is given with all its words so far, saved or
   // not: the page reads them itself until the message is done.
@@ -154,6 +169,7 @@ export function messageItem(row: MessageRow): AiMessageItem {
       writing === undefined && row.text ? messageFromMarkdown(row.text) : null,
     parts: row.parts,
     files: messageFiles(row.parts),
+    template: row.role === 'owner' ? templateOf(row.parts) : null,
     tokens: row.tokens,
     createdAt: row.createdAt,
   };
@@ -161,18 +177,8 @@ export function messageItem(row: MessageRow): AiMessageItem {
 
 /** A file as a chip names it: what it is, its format and its size. */
 function fileTitle(file: AssetVariantInfo): string {
-  const said = THEI_SERVER.phrase;
-  const kind = {
-    [AssetType.Image]: said.image,
-    [AssetType.Video]: said.video,
-    [AssetType.Audio]: said.audio,
-    [AssetType.Other]: said.asset,
-  }[file.type];
-  const size =
-    file.size < 1024 * 1024
-      ? `${Math.max(1, Math.round(file.size / 1024))} KB`
-      : `${(file.size / 1024 / 1024).toFixed(1)} MB`;
-  return `${kind} · ${file.extension.toUpperCase()} · ${size}`;
+  const kind = assetKindName(THEI_SERVER.phrase, file.type);
+  return `${kind} · ${file.extension.toUpperCase()} · ${humanSize(file.size, THEI_SERVER.language.sizeUnits)}`;
 }
 
 /**
@@ -199,6 +205,15 @@ export async function actionItems(rows: ActionRow[]): Promise<AiActionItem[]> {
             ({ kind: row.targetType, id: row.targetId } as EntityKey))
         : undefined;
     const file = key && isFileKey(key) ? actionFile(row, key) : undefined;
+    const fieldNames =
+      row.kind === 'update' && key
+        ? fieldNamesOf(
+            key.kind,
+            ((row.base as { fields?: string[] } | null)?.fields ?? []).map(
+              String,
+            ),
+          )
+        : undefined;
     items.push({
       actionUuid: row.actionUuid,
       messageUuid: row.messageUuid,
@@ -217,8 +232,10 @@ export async function actionItems(rows: ActionRow[]): Promise<AiActionItem[]> {
           : entityRef(key)
         : null,
       ...(file ? { file } : {}),
+      ...(fieldNames ? { fieldNames } : {}),
       payload: row.payload,
       base: row.base,
+      proposed: row.proposed ?? null,
       refs: refsIn(row.payload),
       parts: row.parts as AiActionItem['parts'],
       certainty: row.certainty,
@@ -245,27 +262,6 @@ export async function actionItems(rows: ActionRow[]): Promise<AiActionItem[]> {
  */
 export function sessionAnswerable(row: SessionRow): boolean {
   return row.origin !== 'app' && !row.closedAt && !row.archivedAt;
-}
-
-/** Words as a search compares them: case, «ё» and runs of space set aside. */
-function searchable(value: string): string {
-  return normalizeTermText(value).replace(/\s+/g, ' ').trim();
-}
-
-/** The SQL function a search compares words with, as `searchable` reads them. */
-const SEARCHABLE_SQL = 'thei_searchable';
-const searchableIn = new WeakSet<object>();
-
-/**
- * Words are looked for in SQL with the site's own reading of them — SQLite's
- * lower() knows only Latin letters — given to each connection once.
- */
-function searchableSql(rawDb: Database) {
-  if (searchableIn.has(rawDb)) return;
-  rawDb.function(SEARCHABLE_SQL, { deterministic: true }, (value) =>
-    typeof value === 'string' ? searchable(value) : '',
-  );
-  searchableIn.add(rawDb);
 }
 
 /**
@@ -295,19 +291,14 @@ export function listSessions(
 ): AiSessionListResponse {
   const { db, schema, rawDb } = THEI_SERVER.useDb();
   const table = schema.aiSessions;
-  const words = searchable(filter.q ?? '');
+  const words = (filter.q ?? '').replace(/\s+/g, ' ').trim();
   const about = filter.about
     ? sessionsAbout([{ type: filter.about.kind as never, id: filter.about.id }])
     : undefined;
-  if (about && !about.length)
-    return {
-      sessions: [],
-      modelReady: Boolean(sessionModel()),
-      waiting: aiWaiting(),
-    };
-  if (words) searchableSql(rawDb);
+  if (about && !about.length) return { sessions: [], ...aiReadiness() };
+  if (words) useWordsSql(rawDb);
   const found = (value: SQL) =>
-    sql`instr(${sql.raw(SEARCHABLE_SQL)}(${value}), ${words}) > 0`;
+    sql`${sql.raw(WORDS_SQL)}(${value}, ${words}) = 1`;
   const where = (moment?: SQL) =>
     and(
       filter.origin ? eq(table.origin, filter.origin) : undefined,
@@ -368,8 +359,7 @@ export function listSessions(
       sessionItem(row, named.get(row.sessionUuid) ?? []),
     ),
     ...(next === undefined ? {} : { next }),
-    modelReady: Boolean(sessionModel()),
-    waiting: aiWaiting(),
+    ...aiReadiness(),
   };
 }
 
@@ -450,6 +440,14 @@ export function aiWaiting(): number {
       .where(isNull(schema.aiSessions.archivedAt))
       .get()?.total ?? 0,
   );
+}
+
+/**
+ * What every place that starts a session reads with it: whether a model is
+ * set to answer one, and what waits for the owner, for the admin bar's ✦.
+ */
+export function aiReadiness() {
+  return { modelReady: Boolean(sessionModel()), waiting: aiWaiting() };
 }
 
 export function sessionHead(sessionUuid: string): AiSessionItem | undefined {

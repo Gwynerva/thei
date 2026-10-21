@@ -396,28 +396,73 @@ export function normalizeContentData(value: unknown): ContentOutputData {
   };
 }
 
+/** The edges of one private section: the places of the blocks with its id. */
+export interface PrivateSectionEdges {
+  sectionId: string;
+  /** In order: two for a whole section, any other count for a stray. */
+  indices: number[];
+}
+
+/**
+ * The edges of private sections, gathered by the id they carry, the
+ * sections in the order they begin. `sectionIdOf` reads a block's id, and
+ * none for a block that is no edge.
+ */
+export function pairPrivateSectionEdges<T>(
+  blocks: readonly T[],
+  sectionIdOf: (block: T) => string | undefined,
+): PrivateSectionEdges[] {
+  const edges = new Map<string, number[]>();
+  blocks.forEach((block, index) => {
+    const sectionId = sectionIdOf(block);
+    if (!sectionId) return;
+    const indices = edges.get(sectionId) ?? [];
+    indices.push(index);
+    edges.set(sectionId, indices);
+  });
+  return Array.from(edges, ([sectionId, indices]) => ({
+    sectionId,
+    indices,
+  })).sort((left, right) => left.indices[0]! - right.indices[0]!);
+}
+
+/**
+ * Whether whole sections, in the order they begin, overlap: one begins
+ * before the one before it ends, inside it or across it.
+ */
+export function privateSectionsOverlap(
+  sections: readonly PrivateSectionEdges[],
+): boolean {
+  let previousEnd = -1;
+  for (const { indices } of sections) {
+    if (indices[0]! <= previousEnd) return true;
+    previousEnd = indices[1]!;
+  }
+  return false;
+}
+
+/** The id of the section a block is an edge of; none for any other block. */
+function boundarySectionId(block: ContentOutputBlock) {
+  return block.type === 'privateSectionBoundary'
+    ? (block.data as unknown as ContentPrivateSectionBoundaryData).sectionId
+    : undefined;
+}
+
+/** Where a whole section runs, from its first edge to its second. */
+function sectionRange({
+  sectionId,
+  indices,
+}: PrivateSectionEdges): ContentPrivateSectionRange {
+  return { sectionId, startIndex: indices[0]!, endIndex: indices[1]! };
+}
+
 /** Where the private sections of data `normalizeContentData` gave run. */
 export function normalizedContentPrivateSectionRanges(
   normalized: ContentOutputData,
 ): ContentPrivateSectionRange[] {
-  const blocks = normalized.blocks;
-  const boundaries = new Map<string, number[]>();
-
-  blocks.forEach((block, index) => {
-    if (block.type !== 'privateSectionBoundary') return;
-    const sectionId = (
-      block.data as unknown as ContentPrivateSectionBoundaryData
-    ).sectionId;
-    const indices = boundaries.get(sectionId) ?? [];
-    indices.push(index);
-    boundaries.set(sectionId, indices);
-  });
-
-  return Array.from(boundaries, ([sectionId, indices]) => ({
-    sectionId,
-    startIndex: indices[0]!,
-    endIndex: indices[1]!,
-  })).sort((left, right) => left.startIndex - right.startIndex);
+  return pairPrivateSectionEdges(normalized.blocks, boundarySectionId).map(
+    sectionRange,
+  );
 }
 
 export function contentBlockIsInPrivateSection(
@@ -1009,35 +1054,14 @@ function isContentBlockEmpty(block: ContentOutputBlock): boolean {
 function normalizePrivateSections(
   blocks: ContentOutputBlock[],
 ): ContentOutputBlock[] {
-  const boundaries = new Map<string, number[]>();
-  blocks.forEach((block, index) => {
-    if (block.type !== 'privateSectionBoundary') return;
-    const sectionId = (
-      block.data as unknown as ContentPrivateSectionBoundaryData
-    ).sectionId;
-    const indices = boundaries.get(sectionId) ?? [];
-    indices.push(index);
-    boundaries.set(sectionId, indices);
-  });
-
-  const ranges = Array.from(boundaries, ([sectionId, indices]) => {
-    if (indices.length !== 2) {
-      throw new ContentValidationError('Invalid private section boundaries');
-    }
-    return {
-      sectionId,
-      startIndex: indices[0]!,
-      endIndex: indices[1]!,
-    };
-  }).sort((left, right) => left.startIndex - right.startIndex);
-
-  let previousEnd = -1;
-  for (const range of ranges) {
-    if (range.startIndex <= previousEnd) {
-      throw new ContentValidationError('Private sections cannot overlap');
-    }
-    previousEnd = range.endIndex;
+  const sections = pairPrivateSectionEdges(blocks, boundarySectionId);
+  if (sections.some(({ indices }) => indices.length !== 2)) {
+    throw new ContentValidationError('Invalid private section boundaries');
   }
+  if (privateSectionsOverlap(sections)) {
+    throw new ContentValidationError('Private sections cannot overlap');
+  }
+  const ranges = sections.map(sectionRange);
 
   const emptyBoundaryIndices = new Set<number>();
   for (const range of ranges) {

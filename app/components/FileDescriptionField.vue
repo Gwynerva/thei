@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { AiEntityOffer } from '#layers/thei/shared/ai-entity';
+import type { AiEntityOffer, AiFieldAsk } from '#layers/thei/shared/ai-entity';
 import {
   ASSET_DESCRIPTION_MAX,
   cleanAssetDescription,
@@ -30,6 +30,9 @@ const form = reactive({ description: '' });
 const stored = ref('');
 const version = ref<number | null>(null);
 const offers = shallowRef<AiEntityOffer[]>([]);
+/** What its ✦ is answering now, and whether a model answers it. */
+const asking = shallowRef<AiFieldAsk[]>([]);
+const modelReady = ref(false);
 const loaded = ref(false);
 const saving = ref(false);
 const notice = ref<{ text: string; error?: boolean } | null>(null);
@@ -58,6 +61,9 @@ async function load(keepTyped = false) {
     if (ticket !== reading) return;
     take(read, keepTyped && dirty.value);
     offers.value = read.offers ?? [];
+    asking.value = read.asking ?? [];
+    modelReady.value = Boolean(read.modelReady);
+    if (read.waiting !== undefined) setAiWaiting(read.waiting);
     loaded.value = true;
   } catch (caught) {
     if (ticket !== reading) return;
@@ -68,11 +74,13 @@ async function load(keepTyped = false) {
   }
 }
 
-provideFileAi({
+const fileAi = provideFileAi({
   ref: () => `asset:${props.assetUuid}`,
   offers: () => offers.value,
   form: () => form,
   reload: () => load(true),
+  asking: () => asking.value,
+  modelReady: () => modelReady.value,
 });
 
 onMounted(() => {
@@ -111,7 +119,10 @@ async function save(): Promise<boolean> {
       },
     });
     settle(saved);
-    // What was proposed is settled against the description saved.
+    // A proposal taken into the field and corrected there counts as
+    // applied with the words saved; what was proposed is then settled
+    // against the description saved.
+    await fileAi.saved();
     if (offers.value.length) await load();
     return true;
   } catch (caught) {
@@ -145,7 +156,7 @@ async function save(): Promise<boolean> {
 const filled = computed(
   () => loaded.value && cleanAssetDescription(form.description).length > 0,
 );
-defineExpose({ save, filled, saving });
+defineExpose({ save, filled, saving, loaded });
 
 watch(
   () => form.description,
@@ -200,9 +211,10 @@ watch(
             : notice?.text
         }}
       </p>
+      <!-- Shown only with words to save: the window's action then, in its
+           own colour, as a form's «Save» lights up. -->
       <Button
         v-if="dirty && !embedded"
-        variant="secondary"
         class="flex h-9 items-center gap-xs"
         :disabled="saving || tooLong || !loaded"
         data-file-description-save

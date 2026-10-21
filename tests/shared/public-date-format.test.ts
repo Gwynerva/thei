@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   formatAbsolutePublicDate,
   formatCompactPublicPeriod,
@@ -36,7 +36,7 @@ describe('formatCompactPublicPeriod', () => {
       'spans days',
       { startDate: '2024-06-03', endDate: '2024-06-14' },
       '3–14 июня 2024',
-      'June 3 – 14, 2024',
+      'June 3 — 14, 2024',
     ],
     [
       'is one day',
@@ -106,6 +106,23 @@ describe('formatPublicDateRange', () => {
     expect(plain(formatPublicDateRange(range, 'ru'))).toBe(
       '12 августа — 16 сентября 2025',
     );
+  });
+
+  it('writes the same dash whatever spaces Intl put around its own', () => {
+    const range = { startDate: '2025-04-01', endDate: '2025-10-31' };
+    // A browser spaces Intl's dash plainly, a newer Node with thin spaces: the
+    // page and the server it hydrates from must still say one thing.
+    const formatRange = vi.spyOn(Intl.DateTimeFormat.prototype, 'formatRange');
+    try {
+      for (const space of [' ', ' ', ' ']) {
+        formatRange.mockReturnValue(`April 1${space}–${space}October 31, 2025`);
+        expect(formatPublicDateRange(range, 'en')).toBe(
+          'April 1 — October 31, 2025',
+        );
+      }
+    } finally {
+      formatRange.mockRestore();
+    }
   });
 });
 

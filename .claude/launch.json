@@ -14,6 +14,13 @@
       "runtimeArgs": ["run", "e2e:dev"],
       "port": 3001,
       "url": "http://127.0.0.1:3001"
+    },
+    {
+      "name": "thei-lab",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["scripts/dev-server.ts", "lab"],
+      "port": 3003,
+      "url": "http://lab.localhost:3003"
     }
   ]
 }

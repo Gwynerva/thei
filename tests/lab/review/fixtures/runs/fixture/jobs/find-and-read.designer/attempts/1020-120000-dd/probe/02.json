@@ -1,0 +1,40 @@
+{
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "dpr": 1,
+  "scrollY": 0,
+  "root": "page",
+  "ms": 94,
+  "findings": [
+    {
+      "fp": "near-miss:0a1b2c3d4e",
+      "rule": "near-miss",
+      "hint": "minor",
+      "elements": [
+        {
+          "path": "ol > li:nth-child(1)",
+          "desc": "result 1"
+        },
+        {
+          "path": "ol > li:nth-child(2)",
+          "desc": "result 2"
+        }
+      ],
+      "measure": {
+        "deltaPx": 2
+      },
+      "message": "The left edges of results 1 and 2 differ by 2 px.",
+      "boxes": [
+        {
+          "x": 160,
+          "y": 230,
+          "width": 680,
+          "height": 20
+        }
+      ]
+    }
+  ],
+  "suppressed": []
+}

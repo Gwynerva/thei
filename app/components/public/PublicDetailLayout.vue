@@ -21,10 +21,15 @@ const panelData = computed<PublicDetailPanelData>(() => ({
     ...(props.extraContents ?? []),
   ],
 }));
+
+// What the sidebar holds is, on a phone, in this sheet: a find of the search
+// that lands there opens it.
+const sheet = useTemplateRef<{ open: () => Promise<void> }>('sheet');
+useLandingSheet(() => void sheet.value?.open());
 </script>
 
 <template>
-  <PublicSheet :title="phrase.public_details_overview">
+  <PublicSheet ref="sheet" :title="phrase.public_details_overview">
     <template #summary><PublicDetailMetrics :data="panelData" /></template>
     <PublicDetailPanel :data="panelData" />
   </PublicSheet>

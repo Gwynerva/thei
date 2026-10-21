@@ -405,6 +405,17 @@ export function createEditorHistorySession(
     return send();
   }
 
+  /**
+   * Sends the text as it is now, without waiting for the pause after typing,
+   * and resolves once the server has it — or has refused it, or is out of
+   * reach and it waits for the next try. A save calls it, so the tab's draft
+   * the server keeps is never older than the text saved.
+   */
+  async function flush() {
+    if (!history || closed || !initialized) return;
+    await flushSync();
+  }
+
   function send(): Promise<void> {
     if (!history) return Promise.resolve();
     if (sending) {
@@ -871,6 +882,7 @@ export function createEditorHistorySession(
     initialize,
     recordChange,
     synchronize,
+    flush,
     current,
     currentKey: () => currentKey,
     restore,

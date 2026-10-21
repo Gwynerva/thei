@@ -25,6 +25,7 @@ import {
   EDITOR_BLOCK_SELECTOR,
   EDITOR_SELECTED_BLOCK_SELECTOR,
 } from './editor-dom';
+import { caretAtEdge, caretAtPoint } from './editor-inline-dom';
 
 /** Anything a click is for on its own, or that the editor handles itself. */
 const SKIP_SELECTOR = [
@@ -182,8 +183,8 @@ export function bindEditorGutterClick(root: HTMLElement, editor: EditorJS) {
     if (!target) return;
     const input = inputs[target.index]!;
     const position =
-      caretPositionAt(target.x, target.y, input) ??
-      edgePosition(
+      caretAtPoint(target.x, target.y, input) ??
+      caretAtEdge(
         input,
         fallbackCaretEdge(event.clientX, rects[target.index]!),
       );
@@ -195,7 +196,7 @@ export function bindEditorGutterClick(root: HTMLElement, editor: EditorJS) {
       selection.anchorNode &&
       input.contains(selection.anchorNode)
     ) {
-      selection.extend(position.node, position.offset);
+      selection.extend(position.startContainer, position.startOffset);
       return;
     }
     // The block becomes the editor's current one the way a caret set through
@@ -207,7 +208,7 @@ export function bindEditorGutterClick(root: HTMLElement, editor: EditorJS) {
     if (blockApi) editor.caret.setToBlock(blockApi, 'start');
     selection.removeAllRanges();
     input.focus({ preventScroll: true });
-    selection.collapse(position.node, position.offset);
+    selection.collapse(position.startContainer, position.startOffset);
     // A tap in the padding never crossed a block, so the editor has not
     // opened the toolbar for it yet.
     editor.toolbar.open();
@@ -219,55 +220,6 @@ export function bindEditorGutterClick(root: HTMLElement, editor: EditorJS) {
   return () => {
     root.removeEventListener('mousedown', onMouseDown);
     root.removeEventListener('click', onClick);
-  };
-}
-
-interface CaretPosition {
-  node: Node;
-  offset: number;
-}
-
-function caretPositionAt(
-  x: number,
-  y: number,
-  input: HTMLElement,
-): CaretPosition | undefined {
-  if ('caretPositionFromPoint' in document) {
-    const position = document.caretPositionFromPoint(x, y);
-    return position && input.contains(position.offsetNode)
-      ? { node: position.offsetNode, offset: position.offset }
-      : undefined;
-  }
-  const range = (
-    document as Document & {
-      caretRangeFromPoint?: (x: number, y: number) => Range | null;
-    }
-  ).caretRangeFromPoint?.(x, y);
-  return range && input.contains(range.startContainer)
-    ? { node: range.startContainer, offset: range.startOffset }
-    : undefined;
-}
-
-function edgePosition(
-  input: HTMLElement,
-  edge: 'start' | 'end',
-): CaretPosition {
-  const walker = document.createTreeWalker(input, NodeFilter.SHOW_TEXT);
-  let node: Node | null = null;
-  if (edge === 'start') {
-    node = walker.nextNode();
-  } else {
-    while (walker.nextNode()) node = walker.currentNode;
-  }
-  if (!node) {
-    return {
-      node: input,
-      offset: edge === 'start' ? 0 : input.childNodes.length,
-    };
-  }
-  return {
-    node,
-    offset: edge === 'start' ? 0 : (node.textContent?.length ?? 0),
   };
 }
 

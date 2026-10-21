@@ -1,0 +1,13 @@
+{
+  "jobId": "find-and-read.designer",
+  "study": "fixture",
+  "scenario": "find-and-read",
+  "scenarioTitle": "Find and read a project",
+  "persona": "designer",
+  "lens": "designer",
+  "role": "visitor",
+  "required": [
+    "dd",
+    "pl"
+  ]
+}

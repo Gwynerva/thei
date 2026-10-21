@@ -468,3 +468,15 @@ export function addTagUsage(
     return true;
   });
 }
+
+/** The tags these slugs name, by their ids; a slug no tag has is passed over. */
+export function tagUuidsBySlug(slugs: readonly string[] | undefined): string[] {
+  if (!slugs?.length) return [];
+  const { db, schema } = THEI_SERVER.useDb();
+  return db
+    .select({ tagUuid: schema.tags.tagUuid })
+    .from(schema.tags)
+    .where(inArray(schema.tags.slug, [...slugs]))
+    .all()
+    .map((row) => row.tagUuid);
+}

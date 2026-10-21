@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>clipped-text</title>
+    <link rel="stylesheet" href="base.css" />
+  </head>
+  <body>
+    <!-- A box too short for its second line. -->
+    <div
+      id="t-height"
+      data-expect="clipped-text"
+      style="width: 200px; height: 30px; overflow: hidden"
+    >
+      Line one of the text that wraps onto a second line
+    </div>
+
+    <!-- A label too long for its box, cut without a mark. -->
+    <div
+      id="t-wide"
+      data-expect="clipped-text"
+      style="width: 120px; overflow: hidden; white-space: nowrap"
+    >
+      A long label that does not fit
+    </div>
+
+    <!-- An ellipsis: shortened on purpose, only worth a note. -->
+    <div
+      id="t-ellipsis"
+      data-expect="clipped-text"
+      data-hint="info"
+      style="
+        width: 140px;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      "
+    >
+      An ellipsis that shortens a long label
+    </div>
+
+    <!-- A line set solid in a box that ends above its descenders: they are
+         cut by a few pixels, though the line still reads. -->
+    <div
+      id="t-descenders"
+      data-expect="clipped-text"
+      data-hint="minor"
+      style="
+        width: 200px;
+        height: 28px;
+        overflow: hidden;
+        font-size: 30px;
+        line-height: 30px;
+      "
+    >
+      Jumpy gravy
+    </div>
+
+    <!-- Decoy: the same box over a line with no descenders at all, where only
+         the font's deepest letters would have been cut. -->
+    <div
+      style="
+        width: 200px;
+        height: 28px;
+        overflow: hidden;
+        font-size: 30px;
+        line-height: 30px;
+      "
+    >
+      Saved now
+    </div>
+
+    <!-- Decoy: two lines clamped, the third peeking into the padding. -->
+    <p
+      style="
+        width: 200px;
+        padding-bottom: 6px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      "
+    >
+      A long text clamped to two lines, with a third and a fourth line that the
+      clamp hides from view
+    </p>
+
+    <!-- Decoy: a box that scrolls. -->
+    <div style="width: 200px; height: 50px; overflow: auto">
+      Text that runs on in a box that scrolls, so a line half out of sight is
+      there to be scrolled to
+    </div>
+
+    <!-- Decoy: a fade at the bottom of a cut box. -->
+    <div
+      style="
+        width: 200px;
+        max-height: 50px;
+        overflow: hidden;
+        mask-image: linear-gradient(#000 50%, transparent);
+      "
+    >
+      Text that fades out at the bottom of its box, where a mask hides the cut
+      on purpose
+    </div>
+
+    <!-- Decoy: words only for screen readers. -->
+    <span
+      style="
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      "
+      >Only for screen readers</span
+    >
+
+    <!-- Decoy: an absolute line out of a clipping box that is not its
+         containing block. -->
+    <div style="position: relative; width: 300px; height: 44px">
+      <div style="height: 16px; overflow: hidden">
+        <span style="position: absolute; left: 0; top: 22px"
+          >An absolute line outside a clipping box</span
+        >
+      </div>
+    </div>
+
+    <!-- Decoy: a closed disclosure. -->
+    <details>
+      <summary class="ctl" style="display: block; padding: 12px">More</summary>
+      <p>Hidden words in a closed disclosure</p>
+    </details>
+
+    <!-- Decoy: words that just fit their box. -->
+    <div style="width: 200px; height: 20px; overflow: hidden">
+      Fits in one line
+    </div>
+  </body>
+</html>

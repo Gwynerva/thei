@@ -125,11 +125,28 @@ checked whole and applied in order; an atomic one is undone whole when one
 of its parts fails. A deletion is final and never proposed as sure.
 
 The owner applies, declines or comments on each — a comment gets a new
-version of it — in the session, or in the entity's form, where it waits at
-the label of the field it changes, behind a ✦. Taken in the form, it is
-applied when the form is saved. A declined one may be marked **never to be offered again**: it is
+version of it, which takes the place of the one commented on when it
+changes the same field, relation or remembered fact — in the session, or in
+the entity's form, where it waits at the label of the field it changes,
+behind a ✦. Taken in the form, it is applied when the form is saved. A
+declined one may be marked **never to be offered again**: it is
 remembered, and the same proposal is not made again. An applied action can
 be undone while what it changed reads as it left it.
+
+The owner may correct a proposal's words before applying it, in its card:
+it is checked again as the model's was, and applied as it then stands. One
+taken into a form and saved with other words counts as applied with the
+owner's words, once the saved entity reads so. Either way the model's own
+words are kept beside the owner's, and the proposal stays known by them:
+what the owner corrected is not proposed again.
+
+The ✦ at a field's label also asks: a few ready requests for that field, or
+the owner's own words, up to 2000 characters — the box says so rather than
+cut them. A session of its own answers about that field alone, in the
+background, the ✦ running while it does; what it proposes waits at the
+label, and an answer with nothing to propose stays beside the ✦ in the
+model's own last words. A text's editor has the same ✦ for the text in
+hand, and opens what it proposes on its comparison.
 
 A file's **description** («Описание файла») is what the file is, in words —
 what a picture shows, what a recording is and what it is about, what a
@@ -168,7 +185,7 @@ pictures and files, and every short text beside them: titles, summaries,
 reminders, what a dated stretch is called, status lines, notes on links and
 relations, the titles and captions of placed files, the owner's name and
 slogan, a project's button, the descriptions of files; **File descriptions**
-describes the files of the archive that have none yet, three a run, each
+describes the files of the archive that have none yet, a few a run, each
 from the file and the places it is used in — a file the model cannot be
 shown is left alone, and counted as looked at until its bytes change;
 **Broken links** mends the links that lead nowhere; **Relations and links
@@ -195,10 +212,22 @@ sent from there or an entity's ✦ like any request:
 the entity in hand and the ones the words mention bound it, and once all of
 them is looked at, the next run lets that go and goes over them again from
 the start, a run's worth at a time. Words added to the check's own narrow
-it further, «only the captions of files»: its model reads them and asks for
-what they name with `check_batch`, and is given only what of that is due.
-Of a check the owner chooses only its model; to rewrite its words, they
-copy it. A request keeps its paragraphs as written.
+it further, «only the captions of files», «five at a time»: its model reads
+them and asks for what they name with `check_batch`, and is given only what
+of that is due. It calls it again and again, as long as the owner's words
+ask for more: each call counts the batch before as looked at and gives the
+next — with `count`, at most that many of all that is due, and how many
+more are due after it; without, a batch of the check's own. Of a check the
+owner chooses only its model; to rewrite its words, they copy it. A request
+keeps its paragraphs as written.
+
+A check's run never goes on by itself: every batch is the owner's money.
+While more is due, its answer ends with how much this session's runs have
+looked at — never another run's, nor what a fix applied in a form mended —
+and a button to go on in the same session: «Check N more», as many as its
+model last asked for and as far as what is due now reaches, or the next
+batch of the check's own. Pressed, it sends «Go on». With nothing left, the
+answer says all of it was looked at.
 
 The owner's own templates are ready-made requests: opened as a new session
 with their words written in, the entity named already when it comes from
@@ -224,7 +253,7 @@ a restart cut off says so.
 | Tool                              | What it does                                                         |
 | --------------------------------- | -------------------------------------------------------------------- |
 | `site_overview`                   | The site, its kinds of entities, and what the owner asks of models.  |
-| `search_archive`                  | Words across every text.                                             |
+| `search_archive`                  | Words across every text, grouped by kind, each place by its ids.     |
 | `list_entities`                   | Entities of a kind, by dates too.                                    |
 | `read_entity`                     | One entity whole, its memory, its files.                             |
 | `changes_since`                   | What changed in a span of time.                                      |

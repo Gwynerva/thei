@@ -48,16 +48,7 @@ const requested = ref<{ page: number; key: ControlKey }>();
 
 function request(page: number, key: ControlKey, event: MouseEvent) {
   // A modified click opens the page elsewhere and leaves this one in place.
-  if (
-    page === props.page ||
-    event.button !== 0 ||
-    event.metaKey ||
-    event.ctrlKey ||
-    event.shiftKey ||
-    event.altKey
-  ) {
-    return;
-  }
+  if (page === props.page || !isPlainClick(event)) return;
   requested.value = { page, key };
 }
 

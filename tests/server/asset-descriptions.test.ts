@@ -12,7 +12,12 @@ import {
 import { deleteAssetRow } from '../helpers/delete-asset';
 import { deleteStoredAsset } from '../../server/thei/assets/storage';
 import { listLibraryAssets } from '../../server/thei/assets/library';
-import { buildPublicSearchIndex } from '../../server/thei/public/search-index';
+import {
+  closeSearchStore,
+  rebuildSearchIndex,
+  useSearchStore,
+} from '../../server/thei/search/indexer';
+import { runSearch } from '../../server/thei/search/query';
 import { createSession } from '../../server/thei/ai/sessions/store';
 import { proposeActions } from '../../server/thei/ai/actions/propose';
 import {
@@ -207,7 +212,7 @@ describe('a file’s description', () => {
     expect(found('R&amp;D')).toEqual(['a-notes']);
   });
 
-  it('finds a file in the library, and an entity in the site’s search', () => {
+  it('finds a file in the library, and an entity in the site’s search', async () => {
     writeAssetDescription('a-photo', 'Grandmother at the dacha', {
       expectedUpdatedAt: null,
     });
@@ -232,7 +237,8 @@ describe('a file’s description', () => {
       assetUuid: 'a-photo',
       containerType: 'project',
       containerId: PROJECT,
-      role: 'banner',
+      role: 'showcase-asset',
+      meta: { role: 'showcase-asset', order: 0, isPrivate: false },
     });
     insert('asset-usages', {
       assetUuid: 'a-notes',
@@ -241,11 +247,20 @@ describe('a file’s description', () => {
       role: 'other-asset',
       meta: { role: 'other-asset', order: 0, isPrivate: true },
     });
-    const project = buildPublicSearchIndex().documents.find(
-      (document) => document.uuid === PROJECT,
-    )!;
-    expect(project.text).toContain('grandmother at the dacha');
-    expect(project.text).not.toContain('night train');
+    useSearchStore(':memory:');
+    try {
+      await rebuildSearchIndex();
+      const titles = async (q: string) =>
+        (await runSearch({ q, audience: 'public' })).groups.flatMap((group) =>
+          group.hits
+            .filter((hit) => hit.kind === 'project')
+            .map((hit) => hit.title),
+        );
+      expect(await titles('grandmother dacha')).toEqual(['Parapet']);
+      expect(await titles('night train')).toEqual([]);
+    } finally {
+      closeSearchStore();
+    }
   });
 });
 

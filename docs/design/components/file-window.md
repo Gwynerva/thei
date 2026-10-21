@@ -20,7 +20,11 @@ The panel:
 
 - Its header is one slim row: the kind's icon and a name. The library names
   the kind of file (Image, Video, Audio, File); a placement names its place's
-  role; a visitor's window names the file by its title, in the text's colour.
+  role; a visitor's window names the file by its title, in the text's colour,
+  and a file with no title by what it is — «Изображение», «Видео», and for
+  any other file the format a person knows it as: «Документ PDF», «Архив
+  ZIP», «Таблица CSV», failing that «Файл DOCX» (`assetFormatLabel` in
+  `app/composables/asset-library-labels.ts`).
   A panel that goes screen by screen puts its Back at the left of this row,
   never under it. On a phone the row also folds the panel.
 - What it holds goes in sections one under another, each under a caption in
@@ -44,13 +48,31 @@ The file's description:
   window is about one place — a placement, the editor — it is marked
   «Глобально» with a globe in the warning colour, whose hint says the
   description goes wherever the file is shown.
-- A visitor's window always shows it, when it has one, first in its «Файл»
-  group, before the facts.
+- A visitor's window always shows it, when it has one, first in its «О
+  файле» group, before the facts.
+
+A video's still:
+
+- A video's window has a «Превью» ("Preview") section: the still as wide as
+  the panel, and under it only two buttons, «Выбрать автоматически» and
+  «Текущий кадр · 0:12.4». The way the still was taken is the button
+  pressed.
+- «Текущий кадр» takes the frame the player stands at; its time follows the
+  player to a tenth of a second, and it is off while the player cannot tell
+  its time or stands at the frame already chosen. Its hint says the frame
+  becomes the still of every variant, wherever they are shown.
+- Pressing the still puts the player at its moment, so a frame next to it
+  is a step away. A tick in the accent on the player's bar marks that moment
+  too.
+- The choice is the file's, for every video of its family, like the
+  description. Once taken, the window shows the new still, and every other
+  place that draws the video — the library's tiles, a text's blocks, the form
+  behind the window — takes it at once, without reading anything again.
 
 The library's window:
 
-- Its sections: the facts; the description, saved on its own; «Где
-  используется»; «Как получен файл»; «Другие варианты».
+- Its sections: the facts; the description, saved on its own; «Превью», for
+  a video; «Где используется»; «Как получен файл»; «Другие варианты».
 - «Где используется» lists each place as a chip: the place's picture along
   the chip's right edge (its kind's icon when it has none), its name, and
   under it every way the file is used there, with how many times and how many
@@ -76,21 +98,31 @@ The editor goes one screen at a time:
   video or an archive, makes it first, and goes on once it has been looked
   at. The choice is not repeated in the foot, and no notice says a file was
   uploaded before: the saved variants say it.
-- Last, «Файл»: the description field alone, required, with a hint of why it
-  matters. «Готово» is off until it holds words; to its left a grey square
-  button with a dead face, «Продолжить без описания файла», goes on without
-  one. Back returns to the screen the file was taken on.
+- Last, after an upload or a new variant only, «Файл»: the description field,
+  required, with a hint of why it matters, and for a video its «Превью» under
+  it, the still chosen there being the family's at once. «Готово», the foot's
+  one button, full width with a tick, is off until the field holds words or,
+  under it, the pale «Без описания файла» with a dead face is pressed: that
+  only lets «Готово» go on, so the rest of the screen stays at hand. It is
+  there only while the field is empty, and words in the field take it away
+  with the choice made. Back returns to the screen the file was taken on.
+- A file already stored, taken as it is — opened by «Изменить», picked in
+  the library, found again by its bytes — and a saved variant are handed over
+  at once: their foot's button reads «Готово».
 
 A placement's window:
 
 - The facts, then «Здесь» — what this place says of the file: its caption or
   title and description, whether it is private — then «Файл», the
-  description, marked «Глобально».
+  description, marked «Глобально», and, for a video, «Превью». A place that
+  keeps a video without its meta — a text's block — has it read in the
+  background; until then «Превью» holds a placeholder where it says how the
+  still was taken.
 - Its foot: remove from the place, «Изменить», and the main action.
 
 A visitor's window:
 
-- The caption of the place, in the text's colour; the «Файл» group, its
+- The caption of the place, in the text's colour; the «О файле» group, its
   description and then its facts; and «Где ещё используется», the other pages
   the file is shown on, as chips of the library's kind without a private
   count.
@@ -122,6 +154,21 @@ A visitor's window:
   `required` the hint of why; an `embedded` one has no button of its own, and
   the window's action saves it through the exposed `save()`, reading `filled`
   and `saving`.
+- `app/modals/asset-modal/AssetPreviewFrameSection.vue` — «Превью»: takes
+  the still, its moment, whether it was chosen and the player's time
+  (`playbackTime`, exposed by
+  `app/modals/asset-modal/AssetModalPreviewMedia.vue` with `seek()`); it asks
+  `POST /api/admin/assets/<uuid>/preview` and emits the family's videos as
+  they now are. `posterAt` on the player draws the tick
+  (`app/modals/asset-modal/AssetModalVideoControls.vue`). Its two buttons
+  stand one under the other in a group drawn as `FieldOptions`' column is,
+  the pressed one with a tick, the accent's border and pale ground;
+  «Выбрать автоматически» pressed is off, and «Текущий кадр» pressed takes
+  another frame still. `ModalUploadSettings.vue` puts it under the
+  description of a video just made or uploaded.
+- `app/composables/video-stills.ts` keeps the stills taken in the tab by the
+  video's address; `app/components/Media.vue` draws a video with the one
+  taken since its place read it.
 - The windows: `app/modals/asset-library/LibraryAssetDetailsModal.vue`,
   `app/modals/upload-settings/ModalUploadSettings.vue`,
   `app/modals/asset-details/AssetDetailsModal.vue`,
@@ -172,7 +219,17 @@ A visitor's window:
   no line repeating the choice.
 - The description comes last and is required because it is what a reader
   gets who cannot see the picture, and what search and an AI read; going on
-  without it stays possible, on purpose and visibly.
+  without it stays possible, on purpose and visibly. It is asked for a file
+  new to the library: the owner found the step only distracted when merely
+  choosing a file already stored, which the library's window describes.
+- The owner asked to choose a video's still by hand: a section of the panel
+  with the frame the player stands at, the way back to the automatic pick,
+  and a tick on the bar. The choice used to be remade by a button that picked
+  again by itself, which changed nothing once the update had picked well.
+- A visitor's window read «Файл» twice for a file with no title: as its
+  header and as the group under it, neither saying anything. The owner asked
+  for a header that tells what the file is, and named the group «О файле». A
+  placement keeps «Здесь» and «Файл», where «Файл» stands against «Здесь».
 - A visitor's «Где ещё используется» is there to draw a reader further in,
   and the owner asked for it with care not to leak anything private: hence a
   stranger's view built by the pages' own builders rather than a second set
@@ -183,7 +240,12 @@ A visitor's window:
 - `tests/e2e/admin-project-files.spec.ts` takes a file through the editor's
   screens and its description into a placement.
 - `tests/e2e/asset-editor.spec.ts` and `tests/e2e/asset-library.spec.ts`
-  cover the editor's screens and the library's chips.
+  cover the editor's screens and the library's chips;
+  `tests/e2e/asset-library.spec.ts` also takes a video's frame and sees the
+  still change in the window and on its tile.
+- `tests/server/assets/preview-frame.test.ts` covers the frame taken: exact,
+  for the family, kept by a new variant, the old still left to the cleanup,
+  the route, and the public address that moves with it.
 - `tests/e2e/file-description.spec.ts` saves a description in the library
   and reads it on a public page.
 - `tests/server/public/file-places.test.ts` and

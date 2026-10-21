@@ -523,6 +523,63 @@
 }
 
 /*
+ * The place a find of the search led to (`app/composables/search-landing.ts`):
+ * a light laid over it — tinted, ringed and glowing in the accent — that
+ * stays two seconds as it is and fades over four, as long as `LIT_MS` keeps
+ * it; the words found stay marked in it. The light lets every click through, and stands under the sticky
+ * headers (`z-10`). While the reader is there, what the place cuts short is
+ * read in full: a note clamped to two lines, a title cut with an ellipsis.
+ */
+.search-landing-light {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9;
+  pointer-events: none;
+  background-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+  box-shadow:
+    inset 0 0 0 0.2rem var(--color-accent),
+    0 0 2rem 0.5rem color-mix(in oklab, var(--color-accent) 85%, transparent);
+  animation: search-landing 4s linear 2s both;
+}
+
+::highlight(search-found) {
+  background-color: color-mix(in oklab, var(--color-accent) 28%, transparent);
+  color: var(--color-text-1);
+}
+
+:is([data-search-found], [data-search-found] *):is(
+  .line-clamp-1,
+  .line-clamp-2,
+  .line-clamp-3
+) {
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+  overflow: visible;
+}
+
+:is([data-search-found], [data-search-found] *).truncate {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+@keyframes search-landing {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search-landing-light {
+    animation: none;
+  }
+}
+
+/*
  * The lock pattern of a private section, drawn by a `::before` over whatever
  * box it is applied to: the section on a page, the box laid under a section
  * in the editor. Where it sits (`inset`, `z-index`) is the caller's; how faint

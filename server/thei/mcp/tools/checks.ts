@@ -1,5 +1,4 @@
 import type { McpServer } from '@modelcontextprotocol/server';
-import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { AiMessagePart } from '#layers/thei/shared/ai';
 import { findTarget, type ActionTarget } from '../../ai/actions/target';
@@ -8,21 +7,26 @@ import {
   busySubjects,
   coverageOf,
   holdBatch,
+  rememberAsked,
+  settleTemplateTurn,
 } from '../../ai/templates/coverage';
-import { TEMPLATE_SOURCES } from '../../ai/templates/sources';
+import { TEMPLATE_SOURCES, type CheckItem } from '../../ai/templates/sources';
 import { findTemplate } from '../../ai/templates/store';
+import { TOOL_ANSWER_MAX } from '../../ai/runner/turns';
 import { READS } from '../annotations';
 import type { McpCallContext } from '../context';
 import { guardTool, McpToolError, toolResult } from '../result';
 
-/** The tool a worded run's model asks for its batch with. */
+/** The tool a check's model asks for its next batch with. */
 export const CHECK_BATCH_TOOL = 'check_batch';
 
 /**
  * The one tool of a built-in check's own session: what the owner's words
- * narrow the check to — some areas, some entities — given as a batch of
- * what of that is due, held for the run like a batch given at its start.
- * Only Thei's own model works in such a session; no app is offered it.
+ * narrow the check to — some areas, some entities, how many — given batch
+ * after batch of what of that is due, each held for the run like a batch
+ * given at its start, and each one asked after counting the one before as
+ * looked at. A batch is what fits one answer whole. Only Thei's own model
+ * works in such a session; no app is offered it.
  */
 export function registerCheckTools(server: McpServer, context: McpCallContext) {
   const own = context.session;
@@ -39,20 +43,31 @@ export function registerCheckTools(server: McpServer, context: McpCallContext) {
     {
       title: 'What the check is to look at',
       description:
-        'Gives this check’s batch: of the areas and entities the owner’s ' +
+        'Gives this check’s next batch: of the areas and entities the owner’s ' +
         'words ask for, what the check has not looked at yet, as it reads ' +
         `now. Its areas: ${Object.keys(source.areas).join(', ')}. Leave ` +
-        'areas or refs out for all of them. Once a turn.',
+        'areas or refs out for all of them. Call it again for the batch after, ' +
+        'once you have proposed for this one, as long as the owner’s words ask ' +
+        'for more — "all" means until it says nothing is due; asking again ' +
+        'counts the batch before as looked at.',
       inputSchema: z.object({
         areas: z.array(z.string()).optional(),
         refs: z
           .array(z.string())
           .optional()
           .describe('Entities and files, by ref (asset:<id> for a file)'),
+        count: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe(
+            'How many to give at most, when the owner asked for a number; a batch is never more than fits one answer',
+          ),
       }),
       annotations: READS,
     },
-    ({ areas, refs }) =>
+    ({ areas, refs, count }) =>
       guardTool(async () => {
         const part = sessionMessages(own.sessionUuid)
           .flatMap((message) => message.parts as AiMessagePart[])
@@ -86,31 +101,76 @@ export function registerCheckTools(server: McpServer, context: McpCallContext) {
         const scope: ActionTarget[] | undefined = named?.length ? named : bound;
         const templateId = template.templateId;
         const { db, schema } = THEI_SERVER.useDb();
-        const holds = db
-          .select({ subject: schema.aiTemplateBatches.subject })
-          .from(schema.aiTemplateBatches)
-          .where(eq(schema.aiTemplateBatches.sessionUuid, own.sessionUuid))
-          .get();
-        if (holds)
-          throw new McpToolError(
-            'This turn holds its batch already: work with what it gave.',
-          );
-        const due = await source.due({
+        // Asked again, the run went through what it had: that counts as
+        // looked at, and makes room for the next.
+        settleTemplateTurn(own.sessionUuid, true);
+        const input = {
           scope,
           areas: areas?.length ? new Set(areas) : undefined,
           covered: coverageOf(templateId),
           busy: busySubjects(templateId),
-        });
-        const given = db.transaction((tx) =>
+        };
+        // A number asked for is looked for among all that is due; else a
+        // batch is the check's own.
+        const due = await source.due(count ? { ...input, whole: true } : input);
+        const room = TOOL_ANSWER_MAX - AFTER_BATCH - source.brief([]).length;
+        const given = fitting(due, room, count);
+        const held = db.transaction((tx) =>
           own.live()
-            ? holdBatch(tx, schema, templateId, own.sessionUuid, due)
+            ? holdBatch(tx, schema, templateId, own.sessionUuid, given)
             : [],
         );
-        if (!given.length)
+        if (!held.length)
           return toolResult(
             'Nothing of that is due: the check has looked at all of it as it reads now.',
           );
-        return toolResult(source.brief(given));
+        // Kept for «go on»: the next batch is as much as was asked for.
+        rememberAsked(own.sessionUuid, {
+          areas,
+          refs,
+          ...(count ? { count } : {}),
+        });
+        // Counted among all that is due only when a number was asked for;
+        // a batch of the check's own says only whether more may follow.
+        const left = due.length - held.length;
+        return toolResult(
+          [
+            source.brief(held),
+            !count
+              ? '(More of that may be due: ask again while the owner’s words ask for more; it says when nothing is.)'
+              : left > 0
+                ? `(${left} more of that ${left === 1 ? 'is' : 'are'} due after this batch.)`
+                : '(That is all of it that is due.)',
+          ].join('\n\n'),
+        );
       }),
   );
+}
+
+/**
+ * What of a tool's answer a batch leaves for the line said after it: what
+ * is beyond the answer's cap would be cut off while still counted as looked
+ * at.
+ */
+const AFTER_BATCH = 2_000;
+
+/**
+ * What of what is due fits one answer, in order, at most `count` of it;
+ * always at least one, which is cut short rather than never given.
+ */
+function fitting(
+  due: readonly CheckItem[],
+  room: number,
+  count: number | undefined,
+): CheckItem[] {
+  const given: CheckItem[] = [];
+  let used = 0;
+  for (const item of due) {
+    if (count !== undefined && given.length >= count) break;
+    const size = item.shown.length + 2;
+    if (given.length && used + size > room) break;
+    given.push(item);
+    used += size;
+  }
+  return given;
 }

@@ -18,6 +18,7 @@ import { bindEditorFilePaste } from '#layers/thei/app/composables/editor-file-pa
 import { bindEditorPlainFields } from '#layers/thei/app/composables/editor-plain-fields';
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
 import { createEditorPrivatePattern } from '#layers/thei/app/composables/editor-private-pattern';
+import { createEditorBlockDrag } from '#layers/thei/app/composables/editor-block-drag';
 import { readCleanEditorOutput } from '#layers/thei/app/composables/editor-output';
 import { createEditorHistorySession } from '#layers/thei/app/composables/content-history/session';
 import type { ContentHistoryTransport } from '#layers/thei/app/composables/content-history/api';
@@ -118,6 +119,21 @@ let unbindLinkPaste: (() => void) | undefined;
 let unbindFilePaste: (() => void) | undefined;
 let unbindPlainFields: (() => void) | undefined;
 let cleanupPrivatePattern: (() => void) | undefined;
+let cleanupDrag: (() => void) | undefined;
+const route = useRoute();
+/** What the last save wrote, and what went wrong with a save. */
+const saved = shallowRef<ContentOutputData>();
+const saveErrors = ref<string[]>([]);
+const reopened = ref(0);
+/** The saved text, a line a block: a section's edges as [id and ]id. */
+const savedOutline = computed(() =>
+  (saved.value?.blocks ?? []).map((block) => {
+    const data = block.data as Record<string, unknown>;
+    if (block.type === 'privateSectionBoundary')
+      return `${data.edge === 'start' ? '[' : ']'}${data.sectionId}`;
+    return block.type === 'paragraph' ? String(data.text) : block.type;
+  }),
+);
 let sections: ReturnType<typeof createEditorPrivateSections>;
 let snapshots: ReturnType<typeof createEditorHistorySession>;
 const snapshotPending = computed(() => snapshots?.isPending.value ?? false);
@@ -218,7 +234,13 @@ onMounted(async () => {
     holder: holder.value!,
     data: initial as any,
     tools: {
-      privateSectionBoundary: PrivateSectionBoundaryTool as any,
+      privateSectionBoundary: {
+        class: PrivateSectionBoundaryTool as any,
+        config: {
+          removeSection: (sectionId: string) =>
+            sections.removeSection(sectionId),
+        },
+      },
       contentMedia: {
         class: ContentMediaTool as any,
         inlineToolbar: true,
@@ -249,7 +271,13 @@ onMounted(async () => {
     },
     onChange: (_api, event) => {
       events.value++;
-      if (!ready.value || snapshots.isApplying.value) return;
+      if (!ready.value) return;
+      // As the content editor does: moves told while a text comes in are
+      // judged once it is in.
+      if (snapshots.isApplying.value) {
+        sections.holdMoves(event);
+        return;
+      }
       if (sections.handleChange(event)) snapshots.recordChange();
     },
   });
@@ -269,8 +297,17 @@ onMounted(async () => {
       uploadErrors.value.push(...skipped.map(({ name }) => name)),
   });
   unbindPlainFields = bindEditorPlainFields(holder.value!, editor);
-  sections = createEditorPrivateSections(editor, { suppressionDuration: 20 });
+  sections = createEditorPrivateSections(editor, {
+    suppressionDuration: 20,
+    root: holder.value!,
+  });
   cleanupPrivatePattern = createEditorPrivatePattern(holder.value!);
+  // Blocks dragged by their handle, as in the content editor; asked for by
+  // `?drag`, since the handle then opens the block's settings on a click.
+  if ('drag' in route.query)
+    cleanupDrag = createEditorBlockDrag(holder.value!, editor, {
+      canMove: (from, to) => sections.canMove(from, to),
+    });
   snapshots = createEditorHistorySession({
     read: () => readCleanEditorOutput(editor),
     render: async (data) => {
@@ -290,15 +327,46 @@ onMounted(async () => {
       transport,
     },
   });
+  watch(snapshots.isApplying, (applying) => {
+    if (!applying && sections.releaseMoves()) snapshots.recordChange();
+  });
   await snapshots.initialize();
   savedKey.value = currentKey.value;
   transitions.value = [];
   ready.value = true;
 });
 async function save() {
-  await snapshots.synchronize();
+  try {
+    saved.value = await snapshots.synchronize();
+  } catch (error) {
+    saveErrors.value.push((error as Error).message);
+    return;
+  }
   savedKey.value = currentKey.value;
   transitions.value = [];
+}
+/**
+ * Closes the text and opens what was saved, as the content editor does on
+ * its next opening: a new editor, with nothing remembered from this one.
+ */
+async function reopen() {
+  await save();
+  if (!saved.value) return;
+  ready.value = false;
+  sections.destroy();
+  await editor.render(saved.value as any);
+  sections = createEditorPrivateSections(editor, {
+    suppressionDuration: 20,
+    root: holder.value!,
+  });
+  if (cleanupDrag) {
+    cleanupDrag();
+    cleanupDrag = createEditorBlockDrag(holder.value!, editor, {
+      canMove: (from, to) => sections.canMove(from, to),
+    });
+  }
+  ready.value = true;
+  reopened.value++;
 }
 async function restore() {
   await snapshots.restore(initial);
@@ -349,6 +417,7 @@ onBeforeUnmount(() => {
   unbindFilePaste?.();
   unbindPlainFields?.();
   cleanupPrivatePattern?.();
+  cleanupDrag?.();
   sections?.destroy();
   snapshots?.destroy();
   editor?.destroy();
@@ -366,6 +435,9 @@ onBeforeUnmount(() => {
       :data-history-writes="historyWrites.join(',')"
       :data-upload-errors="uploadErrors.join(',')"
       :data-pending-uploads="pendingUploads"
+      :data-saved="JSON.stringify(savedOutline)"
+      :data-save-errors="saveErrors.join(',')"
+      :data-reopened="reopened"
     >
       <button data-save @click="save">{{ dirty ? 'Save' : 'Saved' }}</button>
       <button @click="insert">Insert section</button>
@@ -374,6 +446,7 @@ onBeforeUnmount(() => {
       <button @click="editor.blocks.move(6, 1)">Invalid move</button>
       <button @click="editor.blocks.move(2, 4)">Valid move</button>
       <button @click="restore">Restore</button>
+      <button @click="reopen">Reopen</button>
       <button @click="insertFile">Insert file</button>
       <button :disabled="!picking" @click="choosePicture">
         Choose picture

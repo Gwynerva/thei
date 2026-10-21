@@ -88,11 +88,6 @@ watch(
   },
 );
 
-const numbers = computed(
-  () =>
-    new Intl.NumberFormat(language.value.code, { maximumFractionDigits: 1 }),
-);
-
 /** What is wrong with the form, in words; empty when it may be saved. */
 const problem = computed(() => {
   const form = draft.value;
@@ -322,13 +317,14 @@ const usage = computed(() => {
     share: Math.min(1, month / limit),
     line: phrase.value.ai_model_usage_line(
       sentence(monthName),
-      numbers.value.format(month / MILLION),
-      numbers.value.format(limit / MILLION),
+      // Said as the sessions' list says it, so the two never disagree.
+      compactAmount(month),
+      compactAmount(limit),
     ),
     average:
       average === null
         ? ''
-        : phrase.value.ai_model_average(numbers.value.format(average / 1000)),
+        : phrase.value.ai_model_average(compactAmount(average)),
   };
 });
 

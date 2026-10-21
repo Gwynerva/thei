@@ -28,6 +28,7 @@ const { viewable, mode, resolvedTitle, details, actionIcon } =
       :target="mode === 'link' && viewable ? '_blank' : undefined"
       :rel="mode === 'link' ? 'noopener noreferrer' : undefined"
       :download="mode === 'link' && !viewable ? '' : undefined"
+      :data-opens-viewer="mode === 'open' ? '' : undefined"
       class="attachment-card group relative flex w-full min-w-0 items-center
         gap-sm rounded-normal border border-border-1 bg-bg-2 p-xs text-left
         text-text-1 no-underline transition-colors outline-none sm:pr-sm"

@@ -1,0 +1,40 @@
+{
+  "attemptId": "1020-130500-pl",
+  "study": "fixture",
+  "jobId": "diary-today.expert",
+  "scenario": "diary-today",
+  "persona": "expert",
+  "variant": {
+    "viewport": "phone",
+    "theme": "light"
+  },
+  "role": "owner",
+  "task": "Write how today went and mention “First snow”.",
+  "picked": {
+    "event": "event:first-snow"
+  },
+  "status": "disturbed",
+  "startedAt": "2026-10-20T13:05:00.000Z",
+  "durationMs": 1600,
+  "code": {
+    "commit": "c81a2f1f",
+    "dirty": true,
+    "diffHash": "a1",
+    "diffHashEnd": "b2"
+  },
+  "archive": {
+    "version": "1.0.0"
+  },
+  "snapshotId": "conformance-1020",
+  "target": "lab",
+  "serverMode": "dev",
+  "pageErrors": [],
+  "consoleErrors": [],
+  "blockedHosts": [],
+  "labNotes": [],
+  "tidy": {
+    "restored": [],
+    "deleted": [],
+    "leftovers": []
+  }
+}

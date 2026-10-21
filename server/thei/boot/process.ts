@@ -21,6 +21,7 @@ import {
   finishUpdateBootRun,
 } from '../updates/boot';
 import { bootOgCleanup } from '../og/boot';
+import { bootSearch } from '../search/indexer';
 
 export async function bootTheiServer() {
   THEI_SERVER.console.tag('Boot').log('Booting...');
@@ -42,6 +43,7 @@ export async function bootTheiServer() {
     bootExternalLinkCleanup();
     bootUpdateChecks();
     bootOgCleanup();
+    bootSearch();
     await finishUpdateBootRun();
     setBootReady();
   } catch (decideOrError) {

@@ -80,6 +80,16 @@ export const AI_NOTICE_KINDS = [
 export type AiNoticeKind = (typeof AI_NOTICE_KINDS)[number];
 
 /**
+ * How a turn may end short and still be gone on with — stopped by the owner,
+ * out of time or of steps: a pause, said quietly, not a failure.
+ */
+export const AI_PAUSES: ReadonlySet<string> = new Set<AiNoticeKind>([
+  'stopped',
+  'timeout',
+  'turns',
+]);
+
+/**
  * What a message carries beside its words. A question waits for the owner;
  * steps say what the model read on the way; a comment ties the owner's words
  * to an action; a notice is the session's own word — stopped, the monthly
@@ -115,7 +125,18 @@ export type AiMessagePart =
       type: 'template';
       templateId: string;
       scope?: string[];
-    };
+    }
+  /**
+   * A check's run has more to look at: `next` subjects in its next batch,
+   * `looked` looked at in its session so far. Offered as one button to go
+   * on; `next: 0` says all of it was looked at.
+   */
+  | { type: 'continue'; next: number; looked: number }
+  /**
+   * The owner's words asked at a field's ✦: the entity or file, by ref, and
+   * the place of its form, as `<Field ai>` names it.
+   */
+  | { type: 'field'; ref: string; place: string };
 
 /**
  * A turn of the conversation as the model saw it, kept so the session can go
@@ -255,6 +276,12 @@ export interface AiMessageItem {
   parts: AiMessagePart[];
   /** The files of its `file` parts, as the library describes them. */
   files: AiMessageFile[];
+  /**
+   * The ready-made request the owner's words began from, as it is called
+   * now: a template's own or a built-in check. None for words of their own,
+   * and for a template gone since.
+   */
+  template: { title: string; builtin: boolean } | null;
   tokens: number;
   createdAt: number;
 }
@@ -279,6 +306,11 @@ export interface AiActionItem {
   payload: unknown;
   /** What it was made against: the value it replaces, a version. */
   base: unknown;
+  /**
+   * What the model proposed, once the owner corrected its words: `payload`
+   * is then the owner's. None while the words are the model's.
+   */
+  proposed: unknown;
   /** The other entities it names — a relation's other end, tags — by ref. */
   refs: Record<string, AiEntityRef>;
   parts: { id: string; state: string; problem?: string }[] | null;
@@ -296,6 +328,11 @@ export interface AiActionItem {
   never: boolean;
   /** A file it is about, as the library has it now. */
   file?: import('./api/asset').AssetVariantInfo;
+  /**
+   * An update's fields as its form keeps them — the keys of `base` — by the
+   * names a change gives them: `externalLinks` is `links`. For its card.
+   */
+  fieldNames?: Record<string, string>;
 }
 
 /**

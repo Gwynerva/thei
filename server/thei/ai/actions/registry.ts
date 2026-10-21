@@ -22,7 +22,10 @@ import type { AiActionKindDef } from './types';
 
 /**
  * Every kind of action, by its name: the one place the site, the session
- * runner and MCP look a kind up.
+ * runner and MCP look a kind up. A new feature or field of an entity comes
+ * with its action here (AGENTS.md), with one exception the owner made: a
+ * video's poster frame has none — it is chosen by eye among the frames,
+ * and a model is shown one frame and the sound, never enough to choose.
  */
 export const AI_ACTION_DEFS: { [K in AiActionKind]: AiActionKindDef<K> } = {
   update: updateAction,

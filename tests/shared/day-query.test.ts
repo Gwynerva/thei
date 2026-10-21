@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { dayQueryRank, parseDayQuery } from '../../shared/day-query';
+import {
+  dayQueryRank,
+  parseDayQuery,
+  resolveNamedDay,
+} from '../../shared/day-query';
+import { createSearchAnalyzer } from '../../shared/language/search';
 
 const days = [
   '2023-05-12',
@@ -168,5 +173,23 @@ describe('text that is not a day', () => {
     expect(found('12 мая')).toEqual(['2024-05-12', '2023-05-12']);
     expect(found('13 мая')).toEqual([]);
     expect(found('studio')).toBeUndefined();
+  });
+});
+
+describe('the days a query names, from the reader’s own day', () => {
+  const relativeDay = (word: string) =>
+    createSearchAnalyzer('ru').relativeDay(word);
+
+  it('reads a word for a day near it from that day', () => {
+    const names = resolveNamedDay('вчера', '2026-01-01', relativeDay)!;
+    expect(names('2025-12-31')).toBe(0);
+    expect(names('2026-01-01')).toBeUndefined();
+  });
+
+  it('reads anything else as the days it answers', () => {
+    const names = resolveNamedDay('12 марта', '2026-01-01', relativeDay)!;
+    expect(names('2024-03-12')).toBeDefined();
+    expect(names('2024-03-13')).toBeUndefined();
+    expect(resolveNamedDay('маяк', '2026-01-01', relativeDay)).toBeUndefined();
   });
 });

@@ -9,11 +9,8 @@ import {
   type InternalUrlSite,
 } from '#layers/thei/shared/internal-url';
 import { trimInlineRange } from '#layers/thei/app/components/content/editor-inline-selection';
-import {
-  editableFieldOf,
-  placeCaretAfter,
-  replaceRangeText,
-} from '#layers/thei/app/components/content/editor-edit-commands';
+import { replaceRangeText } from '#layers/thei/app/components/content/editor-edit-commands';
+import { editableFieldOf, rangeOf, typedText } from './editor-inline-dom';
 import {
   applyLinkAttributes,
   entityLinkAttributes,
@@ -125,23 +122,17 @@ export function bindEditorLinkPaste(
 
   function onBeforeInput(event: InputEvent) {
     if (!event.cancelable || !PASTE_INPUT_TYPES.has(event.inputType)) return;
-    const text = event.dataTransfer?.getData('text/plain') ?? event.data ?? '';
+    const text = typedText(event);
     // Typing sends one character at a time; only a whole address at once is
     // a paste.
     if (event.inputType === 'insertText' && !text.includes('://')) return;
-    const staticRange = event.getTargetRanges()[0];
-    let range: Range | undefined;
-    if (staticRange) {
-      range = document.createRange();
-      range.setStart(staticRange.startContainer, staticRange.startOffset);
-      range.setEnd(staticRange.endContainer, staticRange.endOffset);
-    }
-    range = linkableRange(range);
-    const target = range && pastedLinkTarget(text, options.site);
-    if (!range || !target) return;
+    const target = event.getTargetRanges()[0];
+    const range = linkableRange(target && rangeOf(target));
+    const linked = range && pastedLinkTarget(text, options.site);
+    if (!range || !linked) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    void link(range, target);
+    void link(range, linked);
   }
 
   /**
@@ -182,25 +173,29 @@ export function bindEditorLinkPaste(
       );
       return;
     }
-    const element = linkRange(range, attributes);
-    if (element) placeCaretAfter(element);
+    // The caret is after the link already, as the command left it.
+    linkRange(range, attributes);
     editor.inlineToolbar.close();
   }
 
-  /** The anchors being made links, so that none is asked about twice. */
-  const adopting = new WeakSet<HTMLAnchorElement>();
+  /** The anchors asked about, so that none is asked about twice. */
+  const asked = new WeakSet<HTMLAnchorElement>();
 
   /**
-   * A bare link that rich text brought into a linkable field: one with a web
-   * address and nothing of the editor's own. A relative address is left
-   * alone, as storage keeps it; so is every link the editor made, which is
-   * all a saved text holds, so opening one changes nothing.
+   * A link rich text brought into a linkable field, to be made the editor's
+   * own: one with a web address and nothing of the editor's — or read as
+   * one to another site while its address is this very site's, as pasted
+   * rich text has every address read. A relative address is left alone, as
+   * storage keeps it; so is every other link the editor made, which is all
+   * a saved text holds, so opening one changes nothing.
    */
   function bareLink(anchor: HTMLAnchorElement) {
-    if (adopting.has(anchor) || anchor.hasAttribute('data-content-link'))
-      return undefined;
+    if (asked.has(anchor)) return undefined;
     const href = anchor.getAttribute('href')?.trim() ?? '';
     if (!/^https?:\/\//i.test(href)) return undefined;
+    const kind = anchor.getAttribute('data-content-link');
+    if (kind && !(kind === 'external' && parseInternalUrl(href, options.site)))
+      return undefined;
     return linkableFieldOf(root, editor, options.linkBlocks, anchor)
       ? href
       : undefined;
@@ -209,20 +204,17 @@ export function bindEditorLinkPaste(
   async function adopt(anchor: HTMLAnchorElement, href: string) {
     const target = pastedLinkTarget(href, options.site);
     if (!target) return;
-    adopting.add(anchor);
-    try {
-      const attributes = await attributesFor(target);
-      // Removed, rewritten or made a link by hand while the site was asked:
-      // the link is no longer the one that was pasted.
-      const unchanged =
-        anchor.isConnected &&
-        !anchor.hasAttribute('data-content-link') &&
-        anchor.getAttribute('href')?.trim() === href;
-      if (bound && unchanged && attributes)
-        applyLinkAttributes(anchor, attributes);
-    } finally {
-      adopting.delete(anchor);
-    }
+    asked.add(anchor);
+    const kind = anchor.getAttribute('data-content-link');
+    const attributes = await attributesFor(target);
+    // Removed, rewritten or made a link by hand while the site was asked:
+    // the link is no longer the one that was pasted.
+    const unchanged =
+      anchor.isConnected &&
+      anchor.getAttribute('data-content-link') === kind &&
+      anchor.getAttribute('href')?.trim() === href;
+    if (bound && unchanged && attributes)
+      applyLinkAttributes(anchor, attributes);
   }
 
   const observer = new MutationObserver((records) => {

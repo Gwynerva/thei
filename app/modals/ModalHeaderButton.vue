@@ -1,45 +1,104 @@
 <script lang="ts" setup>
 import type { IconName } from '#thei/icons';
+import TheiLink from '#layers/thei/app/components/TheiLink';
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     icon?: IconName;
+    /** The icon's own colour, as the ✦ of AI wears the accent. */
+    iconClass?: string;
+    /**
+     * On a phone the words give way to this icon, the button a square named
+     * by its label: the floppy disk of a Save.
+     */
+    phoneIcon?: IconName;
+    /**
+     * All of it is saved: the phone's square shows `check` in place of its
+     * icon, both kept in the page (`AdminSaveIcons`).
+     */
+    phoneDone?: boolean;
     label: string;
     variant?: 'default' | 'delete' | 'accent';
     size?: 'default' | 'compact';
     disabled?: boolean;
+    /**
+     * Why it cannot act yet (`useFormNeeds`), a line per need: it looks
+     * disabled but stays pressable, for the modal to answer a press — a tap
+     * on a phone too — by saying the same (`useBlockedReason`).
+     */
+    reason?: string;
+    /**
+     * Where it leads, as a path in data: a link with the same look, loading
+     * the page in full as the admin's other ways to the site do. `disabled`
+     * and `reason` are a button's alone.
+     */
+    to?: string;
   }>(),
-  { variant: 'default', size: 'default', disabled: false },
+  // Without it Vue would read a missing `phoneDone` as false, and every
+  // phone square would carry a hidden check.
+  {
+    variant: 'default',
+    size: 'default',
+    disabled: false,
+    phoneDone: undefined,
+  },
 );
+
+const slots = useSlots();
+// A link has no reason not to lead where it does.
+const {
+  blocked,
+  reasonId,
+  attributes: blockedAttributes,
+} = useBlockedReason(() => ({
+  label: props.label,
+  reason: props.to ? undefined : props.reason,
+  disabled: props.disabled,
+}));
+const attributes = computed(() => ({
+  ...(props.to
+    ? { to: sitePath(props.to), external: true }
+    : { type: 'button', disabled: props.disabled }),
+  ...(blocked.value
+    ? blockedAttributes.value
+    : props.icon && !slots.default
+      ? { 'data-title-popup': props.label }
+      : {}),
+}));
 </script>
 
 <template>
-  <button
-    type="button"
-    :disabled="disabled"
+  <component
+    :is="to ? TheiLink : 'button'"
+    v-bind="attributes"
     :aria-label="label"
-    :data-title-popup="icon && !$slots.default ? label : undefined"
     class="flex shrink-0 cursor-pointer items-center justify-center gap-1
       rounded-normal text-sm font-semibold transition-colors
-      disabled:cursor-auto"
+      disabled:cursor-not-allowed aria-disabled:cursor-default"
     :class="{
-      'h-9 px-xs': size === 'default',
+      'h-9 px-xs pointer-coarse:h-11': size === 'default',
       'size-7 px-0': size === 'compact',
       'bg-bg-3 text-text-2': variant !== 'accent',
       // Its popup open, it looks as it does under the pointer.
-      [`popup-open:bg-bg-4 popup-open:text-text-1 not-disabled:hocus:bg-bg-4
-      not-disabled:hocus:text-text-1`]: variant === 'default',
+      [`popup-open:bg-bg-4 popup-open:text-text-1 not-off:hocus:bg-bg-4
+      not-off:hocus:text-text-1`]: variant === 'default',
       [`popup-open:bg-bg-error popup-open:text-text-error
-      not-disabled:hocus:bg-bg-error not-disabled:hocus:text-text-error`]:
+      not-off:hocus:bg-bg-error not-off:hocus:text-text-error`]:
         variant === 'delete',
-      [`bg-accent/80 text-white popup-open:bg-accent
-      not-disabled:hocus:bg-accent`]: variant === 'accent',
-      'disabled:bg-bg-accent disabled:text-text-2': variant === 'accent',
-      'pointer-events-none opacity-40': disabled && size === 'compact',
-      'w-9 px-0': size === 'default' && icon && !$slots.default,
+      'bg-accent/80 text-white popup-open:bg-accent not-off:hocus:bg-accent':
+        variant === 'accent',
+      'off:bg-bg-accent off:text-text-2': variant === 'accent',
+      'pointer-events-none opacity-40': !to && disabled && size === 'compact',
+      'w-9 px-0 pointer-coarse:w-11':
+        size === 'default' && icon && !$slots.default,
+      'max-sm:w-9 max-sm:px-0 max-sm:pointer-coarse:w-11':
+        size === 'default' && phoneIcon,
     }"
   >
-    <Icon v-if="icon" :name="icon" />
-    <slot></slot>
-  </button>
+    <Icon v-if="icon" :name="icon" :class="iconClass" />
+    <AdminSaveIcons v-if="phoneIcon" :icon="phoneIcon" :done="phoneDone" />
+    <span v-if="phoneIcon" class="max-sm:hidden"><slot></slot></span>
+    <slot v-else></slot>
+    <span v-if="blocked" :id="reasonId" hidden>{{ reason }}</span>
+  </component>
 </template>
