@@ -56,13 +56,13 @@ network.
 
 The same check runs on it wherever it lands: every entity opens with its name,
 parts and synonyms, every file serves the bytes it was stored with and keeps
-its description, every address it had still answers, and nothing private is
-listed.
+its description and a poster frame chosen by hand, every address it had still
+answers, and nothing private is listed.
 
 The seed speaks the last release's API. When a release changes one of the
 requests it makes, `seed.ts` follows once that release is out, and so does
-what a release adds: once 0.0.7 is out, the seed chooses a video's poster
-frame by hand, so the upgrade carries one.
+what a release adds: since 0.0.7 the seed chooses a video's poster frame by
+hand, so the upgrade carries one.
 
 ## Scenarios
 
