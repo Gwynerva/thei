@@ -2,8 +2,6 @@
 
 <img src=".github/readme-banner.png" alt="Thei: a computer game's page with its pixel-art banner, search, the sections of a project, a project in the admin form and the admin panel" width="100%">
 
-<img src=".github/logo.svg" alt="Thei" width="88">
-
 # Thei
 
 **🗃️ Digital archive of your life — a résumé and a diary in one place.**
