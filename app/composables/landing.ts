@@ -24,7 +24,8 @@ import {
  * On a phone, what the sidebar holds is in its sheet, which opens for it.
  * Words that stand in no visible text — a hint, a link's note, a file's
  * description or caption — bring up the hint, the card of the link or the
- * file's window, where they are read.
+ * file's window, where they are read; words in a line cut short, such as a
+ * relation's note, bring up the hint that says the line whole.
  *
  * An anchor — the id of an element, a heading — is scrolled to by the router,
  * as ever; the landing brings it in and scrolls only when it was hidden, or
@@ -217,16 +218,31 @@ function ranges(element: Element, words: string[]): Range[] {
   return found;
 }
 
+type WordHolders = readonly (readonly [selector: string, name: string])[];
+
 /** What holds the words where no text shows them: a hint, a link's note. */
-const WORDS_IN = [
+const WORDS_IN: WordHolders = [
   ['abbr[data-content-hint]', 'data-content-hint'],
   ['a[data-content-note]', 'data-content-note'],
   ['[data-link-note]', 'data-link-note'],
-] as const;
+];
 
-function holderOfWords(element: Element, words: string[]) {
+/**
+ * What says whole, in its hint, a line the page cuts short — a relation's
+ * note beside the entity it is about: the hint shows only while the line
+ * is cut (`data-title-popup-clipped`).
+ */
+const CUT_SHORT: WordHolders = [
+  ['[data-title-popup-clipped]', 'data-title-popup'],
+];
+
+function holderOfWords(
+  element: Element,
+  words: string[],
+  holders: WordHolders = WORDS_IN,
+) {
   const wanted = words.map((word) => word.toLocaleLowerCase());
-  for (const [selector, name] of WORDS_IN) {
+  for (const [selector, name] of holders) {
     const all = [
       ...(element.matches(selector) ? [element] : []),
       ...element.querySelectorAll(selector),
@@ -397,6 +413,12 @@ export function usePageLanding() {
     if (marked.length) {
       if ('highlights' in CSS)
         CSS.highlights.set(HIGHLIGHT, new Highlight(...marked));
+      // Marked in a line cut short, they may stand past its end: its hint
+      // says the line whole.
+      const cut = holderOfWords(place, target.words, CUT_SHORT);
+      if (!cut) return;
+      await pause(450);
+      if (mine === run) hover(cut);
       return;
     }
     // The words stand where no text shows them.

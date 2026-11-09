@@ -708,6 +708,7 @@ export default defineI18nModule({
     error_description: 'Сейчас эту страницу не получается открыть.',
     back_home: 'На главную',
     open_life: 'Открыть Жизнь',
+    open_project_chronology: 'Показать в хронологии',
     pagination: 'Навигация по страницам',
     previous: 'Предыдущая страница',
     next: 'Следующая страница',
@@ -718,6 +719,13 @@ export default defineI18nModule({
     public_details_overview: 'Сводка',
     public_details_contents: 'Содержание',
     public_project_description: 'Описание проекта',
+    public_event_description: 'Описание события',
+    public_diary_text: 'Текст записи',
+    public_excerpt_text: 'Текст отрывка',
+    public_excerpt_position_in: (index, total) =>
+      `Отрывок ${index} из ${total} в`,
+    public_excerpt_in: 'Отрывок в',
+    public_excerpt_about: 'Про',
     public_details_neighbour_sections: 'Соседние разделы',
     public_details_neighbour_entries: 'Соседние записи',
     public_details_neighbour_excerpts: 'Соседние отрывки',
@@ -1432,11 +1440,15 @@ export default defineI18nModule({
     project_action_issue_background: 'изображение фона',
     project_action_issue_color: 'цвет фона в формате #RRGGBB',
     project_content_sections: 'Разделы проекта',
+    project_content_sections_description:
+      'Части проекта и этапы, через которые он прошёл.',
     project_content_sections_hint:
       'Детальные описания составных частей проекта и этапов, через которые он прошел.',
     project_sections_dated: 'Этапы с датами',
     project_sections_undated: 'Общие разделы',
     related_entities: 'Связи',
+    related_entities_description:
+      'Проекты, события и записи дневника, которые автор связал с этим.',
     related_entities_hint:
       'Проекты, события и записи дневника, с которыми это связано. Связь видна с обеих сторон.',
     related_entity_add: 'Добавить связь',
@@ -1545,9 +1557,9 @@ export default defineI18nModule({
     excerpt_about_clear: 'Убрать, про что отрывок',
     excerpt_about_take: (title) => `Про «${title}»`,
     excerpt_hidden_by_subject: (title) =>
-      `Скрыт от посетителей, пока «${title}» приватен.`,
+      `Скрыт от посетителей, пока «${title}» видите только вы.`,
     excerpt_link_only_by_subject: (title) =>
-      `Виден только по ссылке, пока «${title}» открыт только по ссылке.`,
+      `Виден только по ссылке, пока «${title}» открывается только по ссылке.`,
     excerpt_without_about: 'Пока ни про что',
     excerpt_without_about_hint:
       'То, про что он был, удалено. Откройте отрывок и укажите, про что он теперь.',
@@ -2004,6 +2016,7 @@ export default defineI18nModule({
       'Что здесь ещё надо сделать. Пока оно заполнено, во всех списках здесь стоит жёлтая метка.',
     entity_reminder_placeholder: 'Найти фотографии за ту неделю',
     entity_notes: 'Заметки',
+    entity_notes_description: 'Только для вас: посетители их не видят.',
     entity_notes_hint: 'Всё, что стоит держать под рукой, но не публиковать.',
     entity_notes_show_all: 'Показать всё',
     entity_reminder_badge: 'Здесь есть напоминание',
@@ -2856,6 +2869,5 @@ export default defineI18nModule({
     ai_error: 'Не получилось. Попробуйте ещё раз.',
     ai_off_notice: 'ИИ в Thei выключен.',
     x_sections: (count) => plural(count, 'раздел', 'раздела', 'разделов'),
-    x_excerpts: (count) => plural(count, 'отрывок', 'отрывка', 'отрывков'),
   },
 });

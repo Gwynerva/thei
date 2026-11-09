@@ -478,6 +478,8 @@ export type LanguagePhrases = {
   error_description: string;
   back_home: string;
   open_life: string;
+  /** A day of a project's year at a glance: shown on the project's chronology. */
+  open_project_chronology: string;
   pagination: string;
   previous: string;
   next: string;
@@ -488,6 +490,12 @@ export type LanguagePhrases = {
   public_details_overview: string;
   public_details_contents: string;
   public_project_description: string;
+  public_event_description: string;
+  public_diary_text: string;
+  public_excerpt_text: string;
+  public_excerpt_position_in: (index: number, total: number) => string;
+  public_excerpt_in: string;
+  public_excerpt_about: string;
   public_details_neighbour_sections: string;
   public_details_neighbour_entries: string;
   public_details_neighbour_excerpts: string;
@@ -999,10 +1007,12 @@ export type LanguagePhrases = {
   project_action_issue_background: string;
   project_action_issue_color: string;
   project_content_sections: string;
+  project_content_sections_description: string;
   project_content_sections_hint: string;
   project_sections_dated: string;
   project_sections_undated: string;
   related_entities: string;
+  related_entities_description: string;
   related_entities_hint: string;
   related_entity_add: string;
   relation_direction: string;
@@ -1462,6 +1472,7 @@ export type LanguagePhrases = {
   entity_reminder_hint: string;
   entity_reminder_placeholder: string;
   entity_notes: string;
+  entity_notes_description: string;
   entity_notes_hint: string;
   entity_notes_show_all: string;
   entity_reminder_badge: string;
@@ -2119,5 +2130,4 @@ export type LanguagePhrases = {
   ai_error: string;
   ai_off_notice: string;
   x_sections: (count: number) => string;
-  x_excerpts: (count: number) => string;
 };

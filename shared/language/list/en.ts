@@ -646,6 +646,7 @@ export default defineI18nBase({
     error_description: 'The page could not be opened right now.',
     back_home: 'Back home',
     open_life: 'Open Life',
+    open_project_chronology: 'Show in the chronology',
     pagination: 'Pagination',
     previous: 'Previous page',
     next: 'Next page',
@@ -656,6 +657,13 @@ export default defineI18nBase({
     public_details_overview: 'Summary',
     public_details_contents: 'Contents',
     public_project_description: 'Project description',
+    public_event_description: 'Event description',
+    public_diary_text: 'Entry text',
+    public_excerpt_text: 'Excerpt text',
+    public_excerpt_position_in: (index, total) =>
+      `Excerpt ${index} of ${total} in`,
+    public_excerpt_in: 'Excerpt in',
+    public_excerpt_about: 'About',
     public_details_neighbour_sections: 'Nearby sections',
     public_details_neighbour_entries: 'Nearby entries',
     public_details_neighbour_excerpts: 'Nearby excerpts',
@@ -1367,11 +1375,15 @@ export default defineI18nBase({
     project_action_issue_background: 'a background image',
     project_action_issue_color: 'a background color as #RRGGBB',
     project_content_sections: 'Project sections',
+    project_content_sections_description:
+      'The parts of the project and the stages it went through.',
     project_content_sections_hint:
       "Detailed write-ups of the project's parts and of the stages it went through.",
     project_sections_dated: 'Dated stages',
     project_sections_undated: 'General sections',
     related_entities: 'Relations',
+    related_entities_description:
+      'Projects, events and diary entries the author has linked to this.',
     related_entities_hint:
       'Projects, events and diary entries tied to this one. A relation is visible from both sides.',
     related_entity_add: 'Add a relation',
@@ -1938,6 +1950,7 @@ export default defineI18nBase({
       'Something still to do here. While it is set, a yellow mark follows it through every list.',
     entity_reminder_placeholder: 'Find the photos from that week',
     entity_notes: 'Notes',
+    entity_notes_description: 'Only for you: visitors never see them.',
     entity_notes_hint: 'Anything worth keeping at hand without publishing it.',
     entity_notes_show_all: 'Show all',
     entity_reminder_badge: 'There is a reminder on this one',
@@ -2775,6 +2788,5 @@ export default defineI18nBase({
     ai_error: 'It did not work. Try again.',
     ai_off_notice: 'AI in Thei is off.',
     x_sections: (count) => plural(count, 'section', 'sections'),
-    x_excerpts: (count) => plural(count, 'excerpt', 'excerpts'),
   },
 });

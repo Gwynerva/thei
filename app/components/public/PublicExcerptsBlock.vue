@@ -118,7 +118,8 @@ export function publicExcerptsHeading(title: string): ContentHeading {
       <Icon name="loading" class="mr-xs" />{{ phrase.life_activity_loading }}
     </p>
     <template v-else>
-      <!-- The teeth of the cards reach past their boxes: room between them. -->
+      <!-- The teeth of the cards reach past their boxes: room between them.
+           A card names no kind: the block's heading has said it. -->
       <div class="flex min-w-0 flex-col gap-md">
         <PublicContentCard
           v-for="card in items"
@@ -126,8 +127,6 @@ export function publicExcerptsHeading(title: string): ContentHeading {
           :href="card.href"
           :title="card.title"
           :summary="card.summary"
-          :label="phrase.excerpt"
-          icon="excerpt"
           :date="card.date ?? ''"
           :date-presentation="dateOf(card)"
           :hide-date="!card.date || card.parent.type === 'diary-entry'"

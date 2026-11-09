@@ -107,6 +107,7 @@ import {
 import { utcDayOf } from '#layers/thei/shared/date-range';
 import {
   buildParentExcerpts,
+  secretParentExcerpts,
   countPublicExcerptsAbout,
   diaryExcerptParent,
   eventExcerptParent,
@@ -496,6 +497,7 @@ export async function buildPublicProject(
       ...sortStagesNewestFirst(sectionItems),
     ],
     excerpts,
+    excerptSecrets: secretParentExcerpts(projectExcerptParent(project), viewer),
     excerptsAbout,
     showcase,
     files,
@@ -680,6 +682,7 @@ export async function buildPublicEvent(
     ...(bannerMedia ? { bannerMedia } : {}),
     content: content ?? { blocks: [] },
     excerpts,
+    excerptSecrets: secretParentExcerpts(eventExcerptParent(stored), viewer),
     excerptsAbout,
     references: await buildPublicReferences(manual, viewer),
     tags: await buildPublicTags(tags),
@@ -778,6 +781,7 @@ export async function buildPublicDiaryEntry(
     media,
     content: content ?? { blocks: [] },
     excerpts,
+    excerptSecrets: secretParentExcerpts(diaryExcerptParent(stored), viewer),
     excerptsAbout,
     related: countPublicRelated(relations),
     ...(await buildOwnerOnlyNotes(

@@ -14,6 +14,7 @@ import {
   countPublicExcerptsAbout,
   findOpenParentExcerpt,
   resolvePublicExcerptsAbout,
+  secretParentExcerpts,
 } from '../../server/thei/public/excerpts';
 import {
   contentEntityOpens,
@@ -323,6 +324,89 @@ describe('the excerpts about an entity', () => {
       'x-new title',
       'x-private title',
     ]);
+    // The private one stays in its place for a stranger as its codename,
+    // after the two they may read; the owner has nothing hidden.
+    expect(secretParentExcerpts(own, STRANGER)).toEqual([
+      {
+        key: expect.any(String),
+        title: expect.stringMatching(/^Secret excerpt /),
+        iconMedia: expect.any(Object),
+        before: 2,
+      },
+    ]);
+    expect(secretParentExcerpts(own, OWNER)).toEqual([]);
+  });
+});
+
+describe('the relation an excerpt stands on', () => {
+  it('is listed by neither end, unless the owner related them directly', async () => {
+    project('p');
+    diary('d', '2026-05-01');
+    excerpt('x', ['diary-entry', 'd'], [['project', 'p']]);
+    const { resolvePublicRelated } =
+      await import('../../server/thei/public/related');
+    const ends = async () => [
+      (await resolvePublicRelated({ type: 'project', id: 'p' }, STRANGER)).map(
+        (item) => item.endpoint.id,
+      ),
+      (
+        await resolvePublicRelated({ type: 'diary-entry', id: 'd' }, STRANGER)
+      ).map((item) => item.endpoint.id),
+    ];
+    expect(await ends()).toEqual([[], []]);
+    context.insert('entity-relations', {
+      firstType: 'diary-entry',
+      firstId: 'd',
+      secondType: 'project',
+      secondId: 'p',
+      type: 'related',
+      note: null,
+      firstSortOrder: 0,
+      secondSortOrder: 0,
+    });
+    expect(await ends()).toEqual([['d'], ['p']]);
+  });
+});
+
+describe("the direction of an excerpt's relation", () => {
+  it("reads from each page: the subject on the parent's, the excerpt on the subject's", async () => {
+    diary('d-source', '2026-05-01');
+    diary('d-parent', '2026-05-02');
+    excerpt('x', ['diary-entry', 'd-parent'], []);
+    // The earlier day affects the excerpt, with a word for each side.
+    context.insert('entity-relations', {
+      firstType: 'diary-entry',
+      firstId: 'd-source',
+      secondType: 'excerpt',
+      secondId: 'x',
+      type: 'first-influences-second',
+      note: JSON.stringify({
+        type: 'split',
+        firstText: 'said on the source',
+        secondText: 'said on the excerpt',
+      }),
+      firstSortOrder: 0,
+      secondSortOrder: 0,
+    });
+    const parent = diaryExcerptParent(
+      (await context.server.diary.findByUuid('d-parent'))!,
+    );
+    // On the parent's page, by the subject: the source affects it.
+    const [embedded] = await buildParentExcerpts(parent, STRANGER);
+    expect(embedded!.about[0]).toMatchObject({
+      relationType: 'influencing',
+      note: 'said on the excerpt',
+    });
+    // On the subject's page, by the parent: the excerpt depends on it.
+    const page = await buildPublicExcerptsPage(
+      { type: 'diary-entry', id: 'd-source' },
+      1,
+      STRANGER,
+    );
+    expect(page.items[0]).toMatchObject({
+      relationType: 'dependent',
+      note: 'said on the source',
+    });
   });
 });
 

@@ -48,8 +48,7 @@ import { useExternalLinks } from '#layers/thei/app/composables/external-links';
 import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
 import {
   applySavedExcerptIds,
-  changedOnlyInExcerpt,
-  excerptsFormKey,
+  provideExcerptsForm,
 } from '#layers/thei/app/components/admin/excerpts/excerpts-form';
 
 const { projectUuid } = defineProps<{ projectUuid?: string }>();
@@ -115,10 +114,9 @@ provide(currentProjectUuidKey, resolvedProjectUuid);
 provideContentOwner('project', () => resolvedProjectUuid.value);
 // The project's excerpts: named parts of it about other entities, each in
 // a modal of its own, as its sections are.
-provide(excerptsFormKey, {
+provideExcerptsForm({
   parentType: 'project',
   parentId: () => resolvedProjectUuid.value,
-  parentTitle: () => projectData.value.title.trim() || phrase.value.new_project,
   address: () => ({
     type: 'project',
     humanReadableSlug: projectData.value.humanReadableSlug,
@@ -132,25 +130,13 @@ provide(excerptsFormKey, {
           publicId: savedProjectData.value.publicId,
         }
       : undefined,
-  excerpts: () => projectData.value.excerpts ?? [],
-  setExcerpts: (items) => {
-    projectData.value.excerpts = items;
-  },
+  model: () => projectData.value,
   savedExcerpts: () => savedProjectData.value.excerpts ?? [],
-  saveAfterItemEdit: (item, excerptUuid) => {
-    if (saving.value || !canSave.value || !isEdit.value) return;
-    if (
-      !changedOnlyInExcerpt(
-        projectData.value as unknown as Record<string, unknown>,
-        savedSnapshot.value,
-        CONTENT_FIELDS,
-        item,
-        excerptUuid,
-      )
-    )
-      return;
-    void handleSave();
-  },
+  payload: () => projectData.value,
+  savedSnapshot: () => savedSnapshot.value,
+  contentFields: () => CONTENT_FIELDS,
+  canSaveItself: () => !saving.value && canSave.value && isEdit.value,
+  save: () => void handleSave(),
   saved: () => entityAi.panel.value,
 });
 
@@ -398,18 +384,15 @@ provide(saveAfterContentEditKey, saveAfterContentEdit);
  */
 function saveAfterItemEdit(item: object, sectionUuid: string | undefined) {
   if (saving.value || !canSave.value || !isEdit.value) return;
-  const edited = toRaw(item);
-  const current = {
-    ...projectData.value,
-    sections: (projectData.value.sections ?? []).filter(
-      (entry) => toRaw(entry) !== edited,
-    ),
-  };
-  const saved = JSON.parse(savedSnapshot.value) as Record<string, unknown>;
-  saved.sections = ((saved.sections ?? []) as Record<string, unknown>[]).filter(
-    (entry) => !sectionUuid || entry.sectionUuid !== sectionUuid,
-  );
-  if (!changedOnlyIn(current, JSON.stringify(saved), CONTENT_FIELDS)) return;
+  if (
+    !changedOnlyInPart(projectData.value, savedSnapshot.value, CONTENT_FIELDS, {
+      list: 'sections',
+      uuid: 'sectionUuid',
+      item,
+      id: sectionUuid,
+    })
+  )
+    return;
   void handleSave();
 }
 provide(saveAfterItemEditKey, saveAfterItemEdit);

@@ -23,6 +23,12 @@ import {
 /** The anchor of a page's block of related entities, in its contents. */
 export const PUBLIC_RELATED_SECTION_ID = 'related-entities';
 
+/** The anchors of the start of an event's and a diary entry's own text. */
+export const EVENT_DESCRIPTION_ANCHOR = 'event-description';
+export const DIARY_TEXT_ANCHOR = 'diary-text';
+/** The anchor of the start of an excerpt's text, on its own page. */
+export const EXCERPT_TEXT_ANCHOR = 'excerpt-text';
+
 /** The anchor of the block of excerpts about a page's entity. */
 export const PUBLIC_EXCERPTS_ABOUT_ID = 'excerpts-about';
 
@@ -48,10 +54,12 @@ export function excerptHeadingId(publicId: string, id: string): string {
  */
 export const RESERVED_CONTENT_ANCHORS: readonly string[] = [
   PROJECT_DESCRIPTION_ANCHOR,
+  EVENT_DESCRIPTION_ANCHOR,
+  DIARY_TEXT_ANCHOR,
+  EXCERPT_TEXT_ANCHOR,
   PROJECT_SECTIONS_ANCHOR,
   PUBLIC_RELATED_SECTION_ID,
   PUBLIC_EXCERPTS_ABOUT_ID,
-  'excerpts',
   'statuses',
   'avatars',
   'owner-notes',

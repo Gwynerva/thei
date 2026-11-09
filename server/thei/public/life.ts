@@ -19,6 +19,7 @@ import {
   type LifeActivityResponse,
   type LifeDay,
   type LifeEntityKind,
+  type LifeExcerptName,
   type LifePoint,
   type LifeFilter,
   type LifeScope,
@@ -60,7 +61,13 @@ import {
   loadExcerptParent,
   type ExcerptParentInfo,
 } from '../excerpts/parents';
-import { buildPublicExcerptCard, visibleParentExcerpts } from './excerpts';
+import {
+  buildPublicExcerptCard,
+  secretParentExcerpts,
+  visibleParentExcerpts,
+} from './excerpts';
+import { placeExcerptSecrets } from '#layers/thei/shared/excerpt-secrets';
+import { buildPublicRelatedLinks, resolvePublicRelated } from './related';
 import type { ExcerptRecord } from '../excerpts';
 import {
   buildPublicEventSummary,
@@ -1082,16 +1089,12 @@ async function hydrateLifePoint(
       media: summary.media,
       tags: summary.tags,
       relatedEntities: summary.relatedEntities,
-      ...excerptNames(
-        eventExcerptParent(event),
-        visibleParentExcerpts(eventExcerptParent(event), viewer),
-      ),
+      ...(await excerptNames(eventExcerptParent(event), viewer)),
     };
   }
   if (point.entityKind === 'diary-entry') {
     const entry = point.diaryEntry!;
     const parent = diaryExcerptParent(entry);
-    const excerpts = visibleParentExcerpts(parent, viewer);
     const [media, content] = await Promise.all([
       buildPublicEntityPreviewMedia(
         'diary-entry',
@@ -1113,17 +1116,18 @@ async function hydrateLifePoint(
       transition: point.transition,
       visibility: 'visible',
       // An entry has no title of its own, and the card knows to print its
-      // lead in place of one rather than a heading and a summary.
+      // lead in place of one rather than a heading and a summary. The card
+      // lists its excerpts under it, so the lead does not name them too.
       title: '',
       summary: diaryLead({
         data: content?.data,
-        excerptTitles: excerpts.map((excerpt) => excerpt.title),
+        excerptTitles: [],
         includePrivate: opens,
         privateLabel: THEI_SERVER.phrase.content_private_section,
       }),
       href: buildDiaryUrl(entry.date),
       ...(media ? { media } : {}),
-      ...excerptNames(parent, excerpts),
+      ...(await excerptNames(parent, viewer)),
     };
   }
   if (point.entityKind === 'page') {
@@ -1186,19 +1190,49 @@ async function hydrateLifePoint(
   };
 }
 
-/** The excerpts of a parent the viewer may see, named on its card. */
-function excerptNames(
+/**
+ * The excerpts of a parent, named on its card in the owner's order: each the
+ * viewer may see with what it is about, as a related link would name it,
+ * and each they may not by its codename.
+ */
+async function excerptNames(
   parent: ExcerptParentInfo,
-  excerpts: ExcerptRecord[],
-): { excerpts?: { title: string; href: string }[] } {
-  const names = excerpts.map((excerpt) => ({
-    title: excerpt.title,
-    href: buildExcerptUrl(
-      parent.address,
-      excerpt.humanReadableSlug,
-      excerpt.publicId,
-    ),
-  }));
+  viewer: PublicViewer,
+): Promise<{ excerpts?: LifeExcerptName[] }> {
+  const visible = visibleParentExcerpts(parent, viewer);
+  const named = await Promise.all(
+    visible.map(async (excerpt): Promise<LifeExcerptName> => {
+      const [about] = await buildPublicRelatedLinks(
+        await resolvePublicRelated(
+          { type: 'excerpt', id: excerpt.excerptUuid },
+          viewer,
+        ),
+        viewer,
+      );
+      return {
+        title: excerpt.title,
+        href: buildExcerptUrl(
+          parent.address,
+          excerpt.humanReadableSlug,
+          excerpt.publicId,
+        ),
+        ...(about ? { about } : {}),
+      };
+    }),
+  );
+  const names = placeExcerptSecrets(
+    named,
+    secretParentExcerpts(parent, viewer),
+  ).map((placed): LifeExcerptName =>
+    placed.secret
+      ? {
+          secret: true,
+          key: placed.excerpt.key,
+          title: placed.excerpt.title,
+          iconMedia: placed.excerpt.iconMedia,
+        }
+      : placed.excerpt,
+  );
   return names.length ? { excerpts: names } : {};
 }
 

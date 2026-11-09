@@ -1,20 +1,15 @@
 <script lang="ts" setup>
 import type { PublicDiaryResponse } from '#layers/thei/shared/api/public';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
-import { DIARY_SEO_LENGTH, diaryLead } from '#layers/thei/shared/diary-text';
+import { diaryDescription } from '#layers/thei/shared/diary-text';
 import { buildLifeUrl } from '#layers/thei/shared/life';
 import {
   createdAndUpdatedTimelineItems,
   type PublicDetailPanelData,
 } from '#layers/thei/app/components/public/public-detail';
-import { publicOwnerNotesHeading } from '#layers/thei/app/components/public/PublicOwnerNotes.vue';
-import {
-  publicRelatedHeading,
-  publicRelatedTotal,
-} from '#layers/thei/app/components/public/PublicRelatedBlock.vue';
-import { publicExcerptsHeading } from '#layers/thei/app/components/public/PublicExcerptsBlock.vue';
-import { buildExcerptContentsEntries } from '#layers/thei/app/components/content/content-headings';
+import { publicBelowTextContents } from '#layers/thei/app/components/public/public-page-contents';
 import { publicExcerptParts } from '#layers/thei/app/components/public/PublicExcerptInline.vue';
+import { DIARY_TEXT_ANCHOR } from '#layers/thei/shared/content-headings';
 
 definePageMeta({ layout: 'public', key: (route) => route.path });
 const route = useRoute();
@@ -44,23 +39,26 @@ const heading = computed(() =>
 );
 
 /**
- * What a search engine shows under the day: the entry's lead — its headings
- * and its excerpts, then its first words — or, for a day with no text this
- * reader may see, only that it is a diary entry. The text arrived cut to
- * this reader already, its private parts opened or stood in for, so the lead
- * takes it whole.
+ * What a search engine shows under the day: its excerpts by what each is
+ * about, then its first words as far as the room goes — or its lead, for an
+ * entry without excerpts; for a day with no text this reader may see, only
+ * that it is a diary entry. The text arrived cut to this reader already, its
+ * private parts opened or stood in for, so it is taken whole.
  */
 const description = computed(
   () =>
-    diaryLead(
-      {
-        data: data.value.content,
-        excerptTitles: data.value.excerpts.map((excerpt) => excerpt.title),
-        includePrivate: true,
-        privateLabel: phrase.value.content_private_section,
-      },
-      DIARY_SEO_LENGTH,
-    ) || phrase.value.diary_entry_seo_description(heading.value),
+    diaryDescription({
+      data: data.value.content,
+      excerpts: data.value.excerpts.map((excerpt) => {
+        const about = excerpt.about[0];
+        return {
+          title: excerpt.title,
+          ...(about ? { subject: publicExcerptSubjectName(about) } : {}),
+        };
+      }),
+      includePrivate: true,
+      privateLabel: phrase.value.content_private_section,
+    }) || phrase.value.diary_entry_seo_description(heading.value),
 );
 
 const ogImage = useOgImage(() => ({ kind: 'diary', id: data.value.date }));
@@ -113,6 +111,7 @@ const details = computed(
         ...data.value.neighbours,
       },
       excerpts: data.value.excerpts,
+      excerptSecrets: data.value.excerptSecrets,
       // The day the entry is about is its heading, not a technical date.
       chronology: createdAndUpdatedTimelineItems(data.value.chronology, {
         created: phrase.value.diary_chronology_created,
@@ -121,25 +120,7 @@ const details = computed(
     }) satisfies PublicDetailPanelData,
 );
 
-/**
- * The sections below the entry that belong in its table: its excerpts, each
- * with the headings of its text, the excerpts about it, what it is related
- * to, then the owner's notes, which nobody else gets at all.
- */
-const extraContents = computed(() => [
-  ...data.value.excerpts.flatMap((excerpt) =>
-    buildExcerptContentsEntries(excerpt, language.value.slugify),
-  ),
-  ...(data.value.excerptsAbout.total
-    ? [publicExcerptsHeading(phrase.value.excerpts)]
-    : []),
-  ...(publicRelatedTotal(data.value.related)
-    ? [publicRelatedHeading(phrase.value.related_entities)]
-    : []),
-  ...(data.value.notes?.blocks.length
-    ? [publicOwnerNotesHeading(phrase.value.entity_notes)]
-    : []),
-]);
+const extraContents = computed(() => publicBelowTextContents(data.value));
 </script>
 
 <template>
@@ -150,24 +131,23 @@ const extraContents = computed(() => [
       :details="details"
       :content="data.content"
       :extra-contents="extraContents"
+      :content-start="{
+        id: DIARY_TEXT_ANCHOR,
+        title: phrase.public_diary_text,
+      }"
     >
       <ContentRenderer
         v-if="data.content.blocks.length"
+        :id="DIARY_TEXT_ANCHOR"
         :data="data.content"
         asset-viewer
+        class="scroll-mt-[var(--public-anchor-offset,8rem)]"
       />
-      <div
-        v-if="data.excerpts.length"
-        data-landing-zone="excerpts"
-        class="flex flex-col gap-lg"
+      <PublicPageExcerpts
+        :excerpts="data.excerpts"
+        :secrets="data.excerptSecrets"
         :class="{ 'mt-lg': data.content.blocks.length }"
-      >
-        <PublicExcerptInline
-          v-for="excerpt in data.excerpts"
-          :key="excerpt.publicId"
-          :excerpt
-        />
-      </div>
+      />
       <PublicExcerptsBlock
         :about="data.excerptsAbout"
         :url="excerptsUrl"

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   changedOnlyIn,
+  changedOnlyInPart,
   stampSavedContent,
 } from '../../../app/composables/saved-form';
 
@@ -58,6 +59,70 @@ describe('changedOnlyIn', () => {
 
   it('refuses rather than guesses when the snapshot is unreadable', () => {
     expect(changedOnlyIn({}, 'not json', FIELDS)).toBe(false);
+  });
+});
+
+describe('changedOnlyInPart', () => {
+  const stored = JSON.stringify({
+    title: 'Day',
+    content: { data: { blocks: [] } },
+    excerpts: [
+      { excerptUuid: 'e1', title: 'One', content: { data: { blocks: [] } } },
+      { excerptUuid: 'e2', title: 'Two', content: { data: { blocks: [] } } },
+    ],
+  });
+  const part = (item: object, id: string | undefined) => ({
+    list: 'excerpts',
+    uuid: 'excerptUuid',
+    item,
+    id,
+  });
+
+  it('accepts a part edited in its modal when nothing else changed', () => {
+    const current = JSON.parse(stored);
+    current.excerpts[1] = { ...current.excerpts[1], title: 'Renamed' };
+    expect(
+      changedOnlyInPart(
+        current,
+        stored,
+        FIELDS,
+        part(current.excerpts[1], 'e2'),
+      ),
+    ).toBe(true);
+  });
+
+  it('accepts a new part, found by the object it is', () => {
+    const current = JSON.parse(stored);
+    const added = { title: 'Three', content: { data: { blocks: [] } } };
+    current.excerpts.push(added);
+    expect(
+      changedOnlyInPart(current, stored, FIELDS, part(added, undefined)),
+    ).toBe(true);
+  });
+
+  it('refuses when another part or the form changed too', () => {
+    const current = JSON.parse(stored);
+    current.excerpts[1] = { ...current.excerpts[1], title: 'Renamed' };
+    current.excerpts[0] = { ...current.excerpts[0], title: 'Also' };
+    expect(
+      changedOnlyInPart(
+        current,
+        stored,
+        FIELDS,
+        part(current.excerpts[1], 'e2'),
+      ),
+    ).toBe(false);
+    const titled = JSON.parse(stored);
+    titled.title = 'Another day';
+    expect(
+      changedOnlyInPart(titled, stored, FIELDS, part(titled.excerpts[0], 'e1')),
+    ).toBe(false);
+  });
+
+  it('refuses rather than guesses when the snapshot is unreadable', () => {
+    expect(changedOnlyInPart({}, 'not json', FIELDS, part({}, 'e1'))).toBe(
+      false,
+    );
   });
 });
 

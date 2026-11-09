@@ -130,9 +130,12 @@ watch(
         :aria-current="item.id === active ? 'location' : undefined"
       >
         <span v-if="item.icon" class="flex h-lh shrink-0 items-center">
+          <!-- Its own colour, eased as the words' is: `currentColor`
+               would jump to the words' colour of that moment first. -->
           <Icon
             :name="item.icon"
-            :class="item.id === active ? 'text-current' : 'text-text-3'"
+            class="transition-colors"
+            :class="item.id === active ? 'text-accent' : 'text-text-3'"
             aria-hidden="true"
           />
         </span>

@@ -23,7 +23,7 @@
  * before them, the page is looked through for the words: a block a text
  * keeps no id for is found by them all the same.
  */
-const LANDING_ZONES = [
+export const LANDING_ZONES = [
   'icon',
   'banner',
   'showcase',
@@ -35,7 +35,6 @@ const LANDING_ZONES = [
   'statuses',
   'avatars',
   'owner-notes',
-  'excerpts',
 ] as const;
 export type LandingZone = (typeof LANDING_ZONES)[number];
 

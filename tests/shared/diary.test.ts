@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { buildDiaryUrl, dateFromDiaryUrlPart } from '../../shared/diary-url';
 import {
   DIARY_LEAD_LENGTH,
-  DIARY_SEO_LENGTH,
+  diaryDescription,
   diaryLead,
 } from '../../shared/diary-text';
 import { validateDiaryData } from '../../shared/admin/diary';
+import { SEO_DESCRIPTION_LIMIT } from '../../shared/seo-description';
 import { ProjectEventAccessLevel } from '../../shared/access-level';
 
 describe('diary addresses', () => {
@@ -56,13 +57,12 @@ describe('diary lead', () => {
     expect(lead('Кофе остыл. Опять.', 18)).toBe('Кофе остыл. Опять.');
   });
 
-  it('cuts to the card by default and to the meta description on request', () => {
+  it('cuts to the card by default and to a description on request', () => {
     const long = 'word '.repeat(80);
     expect(lead(long).length).toBeLessThanOrEqual(DIARY_LEAD_LENGTH);
-    expect(lead(long, DIARY_SEO_LENGTH).length).toBeLessThanOrEqual(
-      DIARY_SEO_LENGTH,
+    expect(lead(long, SEO_DESCRIPTION_LIMIT).length).toBeLessThanOrEqual(
+      SEO_DESCRIPTION_LIMIT,
     );
-    expect(DIARY_SEO_LENGTH).toBeLessThan(DIARY_LEAD_LENGTH);
   });
 });
 
@@ -300,6 +300,51 @@ describe('diary lead of a body', () => {
     } as any;
     expect(diaryLead({ ...parts, data: empty, includePrivate: false })).toBe(
       'Out in the open.',
+    );
+  });
+});
+
+describe('diary description', () => {
+  const body = {
+    blocks: [
+      { id: 'p', type: 'paragraph', data: { text: 'Up early, rain all day.' } },
+    ],
+  } as never;
+  const parts = { includePrivate: true, privateLabel: 'Private' };
+
+  it('names each subject once with its excerpts, then the first words', () => {
+    expect(
+      diaryDescription({
+        ...parts,
+        data: body,
+        excerpts: [
+          { title: 'The stringers', subject: 'Kayak' },
+          { title: 'Measured', subject: 'Barn roof' },
+          { title: 'Varnish?', subject: 'Kayak' },
+          { title: 'Loose ends' },
+        ],
+      }),
+    ).toBe(
+      'Kayak: The stringers; Varnish? Barn roof: Measured. Loose ends. Up early, rain all day.',
+    );
+  });
+
+  it('cuts the first words where the room ends', () => {
+    expect(
+      diaryDescription(
+        {
+          ...parts,
+          data: body,
+          excerpts: [{ title: 'The stringers', subject: 'Kayak' }],
+        },
+        32,
+      ),
+    ).toBe('Kayak: The stringers. Up early…');
+  });
+
+  it('keeps the lead for an entry without excerpts', () => {
+    expect(diaryDescription({ ...parts, data: body, excerpts: [] })).toBe(
+      'Up early, rain all day.',
     );
   });
 });

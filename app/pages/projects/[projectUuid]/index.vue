@@ -11,7 +11,6 @@ import {
 } from '#layers/thei/shared/project-url';
 import {
   buildContentHeadings,
-  buildExcerptContentsEntries,
   type ContentHeading,
 } from '#layers/thei/app/components/content/content-headings';
 import { PUBLIC_EXCERPTS_ABOUT_ID } from '#layers/thei/shared/content-headings';
@@ -98,9 +97,9 @@ const excerptsUrl = computed(
   () =>
     `/api/projects/${encodeURIComponent(String(route.params.projectUuid))}/excerpts`,
 );
-// Headings of the description, the project's own excerpts with theirs, then
-// the page's own sections in page order. A description without headings is
-// one entry of its own.
+// Headings of the description, then the page's own sections in page order.
+// A description without headings is one entry of its own; the project's
+// own excerpts are listed under the contents on their own.
 const contents = computed<ContentHeading[]>(() => {
   const headings = buildContentHeadings(
     data.value.description,
@@ -139,9 +138,6 @@ const contents = computed<ContentHeading[]>(() => {
   ];
   return [
     ...headings,
-    ...data.value.excerpts.flatMap((excerpt) =>
-      buildExcerptContentsEntries(excerpt, language.value.slugify),
-    ),
     ...sections
       .filter((section) => section.shown)
       .map(({ id, title, icon }) => ({
@@ -159,6 +155,7 @@ const details = computed(
     ({
       contents: contents.value,
       excerpts: data.value.excerpts,
+      excerptSecrets: data.value.excerptSecrets,
       chronology: createdAndUpdatedTimelineItems(data.value.chronology, {
         created: phrase.value.project_chronology_page,
         updated: phrase.value.project_chronology_updated,
@@ -222,17 +219,10 @@ const ownerNotesContents = computed(() =>
             class="scroll-mt-[var(--public-anchor-offset,8rem)]"
           />
 
-          <div
-            v-if="data.excerpts.length"
-            data-landing-zone="excerpts"
-            class="flex flex-col gap-lg"
-          >
-            <PublicExcerptInline
-              v-for="excerpt in data.excerpts"
-              :key="excerpt.publicId"
-              :excerpt
-            />
-          </div>
+          <PublicPageExcerpts
+            :excerpts="data.excerpts"
+            :secrets="data.excerptSecrets"
+          />
           <PublicProjectSections :sections="data.sections" />
           <PublicExcerptsBlock :about="data.excerptsAbout" :url="excerptsUrl" />
           <PublicRelatedBlock :counts="data.related" :url="relatedUrl" />

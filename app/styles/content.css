@@ -53,7 +53,7 @@
    * with it; `anywhere` breaks it only when nothing else can be done.
    */
   .content-prose
-    :is(p, li, blockquote, h2, h3, .ce-paragraph, .ce-header, .cdx-quote) {
+    :is(p, li, blockquote, h2, h3, h4, .ce-paragraph, .ce-header, .cdx-quote) {
     overflow-wrap: anywhere;
   }
 
@@ -74,6 +74,19 @@
 
   .content-prose h3 {
     @apply text-[1.2rem] font-bold tracking-tight;
+    padding: 0 !important;
+    margin: 0 !important;
+    line-height: 1.25 !important;
+  }
+
+  /*
+   * A level-three heading of a text shown one level down — an excerpt's,
+   * under the excerpt's own title on its parent's page (`headingShift` of
+   * `ContentRenderer`): still a heading, a step under the h3 its level-two
+   * headings become there.
+   */
+  .content-prose h4 {
+    @apply text-lg font-bold tracking-tight;
     padding: 0 !important;
     margin: 0 !important;
     line-height: 1.25 !important;

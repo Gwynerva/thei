@@ -15,8 +15,7 @@ import { accessOptions } from '#layers/thei/app/components/field/access-options'
 import { diaryEntrySaysSomething } from '#layers/thei/shared/admin/diary';
 import {
   applySavedExcerptIds,
-  changedOnlyInExcerpt,
-  excerptsFormKey,
+  provideExcerptsForm,
 } from '#layers/thei/app/components/admin/excerpts/excerpts-form';
 
 const { diaryUuid } = defineProps<{ diaryUuid?: string }>();
@@ -80,10 +79,9 @@ const isDirty = computed(
 provideContentOwner('diary-entry', () => diaryUuid);
 // The entry's excerpts: named parts of the day about something in the
 // archive, each in a modal of its own, as a project's sections are.
-provide(excerptsFormKey, {
+provideExcerptsForm({
   parentType: 'diary-entry',
   parentId: () => diaryUuid,
-  parentTitle: () => ownerTitle.value,
   address: () =>
     diaryData.value.date
       ? { type: 'diary-entry', date: diaryData.value.date }
@@ -92,27 +90,15 @@ provide(excerptsFormKey, {
     const { date } = JSON.parse(savedSnapshot.value) as DiaryEditData;
     return isEdit.value && date ? { type: 'diary-entry', date } : undefined;
   },
-  excerpts: () => diaryData.value.excerpts ?? [],
-  setExcerpts: (items) => {
-    diaryData.value.excerpts = items;
-  },
+  model: () => diaryData.value,
   savedExcerpts: () =>
     (JSON.parse(savedSnapshot.value) as DiaryEditData).excerpts ?? [],
-  saveAfterItemEdit: (item, excerptUuid) => {
-    if (saving.value || needs.blocked.value || !isEdit.value || !isDirty.value)
-      return;
-    if (
-      !changedOnlyInExcerpt(
-        diaryPayload() as unknown as Record<string, unknown>,
-        savedSnapshot.value,
-        CONTENT_FIELDS,
-        item,
-        excerptUuid,
-      )
-    )
-      return;
-    void save();
-  },
+  payload: diaryPayload,
+  savedSnapshot: () => savedSnapshot.value,
+  contentFields: () => CONTENT_FIELDS,
+  canSaveItself: () =>
+    !saving.value && !needs.blocked.value && isEdit.value && isDirty.value,
+  save: () => void save(),
   saved: () => entityAi.panel.value,
 });
 useLeaveGuard({ dirty: () => isDirty.value });

@@ -7,8 +7,8 @@ import { buildExcerptContentHeadings } from '#layers/thei/app/components/content
  * An excerpt whole, on its parent's page, after the parent's own text: a
  * part of the page to a reader and to a machine alike. It is an article of
  * its own under its heading, which is the one link to the excerpt's page,
- * marked as its bookmark; what it is about stands under the heading; its
- * text follows with its headings one level down, each anchored under the
+ * marked as its bookmark; what it is about stands over the heading, turning
+ * down to it; its text follows with its headings one level down, each anchored under the
  * excerpt's own anchor, so the page's outline stays one.
  */
 const { excerpt } = defineProps<{ excerpt: PublicExcerpt }>();
@@ -19,7 +19,7 @@ const headings = computed(() =>
   buildExcerptContentHeadings(excerpt, language.value.slugify),
 );
 const title = computed(() => publicText(excerpt.title));
-const summary = computed(() => publicText(excerpt.summary));
+const subject = computed(() => publicExcerptSubjectLine(excerpt.about));
 </script>
 
 <script lang="ts">
@@ -53,7 +53,16 @@ export function publicExcerptParts(excerpts: PublicExcerpt[]): {
     class="flex min-w-0 scroll-mt-[var(--public-anchor-offset,8rem)] flex-col
       gap-sm border-t border-border-1 pt-lg"
   >
+    <!-- What it is about over its title, turning down to it; the summary is
+         left to its own page, since the text is read whole here. -->
     <header class="flex min-w-0 flex-col gap-xs">
+      <PublicPageParent
+        v-if="subject"
+        :parent="subject"
+        arrow
+        class="justify-start!"
+        data-excerpt-subject
+      />
       <h2
         :id="headingId"
         class="flex min-w-0 items-start gap-xs text-xl font-bold tracking-tight
@@ -75,13 +84,6 @@ export function publicExcerptParts(excerpts: PublicExcerpt[]): {
           >{{ title }}</TheiLink
         >
       </h2>
-      <p
-        v-if="summary"
-        class="text-base leading-relaxed font-semibold text-text-2"
-      >
-        {{ summary }}
-      </p>
-      <PublicExcerptAbout :links="excerpt.about" />
     </header>
     <div
       v-if="excerpt.bannerMedia"

@@ -1,14 +1,16 @@
 <script lang="ts" setup>
 import type { PublicExcerptResponse } from '#layers/thei/shared/api/public';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
+import { EXCERPT_TEXT_ANCHOR } from '#layers/thei/shared/content-headings';
 import {
   createdAndUpdatedTimelineItems,
   type PublicDetailPanelData,
 } from './public-detail';
 
 /**
- * An excerpt's own page, under whichever parent it belongs to: its parent
- * named above its title, what it is about under it, then its text, with
+ * An excerpt's own page, under whichever parent it belongs to: "Excerpt 2
+ * of 3 in" its parent above its title, then "About" what it is about,
+ * turning down to the title, then its text, with
  * the excerpts beside it among its parent's in the sidebar. The three
  * routes under a diary entry, an event and a project share it.
  */
@@ -18,16 +20,24 @@ const { data } = defineProps<{ data: PublicExcerptResponse }>();
 const parentName = computed(() =>
   entityListName({ title: data.parent.title, date: data.parent.date }),
 );
+// "Excerpt 2 of 3 in" the parent, or "Excerpt in" it when it is the one.
 const parentLine = computed(() => ({
   label:
     data.position.count > 1
-      ? phrase.value.excerpt_position(data.position.number, data.position.count)
-      : phrase.value.excerpt,
+      ? phrase.value.public_excerpt_position_in(
+          data.position.number,
+          data.position.count,
+        )
+      : phrase.value.public_excerpt_in,
   href: data.parent.href,
   title: parentName.value,
   iconMedia: data.parent.media,
   icon: entityTypeIcon(data.parent.type),
 }));
+/** "About" what it is about, turning down to the title; none once deleted. */
+const subjectLine = computed(() =>
+  publicExcerptSubjectLine(data.about, phrase.value.public_excerpt_about),
+);
 /** What the excerpt is, where it has no summary to say so. */
 const description = computed(() => {
   if (data.summary) return data.summary;
@@ -127,6 +137,7 @@ const details = computed(
       :summary="data.summary"
       :banner-media="data.bannerMedia"
       :parent="parentLine"
+      :subject="subjectLine"
     />
     <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
       <PublicPageHeader
@@ -135,13 +146,22 @@ const details = computed(
         :title="data.title"
         :description="data.summary"
         :parent="parentLine"
+        :subject="subjectLine"
       />
-      <PublicDetailLayout :details="details" :content="data.content">
-        <PublicExcerptAbout :links="data.about" class="mb-md" />
+      <PublicDetailLayout
+        :details="details"
+        :content="data.content"
+        :content-start="{
+          id: EXCERPT_TEXT_ANCHOR,
+          title: phrase.public_excerpt_text,
+        }"
+      >
         <ContentRenderer
           v-if="data.content.blocks.length"
+          :id="EXCERPT_TEXT_ANCHOR"
           :data="data.content"
           asset-viewer
+          class="scroll-mt-[var(--public-anchor-offset,8rem)]"
         />
         <!-- An excerpt always has a text; one that shows nothing has a body
              the visitor may not read. -->

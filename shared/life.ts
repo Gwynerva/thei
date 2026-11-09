@@ -119,8 +119,22 @@ export type VisibleLifePoint = LifePointBase & {
    * The excerpts of a diary entry or an event the reader may see, named on
    * its card: on the Life an excerpt is no point of its own.
    */
-  excerpts?: { title: string; href: string }[];
+  excerpts?: LifeExcerptName[];
 };
+
+/**
+ * An excerpt named on its parent's card, with what it is about: none once
+ * that is deleted. One the visitor may not read is its codename in its
+ * place, as on the parent's page (`PublicExcerptSecret`).
+ */
+export type LifeExcerptName =
+  | {
+      secret?: undefined;
+      title: string;
+      href: string;
+      about?: PublicEntityLink;
+    }
+  | { secret: true; key: string; title: string; iconMedia: MediaDescriptor };
 
 /** A point a visitor may not see, presented under a codename. */
 export type SecretLifePoint = LifePointBase & {

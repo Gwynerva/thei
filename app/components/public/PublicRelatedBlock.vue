@@ -140,6 +140,7 @@ export function publicRelatedHeading(title: string): ContentHeading {
     <PublicSectionHeader
       heading-id="related-entities-heading"
       :title="phrase.related_entities"
+      :description="phrase.related_entities_description"
       icon="arrow-cycle"
     />
     <UnderlineTabs

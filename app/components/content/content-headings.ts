@@ -5,7 +5,6 @@ import {
 import {
   contentBlockPath,
   contentHeadingAnchors,
-  excerptAnchorId,
   excerptHeadingId,
   type ContentHeadingLevel,
 } from '#layers/thei/shared/content-headings';
@@ -57,35 +56,6 @@ export function buildExcerptContentHeadings(
     const id = excerptHeadingId(excerpt.publicId, heading.id);
     return { ...heading, id, href: `#${id}` };
   });
-}
-
-/**
- * What an embedded excerpt adds to the contents of its parent's page: the
- * excerpt itself, then the headings of its text one level down — those of
- * its first level only, since the contents go two levels deep.
- */
-export function buildExcerptContentsEntries(
-  excerpt: EmbeddedExcerpt,
-  slugify: (value: string) => string,
-): ContentHeading[] {
-  const id = excerptAnchorId(excerpt.publicId);
-  return [
-    {
-      title: excerpt.title,
-      level: 2,
-      id,
-      href: `#${id}`,
-      path: `excerpt:${excerpt.publicId}`,
-      icon: 'excerpt',
-    },
-    ...buildExcerptContentHeadings(excerpt, slugify)
-      .filter((heading) => heading.level === 2)
-      .map((heading) => ({
-        ...heading,
-        level: 3 as const,
-        path: `excerpt:${excerpt.publicId}:${heading.path}`,
-      })),
-  ];
 }
 
 /** A text's headings as the page lists and anchors them (`content-headings`). */

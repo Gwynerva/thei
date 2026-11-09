@@ -5,7 +5,7 @@ import type {
   ExcerptParentType,
 } from '#layers/thei/shared/excerpt';
 import type { ExcerptParentAddress } from '#layers/thei/shared/excerpt-url';
-import { changedOnlyIn } from '#layers/thei/app/composables/saved-form';
+import { changedOnlyInPart } from '#layers/thei/app/composables/saved-form';
 
 /**
  * What the excerpts block needs of the form it is in — a diary entry's, an
@@ -16,8 +16,6 @@ export interface ExcerptsForm {
   parentType: ExcerptParentType;
   /** The parent's uuid, once it exists. */
   parentId: () => string | undefined;
-  /** What the parent is called: a diary entry by its day. */
-  parentTitle: () => string;
   /** The parent's address as the form holds it, for the link field. */
   address: () => ExcerptParentAddress | undefined;
   /**
@@ -44,34 +42,57 @@ export const excerptsFormKey = Symbol(
 ) as InjectionKey<ExcerptsForm>;
 
 /**
- * Whether an excerpt is all that differs from the form's last save, content
- * fields aside: the excerpt is left out of both sides of the comparison,
- * and everything else has to match.
+ * Provides the excerpts block with what it needs of the form it is in. The
+ * form says where its excerpts and its last save are, and when it may save
+ * on its own; the rest is the same for each.
  */
-export function changedOnlyInExcerpt(
-  current: Record<string, unknown>,
-  savedSnapshot: string,
-  contentFields: readonly string[],
-  item: object,
-  excerptUuid: string | undefined,
-): boolean {
-  const edited = toRaw(item);
-  const without = {
-    ...current,
-    excerpts: ((current.excerpts ?? []) as object[]).filter(
-      (entry) => toRaw(entry) !== edited,
-    ),
-  };
-  let saved: Record<string, unknown>;
-  try {
-    saved = JSON.parse(savedSnapshot) as Record<string, unknown>;
-  } catch {
-    return false;
-  }
-  saved.excerpts = ((saved.excerpts ?? []) as Record<string, unknown>[]).filter(
-    (entry) => !excerptUuid || entry.excerptUuid !== excerptUuid,
-  );
-  return changedOnlyIn(without, JSON.stringify(saved), contentFields);
+export function provideExcerptsForm(
+  form: Pick<
+    ExcerptsForm,
+    | 'parentType'
+    | 'parentId'
+    | 'address'
+    | 'savedAddress'
+    | 'savedExcerpts'
+    | 'saved'
+  > & {
+    /** The form's model, which holds the excerpts. */
+    model: () => { excerpts?: ExcerptItem[] };
+    /** The form as a save sends it, and as its last save left it. */
+    payload: () => object;
+    savedSnapshot: () => string;
+    /** The fields that hold texts, at any depth. */
+    contentFields: () => readonly string[];
+    /** Whether the form may save itself now: stored already, nothing in the way. */
+    canSaveItself: () => boolean;
+    save: () => void;
+  },
+) {
+  provide(excerptsFormKey, {
+    parentType: form.parentType,
+    parentId: form.parentId,
+    address: form.address,
+    savedAddress: form.savedAddress,
+    excerpts: () => form.model().excerpts ?? [],
+    setExcerpts: (items) => {
+      form.model().excerpts = items;
+    },
+    savedExcerpts: form.savedExcerpts,
+    saveAfterItemEdit: (item, excerptUuid) => {
+      if (!form.canSaveItself()) return;
+      if (
+        !changedOnlyInPart(
+          form.payload(),
+          form.savedSnapshot(),
+          form.contentFields(),
+          { list: 'excerpts', uuid: 'excerptUuid', item, id: excerptUuid },
+        )
+      )
+        return;
+      form.save();
+    },
+    saved: form.saved,
+  });
 }
 
 /**

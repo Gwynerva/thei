@@ -1,3 +1,5 @@
+import { toRaw } from 'vue';
+
 /** What each mounted guard says would be lost by leaving the page now. */
 const pageGuards = new Set<() => boolean>();
 
@@ -112,6 +114,48 @@ export function changedOnlyIn(
     JSON.stringify(withoutFields(current, fields)) ===
     JSON.stringify(withoutFields(saved, fields))
   );
+}
+
+/**
+ * Whether one part of a list the form holds — a section, an excerpt, just
+ * handed over from its modal — is all that differs from the form's last
+ * save, content fields aside: saving it there is then the same decision as
+ * saving the form. The part is left out of both sides of the comparison,
+ * found in the form by the object it is and in the last save by its uuid;
+ * everything else has to match.
+ */
+export function changedOnlyInPart(
+  current: object,
+  savedSnapshot: string,
+  fields: readonly string[],
+  part: {
+    /** The form's field that holds the list: `sections`, `excerpts`. */
+    list: string;
+    /** The field of a part that holds its uuid. */
+    uuid: string;
+    item: object;
+    /** Its uuid, once a save gave it one. */
+    id: string | undefined;
+  },
+): boolean {
+  let saved: Record<string, unknown>;
+  try {
+    saved = JSON.parse(savedSnapshot) as Record<string, unknown>;
+  } catch {
+    return false;
+  }
+  const edited = toRaw(part.item);
+  const held = (current as Record<string, unknown>)[part.list];
+  const without = {
+    ...current,
+    [part.list]: ((held ?? []) as object[]).filter(
+      (entry) => toRaw(entry) !== edited,
+    ),
+  };
+  saved[part.list] = (
+    (saved[part.list] ?? []) as Record<string, unknown>[]
+  ).filter((entry) => !part.id || entry[part.uuid] !== part.id);
+  return changedOnlyIn(without, JSON.stringify(saved), fields);
 }
 
 /**

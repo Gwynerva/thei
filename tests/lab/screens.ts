@@ -51,15 +51,19 @@ function startOf(title: string) {
 
 function richest(
   index: SiteIndex,
-  kind: SiteEntity['kind'],
+  kind: SiteEntity['kind'] | readonly SiteEntity['kind'][],
   score: (entity: SiteEntity) => number,
   test: (entity: SiteEntity) => boolean = () => true,
 ) {
+  const kinds: readonly SiteEntity['kind'][] =
+    typeof kind === 'string' ? [kind] : kind;
   const candidates = Object.values(index.entities).filter(
-    (entity) => entity.kind === kind && test(entity),
+    (entity) => kinds.includes(entity.kind) && test(entity),
   );
   if (!candidates.length)
-    throw new Error(`The archive has no ${kind} for this screen.`);
+    throw new Error(
+      `The archive has no ${kinds.join(' or ')} for this screen.`,
+    );
   return candidates.sort(
     (a, b) => score(b) - score(a) || a.ref.localeCompare(b.ref),
   )[0]!;
@@ -124,6 +128,17 @@ const ownExcerpt = (index: SiteIndex) =>
     'excerpt',
     (e) => n(e, 'words') / 50 + n(e, 'about') * 2,
     (e) => !e.facts.private,
+  );
+/**
+ * What the most excerpts are about: its form lists them on a tab of its
+ * relations, and deleting it asks what becomes of them.
+ */
+const subjectOfExcerpts = (index: SiteIndex) =>
+  richest(
+    index,
+    ['project', 'event', 'diary'],
+    (e) => n(e, 'excerptsAbout'),
+    (e) => n(e, 'excerptsAbout') > 0,
   );
 /** A general section, open in the tab a project's form shows first. */
 const generalSection = (index: SiteIndex) =>
@@ -210,6 +225,28 @@ export const SCREENS: Screen[] = [
     path: (index) => diary(index).publicUrl!,
   },
   {
+    // A visitor's window of a file — here an avatar of the history, which
+    // the archive has several of — the window an address naming a file
+    // open (`#…~open`) opens too. The address itself names the file by an
+    // id the site made, which the index does not keep.
+    id: 'file-window',
+    title: "A file's window",
+    role: 'visitor',
+    path: () => '/',
+    steps: () => [
+      {
+        label: 'Open the history of avatars',
+        action: { click: { role: 'button', name: /^1 of \d+$/ } },
+        options: { answer: { role: 'button', name: 'Avatar', exact: true } },
+      },
+      {
+        label: 'Open an avatar',
+        action: { click: { role: 'button', name: 'Avatar', exact: true } },
+        options: { answer: { role: 'dialog' }, timeoutMs: 15_000 },
+      },
+    ],
+  },
+  {
     id: 'search',
     title: 'Search results',
     role: 'visitor',
@@ -288,6 +325,39 @@ export const SCREENS: Screen[] = [
           },
         },
         options: { answer: { role: 'dialog' }, timeoutMs: 15_000 },
+      },
+    ],
+  },
+  {
+    id: 'admin-excerpts-about',
+    title: 'The excerpts about an entity, in its form',
+    role: 'owner',
+    path: (index) => subjectOfExcerpts(index).adminUrl,
+    steps: () => [
+      {
+        label: 'Look at the excerpts about it',
+        action: { click: { role: 'tab', name: /^Excerpts\b/ } },
+        options: {
+          answer: { role: 'button', name: /^Edit excerpt: / },
+          timeoutMs: 15_000,
+        },
+      },
+    ],
+  },
+  {
+    // Only looked at: the pane's own Delete is never pressed.
+    id: 'admin-excerpts-on-delete',
+    title: 'Deleting what excerpts are about',
+    role: 'owner',
+    path: (index) => subjectOfExcerpts(index).adminUrl,
+    steps: () => [
+      {
+        label: 'Ask to delete it',
+        action: { click: { role: 'button', name: 'Delete', exact: true } },
+        options: {
+          answer: { role: 'button', name: 'Keep the excerpts about it' },
+          timeoutMs: 15_000,
+        },
       },
     ],
   },

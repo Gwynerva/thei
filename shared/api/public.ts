@@ -134,6 +134,20 @@ export type PublicExcerpt = PublicExcerptCard & {
   position: { number: number; count: number };
 };
 
+/**
+ * An excerpt of a page's entity the visitor may not read — private, or
+ * about something closed to them — kept in its place among the ones they
+ * may, under its codename. Only its parent's side shows it: the page of
+ * what it is about and the search leave it out.
+ */
+export type PublicExcerptSecret = {
+  key: string;
+  title: string;
+  iconMedia: MediaDescriptor;
+  /** How many of the excerpts the visitor may read stand before it. */
+  before: number;
+};
+
 export type PublicExcerptResponse = PublicExcerpt & {
   /** Set by the page's own route; the Markdown representation has none. */
   neighbours?: PublicNeighbours;
@@ -344,6 +358,8 @@ export type PublicProjectResponse = {
   sections: PublicProjectSection[];
   /** The project's own excerpts, whole, in the owner's order. */
   excerpts: PublicExcerpt[];
+  /** Its excerpts the visitor may not read, as codenames in their places. */
+  excerptSecrets: PublicExcerptSecret[];
   /** The excerpts of other entities about this project. */
   excerptsAbout: PublicExcerptsAbout;
   showcase: (PublicAssetDescriptor | PublicSecretReference)[];
@@ -381,6 +397,8 @@ export type PublicEventResponseFull = {
   content: PublicContentOutputData;
   /** The event's own excerpts, whole, in the owner's order. */
   excerpts: PublicExcerpt[];
+  /** Its excerpts the visitor may not read, as codenames in their places. */
+  excerptSecrets: PublicExcerptSecret[];
   /** The excerpts of other entities about this event. */
   excerptsAbout: PublicExcerptsAbout;
   references: PublicReferences;
@@ -409,6 +427,8 @@ export type PublicDiaryResponse = {
   content: PublicContentOutputData;
   /** The entry's own excerpts, whole, in the owner's order. */
   excerpts: PublicExcerpt[];
+  /** Its excerpts the visitor may not read, as codenames in their places. */
+  excerptSecrets: PublicExcerptSecret[];
   /** The excerpts of other entities about this entry. */
   excerptsAbout: PublicExcerptsAbout;
   related: PublicRelatedCounts;

@@ -9,8 +9,8 @@ import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 /**
  * One excerpt in its parent's form: its name, with a lock before it when
  * only the owner sees it — marked so, or about something private — its
- * summary, and what it is about in the archive — a chip, where a section's
- * row has its dates — over its banner or the first picture of its text,
+ * summary, and, over its name, what it is about in the archive, the way its
+ * public page says it — where a section's row has its dates — over its banner or the first picture of its text,
  * which fills the row from the right edge. An excerpt about nothing, left so
  * by a deleted target, says so until the owner says what it is about.
  *
@@ -37,6 +37,12 @@ const lockWords = computed(() =>
       ? phrase.value.excerpt_hidden_by_subject(entityListName(about))
       : undefined,
 );
+/** The note of the relation as the excerpt's side reads it. */
+const aboutNote = computed(() => {
+  const note = about?.note;
+  if (!note) return undefined;
+  return note.type === 'split' ? note.currentText : note.text;
+});
 const accent = computed(() =>
   imageAccentCssColor(media?.accent, 'var(--color-accent)'),
 );
@@ -91,6 +97,45 @@ const accent = computed(() =>
         class="flex min-w-0 flex-col gap-1 text-halo-bg-3"
         :class="media ? 'max-w-4/5 sm:max-w-3/4' : undefined"
       >
+        <!-- What it is about over its title, as on the public page: the
+             entity, the relation's word when it has a direction and the
+             start of its note, and the arrow turning down to the title. -->
+        <span
+          class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"
+          data-excerpt-about
+        >
+          <template v-if="about">
+            <span
+              class="inline-flex max-w-full min-w-0 items-center gap-1
+                font-semibold text-text-2"
+            >
+              <EntityTokenIcon
+                :media="about.iconMedia"
+                :icon="relationEntityIcon(about.entityType)"
+                class="size-4"
+              />
+              <span class="min-w-0 truncate">{{
+                entityListName(about, 'abbreviated')
+              }}</span>
+            </span>
+            <PublicRelationInline :type="about.type" :note="aboutNote" />
+            <Icon
+              name="subfolder-arrow"
+              class="shrink-0 translate-y-[12%]
+                [transform:rotate(90deg)_scaleY(-1)] text-text-3"
+              aria-hidden="true"
+            />
+          </template>
+          <span
+            v-else
+            class="inline-flex items-center gap-1 text-text-warning italic"
+            :data-title-popup="phrase.excerpt_without_about_hint"
+            data-excerpt-orphan
+          >
+            <Icon name="warning" aria-hidden="true" />
+            {{ phrase.excerpt_without_about }}
+          </span>
+        </span>
         <span
           class="line-clamp-2 leading-snug font-semibold wrap-break-word
             transition-colors
@@ -112,36 +157,6 @@ const accent = computed(() =>
           class="line-clamp-2 text-sm wrap-break-word text-text-2"
         >
           {{ publicText(summary) }}
-        </span>
-        <!-- The chips have a ground of their own: no halo inside them. -->
-        <span
-          class="mt-1.5 flex flex-wrap items-center gap-1 text-shadow-none"
-          data-excerpt-about
-        >
-          <span
-            v-if="about"
-            class="inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm
-              bg-bg-2 py-0.5 pr-1.5 pl-0.5 text-xs text-text-2"
-          >
-            <EntityTokenIcon
-              :media="about.iconMedia"
-              :icon="relationEntityIcon(about.entityType)"
-              class="size-4"
-            />
-            <span class="min-w-0 truncate">{{
-              entityListName(about, 'abbreviated')
-            }}</span>
-          </span>
-          <span
-            v-else
-            class="inline-flex items-center gap-1 text-xs text-text-warning
-              italic"
-            :data-title-popup="phrase.excerpt_without_about_hint"
-            data-excerpt-orphan
-          >
-            <Icon name="warning" aria-hidden="true" />
-            {{ phrase.excerpt_without_about }}
-          </span>
         </span>
       </span>
     </button>

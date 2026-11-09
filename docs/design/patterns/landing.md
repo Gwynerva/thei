@@ -17,13 +17,11 @@ The place is written into the address's hash (`shared/landing.ts`):
   files;
 - `statuses~<day>`, `avatars~<id>` — a status in the history of statuses, an
   avatar in the history of avatars;
-- `r-<kind>~<address>` — a related entity, on the relations block;
+- `r-<kind>~<address>` — a related entity, on the relations block, or
+  what an excerpt is about, in the line over the title of its page;
 - `l-<address>` — a link of the page;
-- `excerpts~<id>` — an excerpt of the page's entity, where the page shows
-  it whole;
 - a part of the page: `icon`, `banner`, `showcase`, `files`, `links`,
-  `tags`, `periods`, `facts`, `statuses`, `avatars`, `owner-notes`,
-  `excerpts`;
+  `tags`, `periods`, `facts`, `statuses`, `avatars`, `owner-notes`;
 - `~open` after a file or an avatar — its window, open on it;
 - anything else — an anchor, the id of an element: a heading of the text,
   `project-description`, `project-sections`, `related-entities`,
@@ -45,7 +43,10 @@ file, shows a list cut short in full, opens the history of statuses or of
 avatars and reads it on to the day or the avatar, turns the relations block
 to the kind and its pages to the entity, shows «About me» and the facts in
 full, opens the sidebar's sheet on a phone, and opens the hint, the link's
-card or the file's window where the words are only there.
+card or the file's window where the words are only there. Words in a line
+cut short — a relation's note beside what it is about
+(`PublicRelationInline.vue`) — are marked, and the hint that says the line
+whole is opened too.
 
 - A part of a page that hides what a find may lead to takes part: it marks
   its places (`data-block`, `data-file`, `data-relation-href`, `data-link`,
@@ -121,7 +122,9 @@ card or the file's window where the words are only there.
 
 ## How it is checked
 
-- `tests/shared/landing.test.ts` writes and reads every kind of place.
+- `tests/shared/landing.test.ts` writes and reads every kind of place;
+  `tests/app/components/landing-marks.test.ts` keeps every part of a page
+  a hash names marked, and the line of what an excerpt is about.
 - `tests/app/modals/modal-stack.test.ts` keeps a modal's address in its entry
   of the history.
 - `tests/server/public/file-places.test.ts` leads a file's places to where

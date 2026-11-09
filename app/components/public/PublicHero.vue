@@ -7,6 +7,7 @@ import type {
 } from '#layers/thei/shared/api/public';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import type { IconName } from '#thei/icons';
+import type { RelationType } from '#layers/thei/shared/relation';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 
 /**
@@ -34,6 +35,18 @@ const props = defineProps<{
     title: string;
     iconMedia?: MediaDescriptor;
     icon?: IconName;
+  };
+  /**
+   * What the page is about, on a line under `parent` that turns down to the
+   * title: an excerpt's subject. No link where the reader may not open it.
+   */
+  subject?: {
+    label?: string;
+    href?: string;
+    title: string;
+    iconMedia?: MediaDescriptor;
+    icon?: IconName;
+    relation?: { type: RelationType; note?: string };
   };
   action?: PublicAction;
   showcase?: (PublicAssetDescriptor | PublicSecretReference)[];
@@ -150,6 +163,17 @@ const heroPill = `inline-flex items-center gap-2 rounded-full bg-white/9 text-sm
               on-dark
               class="hero-parent"
               data-hero-parent
+            />
+            <!-- The one relation of an excerpt's page: a find of its note
+                 lands on it (`r-<kind>~<address>`). -->
+            <PublicPageParent
+              v-if="subject"
+              :parent="subject"
+              on-dark
+              arrow
+              class="hero-parent"
+              data-hero-subject
+              :data-relation-href="subject.href"
             />
             <div
               class="flex max-w-full min-w-0 flex-col items-center gap-sm

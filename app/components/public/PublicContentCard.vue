@@ -14,6 +14,8 @@ import {
   tornStripOutlinePath,
 } from '#layers/thei/shared/continuation-outline';
 import type { RelationType } from '#layers/thei/shared/relation';
+import type { LifeExcerptName } from '#layers/thei/shared/life';
+import { relationEntityIcon } from '#layers/thei/shared/relation-display';
 import {
   boxRadius,
   useMeasuredOutline,
@@ -96,8 +98,15 @@ const props = defineProps<{
    * The excerpts of an entry or an event, named under its words on the
    * Life, each leading to its own page.
    */
-  parts?: { title: string; href: string }[];
+  parts?: LifeExcerptName[];
 }>();
+
+/** What an excerpt of the card is about, by name, as its token's hint. */
+function aboutName(part: Extract<LifeExcerptName, { href: string }>) {
+  return part.about
+    ? publicExcerptSubjectName(part.about)
+    : phrase.value.excerpt_without_about;
+}
 
 const datePresentation = computed(
   () =>
@@ -243,6 +252,7 @@ const hasFooter = computed(
       :class="[compact ? 'p-sm sm:p-md' : 'p-md', { 'text-halo-bg-2': media }]"
     >
       <div
+        v-if="label || !hideDate || reminder || secret"
         class="flex max-w-4/5 flex-wrap items-center gap-x-2 gap-y-1 text-xs
           font-semibold text-accent sm:max-w-3/4"
       >
@@ -343,7 +353,7 @@ const hasFooter = computed(
         class="public-card-copy flex max-w-4/5 min-w-0 flex-col gap-sm
           sm:max-w-3/4"
       >
-        <PublicParentLink v-if="parent" :parent="parent" />
+        <PublicParentLink v-if="parent" :parent="parent" :relation />
         <p
           v-if="titleless"
           class="public-card-title -mx-[0.75em] line-clamp-4 px-[0.75em]
@@ -369,32 +379,71 @@ const hasFooter = computed(
           </p>
         </div>
         <RelationLine
-          v-if="relation && (relation.type !== 'related' || relationText)"
+          v-if="
+            !parent && relation && (relation.type !== 'related' || relationText)
+          "
           :type="relation.type"
           :text="relationText"
           italic
           class="-mx-[0.75em] line-clamp-2 px-[0.75em] text-sm text-text-2"
         />
-        <!-- The links stay clickable above the card's own full-size link. -->
-        <span
+        <!-- The excerpts in a row while they fit, each after the token of
+             what it is about — its picture, or its kind's icon, or a dead
+             face once that is deleted — whose name its hint gives. One the
+             reader may not read is its codename with a lock, as a secret
+             card is, leading nowhere. The links stay clickable above the
+             card's own full-size link. -->
+        <ul
           v-if="parts?.length"
-          class="flex min-w-0 flex-wrap items-center gap-x-xs gap-y-0.5 text-xs"
+          class="flex min-w-0 flex-wrap gap-x-sm gap-y-1 text-sm"
           data-card-parts
         >
-          <Icon
-            name="excerpt"
-            class="shrink-0 text-text-3"
-            aria-hidden="true"
-          />
-          <template v-for="(part, index) in parts" :key="part.href">
+          <li
+            v-for="part in parts"
+            :key="part.secret ? part.key : part.href"
+            class="flex min-w-0"
+          >
+            <span
+              v-if="part.secret"
+              class="pointer-events-auto relative z-3 inline-flex min-w-0
+                items-center gap-xs text-text-3"
+              data-card-part-secret
+            >
+              <EntityTokenIcon
+                :media="part.iconMedia"
+                icon="excerpt"
+                class="size-6"
+              />
+              <span class="min-w-0 truncate italic">{{ part.title }}</span>
+              <Icon
+                name="lock-close"
+                :data-title-popup="phrase.secret_hint"
+                :aria-label="phrase.secret_hint"
+                role="img"
+                class="shrink-0 opacity-60"
+              />
+            </span>
             <TheiLink
+              v-else
               :to="part.href"
-              class="pointer-events-auto relative z-3 font-semibold text-text-2
-                transition hocus:text-accent"
-              >{{ publicText(part.title) }}</TheiLink
-            ><span v-if="index < parts.length - 1" aria-hidden="true">·</span>
-          </template>
-        </span>
+              class="group/part pointer-events-auto relative z-3 inline-flex
+                min-w-0 items-center gap-xs font-semibold text-text-2 transition
+                hocus:text-accent"
+            >
+              <EntityTokenIcon
+                :media="part.about?.iconMedia"
+                :icon="
+                  part.about
+                    ? relationEntityIcon(part.about.entityType ?? 'project')
+                    : 'face-dead'
+                "
+                :data-title-popup="aboutName(part)"
+                class="size-6 transition group-hocus/part:brightness-125"
+              />
+              <span class="min-w-0 truncate">{{ publicText(part.title) }}</span>
+            </TheiLink>
+          </li>
+        </ul>
       </div>
 
       <div

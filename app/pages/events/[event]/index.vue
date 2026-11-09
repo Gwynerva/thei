@@ -6,15 +6,9 @@ import {
   createdAndUpdatedTimelineItems,
   type PublicDetailPanelData,
 } from '#layers/thei/app/components/public/public-detail';
-
-import { publicOwnerNotesHeading } from '#layers/thei/app/components/public/PublicOwnerNotes.vue';
-import {
-  publicRelatedHeading,
-  publicRelatedTotal,
-} from '#layers/thei/app/components/public/PublicRelatedBlock.vue';
-import { publicExcerptsHeading } from '#layers/thei/app/components/public/PublicExcerptsBlock.vue';
-import { buildExcerptContentsEntries } from '#layers/thei/app/components/content/content-headings';
+import { publicBelowTextContents } from '#layers/thei/app/components/public/public-page-contents';
 import { publicExcerptParts } from '#layers/thei/app/components/public/PublicExcerptInline.vue';
+import { EVENT_DESCRIPTION_ANCHOR } from '#layers/thei/shared/content-headings';
 
 definePageMeta({ layout: 'public', key: (route) => route.path });
 const route = useRoute();
@@ -82,6 +76,7 @@ const details = computed(
     ({
       periods: data.value.periods,
       excerpts: data.value.excerpts,
+      excerptSecrets: data.value.excerptSecrets,
       chronology: createdAndUpdatedTimelineItems(data.value.chronology, {
         created: phrase.value.event_chronology_created,
         updated: phrase.value.event_chronology_updated,
@@ -91,26 +86,7 @@ const details = computed(
     }) satisfies PublicDetailPanelData,
 );
 
-/**
- * The sections that live below the content but belong in its table.
- *
- * The related entities come first because a visitor sees them; the owner's
- * notes, which nobody else gets at all, stay last.
- */
-const extraContents = computed(() => [
-  ...data.value.excerpts.flatMap((excerpt) =>
-    buildExcerptContentsEntries(excerpt, language.value.slugify),
-  ),
-  ...(data.value.excerptsAbout.total
-    ? [publicExcerptsHeading(phrase.value.excerpts)]
-    : []),
-  ...(publicRelatedTotal(data.value.related)
-    ? [publicRelatedHeading(phrase.value.related_entities)]
-    : []),
-  ...(data.value.notes?.blocks.length
-    ? [publicOwnerNotesHeading(phrase.value.entity_notes)]
-    : []),
-]);
+const extraContents = computed(() => publicBelowTextContents(data.value));
 </script>
 
 <template>
@@ -138,24 +114,23 @@ const extraContents = computed(() => [
         :details="details"
         :content="data.content"
         :extra-contents="extraContents"
+        :content-start="{
+          id: EVENT_DESCRIPTION_ANCHOR,
+          title: phrase.public_event_description,
+        }"
       >
         <ContentRenderer
           v-if="data.content.blocks.length"
+          :id="EVENT_DESCRIPTION_ANCHOR"
           :data="data.content"
           asset-viewer
+          class="scroll-mt-[var(--public-anchor-offset,8rem)]"
         />
-        <div
-          v-if="data.excerpts.length"
-          data-landing-zone="excerpts"
-          class="flex flex-col gap-lg"
+        <PublicPageExcerpts
+          :excerpts="data.excerpts"
+          :secrets="data.excerptSecrets"
           :class="{ 'mt-lg': data.content.blocks.length }"
-        >
-          <PublicExcerptInline
-            v-for="excerpt in data.excerpts"
-            :key="excerpt.publicId"
-            :excerpt
-          />
-        </div>
+        />
         <PublicExcerptsBlock
           :about="data.excerptsAbout"
           :url="excerptsUrl"

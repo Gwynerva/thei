@@ -282,27 +282,44 @@ describe('excerpts on the Life', () => {
     );
     expect(entry?.visibility).toBe('visible');
     if (entry?.visibility !== 'visible') return;
+    // Each with what it is about, for its token; one about nothing has none.
     expect(entry.excerpts).toEqual([
-      { title: 'XD title', href: '/diary/2026-04-01/excerpts/XD-XD/' },
+      {
+        title: 'XD title',
+        href: '/diary/2026-04-01/excerpts/XD-XD/',
+        about: expect.objectContaining({
+          entityType: 'project',
+          title: 'The project',
+          href: '/projects/p-P/',
+        }),
+      },
       { title: 'XD2 title', href: '/diary/2026-04-01/excerpts/XD2-XD2/' },
     ]);
-    // The entry's lead names its headings and its excerpts, then quotes it.
-    expect(entry.summary).toBe(
-      'Morning · XD title · XD2 title — Morning Out in the open.',
-    );
+    // The entry's lead names its headings, then quotes it; its excerpts are
+    // listed under it on the card, and the lead does not name them again.
+    expect(entry.summary).toBe('Morning — Morning Out in the open.');
     const seen = (await getLatestLifePoints(20, { viewer: STRANGER })).find(
       (point) =>
         point.entityKind === 'diary-entry' && point.date === '2026-04-01',
     );
     expect(seen?.visibility).toBe('visible');
     if (seen?.visibility !== 'visible') return;
-    expect(seen.summary).toBe('Morning · XD title — Morning Out in the open.');
-    // An event's point names its excerpts the visitor may see.
+    expect(seen.summary).toBe('Morning — Morning Out in the open.');
+    // An event's point names its excerpts the visitor may see, and the
+    // private one by its codename in its place, leading nowhere.
     const event = (await getLatestLifePoints(20, { viewer: STRANGER })).find(
       (point) => point.entityKind === 'event',
     );
     expect(event?.visibility).toBe('visible');
     if (event?.visibility !== 'visible') return;
-    expect(event.excerpts?.map((item) => item.title)).toEqual(['XE title']);
+    expect(event.excerpts).toEqual([
+      expect.objectContaining({ title: 'XE title', href: expect.any(String) }),
+      {
+        secret: true,
+        key: expect.any(String),
+        title: expect.stringMatching(/^Secret excerpt /),
+        iconMedia: expect.any(Object),
+      },
+    ]);
   });
 });

@@ -1,5 +1,6 @@
 import type {
   PublicExcerpt,
+  PublicExcerptSecret,
   PublicNeighbours,
   PublicReferences,
   PublicTagSummary,
@@ -57,6 +58,8 @@ export type PublicDetailPanelData = {
   contents?: ContentHeading[];
   /** The page's own excerpts, listed under the contents, each leading to its place. */
   excerpts?: PublicExcerpt[];
+  /** Its excerpts the visitor may not read, as codenames in their places. */
+  excerptSecrets?: PublicExcerptSecret[];
   neighbours?: PublicDetailNeighbours;
   chronology?: PublicDetailTimelineItem[];
   periods?: Period[];

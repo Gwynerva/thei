@@ -33,6 +33,12 @@ const { scope = { kind: 'life' }, basePath = '/life/' } = defineProps<{
 const scopeQuery = computed(() =>
   scope.kind === 'project' ? { project: scope.publicId } : {},
 );
+/** What a picked day opens, by where it opens: the Life, or the project's chronology. */
+const openDay = computed(() =>
+  scope.kind === 'project'
+    ? phrase.value.open_project_chronology
+    : phrase.value.open_life,
+);
 const selectedYear = ref<number>();
 const selectedDate = ref<string>();
 const day = ref<LifeDay>();
@@ -467,8 +473,8 @@ watch(weeks, () => void nextTick(readEdges));
         <TheiLink
           v-if="dayTotal(selectedDate)"
           :to="buildLifeUrl({ date: selectedDate }, basePath)"
-          :aria-label="phrase.open_life"
-          :data-title-popup="phrase.open_life"
+          :aria-label="openDay"
+          :data-title-popup="openDay"
           class="flex size-8 shrink-0 items-center justify-center rounded-normal
             bg-bg-3 p-1 text-base text-text-2 transition-colors
             focus-visible:ring-2 focus-visible:ring-accent

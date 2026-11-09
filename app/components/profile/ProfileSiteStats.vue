@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 import type { PublicProfileResponse } from '#layers/thei/shared/profile';
+import { buildLifeUrl } from '#layers/thei/shared/life';
 const props = defineProps<{ counts: PublicProfileResponse['counts'] }>();
 const compactNumber = useCompactNumber();
 /**
@@ -21,7 +22,7 @@ const columns = computed(() =>
       const label = phrase.value.profile_counter_label(kind, count);
       return {
         kind,
-        href: `/life/?f=${kind}`,
+        href: buildLifeUrl({ filter: [kind] }),
         // Whole up to four digits; shortened past them, the hint says it whole.
         shown: count < 10_000 ? exact : compactNumber(count),
         word: phrase.value.profile_counter(kind, count),

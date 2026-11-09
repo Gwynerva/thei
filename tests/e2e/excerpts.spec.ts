@@ -252,7 +252,7 @@ test('an entry may be nothing but an excerpt, written in its modal and about a p
   await expect(
     article.getByRole('link', { name: `Stringers ${stamp}` }),
   ).toHaveAttribute('rel', 'bookmark');
-  await expect(article.locator('[data-excerpt-about]')).toContainText(
+  await expect(article.locator('[data-excerpt-subject]')).toContainText(
     `Kayak ${stamp}`,
   );
   await article.getByRole('link', { name: `Stringers ${stamp}` }).click();

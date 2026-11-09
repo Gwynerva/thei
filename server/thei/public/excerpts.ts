@@ -2,6 +2,7 @@ import type {
   PublicExcerpt,
   PublicExcerptCard,
   PublicExcerptParent,
+  PublicExcerptSecret,
   PublicExcerptsAbout,
   PublicExcerptsPage,
   PublicNeighbour,
@@ -49,6 +50,7 @@ import {
   buildPublicEntityReference,
 } from './entities';
 import { buildPublicRelatedLinks, resolvePublicRelated } from './related';
+import { buildSecretReference } from './secret';
 
 /**
  * Excerpts as visitors read them.
@@ -59,7 +61,8 @@ import { buildPublicRelatedLinks, resolvePublicRelated } from './related';
  * more than the page would. What the viewer may see is decided by the
  * predicates of `../excerpts/parents.ts`: an excerpt is as open as the
  * stricter of its parent and what it is about, unless it is private, and is
- * seen only by whoever may open both.
+ * seen only by whoever may open both; on its parent's side, one they may
+ * not is its codename in its place (`secretParentExcerpts`).
  */
 
 /** How many cards one page of the block on a target holds. */
@@ -195,6 +198,34 @@ export function visibleParentExcerpts(
 }
 
 /**
+ * A parent's excerpts the viewer may not read, each as its codename where
+ * it stands among the ones they may: the parent's side says it has a part
+ * closed to them, as the Life does, and nothing of it. The codename is the
+ * one its point on a chronology goes by.
+ */
+export function secretParentExcerpts(
+  parent: ExcerptParentInfo,
+  viewer: PublicViewer,
+): PublicExcerptSecret[] {
+  const secrets: PublicExcerptSecret[] = [];
+  let before = 0;
+  for (const excerpt of listExcerpts(parent)) {
+    if (excerptShownWithParent(viewer, excerpt, parent)) {
+      before += 1;
+      continue;
+    }
+    const secret = buildSecretReference('excerpt', excerpt.excerptUuid);
+    secrets.push({
+      key: secret.key,
+      title: secret.title,
+      iconMedia: secret.iconMedia,
+      before,
+    });
+  }
+  return secrets;
+}
+
+/**
  * An excerpt's own page, by its public id: the excerpt, if it opens for the
  * viewer, and the parent's excerpts it is placed among. One about something
  * open by its link only is not shown on its parent's page, but opens by its
@@ -209,8 +240,7 @@ export function findOpenParentExcerpt(
   const excerpt = all.find((item) => item.publicId === publicId);
   if (!excerpt || !excerptOpens(viewer, excerpt, parent)) return undefined;
   const visible = all.filter(
-    (item) =>
-      item === excerpt || excerptShownWithParent(viewer, item, parent),
+    (item) => item === excerpt || excerptShownWithParent(viewer, item, parent),
   );
   return { excerpt, visible };
 }

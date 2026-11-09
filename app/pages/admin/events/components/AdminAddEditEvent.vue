@@ -40,8 +40,7 @@ import { externalLinkListItems } from '#layers/thei/shared/external-link';
 import { useExternalLinks } from '#layers/thei/app/composables/external-links';
 import {
   applySavedExcerptIds,
-  changedOnlyInExcerpt,
-  excerptsFormKey,
+  provideExcerptsForm,
 } from '#layers/thei/app/components/admin/excerpts/excerpts-form';
 
 const { eventUuid } = defineProps<{ eventUuid?: string }>();
@@ -94,10 +93,9 @@ const isEdit = computed(() => Boolean(eventUuid));
 provideContentOwner('event', () => eventUuid);
 // The event's excerpts: named parts of it about something in the archive,
 // each in a modal of its own, as a project's sections are.
-provide(excerptsFormKey, {
+provideExcerptsForm({
   parentType: 'event',
   parentId: () => resolvedEventUuid.value,
-  parentTitle: () => eventData.value.title.trim() || phrase.value.new_event,
   address: () => ({
     type: 'event',
     humanReadableSlug: eventData.value.humanReadableSlug,
@@ -113,27 +111,15 @@ provide(excerptsFormKey, {
         }
       : undefined;
   },
-  excerpts: () => eventData.value.excerpts ?? [],
-  setExcerpts: (items) => {
-    eventData.value.excerpts = items;
-  },
+  model: () => eventData.value,
   savedExcerpts: () =>
     (JSON.parse(savedSnapshot.value) as EventEditData).excerpts ?? [],
-  saveAfterItemEdit: (item, excerptUuid) => {
-    if (saving.value || needs.blocked.value || !isEdit.value || !isDirty.value)
-      return;
-    if (
-      !changedOnlyInExcerpt(
-        eventPayload() as unknown as Record<string, unknown>,
-        savedSnapshot.value,
-        CONTENT_FIELDS,
-        item,
-        excerptUuid,
-      )
-    )
-      return;
-    void save();
-  },
+  payload: eventPayload,
+  savedSnapshot: () => savedSnapshot.value,
+  contentFields: () => CONTENT_FIELDS,
+  canSaveItself: () =>
+    !saving.value && !needs.blocked.value && isEdit.value && isDirty.value,
+  save: () => void save(),
   saved: () => entityAi.panel.value,
 });
 const saving = ref(false);

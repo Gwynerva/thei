@@ -1,3 +1,4 @@
+import { SEO_DESCRIPTION_LIMIT } from './seo-description';
 import {
   contentBlockIsInPrivateSection,
   contentBlockTextParts,
@@ -19,9 +20,6 @@ import {
  * not this number, is usually what ends the text.
  */
 export const DIARY_LEAD_LENGTH = 240;
-
-/** How much of an entry a search engine shows under its page's title. */
-export const DIARY_SEO_LENGTH = 160;
 
 /** What a lead is built from: the day's text and the names of its excerpts. */
 export type DiaryLeadParts = {
@@ -78,6 +76,56 @@ export function diaryLead(
     named && words ? `${named} — ${words}` : named || words,
     limit,
   );
+}
+
+/** An excerpt as an entry's description names it: by what it is about. */
+export type DiaryDescriptionExcerpt = {
+  title: string;
+  /** The name of what it is about; none once that is deleted. */
+  subject?: string;
+};
+
+/**
+ * What a search engine shows under an entry's day. An entry with excerpts
+ * says first what it is about, each subject once with its excerpts' titles,
+ * in the order the excerpts come — `Kayak: The stringers; Varnish. Barn
+ * roof: Measured.` — then quotes how its own text begins, as far as the room
+ * goes. One about nothing any more is named by its title alone. An entry
+ * without excerpts is described by its lead.
+ */
+export function diaryDescription(
+  parts: Omit<DiaryLeadParts, 'excerptTitles' | 'headings'> & {
+    excerpts: readonly DiaryDescriptionExcerpt[];
+  },
+  limit = SEO_DESCRIPTION_LIMIT,
+): string {
+  const groups = new Map<string, string[]>();
+  for (const excerpt of parts.excerpts) {
+    const title = oneLine(excerpt.title);
+    if (!title) continue;
+    const subject = oneLine(excerpt.subject ?? '');
+    groups.set(subject, [...(groups.get(subject) ?? []), title]);
+  }
+  if (!groups.size) return diaryLead({ ...parts, excerptTitles: [] }, limit);
+  const said = [...groups]
+    .map(([subject, titles]) =>
+      endSentence(`${subject ? `${subject}: ` : ''}${titles.join('; ')}`),
+    )
+    .join(' ');
+  const words = diaryLead(
+    { ...parts, excerptTitles: [], headings: false },
+    Number.POSITIVE_INFINITY,
+  );
+  return cutAtWord(words ? `${said} ${words}` : said, limit);
+}
+
+function oneLine(text: string) {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+/** A sentence ended as written, or with a full stop where it has no mark. */
+function endSentence(text: string) {
+  return /[.!?…]$/.test(text) ? text : `${text}.`;
 }
 
 /** The level-two headings of a text, as plain words, in text order. */

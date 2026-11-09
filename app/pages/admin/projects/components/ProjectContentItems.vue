@@ -7,10 +7,6 @@ import {
   type ProjectSectionItem,
 } from '#layers/thei/shared/project-content-item';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
-import {
-  moveItemById,
-  useDragSort,
-} from '#layers/thei/app/composables/drag-sort';
 import { projectAssetUsageDelta } from '#layers/thei/shared/admin/project';
 import {
   currentProjectUuidKey,
@@ -38,7 +34,6 @@ const saveAfterItemEdit = inject(saveAfterItemEditKey, undefined);
 const currentProjectUuid = inject(currentProjectUuidKey)!;
 const route = useRoute();
 const root = useTemplateRef<HTMLElement>('root');
-const unsavedIds = new WeakMap<object, string>();
 const sections = computed(() => projectData.value.sections ?? []);
 const undated = computed(() =>
   sections.value.filter((section) => !isDatedSection(section)),
@@ -53,10 +48,33 @@ const tabs = computed(() =>
     dated: dated.value.length,
   }),
 );
+const parts = useModalParts({
+  uuid: 'sectionUuid',
+  // `?section=<publicId>`: the admin bar on a public section page lands
+  // here, and so does the form's own AI memory.
+  query: 'section',
+  items: () => sections.value,
+  setItems,
+  savedItems: () => savedProjectData.value.sections ?? [],
+  atOwnAddress: () => route.params.projectUuid === currentProjectUuid.value,
+  open: (target) => {
+    selected.value = groupOf(target);
+    return openItem(target);
+  },
+  root,
+  handle: '[data-content-section-handle]',
+  // Only the general sections are dragged, in their tab; the stages keep
+  // the order of their dates.
+  sorted: {
+    items: () => undated.value,
+    arrange: (sorted) => setItems([...sorted, ...dated.value]),
+    shown: () => selected.value === 'undated',
+  },
+});
 const itemViews = computed(() =>
   (selected.value === 'dated' ? dated.value : undated.value).map((item) => ({
     item,
-    id: itemId(item),
+    id: parts.itemId(item),
     media:
       item.bannerMedia ?? analyzeContentData(item.content?.data).preview.media,
   })),
@@ -66,134 +84,13 @@ function groupOf(item: ProjectSectionItem): SectionGroup {
   return isDatedSection(item) ? 'dated' : 'undated';
 }
 
-function itemId(item: ProjectSectionItem) {
-  if (item.sectionUuid) return item.sectionUuid;
-  let generated = unsavedIds.get(item);
-  if (!generated) {
-    generated = crypto.randomUUID();
-    unsavedIds.set(item, generated);
-  }
-  return generated;
-}
-
 function setItems(next: ProjectSectionItem[]) {
   projectData.value.sections = orderProjectSections(next);
 }
 
-/**
- * Sections are addressed by the object the project form holds, never by
- * their position: dated ones re-sort by their periods, undated ones are
- * dragged, and a modal or a confirmation stays open over the list while that
- * happens. The project form mutates its sections in place when a save assigns
- * them identities, so the object stays a valid handle for as long as the
- * section exists.
- */
-function replaceItem(
-  previous: ProjectSectionItem | undefined,
-  next: ProjectSectionItem,
-) {
-  const index = previous ? sections.value.indexOf(previous) : -1;
-  const list = [...sections.value];
-  if (index < 0) list.push(next);
-  else list[index] = next;
-  setItems(list);
-}
-
-/**
- * Removing is never saved on its own: it takes the section's content, files
- * and page with it, so it waits for the project's Save button like any other
- * decision that cannot be taken back.
- */
-function removeItem(target: ProjectSectionItem) {
-  // The list holds reactive proxies, while a section the modal has just
-  // handed over is the plain object behind one.
-  setItems(sections.value.filter((item) => toRaw(item) !== toRaw(target)));
-}
-
-/** Saves the project when this section is all that changed since its last save. */
-function saveProject(item: ProjectSectionItem) {
-  saveAfterItemEdit?.(item, item.sectionUuid);
-}
-
-/**
- * The modal keeps its own draft and does not learn what a project save gives
- * back: the identity the server assigned to a new section, and the time
- * stamped on its content. Both are carried over from the section the form
- * already holds, so handing the draft over again neither loses them nor reads
- * as a change.
- */
-function mergeSaved(
-  previous: ProjectSectionItem | undefined,
-  next: ProjectSectionItem,
-): ProjectSectionItem {
-  if (!previous) return next;
-  const merged = { ...next };
-  merged.sectionUuid ??= previous.sectionUuid;
-  if (
-    previous.content &&
-    merged.content &&
-    JSON.stringify(previous.content.data) ===
-      JSON.stringify(merged.content.data) &&
-    previous.content.contentUuid === merged.content.contentUuid
-  )
-    merged.content = previous.content;
-  return merged;
-}
-
-const dragSort = useDragSort(
-  () => (selected.value === 'undated' ? root.value : null),
-  {
-    handle: '[data-content-section-handle]',
-    onDrop: ({ id, newIndex }) => moveUndated(id, newIndex),
-  },
-);
-
-/** Moves an undated section within its tab; the dated ones keep their time order. */
-function moveUndated(id: string, newIndex: number) {
-  setItems([
-    ...moveItemById(undated.value, id, newIndex, itemId),
-    ...dated.value,
-  ]);
-}
-
-/**
- * One modal at a time from this list. `openModal` loads the component before
- * the modal enters the stack, so a quick second click would otherwise stack a
- * duplicate on top of the first.
- */
-let busy = false;
-async function exclusively(run: () => Promise<void>) {
-  if (busy) return;
-  busy = true;
-  try {
-    await run();
-  } finally {
-    busy = false;
-  }
-}
-
-/**
- * Whether the project's last save holds the section as the form holds it
- * now. A section handed over from its modal waits in the form until the
- * project is saved with it.
- */
-function sectionStored(section: ProjectSectionItem | undefined) {
-  // Read through the form's own list, so that a save setting the section's
-  // identity and stamping its text is heard.
-  const held =
-    section && sections.value.find((item) => toRaw(item) === toRaw(section));
-  const uuid = held?.sectionUuid;
-  const stored = savedProjectData.value.sections?.find(
-    (item) => uuid && item.sectionUuid === uuid,
-  );
-  return Boolean(stored) && JSON.stringify(held) === JSON.stringify(stored);
-}
-
-function openItem(target?: ProjectSectionItem) {
-  return exclusively(async () => {
-    // The section as the form holds it: the modal hands over new ones.
-    const current = shallowRef(target);
-    const result = await openModal(projectContentItemModal, {
+function openItem(target?: ProjectSectionItem): Promise<void> {
+  return parts.edit(target, (edit) =>
+    openModal(projectContentItemModal, {
       projectHumanReadableSlug: projectData.value.humanReadableSlug,
       projectPublicId: projectData.value.publicId,
       savedProject: {
@@ -203,79 +100,24 @@ function openItem(target?: ProjectSectionItem) {
       item: target,
       saved: () => projectAi?.panel.value,
       onSave: (item: ProjectSectionItem) => {
-        const merged = mergeSaved(current.value, item);
-        replaceItem(current.value, merged);
-        current.value = merged;
+        const merged = edit.take(item);
         // A section that gained or lost its dates is now in the other tab;
         // the list follows it there.
         selected.value = groupOf(merged);
-        saveProject(merged);
+        // Saves the project when this section is all that changed since
+        // its last save.
+        saveAfterItemEdit?.(merged, merged.sectionUuid);
       },
-      stored: () => sectionStored(current.value),
+      stored: edit.stored,
       // The section as the modal holds it, in place of the one it was
       // opened with, against the project as last saved.
       usageDelta: (draft: ProjectSectionItem) =>
         projectAssetUsageDelta(
-          {
-            ...projectData.value,
-            sections: current.value
-              ? sections.value.map((item) =>
-                  // The list holds proxies; `current` may be the plain
-                  // object the last save put there.
-                  toRaw(item) === toRaw(current.value) ? draft : item,
-                )
-              : [...sections.value, draft],
-          },
+          { ...projectData.value, sections: edit.withDraft(draft) },
           savedProjectData.value,
         ),
-    });
-    if (result.type === 'deleted' && current.value) removeItem(current.value);
-  });
-}
-
-/**
- * `?section=<publicId>` opens that section straight away, in its tab: it is
- * how the admin bar on a public section page lands here, and a link to a
- * section from anywhere in the admin — the form's own AI memory too.
- *
- * Only on the UUID address — reached by public ID, the editor first moves
- * there, and the page mounted at the old address must not open it too. The
- * query is dropped before the modal opens, so going back or reloading does
- * not open it again.
- */
-async function openWanted() {
-  const wanted = route.query.section;
-  if (typeof wanted !== 'string') return;
-  if (route.params.projectUuid !== currentProjectUuid.value) return;
-  const target = sections.value.find((item) => item.publicId === wanted);
-  const query = { ...route.query };
-  delete query.section;
-  // The path goes along: without it the router rebuilds the address from the
-  // route's pattern, which has no trailing slash, and the admin bar no longer
-  // recognizes the editor.
-  await navigateTo({ path: route.path, query }, { replace: true });
-  if (!target) return;
-  selected.value = groupOf(target);
-  await openItem(target);
-}
-onMounted(openWanted);
-watch(() => route.query.section, openWanted);
-
-/**
- * Moving a row moves its element, and an element moved in the document
- * loses the focus: the grip takes it back, so the arrows can go on.
- */
-async function moveWithKeyboard(target: ProjectSectionItem, direction: -1 | 1) {
-  const newIndex = undated.value.indexOf(target) + direction;
-  if (newIndex < 0 || newIndex >= undated.value.length) return;
-  const id = itemId(target);
-  moveUndated(id, newIndex);
-  await nextTick();
-  root.value
-    ?.querySelector<HTMLElement>(
-      `[data-drag-id="${id}"] [data-content-section-handle]`,
-    )
-    ?.focus();
+    }),
+  );
 }
 </script>
 
@@ -321,8 +163,8 @@ async function moveWithKeyboard(target: ProjectSectionItem, direction: -1 | 1) {
           :media
           :is-private="item.isPrivate"
           :sortable="selected === 'undated'"
-          @open="dragSort.guardClick(() => openItem(item))"
-          @move="moveWithKeyboard(item, $event)"
+          @open="parts.guardClick(() => openItem(item))"
+          @move="parts.moveWithKeyboard(item, $event)"
         />
         <p
           v-if="!itemViews.length"
