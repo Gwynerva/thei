@@ -15,6 +15,8 @@ export function renderEntity(view: McpEntityView): string {
     lines.push(`${key}: ${formatValue(value)}`);
   if (view.project)
     lines.push(`project: ${view.project.ref} — ${view.project.title}`);
+  if (view.parent)
+    lines.push(`parent: ${view.parent.ref} — ${view.parent.title}`);
   if (view.periods?.length)
     lines.push(`periods: ${view.periods.map(formatPeriod).join('; ')}`);
 
@@ -43,6 +45,19 @@ export function renderEntity(view: McpEntityView): string {
             ? ` (stage: ${section.periods.map(formatPeriod).join('; ')})`
             : ' (general section)'
         }${section.isPrivate ? ' [private]' : ''}${section.hasBody ? '' : ' [no text]'}`,
+      );
+  }
+  if (view.excerpts?.length) {
+    lines.push(
+      '',
+      '## Excerpts',
+      '',
+      'Named parts of it, each about something else in the archive (its relations); read with it and on the pages of what it is about.',
+      '',
+    );
+    for (const excerpt of view.excerpts)
+      lines.push(
+        `- ${excerpt.ref} — ${excerpt.title}${excerpt.summary ? ` — ${excerpt.summary}` : ''}${excerpt.isPrivate ? ' [private]' : ''} · about ${excerpt.about.join(', ') || 'nothing yet'}`,
       );
   }
   if (view.tags) {

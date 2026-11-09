@@ -66,6 +66,7 @@ const AREAS = {
 const KINDS: EntityKind[] = [
   'project',
   'project-section',
+  'excerpt',
   'event',
   'diary-entry',
   'page',

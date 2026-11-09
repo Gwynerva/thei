@@ -4,6 +4,7 @@ import type {
   ContentSlot,
 } from '#layers/thei/shared/content';
 import type { ContentEntityType } from '#layers/thei/shared/content-link';
+import type { ExcerptParentType } from '#layers/thei/shared/excerpt';
 import { contentToEditMarkdown } from '#layers/thei/shared/content-edit-markdown/serialize';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
@@ -120,6 +121,14 @@ export interface McpEntityView {
   project?: { ref: string; title: string };
   /** An excerpt's parent: the entry, event or project it is a part of. */
   parent?: { ref: string; title: string };
+  /** A parent's excerpts, in the owner's order, each with what it is about. */
+  excerpts?: {
+    ref: string;
+    title: string;
+    summary: string;
+    isPrivate: boolean;
+    about: string[];
+  }[];
   /** A section with dates: its place among the project's stages, in time. */
   stage?: { index: number; count: number };
   /**
@@ -331,6 +340,36 @@ async function editableFields(
   return formView(key.kind as FormKind, loaded.form);
 }
 
+/** A parent's excerpts as its view lists them, each with the refs it is about. */
+async function excerptsOf(
+  parent: ExcerptParentType,
+  id: string,
+): Promise<NonNullable<McpEntityView['excerpts']>> {
+  const { db, schema } = THEI_SERVER.useDb();
+  const rows = db
+    .select()
+    .from(schema.excerpts)
+    .where(
+      and(
+        eq(schema.excerpts.parentType, parent),
+        eq(schema.excerpts.parentId, id),
+      ),
+    )
+    .orderBy(asc(schema.excerpts.sortOrder))
+    .all();
+  return Promise.all(
+    rows.map(async (row) => ({
+      ref: refOf({ kind: 'excerpt', id: row.excerptUuid }),
+      title: row.title,
+      summary: row.summary,
+      isPrivate: row.isPrivate,
+      about: (await relationsOf('excerpt', row.excerptUuid)).map(
+        (relation) => relation.ref,
+      ),
+    })),
+  );
+}
+
 /** A section's place among the dated sections of its project, by first date. */
 function stageOf(projectUuid: string, sectionUuid: string) {
   const { db, schema } = THEI_SERVER.useDb();
@@ -429,6 +468,7 @@ async function readEntityView(
           periods: sectionPeriods.get(section.sectionUuid) ?? [],
           hasBody: bodies.has(section.sectionUuid),
         })),
+        excerpts: await excerptsOf('project', key.id),
         tags: tagsOf('project', key.id),
         relations,
         linkedInText: await linkedInText(texts, relations),
@@ -540,6 +580,7 @@ async function readEntityView(
         },
         texts: stripData(texts),
         periods: readPeriods(db, schema, 'event', key.id),
+        excerpts: await excerptsOf('event', key.id),
         tags: tagsOf('event', key.id),
         relations,
         linkedInText: await linkedInText(texts, relations),
@@ -569,6 +610,7 @@ async function readEntityView(
           createdAt: row.createdAt,
         },
         texts: stripData(texts),
+        excerpts: await excerptsOf('diary-entry', key.id),
         relations,
         linkedInText: await linkedInText(texts, relations),
         urls: {

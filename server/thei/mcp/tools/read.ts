@@ -32,7 +32,7 @@ export function registerReadTool(server: McpServer, context: McpCallContext) {
         ref: z
           .string()
           .describe(
-            'project:<id>, project-section:<id>, event:<id>, ' +
+            'project:<id>, project-section:<id>, excerpt:<id>, event:<id>, ' +
               'diary-entry:YYYY-MM-DD, page:<id>, tag:<id> or profile',
           ),
         text: z

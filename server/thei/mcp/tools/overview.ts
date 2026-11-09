@@ -71,7 +71,7 @@ export function registerOverviewTool(
           '',
           '## Refs',
           '',
-          'Entities are named kind:id — project:<id>, project-section:<id>, event:<id>, page:<id>, tag:<id>, profile — and a diary entry by its day, diary-entry:YYYY-MM-DD.',
+          'Entities are named kind:id — project:<id>, project-section:<id>, excerpt:<id>, event:<id>, page:<id>, tag:<id>, profile — and a diary entry by its day, diary-entry:YYYY-MM-DD.',
           '',
           EDITING_MARKDOWN_REFERENCE,
         ];

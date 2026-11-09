@@ -106,6 +106,7 @@ export function namesTag(
 export const AI_FIELD_ACTIONS = {
   project: ['title', 'summary', 'reminder', 'synonyms', 'showcase', 'cv'],
   'project-section': ['title', 'summary'],
+  excerpt: ['title', 'summary'],
   event: ['title', 'summary', 'reminder', 'synonyms'],
   'diary-entry': ['reminder'],
   page: ['title', 'summary', 'reminder', 'synonyms'],
@@ -317,6 +318,7 @@ export type AiActionPayload =
       entity:
         | 'project'
         | 'project-section'
+        | 'excerpt'
         | 'event'
         | 'diary-entry'
         | 'page'

@@ -97,6 +97,21 @@ export function shortTexts(
       value: row.summary,
     });
   }
+  for (const row of db.select().from(schema.excerpts).all()) {
+    const key = own('excerpt', row.excerptUuid);
+    add(key, row.updatedAt, {
+      key: 'title',
+      area: 'titles',
+      label: 'title',
+      value: row.title,
+    });
+    add(key, row.updatedAt, {
+      key: 'summary',
+      area: 'summaries',
+      label: 'summary',
+      value: row.summary,
+    });
+  }
   const events = db.select().from(schema.events).all();
   const eventAt = new Map(events.map((row) => [row.eventUuid, row.updatedAt]));
   for (const row of events) {

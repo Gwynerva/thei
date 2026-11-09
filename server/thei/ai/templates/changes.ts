@@ -12,6 +12,7 @@ import { loadDocuments } from '../../mcp/documents';
 export const CHANGE_KINDS: EntityKind[] = [
   'project',
   'project-section',
+  'excerpt',
   'event',
   'diary-entry',
   'page',

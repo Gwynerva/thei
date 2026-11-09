@@ -262,12 +262,23 @@ describe('the fields of a form', () => {
     };
     const key = { kind: 'project', id: 'p-1' } as never;
     const section = { sectionUuid: 's-1', title: 'One', periods: [] };
+    const excerpt = {
+      excerptUuid: 'x-1',
+      title: 'One',
+      relations: [{ entityType: 'event', entityId: 'e-1', type: 'related' }],
+    };
     const change: Record<(typeof kinds)[number], (field: string) => unknown> = {
       project: (field) => projectChanges({} as never, { [field]: 42 }, key),
       'project-section': (field) =>
         projectChanges(
           { sections: [section] } as never,
           { sections: [{ id: 's-1', [field]: 42 }] },
+          key,
+        ),
+      excerpt: (field) =>
+        projectChanges(
+          { excerpts: [excerpt] } as never,
+          { excerpts: [{ id: 'x-1', [field]: 42 }] },
           key,
         ),
       event: (field) => eventChanges({} as never, { [field]: 42 }, key),

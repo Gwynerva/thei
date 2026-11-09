@@ -124,6 +124,15 @@ file's description — each with a reason, and sure or left to the owner. Severa
 checked whole and applied in order; an atomic one is undone whole when one
 of its parts fails. A deletion is final and never proposed as sure.
 
+An excerpt — a named part of a diary entry, an event or a project, about
+something else in the archive — is an entity of its own to a model:
+`excerpt:<id>`, read with its parent and on its own, made with `create`
+under its parent as the target (a title, a body and at least one relation,
+never to the parent), changed with `update`, `field`, `write` and `revise`,
+its relations proposed with `relation` from the excerpt's own side, and
+deleted with `delete`. A parent's `excerpts` field takes them as a project's
+`sections` field takes sections.
+
 The owner applies, declines or comments on each — a comment gets a new
 version of it, which takes the place of the one commented on when it
 changes the same field, relation or remembered fact — in the session, or in

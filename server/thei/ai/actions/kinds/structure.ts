@@ -5,6 +5,10 @@ import type { EventEditData } from '#layers/thei/shared/event';
 import type { DiaryEditData } from '#layers/thei/shared/diary';
 import type { PageEditData } from '#layers/thei/shared/page';
 import type { TagEditData } from '#layers/thei/shared/tag';
+import {
+  isExcerptParentType,
+  type ExcerptItem,
+} from '#layers/thei/shared/excerpt';
 import { refuse as fail } from '../../../entity-patch/text';
 import { createProject } from '../../../projects/create';
 import { createEvent } from '../../../events/create';
@@ -23,6 +27,7 @@ import {
   diaryChanges,
   eventChanges,
   pageChanges,
+  parentChanges,
   projectChanges,
   tagChanges,
   type Changes,
@@ -39,14 +44,15 @@ import type { AiActionKindDef, PartStateRow } from '../types';
 
 /**
  * Actions that make an entity or delete one. A new entity may come with
- * parts of its own — a project's sections, tags, relations — each of which
- * the owner may leave out; they dim when the entity itself is unticked. A
- * deletion is final, and never the model's sure call.
+ * parts of its own — a project's sections, its excerpts, tags, relations —
+ * each of which the owner may leave out; they dim when the entity itself is
+ * unticked. A deletion is final, and never the model's sure call.
  */
 
 const CREATED_KINDS = [
   'project',
   'project-section',
+  'excerpt',
   'event',
   'diary-entry',
   'page',
@@ -55,7 +61,7 @@ const CREATED_KINDS = [
 type CreatedKind = (typeof CREATED_KINDS)[number];
 
 /** The lists of a new entity's fields the owner decides item by item. */
-const PART_LISTS = ['sections', 'tags', 'relations'] as const;
+const PART_LISTS = ['sections', 'excerpts', 'tags', 'relations'] as const;
 
 /** The parts of a new entity, by the id the owner decides them under. */
 function createPartIds(fields: Changes): string[] {
@@ -89,7 +95,7 @@ function titleOf(entity: CreatedKind, fields: Changes): string {
 async function newForm(
   entity: CreatedKind,
   fields: Changes,
-  project: EntityKey | undefined,
+  parent: EntityKey | undefined,
 ) {
   const title = titleOf(entity, fields);
   const none = { kind: entity, id: '' } as EntityKey;
@@ -102,14 +108,28 @@ async function newForm(
         none,
       );
     case 'project-section': {
-      if (!project)
+      if (!parent)
         fail('A section belongs to a project: name it as the target.');
       if (!title) fail('A section needs its title.');
-      const loaded = await loadForm(project);
+      const loaded = await loadForm(parent);
       const next = await projectChanges(
         loaded.form,
         { sections: [fields] },
-        project,
+        parent,
+      );
+      return { loaded, next };
+    }
+    case 'excerpt': {
+      if (!parent)
+        fail(
+          'An excerpt is a part of a project, an event or a diary entry: name it as the target.',
+        );
+      if (!title) fail('An excerpt needs its title.');
+      const loaded = await loadForm(parent);
+      const next = await parentChanges(
+        loaded.form,
+        { excerpts: [fields] },
+        parent,
       );
       return { loaded, next };
     }
@@ -149,19 +169,30 @@ async function newForm(
 export const createAction: AiActionKindDef<'create'> = {
   kind: 'create',
   reference:
-    'A new entity, private until the owner shows it: entity — project, project-section, event, diary-entry, page or tag — and fields as update names them. It has no target, but for a section, which names its project as the target. A project’s sections, tags and relations come in its fields, each a part the owner may leave out. A diary entry needs its day (date) and a body: one a day.',
+    'A new entity, private until the owner shows it: entity — project, project-section, excerpt, event, diary-entry, page or tag — and fields as update names them. It has no target, but for a section, which names its project as the target, and an excerpt, which names the project, event or diary entry it is a part of. A project’s sections, its excerpts, tags and relations come in its fields, each a part the owner may leave out. A diary entry needs its day (date) and a body: one a day. An excerpt needs its title, its body and at least one relation: what it is about, never its parent.',
   schema: z.object({
     entity: z.enum(CREATED_KINDS),
     fields: z.record(z.string(), z.unknown()),
   }),
-  // Only a section has a target: its project.
-  targets: ['project'],
+  // Only a part has a target: a section its project, an excerpt its parent.
+  targets: ['project', 'event', 'diary-entry'],
   async prepare(key, input) {
     const entity = input.entity as CreatedKind;
     const fields = input.fields as Changes;
     if (entity === 'project-section') {
       if (key?.kind !== 'project')
         fail('A section belongs to a project: name it as the target.');
+    } else if (entity === 'excerpt') {
+      if (!key || !isExcerptParentType(key.kind))
+        fail(
+          'An excerpt is a part of a project, an event or a diary entry: name it as the target.',
+        );
+      if (typeof fields.body !== 'string' || !fields.body.trim())
+        fail('An excerpt needs its text: body, in editing Markdown.');
+      if (!Array.isArray(fields.relations) || !fields.relations.length)
+        fail(
+          'An excerpt says what it is about: relations, at least one — a project, an event or a diary entry.',
+        );
     } else if (key) fail(`A new ${entity} has no target.`);
     if (entity === 'project' && 'sectionOrder' in fields)
       fail('A new project takes its sections in the order given.');
@@ -243,6 +274,28 @@ export const createAction: AiActionKindDef<'create'> = {
         );
         break;
       }
+      case 'excerpt': {
+        const { loaded, next } = form as {
+          loaded: LoadedForm;
+          next: { excerpts?: ExcerptItem[] };
+        };
+        const excerpt = next.excerpts!.find((item) => !item.excerptUuid)!;
+        saved(
+          await loaded.save(next, {
+            expectedUpdatedAt: loaded.version,
+            onWrite: (tx, schema) => {
+              const made = tx
+                .select({ id: schema.excerpts.excerptUuid })
+                .from(schema.excerpts)
+                .where(eq(schema.excerpts.publicId, excerpt.publicId))
+                .get() as { id: string } | undefined;
+              if (!made) fail('The excerpt was not made.');
+              onCreate('excerpt', loaded.version)(tx, schema, made.id);
+            },
+          }),
+        );
+        break;
+      }
       case 'event':
         saved(
           await createEvent(form as EventEditData, {
@@ -274,7 +327,10 @@ export const createAction: AiActionKindDef<'create'> = {
   },
   evaluate(key, row) {
     const payload = row.payload as { entity: CreatedKind; fields: Changes };
-    if (payload.entity === 'project-section' && (!key || !entityFace(key)))
+    if (
+      (payload.entity === 'project-section' || payload.entity === 'excerpt') &&
+      (!key || !entityFace(key))
+    )
       return { state: 'gone' };
     if (
       payload.entity === 'diary-entry' &&
@@ -309,6 +365,7 @@ export const deleteAction: AiActionKindDef<'delete'> = {
   targets: [
     'project',
     'project-section',
+    'excerpt',
     'event',
     'diary-entry',
     'page',
@@ -330,9 +387,12 @@ export const deleteAction: AiActionKindDef<'delete'> = {
     // The owner decided over the entity as it was proposed.
     if (entityVersion(key) !== base.version) fail(CHANGED_SINCE);
     await removeEntity(key, {
-      // A section is deleted from its project's form, checked as it is read.
+      // A section or an excerpt is deleted from its parent's form, checked
+      // as it is read.
       expectedVersion:
-        key.kind === 'project-section' ? undefined : base.version,
+        key.kind === 'project-section' || key.kind === 'excerpt'
+          ? undefined
+          : base.version,
       onWrite: (tx, schema) => write(tx, schema, { kind: 'final' }),
     });
     return key;

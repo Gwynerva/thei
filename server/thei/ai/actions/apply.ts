@@ -281,7 +281,11 @@ async function applyOne(
 export function movedBy(row: ActionRow): string[] {
   const target = targetOf(row);
   const refs = target ? [targetRef(target)] : [];
-  if (target && !isFileKey(target) && target.kind === 'project-section') {
+  if (
+    target &&
+    !isFileKey(target) &&
+    (target.kind === 'project-section' || target.kind === 'excerpt')
+  ) {
     const owner = formOwnerOf(target);
     if (owner) refs.push(refOf(owner));
   }

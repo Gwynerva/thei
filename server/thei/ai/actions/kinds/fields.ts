@@ -171,6 +171,7 @@ export const updateAction: AiActionKindDef<'update'> = {
   targets: [
     'project',
     'project-section',
+    'excerpt',
     'event',
     'diary-entry',
     'page',

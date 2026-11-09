@@ -11,7 +11,12 @@ import {
   checkedRelationEnd,
   existingTag,
 } from '../../../entity-patch/validate';
-import { findEntity, refOf, type EntityKey } from '../../../entity-kinds';
+import {
+  findEntity,
+  formOwnerOf,
+  refOf,
+  type EntityKey,
+} from '../../../entity-kinds';
 import { relationNote, relationNoteInput } from '../../forms/changes';
 import { loadForm } from '../../forms/load';
 import { currentRelation, currentTags } from '../current';
@@ -121,7 +126,7 @@ export const tagsAction: AiActionKindDef<'tags'> = {
 export const relationAction: AiActionKindDef<'relation'> = {
   kind: 'relation',
   reference:
-    'A relation of the owner’s map, between projects, events and diary entries: other (a ref), relation — related | depends-on (the target depends on the other) | affects — op add | change | remove, a note — one for both sides (note), or one per side (notes: { this, other }) — and whyNotInlineLink: why a link in the text would not do. A relation is a deliberate claim of a real dependency; a mere mention deserves a link (revise, category link). It needs its reason.',
+    'A relation of the owner’s map, between projects, events and diary entries: other (a ref), relation — related | depends-on (the target depends on the other) | affects — op add | change | remove, a note — one for both sides (note), or one per side (notes: { this, other }) — and whyNotInlineLink: why a link in the text would not do. A relation is a deliberate claim of a real dependency; a mere mention deserves a link (revise, category link). It needs its reason. An excerpt’s relations say what it is about, read from the excerpt alone: the target is the excerpt, the other a project, an event or a diary entry, never its parent, and an excerpt keeps at least one.',
   schema: z.object({
     op: z.enum(['add', 'change', 'remove']).default('add'),
     other: z.string(),
@@ -132,10 +137,15 @@ export const relationAction: AiActionKindDef<'relation'> = {
       .optional(),
     whyNotInlineLink: z.string().optional(),
   }),
-  targets: ['project', 'event', 'diary-entry'],
+  targets: ['project', 'event', 'diary-entry', 'excerpt'],
   async prepare(key, input, context) {
     const entity = target(key);
     const other = checkedRelationEnd(entity, input.other);
+    if (entity.kind === 'excerpt') {
+      const parent = formOwnerOf(entity);
+      if (parent && parent.kind === other.kind && parent.id === other.id)
+        fail('An excerpt is not about its own parent: it is a part of it.');
+    }
     if (!context.reason.trim())
       fail('A relation needs its reason: what real dependency joins the two.');
     if (input.op !== 'remove' && !input.whyNotInlineLink?.trim())

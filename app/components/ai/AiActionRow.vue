@@ -140,7 +140,7 @@ interface PartRow {
   state?: string;
 }
 
-const PART_LISTS = ['sections', 'tags', 'relations'] as const;
+const PART_LISTS = ['sections', 'excerpts', 'tags', 'relations'] as const;
 
 /** A new entity's parts. */
 const parts = computed<PartRow[]>(() => {
@@ -155,7 +155,7 @@ const parts = computed<PartRow[]>(() => {
         ? (fields[list] as any[]).map((item, index): PartRow => {
             const id = `${list}:${index}`;
             const label =
-              list === 'sections'
+              list === 'sections' || list === 'excerpts'
                 ? publicText(String(item?.title ?? ''))
                 : list === 'tags'
                   ? publicText(String(item))
@@ -169,9 +169,11 @@ const parts = computed<PartRow[]>(() => {
               icon:
                 list === 'sections'
                   ? 'project-section'
-                  : list === 'tags'
-                    ? 'tag'
-                    : 'relation-related',
+                  : list === 'excerpts'
+                    ? 'excerpt'
+                    : list === 'tags'
+                      ? 'tag'
+                      : 'relation-related',
               certainty: 'sure',
               state: states.get(id),
             };

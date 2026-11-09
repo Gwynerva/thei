@@ -2711,6 +2711,7 @@ export default defineI18nModule({
       notes: 'Заметки',
       sections: 'Разделы',
       sectionOrder: 'Порядок разделов',
+      excerpts: 'Отрывки',
       private: 'Приватный',
       periods: 'Даты',
       body: 'Текст',
@@ -2735,6 +2736,7 @@ export default defineI18nModule({
     },
     ai_action_parts: {
       sections: 'Разделы',
+      excerpts: 'Отрывки',
       tags: 'Теги',
       relations: 'Связи',
     },

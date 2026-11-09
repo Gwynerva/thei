@@ -1232,6 +1232,142 @@ describe('making and deleting', () => {
     ).toBe(0);
   });
 
+  it('makes an excerpt of a diary entry about a project, and takes it back', async () => {
+    const parent = 'diary-entry:2026-10-13';
+    const aboutParent = await propose(session(), {
+      kind: 'create',
+      target: parent,
+      entity: 'excerpt',
+      fields: {
+        title: 'The boss',
+        body: 'The boss fell.',
+        relations: [{ ref: parent, kind: 'related' }],
+      },
+    });
+    expect(aboutParent.results[0]).toMatchObject({
+      refused: expect.stringMatching(/own parent/),
+    });
+    const aboutNothing = await propose(session(), {
+      kind: 'create',
+      target: parent,
+      entity: 'excerpt',
+      fields: { title: 'The boss', body: 'The boss fell.' },
+    });
+    expect(aboutNothing.results[0]).toMatchObject({
+      refused: expect.stringMatching(/at least one/),
+    });
+    const actionUuid = await proposed(session(), {
+      kind: 'create',
+      target: parent,
+      entity: 'excerpt',
+      fields: {
+        title: 'The boss',
+        body: 'The boss fell.',
+        relations: [{ ref: `project:${PROJECT}`, kind: 'related' }],
+      },
+    });
+    expect(findAction(actionUuid)?.parts).toEqual([
+      { id: 'relations:0', state: 'pending' },
+    ]);
+    const outcome = await applyActions({
+      actionUuids: [actionUuid],
+      by: 'owner',
+    });
+    const ref = outcome.applied[0]!.entity!;
+    expect(ref).toMatch(/^excerpt:/);
+    const id = ref.slice('excerpt:'.length);
+    expect(
+      one(
+        'SELECT parentType, parentId FROM excerpts WHERE excerptUuid = ?',
+        id,
+      ),
+    ).toEqual({ parentType: 'diary-entry', parentId: DIARY });
+    // Its relation is its own: the project's form never holds it.
+    expect(
+      one(
+        "SELECT COUNT(*) AS n FROM `entity-relations` WHERE firstType = 'excerpt' OR secondType = 'excerpt'",
+      )?.n,
+    ).toBe(1);
+    const project = await loadForm({ kind: 'project', id: PROJECT });
+    expect(project.form.relations).toEqual([]);
+    await undoAction(actionUuid);
+    expect(
+      one('SELECT excerptUuid FROM excerpts WHERE excerptUuid = ?', id),
+    ).toBeUndefined();
+    expect(
+      one(
+        "SELECT COUNT(*) AS n FROM `entity-relations` WHERE firstType = 'excerpt' OR secondType = 'excerpt'",
+      )?.n,
+    ).toBe(0);
+  });
+
+  it('changes an excerpt, relates it from its own side, and deletes it', async () => {
+    const parent = 'diary-entry:2026-10-13';
+    const made = await applyActions({
+      actionUuids: [
+        await proposed(session(), {
+          kind: 'create',
+          target: parent,
+          entity: 'excerpt',
+          fields: {
+            title: 'The boss',
+            body: 'The boss fell.',
+            relations: [{ ref: `project:${PROJECT}`, kind: 'related' }],
+          },
+        }),
+      ],
+      by: 'owner',
+    });
+    const ref = made.applied[0]!.entity!;
+    const id = ref.slice('excerpt:'.length);
+    await tick();
+    const change = await proposed(session(), {
+      kind: 'update',
+      target: ref,
+      changes: { summary: 'How it ended' },
+    });
+    expect(findAction(change)?.base).toEqual({
+      fields: ['summary'],
+      before: { summary: '' },
+      after: { summary: 'How it ended' },
+    });
+    await applyActions({ actionUuids: [change], by: 'owner' });
+    expect(
+      one('SELECT summary FROM excerpts WHERE excerptUuid = ?', id)?.summary,
+    ).toBe('How it ended');
+    // Its last relation cannot go; one to its parent is no relation of it.
+    const bare = await propose(session(), {
+      kind: 'update',
+      target: ref,
+      changes: { relations: [] },
+    });
+    expect(bare.results[0]).toMatchObject({
+      refused: expect.stringMatching(/what it is about/),
+    });
+    const toParent = await propose(session(), {
+      kind: 'relation',
+      target: ref,
+      other: parent,
+      relation: 'related',
+      reason: 'The day it is part of',
+      whyNotInlineLink: 'It is the parent',
+    });
+    expect(toParent.results[0]).toMatchObject({
+      refused: expect.stringMatching(/own parent/),
+    });
+    await tick();
+    const deletion = await proposed(session(), {
+      kind: 'delete',
+      target: ref,
+      reason: 'Said in the entry itself',
+    });
+    await applyActions({ actionUuids: [deletion], by: 'owner' });
+    expect(
+      one('SELECT excerptUuid FROM excerpts WHERE excerptUuid = ?', id),
+    ).toBeUndefined();
+    await expect(undoAction(deletion)).rejects.toThrow(/final/);
+  });
+
   it('refuses a second entry for a day, and deletes for good', async () => {
     const { results } = await propose(session(), {
       kind: 'create',

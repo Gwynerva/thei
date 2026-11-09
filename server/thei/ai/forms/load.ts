@@ -16,6 +16,7 @@ import {
   eventChanges,
   diaryChanges,
   pageChanges,
+  parentChanges,
   tagChanges,
   profileChanges,
 } from './changes';
@@ -284,10 +285,12 @@ export async function changedForm(
         loaded.owner,
       );
     case 'excerpt':
-      // An excerpt's own changes come with its actions; until then it is
-      // edited in its parent's form by hand.
-      return fail(
-        `The excerpt ${refOf(key)} is edited in its parent's form; no action changes it yet.`,
+      // An excerpt's change is laid over its parent's form, as a section's
+      // over its project's.
+      return parentChanges(
+        form,
+        { excerpts: [{ ...changes, id: key.id }] },
+        loaded.owner,
       );
     case 'event':
       return eventChanges(form, changes, key);

@@ -4,6 +4,7 @@ import type {
   ContentSlot,
 } from '#layers/thei/shared/content';
 import type { TagEditItem } from '#layers/thei/shared/tag';
+import { isExcerptParentType } from '#layers/thei/shared/excerpt';
 import {
   findHistoryText,
   describeHistoryData,
@@ -106,7 +107,7 @@ function ownerVersionsOf(undo: StoredUndo) {
 
 /**
  * The actions that changed a form, undone since or not: those on its
- * entity, and on a project's sections.
+ * entity, on a project's sections and on a parent's excerpts.
  */
 function formActions(owner: EntityKey): ActionRow[] {
   const { db, schema } = THEI_SERVER.useDb();
@@ -119,6 +120,19 @@ function formActions(owner: EntityKey): ActionRow[] {
           .all()
           .map((section) => section.id)
       : [];
+  const excerpts = isExcerptParentType(owner.kind)
+    ? db
+        .select({ id: schema.excerpts.excerptUuid })
+        .from(schema.excerpts)
+        .where(
+          and(
+            eq(schema.excerpts.parentType, owner.kind),
+            eq(schema.excerpts.parentId, owner.id),
+          ),
+        )
+        .all()
+        .map((excerpt) => excerpt.id)
+    : [];
   const t = schema.aiActions;
   return db
     .select()
@@ -135,6 +149,9 @@ function formActions(owner: EntityKey): ActionRow[] {
                   inArray(t.targetId, sections),
                 ),
               ]
+            : []),
+          ...(excerpts.length
+            ? [and(eq(t.targetType, 'excerpt'), inArray(t.targetId, excerpts))]
             : []),
         ),
       ),
@@ -497,7 +514,9 @@ async function undoNow(
         onWrite: finish,
         expectedVersion: ownerBefore,
       });
-      return undo!.kind === 'create' && undo!.created.kind === 'project-section'
+      return undo!.kind === 'create' &&
+        (undo!.created.kind === 'project-section' ||
+          undo!.created.kind === 'excerpt')
         ? owner
         : undefined;
     case 'text': {

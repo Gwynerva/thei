@@ -39,6 +39,8 @@ export interface McpDocument {
   periods?: Period[];
   /** The project a section belongs to. */
   project?: string;
+  /** The project, event or diary entry an excerpt is a part of. */
+  parent?: string;
   updatedAt: number;
   /** Every word the entity holds, texts and fields together. */
   text: string;
@@ -246,6 +248,28 @@ function buildDocuments(): McpDocument[] {
         updatedAt: row.updatedAt,
         main: own[0]?.text,
         text: join(row.title, row.summary, ...own.map((text) => text.text)),
+      });
+    }
+  }
+
+  {
+    const rows = db.select().from(schema.excerpts).all();
+    const ids = rows.map((row) => row.excerptUuid);
+    const texts = textsByOwner('excerpt', ids);
+    for (const row of rows) {
+      const own = owned('excerpt', texts, row.excerptUuid);
+      drafts.push({
+        ref: `excerpt:${row.excerptUuid}`,
+        id: row.excerptUuid,
+        kind: 'excerpt',
+        title: row.title,
+        summary: row.summary,
+        access: row.isPrivate ? 'private' : undefined,
+        parent: `${row.parentType}:${row.parentId}`,
+        updatedAt: row.updatedAt,
+        main: own[0]?.text,
+        text: join(row.title, row.summary, ...own.map((text) => text.text)),
+        relationCount: relations.get(`excerpt:${row.excerptUuid}`) ?? 0,
       });
     }
   }

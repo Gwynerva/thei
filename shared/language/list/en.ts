@@ -2631,6 +2631,7 @@ export default defineI18nBase({
       notes: 'Notes',
       sections: 'Sections',
       sectionOrder: 'Order of sections',
+      excerpts: 'Excerpts',
       private: 'Private',
       periods: 'Dates',
       body: 'Text',
@@ -2655,6 +2656,7 @@ export default defineI18nBase({
     },
     ai_action_parts: {
       sections: 'Sections',
+      excerpts: 'Excerpts',
       tags: 'Tags',
       relations: 'Relations',
     },

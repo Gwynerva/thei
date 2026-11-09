@@ -172,6 +172,7 @@ export const writeAction: AiActionKindDef<'write'> = {
   targets: [
     'project',
     'project-section',
+    'excerpt',
     'event',
     'diary-entry',
     'page',
@@ -611,6 +612,7 @@ export const reviseAction: AiActionKindDef<'revise'> = {
   targets: [
     'project',
     'project-section',
+    'excerpt',
     'event',
     'diary-entry',
     'page',

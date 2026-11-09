@@ -1994,6 +1994,7 @@ export type LanguagePhrases = {
     | 'notes'
     | 'sections'
     | 'sectionOrder'
+    | 'excerpts'
     | 'private'
     | 'periods'
     | 'body'
@@ -2016,7 +2017,10 @@ export type LanguagePhrases = {
     'project' | 'project-section' | 'event' | 'diary-entry' | 'page' | 'tag',
     string
   >;
-  ai_action_parts: Record<'sections' | 'tags' | 'relations', string>;
+  ai_action_parts: Record<
+    'sections' | 'excerpts' | 'tags' | 'relations',
+    string
+  >;
   ai_action_access: Record<'public' | 'link-only' | 'private', string>;
   ai_toast_declined: (count: number) => string;
   ai_toast_never: string;
