@@ -178,8 +178,6 @@ export type SearchAction =
       exists: boolean;
       href: string;
     }
-  /** The entity the owner is looking at, in its editor or on the site. */
-  | { type: 'edit' | 'view'; kind: SearchKind; title: string; href: string }
   /** What the owner saved last. */
   | {
       type: 'recent';

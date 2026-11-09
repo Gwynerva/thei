@@ -236,7 +236,7 @@ useRegisterAdminBarContextButton(
     const { date } = JSON.parse(savedSnapshot.value) as DiaryEditData;
     return date
       ? {
-          to: { href: buildDiaryUrl(date), external: true },
+          to: { href: buildDiaryUrl(date), external: true, target: '_blank' },
           icon: 'visibility' as const,
           title: phrase.value.diary_entry,
         }

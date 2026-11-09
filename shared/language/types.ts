@@ -455,8 +455,6 @@ export type LanguagePhrases = {
   search_action_diary_today_new: string;
   search_action_diary_day: (day: string) => string;
   search_action_diary_day_new: (day: string) => string;
-  search_action_edit: (title: string) => string;
-  search_action_view: (title: string) => string;
   search_action_section: string;
   search_action_new_project: (title: string) => string;
   search_action_new_event: (title: string) => string;

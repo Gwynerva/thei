@@ -118,6 +118,7 @@ function dayOf(item: DiaryListItem) {
           <TheiLink
             :to="sitePath(buildDiaryUrl(item.date))"
             external
+            target="_blank"
             :data-title-popup="phrase.diary_entry"
             :aria-label="phrase.diary_entry"
             class="cursor-pointer text-text-2/50 transition hocus:text-text-1"

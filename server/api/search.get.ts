@@ -59,10 +59,6 @@ export default defineEventHandler(async (event): Promise<SearchResponse> => {
   if (!isAdmin || !quick) return response;
   return {
     ...response,
-    actions: await searchActions({
-      q: filters.q,
-      today,
-      ...(typeof query.path === 'string' ? { path: query.path } : {}),
-    }),
+    actions: searchActions({ q: filters.q, today }),
   };
 });

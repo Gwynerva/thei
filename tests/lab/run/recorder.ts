@@ -187,7 +187,17 @@ export interface Recording {
 }
 
 export function record(input: RecorderInput): Recording {
-  const { page, dir } = input;
+  const { dir } = input;
+  /**
+   * The tab the person looks at: the one the play began in, or the last a
+   * step opened — an eye of the admin opens a public page in a new tab — until
+   * it is closed and the one before it is in front again.
+   */
+  let page = input.page;
+  const tabs: Page[] = [page];
+  /** Tabs opened since the step began, by whatever the step did. */
+  const opened: Page[] = [];
+  page.context().on('page', (tab) => opened.push(tab));
   const startedAt = Date.now();
   const steps: StepRecord[] = [];
   const findings: PlayFinding[] = [];
@@ -241,12 +251,40 @@ export function record(input: RecorderInput): Recording {
     return undefined;
   }
 
+  /**
+   * A tab the step opened is where the person goes on: brought to the front,
+   * loaded — a page of the site hydrated — and taken by every step after it.
+   */
+  async function followOpened(n: number): Promise<boolean> {
+    const tab = opened.at(-1);
+    opened.length = 0;
+    if (!tab || tab.isClosed()) return false;
+    page = tab;
+    tabs.push(tab);
+    tab.once('close', () => {
+      tabs.splice(tabs.indexOf(tab), 1);
+      if (page !== tab || !tabs.length) return;
+      page = tabs.at(-1)!;
+      void page.bringToFront().catch(() => {});
+    });
+    await tab.bringToFront().catch(() => {});
+    await tab.waitForLoadState('domcontentloaded').catch(() => {});
+    if (tab.url().startsWith(input.origin))
+      await hydrated(tab, 30_000).catch(() =>
+        notes.push(
+          `step ${n}: the tab it opened did not mark itself hydrated within 30 s`,
+        ),
+      );
+    return true;
+  }
+
   async function step(
     label: string,
     action?: StepAction,
     options: StepOptions = {},
   ): Promise<StepRecord> {
     const n = steps.length + 1;
+    opened.length = 0;
     const base = `${String(n).padStart(2, '0')}-${slug(label)}`;
     const entry: StepRecord = {
       n,
@@ -385,10 +423,24 @@ export function record(input: RecorderInput): Recording {
             const force =
               kind === 'click' &&
               (await locator.getAttribute('aria-disabled')) === 'true';
+            // A link to a new tab opens it a moment after the press.
+            const newTab =
+              kind === 'click' &&
+              (await locator
+                .evaluate((element) =>
+                  Boolean(element.closest('a[target="_blank"]')),
+                )
+                .catch(() => false))
+                ? page
+                    .context()
+                    .waitForEvent('page', { timeout: 10_000 })
+                    .catch(() => undefined)
+                : undefined;
             if (kind === 'click')
               await (input.phone
                 ? locator.tap({ timeout: 10_000, force })
                 : locator.click({ timeout: 10_000, force }));
+            await newTab;
             if (kind === 'fill')
               await locator.fill((action as { text: string }).text, {
                 timeout: 10_000,
@@ -420,6 +472,8 @@ export function record(input: RecorderInput): Recording {
         }
       }
     }
+
+    if (await followOpened(n)) entry.newTab = true;
 
     if (!stopped && (options.answer || options.answerGone)) {
       const started = Date.now();
@@ -472,6 +526,11 @@ export function record(input: RecorderInput): Recording {
     // the network is quiet until then, and a shot taken at once shows
     // nothing yet. The probe measures the page as it then stands.
     await settle(page, { pauseMs: 250, networkIdleMs: 3000 });
+    // A tab opened late, by a script after the press, is in front by now.
+    if (await followOpened(n)) {
+      entry.newTab = true;
+      await settle(page, { pauseMs: 250, networkIdleMs: 3000 });
+    }
     entry.url = page.url().replace(input.origin, '');
     await page.screenshot({ path: join(dir, entry.shot) });
     let result: ProbeResult | undefined;
@@ -520,7 +579,9 @@ export function record(input: RecorderInput): Recording {
 
   const context: ScenarioContext = {
     ...input.context,
-    page,
+    get page() {
+      return page;
+    },
     phone: input.phone,
     entity(name) {
       const ref = input.context.picked[name];

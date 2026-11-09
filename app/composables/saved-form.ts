@@ -1,13 +1,49 @@
+/** What each mounted guard says would be lost by leaving the page now. */
+const pageGuards = new Set<() => boolean>();
+
+/**
+ * Set once the owner has agreed to leave from the page itself: the browser
+ * then does not ask the same question a second time.
+ */
+let leaveAgreed = false;
+
 /**
  * Asks the browser to confirm leaving the page — closing the tab, reloading,
  * following an address — while `shouldGuard` says something would be lost.
  */
 export function useBeforeUnloadGuard(shouldGuard: () => boolean) {
   const beforeUnload = (event: BeforeUnloadEvent) => {
-    if (shouldGuard()) event.preventDefault();
+    if (!leaveAgreed && shouldGuard()) event.preventDefault();
   };
-  onMounted(() => window.addEventListener('beforeunload', beforeUnload));
-  onUnmounted(() => window.removeEventListener('beforeunload', beforeUnload));
+  onMounted(() => {
+    pageGuards.add(shouldGuard);
+    window.addEventListener('beforeunload', beforeUnload);
+  });
+  onUnmounted(() => {
+    pageGuards.delete(shouldGuard);
+    window.removeEventListener('beforeunload', beforeUnload);
+  });
+}
+
+/**
+ * Leaves the page by something it does itself — signing out — asking first
+ * while any guard says something would be lost. Asked before `steps` begin,
+ * so «Cancel» leaves everything as it was; agreed, the browser does not ask
+ * again on the way out. `steps` leave the page, or answer false when the
+ * owner thought better of it on the way; then, and when a step fails — the
+ * server out of reach — the page stays, and closing it asks again.
+ */
+export async function leavePage(steps: () => Promise<boolean | void>) {
+  const wouldLose = [...pageGuards].some((guard) => guard());
+  if (wouldLose && !window.confirm(phrase.value.unsaved_changes_confirm))
+    return;
+  leaveAgreed = true;
+  try {
+    if ((await steps()) === false) leaveAgreed = false;
+  } catch (error) {
+    leaveAgreed = false;
+    throw error;
+  }
 }
 
 /**

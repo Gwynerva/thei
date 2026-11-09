@@ -681,8 +681,6 @@ export default defineI18nModule({
     search_action_diary_today_new: 'Написать запись за сегодня',
     search_action_diary_day: (day) => `Запись дневника за ${day}`,
     search_action_diary_day_new: (day) => `Написать запись за ${day}`,
-    search_action_edit: (title) => `Редактировать «${title}»`,
-    search_action_view: (title) => `Открыть «${title}» на сайте`,
     search_action_section: 'Раздел админки',
     search_action_new_project: (title) => `Новый проект «${title}»`,
     search_action_new_event: (title) => `Новое событие «${title}»`,

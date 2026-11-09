@@ -50,23 +50,27 @@ onMounted(() => {
 });
 onBeforeUnmount(() => window.removeEventListener('online', sendUnsyncedTexts));
 
-async function signOut() {
+function signOut() {
   // Nothing typed may stay behind in the browser after signing out: it is sent
   // first, and what cannot be sent is given up only when the owner agrees.
-  // What the owner searched for goes too.
-  const unsynced = await sendUnsyncedTexts().catch(
-    () => historyBuffer.list().length,
-  );
-  if (
-    unsynced &&
-    !window.confirm(phrase.value.sign_out_unsynced_confirm(unsynced))
-  )
-    return;
-  await $fetch('/api/admin/session', { method: 'DELETE' });
-  for (const entry of historyBuffer.list())
-    historyBuffer.remove(entry.field, entry.writer);
-  forgetOwnerSearchHistory(siteBase);
-  await navigateTo(sitePath('/sign-in/'), { external: true });
+  // What the owner searched for goes too. An unsaved form is asked about
+  // before anything is done, since signing out leaves it; a sign-out that
+  // stops on the way leaves the page asking again when it is closed.
+  return leavePage(async () => {
+    const unsynced = await sendUnsyncedTexts().catch(
+      () => historyBuffer.list().length,
+    );
+    if (
+      unsynced &&
+      !window.confirm(phrase.value.sign_out_unsynced_confirm(unsynced))
+    )
+      return false;
+    await $fetch('/api/admin/session', { method: 'DELETE' });
+    for (const entry of historyBuffer.list())
+      historyBuffer.remove(entry.field, entry.writer);
+    forgetOwnerSearchHistory(siteBase);
+    await navigateTo(sitePath('/sign-in/'), { external: true });
+  });
 }
 
 /**
@@ -111,7 +115,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
   if (/^\/admin\/projects\/[^/]+\/edit\/$/.test(route.path)) {
     const id = route.path.split('/')[3];
     return {
-      to: { href: `/projects/${id}/`, external: true },
+      to: { href: `/projects/${id}/`, external: true, target: '_blank' },
       icon: 'visibility',
       title: phrase.value.view_project,
     };
@@ -149,7 +153,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
   if (/^\/admin\/events\/[^/]+\/edit\/$/.test(route.path)) {
     const id = route.path.split('/')[3];
     return {
-      to: { href: `/events/${id}/`, external: true },
+      to: { href: `/events/${id}/`, external: true, target: '_blank' },
       icon: 'visibility',
       title: phrase.value.view_event,
     };

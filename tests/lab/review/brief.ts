@@ -171,6 +171,7 @@ function stepRow(
   }
   if (step.keys)
     action.push(`(${step.keys} key press${step.keys === 1 ? '' : 'es'})`);
+  if (step.newTab) action.push('(opened a new tab, where the steps go on)');
   const pointer = step.pointer
     ? `${Math.round(step.pointer.travelPx)} px`
     : '—';

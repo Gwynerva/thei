@@ -82,6 +82,54 @@ for (const [name, size] of SIZES) {
     await expectPopupUsable(page, openPopup(page));
   });
 
+  // On a phone the card is the whole screen: there is nothing around it.
+  if (name === 'computer')
+    test(`a press begun in a popup and let go around the card keeps the modal (${name})`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(size);
+      await openForm(page, await createProject(page));
+      await page.locator('button[data-field]').first().click();
+      const editor = page.locator('dialog .content-editor').first();
+      await expect(editor).toBeVisible({ timeout: 15_000 });
+      await page.getByRole('button', { name: 'Version history' }).click();
+      const popup = openPopup(page);
+      await expectPopupUsable(page, popup);
+
+      // A point around the card, on the overlay that closes the modal.
+      const around = await page.evaluate(() => {
+        const { innerWidth: width, innerHeight: height } = window;
+        const points: [number, number][] = [
+          [4, height / 2],
+          [width - 4, height / 2],
+          [width / 2, 4],
+          [width / 2, height - 4],
+        ];
+        return points.find(([x, y]) =>
+          document
+            .elementFromPoint(x, y)
+            ?.matches('dialog[open] section > div:first-child'),
+        );
+      });
+      expect(around, 'no room around the card').toBeDefined();
+
+      // Selecting the popup's words and letting go around the card.
+      const box = (await popup.boundingBox())!;
+      await page.mouse.move(box.x + box.width / 2, box.y + 16);
+      await page.mouse.down();
+      await page.mouse.move(around![0], around![1], { steps: 8 });
+      await page.mouse.up();
+      await expect(popup).toBeVisible();
+      await expect(editor).toBeVisible();
+
+      // A click around the card is a step: the popup first, then the modal.
+      await page.mouse.click(around![0], around![1]);
+      await expect(popup).toBeHidden();
+      await expect(editor).toBeVisible();
+      await page.mouse.click(around![0], around![1]);
+      await expect(editor).toBeHidden();
+    });
+
   test(`the relation picker opens inside its modal (${name})`, async ({
     page,
   }) => {
@@ -110,9 +158,7 @@ for (const [name, size] of SIZES) {
     await page.keyboard.press('Escape');
 
     // Brought to the very bottom of the screen, the list turns upward.
-    await field.evaluate((element) =>
-      element.scrollIntoView({ block: 'end' }),
-    );
+    await field.evaluate((element) => element.scrollIntoView({ block: 'end' }));
     await field.fill('');
     await field.fill('b');
     await expectPopupUsable(page, openPopup(page));

@@ -152,16 +152,22 @@ useSaveShortcut(() => void save(), {
   root: () => modalContainer.value?.root,
   exclusive: true,
 });
-// A request written and not saved is not dropped by a stray Escape.
-useModalCloseGuard(
+/** A request written and not saved: a built-in check's words are the code's. */
+const unsaved = computed(
   () =>
-    loading.value ||
-    builtin.value ||
-    !(isNew.value
-      ? draft.value.instruction.trim() || draft.value.title.trim()
-      : dirty.value) ||
-    window.confirm(phrase.value.unsaved_modal_confirm),
+    !loading.value &&
+    !builtin.value &&
+    Boolean(
+      isNew.value
+        ? draft.value.instruction.trim() || draft.value.title.trim()
+        : dirty.value,
+    ),
 );
+// It is not dropped by a stray Escape, nor by leaving the page.
+useModalCloseGuard(
+  () => !unsaved.value || window.confirm(phrase.value.unsaved_modal_confirm),
+);
+useBeforeUnloadGuard(() => unsaved.value);
 </script>
 
 <template>

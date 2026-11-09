@@ -620,8 +620,6 @@ export default defineI18nBase({
     search_action_diary_today_new: 'Write today’s diary entry',
     search_action_diary_day: (day) => `Diary entry of ${day}`,
     search_action_diary_day_new: (day) => `Write the diary entry of ${day}`,
-    search_action_edit: (title) => `Edit “${title}”`,
-    search_action_view: (title) => `Open “${title}” on the site`,
     search_action_section: 'A section of the admin',
     search_action_new_project: (title) => `New project “${title}”`,
     search_action_new_event: (title) => `New event “${title}”`,

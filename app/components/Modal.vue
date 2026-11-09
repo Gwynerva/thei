@@ -2,6 +2,7 @@
 import {
   activeModal,
   closeActiveModal,
+  closedPopup,
   closeModal,
   dismissOneStep,
   hasDismissLayer,
@@ -390,8 +391,21 @@ function onDialogCancel(e: Event) {
   dismissOneStep();
 }
 
+/**
+ * A click on the dialog itself closes the modal only when the press began
+ * there too. A popup lives in the dialog beside the card, so a press begun
+ * in it — selecting its text — and let go over the card or around it clicks
+ * on the dialog, their common ancestor.
+ */
+let backdropArmed = false;
+function onBackdropPress(e: PointerEvent) {
+  backdropArmed = e.target === dialogElement.value && !closedPopup(e);
+}
+
 function onBackdropClick(e: MouseEvent) {
-  if (e.target === dialogElement.value) closeModal();
+  const armed = backdropArmed;
+  backdropArmed = false;
+  if (armed && e.target === dialogElement.value) closeModal();
 }
 </script>
 
@@ -403,6 +417,7 @@ function onBackdropClick(e: MouseEvent) {
       bg-transparent p-0 outline-none backdrop:bg-transparent"
     @close="onNativeClose"
     @cancel="onDialogCancel"
+    @pointerdown="onBackdropPress"
     @click="onBackdropClick"
   >
     <Transition

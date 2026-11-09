@@ -28,9 +28,10 @@ const props = withDefaults(
      */
     reason?: string;
     /**
-     * Where it leads, as a path in data: a link with the same look, loading
-     * the page in full as the admin's other ways to the site do. `disabled`
-     * and `reason` are a button's alone.
+     * Where it leads, as a path in data: a link with the same look, opening
+     * the page in full in a new tab, as every eye from the admin to the site
+     * does, so the modal stays open. `disabled` and `reason` are a button's
+     * alone.
      */
     to?: string;
   }>(),
@@ -57,7 +58,7 @@ const {
 }));
 const attributes = computed(() => ({
   ...(props.to
-    ? { to: sitePath(props.to), external: true }
+    ? { to: sitePath(props.to), external: true, target: '_blank' }
     : { type: 'button', disabled: props.disabled }),
   ...(blocked.value
     ? blockedAttributes.value

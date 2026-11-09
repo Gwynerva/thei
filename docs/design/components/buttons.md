@@ -39,6 +39,10 @@ neutral — and in square icon-only sizes.
   `phoneIcon` in a modal. Once everything is saved the square shows `check`:
   a pale floppy disk alone did not say whether the save had gone through.
 - Under a finger, small square buttons grow: `pointer-coarse:size-11`.
+- An eye in the admin — the `visibility` icon leading to an entity's public
+  page, in the admin bar, a list's row or a modal's header — opens that page
+  in a new tab (`target="_blank"`), so the form or modal it was pressed in
+  stays where it was.
 - A row of a list the owner orders by hand — the profile's links, the files
   of a group in a text — has a grip: a square `Button` with `dragHandle` and
   the `grip` icon, named by what it moves. A drag starts from it alone
@@ -101,10 +105,10 @@ both icons stay in the page, one hidden, since pointing an icon's `<use>`
 elsewhere while the owner types in a text ends the browser's run of typing,
 and Ctrl+Z would then stop after the first letter. `AdminSaveButton` keeps
 its two squares the same way, with the same `AdminSaveIcons`. `to`, a path in data, makes it a link with the
-same look (`TheiLink` with `external`, the base path added by `sitePath()`):
-the page loads in full, as the admin's other ways to the site do, and Ctrl or
-the middle button opens it in a new tab. `disabled` and `reason` are a
-button's alone.
+same look (`TheiLink` with `external` and `target="_blank"`, the base path
+added by `sitePath()`): the page opens in full in a new tab, as the admin's
+other eyes to the site do — the admin bar's and a list row's — and the modal
+stays open. `disabled` and `reason` are a button's alone.
 
 What is stored, a Save in a modal learns from the form behind it. A text's
 editor reads the stamp a save of the entity puts on each text it stores

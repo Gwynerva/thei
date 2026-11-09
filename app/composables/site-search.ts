@@ -94,15 +94,13 @@ const PAUSE_MS = 150;
 /**
  * The quick search's answers as the query is typed: each after a pause,
  * the one before cancelled, an answer that comes late to a newer query
- * dropped. The owner's search also hears which page they are on and what
- * day it is for them, for what it offers to do; with nothing typed, only the
- * owner's asks.
+ * dropped. The owner's search also hears what day it is for them, for what it
+ * offers to do; with nothing typed, only the owner's asks.
  */
 export function useQuickSearch(
   text: Ref<string>,
   options: { enabled: Ref<boolean>; owner: Ref<boolean> },
 ) {
-  const route = useRoute();
   const response = shallowRef<SearchResponse | null>(null);
   const loading = ref(false);
   const failed = ref(false);
@@ -122,9 +120,7 @@ export function useQuickSearch(
           q,
           quick: '1',
           typing: '1',
-          ...(options.owner.value
-            ? { today: toDateString(new Date()), path: route.path }
-            : {}),
+          ...(options.owner.value ? { today: toDateString(new Date()) } : {}),
         },
         signal: controller.signal,
         retry: 0,

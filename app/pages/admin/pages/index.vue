@@ -116,6 +116,7 @@ const list = computed<PageListResponse | undefined>(() => data.value);
           <TheiLink
             :to="sitePath(buildPageUrl(item.slug))"
             external
+            target="_blank"
             :data-title-popup="phrase.view_page"
             :aria-label="phrase.view_page"
             class="cursor-pointer text-text-2/50 transition hocus:text-text-1"

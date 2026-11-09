@@ -377,6 +377,8 @@ export interface StepRecord {
   answer?: { firstFeedbackMs?: number; answerMs?: number; timedOut?: boolean };
   blockedMs?: number;
   coveredBy?: string;
+  /** The step opened a new tab, which the play went on in. */
+  newTab?: boolean;
   probe: { counts: Partial<Record<ProbeRule, number>>; fps: string[] };
   note?: string;
 }

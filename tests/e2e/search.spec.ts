@@ -258,10 +258,19 @@ test("the owner's searches are kept apart from a visitor's", async ({
     ),
   );
   await page.locator('[data-site-search]').first().click();
-  // The owner is offered what to do, and none of a visitor's queries.
+  // The owner is offered what they saved last, and none of a visitor's
+  // queries.
   await expect(page.getByRole('option').first()).toBeVisible();
   await expect(page.locator('[data-search-history]')).toHaveCount(0);
+  // What the owner saved last may hold the same title: Enter waits for the
+  // answer to the query.
+  const answered = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/search') &&
+      new URL(response.url()).searchParams.get('q') === WORD,
+  );
   await field(page).fill(WORD);
+  await answered;
   // On the site the owner's Enter opens the page, not its editor.
   await expect(page.getByRole('option').first()).toContainText(TITLE);
   await page.keyboard.press('Enter');
