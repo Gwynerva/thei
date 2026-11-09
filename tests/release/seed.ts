@@ -65,6 +65,8 @@ export interface SeedManifest {
     links?: string[];
     /** The other names it is found by. */
     synonyms?: string[];
+    /** The titles of its excerpts, in its order. */
+    excerpts?: string[];
   }[];
   /** Files as stored, by the hash of their bytes, and what each one is. */
   assets: {
@@ -391,7 +393,7 @@ function createSite(
     name: string,
     parts?: Pick<
       SeedManifest['entities'][number],
-      'sections' | 'links' | 'synonyms'
+      'sections' | 'links' | 'synonyms' | 'excerpts'
     >,
   ) => manifest.entities.push({ kind, uuid, name, ...parts });
 
@@ -664,10 +666,26 @@ function createSite(
           note: { type: 'split', currentText: 'Отсюда', relatedText: 'Туда' },
         },
       ],
+      // A named part of the day about the project, with a page of its own.
+      excerpts: [
+        {
+          title: 'О проекте',
+          summary: 'Что осталось от доклада.',
+          humanReadableSlug: 'o-proekte',
+          publicId: 'BenchExcerpt',
+          isPrivate: false,
+          content: content(paragraph('Проект после доклада.')),
+          about: {
+            entityType: 'project',
+            entityId: project.projectUuid,
+            type: 'related',
+          },
+        },
+      ],
     },
     'a public diary entry',
   );
-  add('diary', entry.diaryUuid, '2025-05-11');
+  add('diary', entry.diaryUuid, '2025-05-11', { excerpts: ['О проекте'] });
   const hiddenEntry = create(
     server,
     '/api/admin/diary',
@@ -750,6 +768,15 @@ export function checkSeedSite(server: Server, manifest: SeedManifest): void {
       check(
         JSON.stringify(body.synonyms) === JSON.stringify(entity.synonyms),
         `"${entity.name}" keeps its other names (${JSON.stringify(body.synonyms)})`,
+      );
+    }
+    if (entity.excerpts) {
+      const titles = (body.excerpts ?? []).map(
+        (excerpt: { title: string }) => excerpt.title,
+      );
+      check(
+        JSON.stringify(titles) === JSON.stringify(entity.excerpts),
+        `"${entity.name}" keeps its excerpts (${JSON.stringify(titles)})`,
       );
     }
   }

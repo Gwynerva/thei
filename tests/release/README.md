@@ -49,21 +49,22 @@ Nothing is pushed anywhere and no tag is created in this repository:
 `seed.ts`: the last release is installed and filled through its own admin API
 with one of everything a site holds — each kind of entity at each access
 level, sections with several periods, every content block, tags, synonyms,
-relations, statuses and files of each type in each place a file can go, some
-with descriptions. Its `content/`
+relations, an excerpt, statuses and files of each type in each place a file
+can go, some with descriptions. Its `content/`
 is then copied out once and restored wherever a scenario needs it. Links in
 it point at an address the server refuses to fetch, so it never reaches the
 network.
 
 The same check runs on it wherever it lands: every entity opens with its name,
-parts and synonyms, every file serves the bytes it was stored with and keeps
+parts, excerpts and synonyms, every file serves the bytes it was stored with and keeps
 its description and a poster frame chosen by hand, every address it had still
 answers, and nothing private is listed.
 
 The seed speaks the last release's API. When a release changes one of the
 requests it makes, `seed.ts` follows once that release is out, and so does
 what a release adds: since 0.0.7 the seed chooses a video's poster frame by
-hand, so the upgrade carries one.
+hand, so the upgrade carries one, and since 0.0.8 a diary entry holds an
+excerpt about a project.
 
 ## Scenarios
 
