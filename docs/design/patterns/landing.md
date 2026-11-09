@@ -19,11 +19,17 @@ The place is written into the address's hash (`shared/landing.ts`):
   avatar in the history of avatars;
 - `r-<kind>~<address>` — a related entity, on the relations block;
 - `l-<address>` — a link of the page;
+- `excerpts~<id>` — an excerpt of the page's entity, where the page shows
+  it whole;
 - a part of the page: `icon`, `banner`, `showcase`, `files`, `links`,
-  `tags`, `periods`, `facts`, `statuses`, `avatars`, `owner-notes`;
+  `tags`, `periods`, `facts`, `statuses`, `avatars`, `owner-notes`,
+  `excerpts`;
 - `~open` after a file or an avatar — its window, open on it;
 - anything else — an anchor, the id of an element: a heading of the text,
-  `project-description`, `project-sections`, `related-entities`.
+  `project-description`, `project-sections`, `related-entities`,
+  `excerpts-about` (the block of excerpts about the entity), and
+  `excerpt-<id>` with `excerpt-<id>--<heading>` for an excerpt shown on its
+  parent's page and a heading inside it.
 
 The words found follow as a text fragment, `:~:text=…`. A file is named by
 its public id, never by the id it is stored under. A heading never takes a

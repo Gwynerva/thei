@@ -12,7 +12,8 @@ You have kept your archive in Thei for years: hundreds of diary entries,
 dozens of projects, a large library of files. You open it almost every day.
 
 **What you know.** Every part of the admin and its words: relations,
-sections and stages, the showcase, link-only access, tags and synonyms.
+sections and stages, excerpts and what they are about, the showcase,
+link-only access, tags and synonyms.
 Keyboard shortcuts: Ctrl+K to search, Ctrl+S to save, Esc, the arrows.
 
 **How you act.** You do routine things quickly and from memory: write the

@@ -72,14 +72,22 @@ const project = (index: SiteIndex) =>
   richest(
     index,
     'project',
-    (e) => n(e, 'sections') * 3 + n(e, 'words') / 100,
+    (e) =>
+      n(e, 'sections') * 3 +
+      n(e, 'excerpts') * 2 +
+      n(e, 'excerptsAbout') +
+      n(e, 'words') / 100,
     (e) => e.access === 'public',
   );
 const event = (index: SiteIndex) =>
   richest(
     index,
     'event',
-    (e) => n(e, 'pictures') + n(e, 'files') + (e.facts.hasBanner ? 5 : 0),
+    (e) =>
+      n(e, 'pictures') +
+      n(e, 'files') +
+      n(e, 'excerpts') * 2 +
+      (e.facts.hasBanner ? 5 : 0),
     (e) => e.access === 'public',
   );
 const section = (index: SiteIndex) =>
@@ -93,9 +101,29 @@ const diary = (index: SiteIndex) =>
   richest(
     index,
     'diary',
-    (e) => n(e, 'pictures') * 2 + n(e, 'words') / 100 + n(e, 'relations'),
+    (e) =>
+      n(e, 'pictures') * 2 +
+      n(e, 'words') / 100 +
+      n(e, 'relations') +
+      n(e, 'excerpts') * 2,
     // A day still to come waits: a stranger cannot open it yet.
     (e) => e.access === 'public' && !e.facts.future,
+  );
+/** An excerpt a stranger may read: of an open parent, not private. */
+const excerpt = (index: SiteIndex) =>
+  richest(
+    index,
+    'excerpt',
+    (e) => n(e, 'words') / 50 + (e.facts.hasBanner ? 5 : 0) + n(e, 'about') * 2,
+    (e) => e.access === 'public',
+  );
+/** An excerpt its parent's form opens on: not private, so its row is named by its title alone. */
+const ownExcerpt = (index: SiteIndex) =>
+  richest(
+    index,
+    'excerpt',
+    (e) => n(e, 'words') / 50 + n(e, 'about') * 2,
+    (e) => !e.facts.private,
   );
 /** A general section, open in the tab a project's form shows first. */
 const generalSection = (index: SiteIndex) =>
@@ -162,6 +190,12 @@ export const SCREENS: Screen[] = [
     title: 'A dated section',
     role: 'visitor',
     path: (index) => section(index).publicUrl!,
+  },
+  {
+    id: 'excerpt',
+    title: 'An excerpt',
+    role: 'visitor',
+    path: (index) => excerpt(index).publicUrl!,
   },
   {
     id: 'event',
@@ -231,6 +265,26 @@ export const SCREENS: Screen[] = [
           click: {
             role: 'button',
             name: startOf(generalSection(index).title ?? ''),
+          },
+        },
+        options: { answer: { role: 'dialog' }, timeoutMs: 15_000 },
+      },
+    ],
+  },
+  {
+    id: 'admin-excerpt',
+    title: "An excerpt in its parent's form",
+    role: 'owner',
+    path: (index) =>
+      index.entities[ownExcerpt(index).parent!]?.adminUrl ??
+      ownExcerpt(index).adminUrl,
+    steps: (index) => [
+      {
+        label: 'Open the excerpt',
+        action: {
+          click: {
+            role: 'button',
+            name: startOf(ownExcerpt(index).title ?? ''),
           },
         },
         options: { answer: { role: 'dialog' }, timeoutMs: 15_000 },

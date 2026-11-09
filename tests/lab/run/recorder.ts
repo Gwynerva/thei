@@ -105,6 +105,18 @@ async function unobstructed(locator: Locator): Promise<boolean> {
       const x = box.left + box.width / 2;
       const y = box.top + Math.min(box.height / 2, 12);
       if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return true;
+      // Below the fold of a scrolling part — a modal's body — it is reached
+      // by scrolling that part, as a page's own fold is.
+      for (let up = element.parentElement; up; up = up.parentElement) {
+        const style = getComputedStyle(up);
+        if (
+          !/auto|scroll/.test(style.overflowY) ||
+          up.scrollHeight <= up.clientHeight + 4
+        )
+          continue;
+        const frame = up.getBoundingClientRect();
+        if (y < frame.top || y > frame.bottom) return true;
+      }
       const hit = document.elementFromPoint(x, y);
       return Boolean(
         hit &&
@@ -235,7 +247,15 @@ export function record(input: RecorderInput): Recording {
         await page.waitForTimeout(200);
         continue;
       }
-      const all = locate(await scopeOf(page), target);
+      // A dialog is looked for on the page: the top modal is the scope of
+      // everything else, and never holds itself.
+      const root =
+        typeof target === 'object' &&
+        'role' in target &&
+        target.role === 'dialog'
+          ? page
+          : await scopeOf(page);
+      const all = locate(root, target);
       const count = await all.count();
       const visible: Locator[] = [];
       for (let index = 0; index < count; index++)

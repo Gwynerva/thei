@@ -13,7 +13,7 @@ of projects and a few diary entries, but you don't know your way around yet.
 **What you know.** What a diary, a project and an event are, roughly. How to
 open the site and sign in. Ordinary buttons: "Save", "Cancel", "Delete".
 
-**What you don't know.** The words "relation", "section", "stage",
+**What you don't know.** The words "relation", "section", "stage", "excerpt",
 "showcase", "link-only access", or what ✦ means. Keyboard shortcuts. That
 something can be dragged or opened with a right click.
 
