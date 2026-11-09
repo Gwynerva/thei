@@ -23,7 +23,8 @@ import {
   publicIdIsValid,
 } from '../public-link';
 import type { EventEditData, ValidatedEventEditData } from '../event';
-import { validateRelations } from '../relation';
+import { normalizeExcerpts } from '../excerpt';
+import { RELATION_TARGET_TYPES, validateRelations } from '../relation';
 import { normalizeTagEditItems } from '../tag';
 import { joinTagContextText, type TagContext } from '../tag-recommendation';
 
@@ -74,7 +75,10 @@ export function validateEventData(
       otherAssets: validateFiles(data.otherAssets),
       externalLinks: validateExternalLinks(data.externalLinks),
       tags: validateTags(data.tags),
-      relations: validateRelations(data.relations),
+      relations: validateRelations(data.relations, {
+        allowed: RELATION_TARGET_TYPES,
+      }),
+      excerpts: normalizeExcerpts(data.excerpts),
       action: normalizeProjectAction(data.action),
       reminder: normalizeEntityReminder(data.reminder),
       notes: normalizeEntityNotes(data.notes),

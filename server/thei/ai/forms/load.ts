@@ -1,5 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import type { ProjectSectionItem } from '#layers/thei/shared/project-content-item';
+import type { ExcerptItem } from '#layers/thei/shared/excerpt';
 import { EntityEditConflict, type EntityEditOptions } from '../../entity-edit';
 import { refuse as fail } from '../../entity-patch/text';
 import { readProjectEdit, saveProjectEdit } from '../../projects/edit';
@@ -154,6 +155,7 @@ export async function loadForm(key: EntityKey): Promise<LoadedForm> {
       };
     }
     case 'project-section':
+    case 'excerpt':
       return loadForm(
         formOwnerOf(key) ?? fail(`Nothing found for ${refOf(key)}.`),
       );
@@ -235,21 +237,34 @@ export async function loadForm(key: EntityKey): Promise<LoadedForm> {
  * compares is this part alone, so another section's change leaves it be.
  */
 export function formPart(key: EntityKey, form: any): any {
-  if (key.kind !== 'project-section') return form;
-  return ((form.sections ?? []) as ProjectSectionItem[]).find(
-    (section) => section.sectionUuid === key.id,
-  );
+  if (key.kind === 'project-section')
+    return ((form.sections ?? []) as ProjectSectionItem[]).find(
+      (section) => section.sectionUuid === key.id,
+    );
+  if (key.kind === 'excerpt')
+    return ((form.excerpts ?? []) as ExcerptItem[]).find(
+      (excerpt) => excerpt.excerptUuid === key.id,
+    );
+  return form;
 }
 
 /** The form with the entity's part put back: what is saved. */
 export function withFormPart(key: EntityKey, form: any, part: any): any {
-  if (key.kind !== 'project-section') return part;
-  return {
-    ...form,
-    sections: ((form.sections ?? []) as ProjectSectionItem[]).map((section) =>
-      section.sectionUuid === key.id ? part : section,
-    ),
-  };
+  if (key.kind === 'project-section')
+    return {
+      ...form,
+      sections: ((form.sections ?? []) as ProjectSectionItem[]).map(
+        (section) => (section.sectionUuid === key.id ? part : section),
+      ),
+    };
+  if (key.kind === 'excerpt')
+    return {
+      ...form,
+      excerpts: ((form.excerpts ?? []) as ExcerptItem[]).map((excerpt) =>
+        excerpt.excerptUuid === key.id ? part : excerpt,
+      ),
+    };
+  return part;
 }
 
 /** A change laid over the form it is made in. */
@@ -267,6 +282,12 @@ export async function changedForm(
         form,
         { sections: [{ ...changes, id: key.id }] },
         loaded.owner,
+      );
+    case 'excerpt':
+      // An excerpt's own changes come with its actions; until then it is
+      // edited in its parent's form by hand.
+      return fail(
+        `The excerpt ${refOf(key)} is edited in its parent's form; no action changes it yet.`,
       );
     case 'event':
       return eventChanges(form, changes, key);

@@ -1,8 +1,10 @@
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { ContentSlot } from '#layers/thei/shared/content';
 import { isLifeDay } from '#layers/thei/shared/life';
 import { PROFILE_ID } from '#layers/thei/shared/profile';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
+import type { ExcerptParentType } from '#layers/thei/shared/excerpt';
+import { buildExcerptAdminPath } from '#layers/thei/shared/excerpt-url';
 
 /**
  * Every kind of thing on the site that AI sessions, their actions and access
@@ -20,6 +22,7 @@ export const ENTITY_KINDS = [
   'project-section',
   'event',
   'diary-entry',
+  'excerpt',
   'page',
   'tag',
   'profile',
@@ -100,6 +103,16 @@ function tableOf(schema: any, kind: EntityKind) {
         title: schema.diaryEntries.date,
         updatedAt: schema.diaryEntries.updatedAt,
       };
+    case 'excerpt':
+      return {
+        table: schema.excerpts,
+        id: schema.excerpts.excerptUuid,
+        title: schema.excerpts.title,
+        updatedAt: schema.excerpts.updatedAt,
+        publicId: schema.excerpts.publicId,
+        parentType: schema.excerpts.parentType,
+        parentId: schema.excerpts.parentId,
+      };
     case 'page':
       return {
         table: schema.pages,
@@ -126,19 +139,24 @@ function tableOf(schema: any, kind: EntityKind) {
 
 /**
  * Where the owner edits an entity: a section, in its project's form, which
- * opens it.
+ * opens it; an excerpt, in its parent's form, the same way.
  */
 export function adminPath(
   kind: EntityKind,
   id: string,
   project?: string,
   publicId?: string,
+  parent?: { kind: ExcerptParentType; id: string },
 ): string {
   switch (kind) {
     case 'project':
       return `/admin/projects/${id}/edit/`;
     case 'project-section':
       return `/admin/projects/${project ?? ''}/edit/${publicId ? `?section=${encodeURIComponent(publicId)}` : ''}`;
+    case 'excerpt':
+      return parent
+        ? buildExcerptAdminPath(parent.kind, parent.id, publicId)
+        : '/admin/';
     case 'event':
       return `/admin/events/${id}/edit/`;
     case 'diary-entry':
@@ -163,6 +181,8 @@ export interface EntityFace {
   version?: number;
   /** A section's project. */
   project?: string;
+  /** An excerpt's parent: the entry, event or project it is a part of. */
+  parent?: EntityKey;
 }
 
 type FaceRow = {
@@ -171,6 +191,8 @@ type FaceRow = {
   updatedAt?: number;
   project?: string;
   publicId?: string;
+  parentType?: ExcerptParentType;
+  parentId?: string;
 };
 
 function faceOf(kind: EntityKind, row: FaceRow): EntityFace {
@@ -179,13 +201,18 @@ function faceOf(kind: EntityKind, row: FaceRow): EntityFace {
     id: row.id,
     ...(kind === 'diary-entry' ? { date: row.title } : {}),
   };
+  const parent =
+    row.parentType && row.parentId
+      ? { kind: row.parentType, id: row.parentId }
+      : undefined;
   return {
     key,
     ref: refOf(key),
     title: row.title,
-    path: adminPath(kind, row.id, row.project, row.publicId),
+    path: adminPath(kind, row.id, row.project, row.publicId, parent),
     ...(row.updatedAt !== undefined ? { version: row.updatedAt } : {}),
     ...(row.project ? { project: row.project } : {}),
+    ...(parent ? { parent } : {}),
   };
 }
 
@@ -196,6 +223,9 @@ function selection(columns: ReturnType<typeof tableOf>) {
     ...(columns.updatedAt ? { updatedAt: columns.updatedAt } : {}),
     ...('project' in columns ? { project: columns.project } : {}),
     ...('publicId' in columns ? { publicId: columns.publicId } : {}),
+    ...('parentType' in columns
+      ? { parentType: columns.parentType, parentId: columns.parentId }
+      : {}),
   };
 }
 
@@ -261,13 +291,16 @@ export function entityVersion(key: EntityKey, tx?: any): number | undefined {
 }
 
 /**
- * Whose edit form an entity is changed in: a section's is its project's;
- * every other entity has its own.
+ * Whose edit form an entity is changed in: a section's is its project's, an
+ * excerpt's its parent's; every other entity has its own.
  */
 export function formOwnerOf(key: EntityKey, tx?: any): EntityKey | undefined {
-  if (key.kind !== 'project-section') return key;
-  const project = entityFace(key, tx)?.project;
-  return project ? { kind: 'project', id: project } : undefined;
+  if (key.kind === 'project-section') {
+    const project = entityFace(key, tx)?.project;
+    return project ? { kind: 'project', id: project } : undefined;
+  }
+  if (key.kind === 'excerpt') return entityFace(key, tx)?.parent;
+  return key;
 }
 
 /** The version of the form an entity is edited in. */
@@ -312,6 +345,7 @@ export const ENTITY_TEXT_SLOTS: Record<EntityKind, EntityText[]> = {
     { name: 'body', slot: 'diary-body', private: false },
     { name: 'notes', slot: 'diary-notes', private: true },
   ],
+  excerpt: [{ name: 'body', slot: 'excerpt-body', private: false }],
   page: [
     { name: 'body', slot: 'page-body', private: false },
     { name: 'notes', slot: 'page-notes', private: true },
@@ -338,9 +372,27 @@ export function entityTextOfSlot(kind: EntityKind, slot: unknown) {
   return ENTITY_TEXT_SLOTS[kind]?.find((text) => text.slot === slot);
 }
 
-/** A text may be emptied, except a diary entry's body: the entry is it. */
-export function textMayBeEmpty(slot: ContentSlot): boolean {
-  return slot !== 'diary-body';
+/**
+ * A text may be emptied, except a diary entry's body: the entry is it —
+ * unless the entry holds an excerpt, which says something of the day on its
+ * own. The same rule the entry's form keeps (`diaryEntrySaysSomething`).
+ */
+export function textMayBeEmpty(slot: ContentSlot, owner?: EntityKey): boolean {
+  if (slot !== 'diary-body') return true;
+  if (!owner) return false;
+  const { db, schema } = THEI_SERVER.useDb();
+  return Boolean(
+    db
+      .select({ excerptUuid: schema.excerpts.excerptUuid })
+      .from(schema.excerpts)
+      .where(
+        and(
+          eq(schema.excerpts.parentType, 'diary-entry'),
+          eq(schema.excerpts.parentId, owner.id),
+        ),
+      )
+      .get(),
+  );
 }
 
 /**

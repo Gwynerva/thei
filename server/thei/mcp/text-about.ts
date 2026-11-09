@@ -24,6 +24,10 @@ function readers(view: McpEntityView, text: McpText): string {
     return view.fields.isPrivate
       ? 'The section is private: only the owner sees it.'
       : 'Shown with its project, to whoever may open the project.';
+  if (view.kind === 'excerpt')
+    return view.fields.isPrivate
+      ? 'The excerpt is private: only the owner sees it.'
+      : 'Shown with its parent, to whoever may open the parent, and on the pages of what it is about.';
   switch (view.fields.access) {
     case 'public':
       return 'Public: anyone may read it.';
@@ -75,6 +79,8 @@ export function aboutText(view: McpEntityView, text: McpText): string {
         : 'a general section';
       return `The text of ${place} ${title} of the project “${view.project?.title ?? ''}”${when(view)}: one part of the project, read on its own page and among the project's sections, always under the project's title — so it needs no more context than the project gives. ${seen}`;
     }
+    case 'excerpt':
+      return `The text of the excerpt ${title}: a named part of “${view.parent?.title ?? ''}” about something in the archive — what its relations name. Read in full on its parent's page under its own heading, on a page of its own, and as a card on the pages of what it is about, so it stands on its own with its title. ${seen}`;
     case 'event':
       return text.private
         ? `The owner's notes on the event ${title}. ${seen}`

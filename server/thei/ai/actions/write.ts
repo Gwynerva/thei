@@ -261,7 +261,7 @@ export async function applyText(
   let written = false;
   const result = await saveText(target, data, {
     expectedVersion: stored.version,
-    allowEmpty: textMayBeEmpty(text.slot),
+    allowEmpty: textMayBeEmpty(text.slot, key),
     onWrite: (tx, schema) => {
       const after = storedIn(tx, schema, target.ownerType, key.id, text.slot);
       if (beforeDigest)

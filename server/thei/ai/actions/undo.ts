@@ -524,7 +524,10 @@ async function undoNow(
         : { blocks: [] };
       await saveText(target, before, {
         expectedVersion: stored.version,
-        allowEmpty: textMayBeEmpty(target.slot),
+        allowEmpty: textMayBeEmpty(target.slot, {
+          kind: target.ownerType,
+          id: target.ownerId,
+        }),
         onWrite: finish,
       });
       return affected;

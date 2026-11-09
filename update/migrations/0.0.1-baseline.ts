@@ -240,6 +240,22 @@ export const baselineSql: string[] = [
 `,
   `CREATE INDEX \`project-content-sections-project-idx\` ON \`project-content-sections\` (\`projectUuid\`,\`sortOrder\`);`,
   `CREATE UNIQUE INDEX \`project-content-sections-public-id-unique\` ON \`project-content-sections\` (\`publicId\`);`,
+  `CREATE TABLE \`excerpts\` (
+	\`excerptUuid\` text PRIMARY KEY NOT NULL,
+	\`parentType\` text NOT NULL,
+	\`parentId\` text NOT NULL,
+	\`title\` text NOT NULL,
+	\`summary\` text DEFAULT '' NOT NULL,
+	\`humanReadableSlug\` text NOT NULL,
+	\`publicId\` text NOT NULL,
+	\`isPrivate\` integer DEFAULT false NOT NULL,
+	\`sortOrder\` integer NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`updatedAt\` integer NOT NULL
+);
+`,
+  `CREATE INDEX \`excerpts-parent-idx\` ON \`excerpts\` (\`parentType\`,\`parentId\`,\`sortOrder\`);`,
+  `CREATE UNIQUE INDEX \`excerpts-public-id-unique\` ON \`excerpts\` (\`publicId\`);`,
   `CREATE TABLE \`periods\` (
 	\`ownerType\` text NOT NULL,
 	\`ownerId\` text NOT NULL,

@@ -388,6 +388,9 @@ function buildRawLifePoints(cutoff?: string): RawPoint[] {
       { type: row.firstType, id: row.firstId },
       { type: row.secondType, id: row.secondId },
     ];
+    // An excerpt's relations say what the excerpt is about; they put the
+    // excerpt on a chronology, not the entry or the event it is part of.
+    if (ends.some((end) => end.type === 'excerpt')) continue;
     const project = ends.find((end) => end.type === 'project');
     const other = ends.find((end) => end.type !== 'project');
     if (!project || !other) continue;

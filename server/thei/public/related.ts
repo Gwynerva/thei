@@ -73,6 +73,9 @@ export async function resolvePublicRelated(
   for (const row of rows) {
     const target = targets.get(relationEndpointKey(row.other));
     if (!target) continue;
+    // An excerpt's relations are read from the excerpt's side; the pages of
+    // what it is about list excerpts in a block of their own.
+    if (row.other.type === 'excerpt') continue;
     // Each end is judged on its own: a link to this entity opens nothing on
     // the other side of its relations.
     const listable = canListPublicEntity(
@@ -131,6 +134,8 @@ export async function buildPublicRelatedLinks(
 ): Promise<PublicEntityLink[]> {
   const links = await Promise.all(
     items.map(async (item): Promise<PublicEntityLink | undefined> => {
+      // Never listed here: an excerpt is shown by the block of its own.
+      if (item.endpoint.type === 'excerpt') return undefined;
       const entityType = item.endpoint.type;
       const entityId = item.endpoint.id;
       if (item.secret)

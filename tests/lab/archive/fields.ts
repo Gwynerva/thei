@@ -155,6 +155,7 @@ const FORM_KEY_LISTS = {
       'newStatuses',
       'updatedStatuses',
       'deletedStatusIds',
+      'excerpts',
     ],
     kept: [
       'projectUuid',
@@ -184,11 +185,20 @@ const FORM_KEY_LISTS = {
       'reminder',
       'synonyms',
       'notes',
+      'excerpts',
     ],
     kept: ['eventUuid', 'version', 'bannerMedia', 'createdAt', 'updatedAt'],
   },
   diary: {
-    written: ['date', 'access', 'content', 'relations', 'reminder', 'notes'],
+    written: [
+      'date',
+      'access',
+      'content',
+      'relations',
+      'reminder',
+      'notes',
+      'excerpts',
+    ],
     kept: ['diaryUuid', 'version', 'createdAt', 'updatedAt'],
   },
   page: {

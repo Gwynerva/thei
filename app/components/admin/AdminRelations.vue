@@ -2,7 +2,7 @@
 import {
   isRelationEntityType,
   orderRelationsForEditing,
-  RELATION_ENTITY_TYPES,
+  RELATION_TARGET_TYPES,
   relationEndOf,
   relationEndpointKey,
   type RelationEditItem,
@@ -87,7 +87,7 @@ function ofKind(items: RelationEditItem[], type: RelationEntityType) {
 
 function firstKind() {
   return (
-    RELATION_ENTITY_TYPES.find(
+    RELATION_TARGET_TYPES.find(
       (type) => ofKind(relations.value, type).length,
     ) ?? 'project'
   );
@@ -116,7 +116,7 @@ const sortable = computed(() => selected.value !== 'diary-entry');
 const tabs = computed(() =>
   relationKindTabs(
     Object.fromEntries(
-      RELATION_ENTITY_TYPES.map((type) => [
+      RELATION_TARGET_TYPES.map((type) => [
         type,
         ofKind(relations.value, type).length,
       ]),
@@ -272,7 +272,7 @@ const { guardClick } = useDragSort(panel, {
       relationKey,
     );
     replaceRelations(
-      RELATION_ENTITY_TYPES.flatMap((kind) =>
+      RELATION_TARGET_TYPES.flatMap((kind) =>
         kind === type ? moved : ofKind(relations.value, kind),
       ),
     );

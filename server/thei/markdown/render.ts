@@ -11,9 +11,9 @@ import {
   withLinkFragment,
 } from '#layers/thei/shared/content-link';
 import {
-  RELATION_ENTITY_TYPES,
+  RELATION_TARGET_TYPES,
   type RelationEndpoint,
-  type RelationEntityType,
+  type RelationTargetType,
 } from '#layers/thei/shared/relation';
 import { relationLabel } from '#layers/thei/shared/relation-display';
 import {
@@ -383,13 +383,13 @@ async function relatedEntities(
   );
   if (!links.length) return [];
   const phrase = THEI_SERVER.phrase;
-  const kindTitles: Record<RelationEntityType, string> = {
+  const kindTitles: Record<RelationTargetType, string> = {
     project: phrase.projects,
     event: phrase.events,
     'diary-entry': phrase.diary,
   };
   const lines = [`## ${phrase.related_entities}`];
-  for (const kind of RELATION_ENTITY_TYPES) {
+  for (const kind of RELATION_TARGET_TYPES) {
     const group = links.filter((link) => link.entityType === kind);
     if (!group.length) continue;
     lines.push(`### ${kindTitles[kind]}`);

@@ -11,7 +11,11 @@ import type {
 } from '../project-action';
 import type { MediaDescriptor } from '../media';
 import type { ArchivedOriginalFileMeta, AssetRole } from '../asset';
-import type { RelationEntityType, RelationType } from '../relation';
+import type {
+  RelationEntityType,
+  RelationTargetType,
+  RelationType,
+} from '../relation';
 import type { StatusHistoryItem } from '../status';
 import type { PaginatedResponse } from '../pagination';
 
@@ -25,7 +29,7 @@ export type PublicTagSummary = {
 
 export type PublicEntityReference = {
   /** Which kind of thing this is, for the badge on its tile. */
-  entityType: RelationEntityType;
+  entityType: RelationTargetType;
   title: string;
   summary: string;
   href: string;
@@ -57,7 +61,7 @@ export type PublicSecretReference = {
    * Saying "a project you cannot see" rather than "something you cannot see"
    * gives the reader their bearings without giving the thing itself away.
    */
-  entityType?: RelationEntityType;
+  entityType?: RelationTargetType;
 };
 
 export type PublicEntityLink = PublicEntityReference | PublicSecretReference;

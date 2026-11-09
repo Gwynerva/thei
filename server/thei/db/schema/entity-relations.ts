@@ -9,15 +9,16 @@ import {
 /**
  * What a relation can join.
  *
- * All three kinds stand on their own and all three carry relations: a
- * project, an event or a diary entry may be related to any of the three, and
- * either end edits the relation. Pages are deliberately absent: a page
- * belongs to no timeline and relates to nothing.
+ * A project, an event or a diary entry may be related to any of the three,
+ * and either end edits the relation. An excerpt relates to those three only,
+ * and only from its own side: its relations say what it is about. Pages are
+ * deliberately absent: a page belongs to no timeline and relates to nothing.
  */
 export const RELATION_ENTITY_TYPES = [
   'project',
   'event',
   'diary-entry',
+  'excerpt',
 ] as const;
 export type RelationEntityType = (typeof RELATION_ENTITY_TYPES)[number];
 

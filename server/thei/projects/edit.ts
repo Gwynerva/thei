@@ -2,6 +2,15 @@ import {
   validateProjectData,
   type ProjectEditData,
 } from '#layers/thei/shared/admin/project';
+import {
+  applyExcerpts,
+  deleteExcerptsOfParent,
+  detachExcerptsFromTarget,
+  excerptIdentities,
+  prepareExcerpts,
+  readExcerptsForForm,
+  type ExcerptsOnTargetDelete,
+} from '../excerpts';
 import type {
   OtherAssetGetItem,
   ProjectGetResponse,
@@ -216,6 +225,7 @@ export async function readProjectEdit(project: ProjectRow) {
       'project-notes',
     ),
     sections,
+    excerpts: await readExcerptsForForm({ type: 'project', id: projectUuid }),
     showcaseAssets,
     otherAssets,
     relations: await getRelations({ type: 'project', id: projectUuid }),
@@ -319,6 +329,18 @@ export async function saveProjectEdit(
       message: error instanceof Error ? error.message : 'Invalid relations',
     } satisfies ProjectSaveResponse;
   }
+  let preparedExcerpts;
+  try {
+    preparedExcerpts = await prepareExcerpts(
+      { type: 'project', id: projectUuid },
+      result.excerpts,
+    );
+  } catch (error) {
+    return {
+      type: 'error',
+      message: error instanceof Error ? error.message : 'Invalid excerpts',
+    } satisfies ProjectSaveResponse;
+  }
   let preparedTags;
   try {
     preparedTags = await prepareTagUsages(result.tags);
@@ -420,6 +442,12 @@ export async function saveProjectEdit(
         schema,
         { type: 'project', id: projectUuid },
         preparedRelations,
+      );
+      applyExcerpts(
+        tx,
+        schema,
+        { type: 'project', id: projectUuid },
+        preparedExcerpts,
       );
       applyExternalLinkList(
         tx,
@@ -560,6 +588,7 @@ export async function saveProjectEdit(
       (section) => section.sectionUuid,
       (section) => section.publicId,
     ),
+    excerpts: excerptIdentities(preparedExcerpts),
     statuses: await getStatusHistory(
       { type: 'project', id: projectUuid },
       undefined,
@@ -571,7 +600,10 @@ export async function saveProjectEdit(
 /** Deletes a project with everything that is its own. */
 export async function deleteProject(
   projectUuid: string,
-  options: Pick<EntityEditOptions, 'onWrite' | 'beforeWrite'> = {},
+  options: Pick<EntityEditOptions, 'onWrite' | 'beforeWrite'> & {
+    /** What becomes of the excerpts about the project. */
+    excerpts?: ExcerptsOnTargetDelete;
+  } = {},
 ) {
   const usages = await THEI_SERVER.assets.usages.findByContainer(
     'project',
@@ -580,6 +612,13 @@ export async function deleteProject(
   const { db, schema } = THEI_SERVER.useDb();
   db.transaction((tx) => {
     options.beforeWrite?.(tx, schema);
+    deleteExcerptsOfParent(tx, schema, { type: 'project', id: projectUuid });
+    detachExcerptsFromTarget(
+      tx,
+      schema,
+      { type: 'project', id: projectUuid },
+      options.excerpts ?? 'keep',
+    );
     deleteProjectSections(tx, schema, projectUuid);
     deleteStatusesForOwner(tx, schema, {
       type: 'project',

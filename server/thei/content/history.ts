@@ -97,6 +97,7 @@ export function contentOwnerKeys(
       table: schema.diaryEntries,
       id: schema.diaryEntries.diaryUuid,
     },
+    excerpt: { table: schema.excerpts, id: schema.excerpts.excerptUuid },
   };
 }
 

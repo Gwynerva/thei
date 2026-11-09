@@ -104,6 +104,22 @@ export async function removeEntity(
       );
       return;
     }
+    case 'excerpt': {
+      const loaded = await loadForm(key);
+      saved(
+        await loaded.save(
+          {
+            ...loaded.form,
+            excerpts: (loaded.form.excerpts ?? []).filter(
+              (excerpt: { excerptUuid?: string }) =>
+                excerpt.excerptUuid !== key.id,
+            ),
+          },
+          { expectedUpdatedAt: expectedVersion ?? loaded.version, onWrite },
+        ),
+      );
+      return;
+    }
     case 'event':
       await found(THEI_SERVER.events.findByUuid(key.id), key);
       await deleteEvent(key.id, { onWrite, beforeWrite });

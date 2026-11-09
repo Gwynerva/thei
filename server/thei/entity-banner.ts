@@ -19,7 +19,7 @@ import { deleteUsagesReleasing } from './assets/repository/usages/release';
  * thing itself; a project keeps its icon on cards.
  */
 
-type BannerOwner = 'event' | 'project-section';
+type BannerOwner = 'event' | 'project-section' | 'excerpt';
 type Addressed = { humanReadableSlug: string; publicId: string };
 
 /** An event or a section, with what its public addresses are built from. */

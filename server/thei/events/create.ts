@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+import { applyExcerpts, excerptIdentities, prepareExcerpts } from '../excerpts';
 import { validateEventData } from '#layers/thei/shared/admin/event';
 import type { EventEditData } from '#layers/thei/shared/event';
 import type { EventSaveResponse } from '#layers/thei/shared/api/event';
@@ -52,6 +53,18 @@ export async function createEvent(
     return {
       type: 'error',
       message: error instanceof Error ? error.message : 'Invalid relations',
+    };
+  }
+  let preparedExcerpts;
+  try {
+    preparedExcerpts = await prepareExcerpts(
+      { type: 'event', id: eventUuid },
+      result.excerpts,
+    );
+  } catch (error) {
+    return {
+      type: 'error',
+      message: error instanceof Error ? error.message : 'Invalid excerpts',
     };
   }
   try {
@@ -114,6 +127,12 @@ export async function createEvent(
         { type: 'event', id: eventUuid },
         preparedRelations,
       );
+      applyExcerpts(
+        tx,
+        schema,
+        { type: 'event', id: eventUuid },
+        preparedExcerpts,
+      );
       syncEntityActionUsages(tx, schema, [], 'event', eventUuid, result.action);
       syncEntityBanner(
         tx,
@@ -152,6 +171,7 @@ export async function createEvent(
       eventUuid,
       version: storedVersion('event', eventUuid),
       action: result.action,
+      excerpts: excerptIdentities(preparedExcerpts),
     };
   } catch (error) {
     return {

@@ -18,6 +18,7 @@ describe('generated fallback icons', () => {
       'page',
       'event',
       'project-section',
+      'excerpt',
       'diary-entry',
       'tag',
       'author',

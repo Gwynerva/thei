@@ -75,8 +75,12 @@ function chosen(draft: Draft): draft is RelationEditItem {
   return Boolean(draft.entityType && draft.entityId);
 }
 
+// The other end is always a project, an event or a diary entry: an excerpt
+// relates to those and is never chosen as the other end of a relation.
 const other = computed(() =>
-  chosen(relation.value) ? relation.value : undefined,
+  chosen(relation.value) && relation.value.entityType !== 'excerpt'
+    ? { ...relation.value, entityType: relation.value.entityType }
+    : undefined,
 );
 
 function update(patch: Partial<Draft>) {

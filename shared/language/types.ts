@@ -317,6 +317,7 @@ export type LanguagePhrases = {
   life_activity_diary: (count: number) => string;
   projects: string;
   events: string;
+  excerpts: string;
   pages: string;
   tags: string;
   settings: string;

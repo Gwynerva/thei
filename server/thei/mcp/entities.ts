@@ -15,6 +15,7 @@ import {
 } from '#layers/thei/shared/project-url';
 import {
   RELATION_WORD_OF_TYPE,
+  type RelationEntityType,
   type RelationNote,
   type RelationWord,
 } from '#layers/thei/shared/relation';
@@ -117,6 +118,8 @@ export interface McpEntityView {
     hasBody: boolean;
   }[];
   project?: { ref: string; title: string };
+  /** An excerpt's parent: the entry, event or project it is a part of. */
+  parent?: { ref: string; title: string };
   /** A section with dates: its place among the project's stages, in time. */
   stage?: { index: number; count: number };
   /**
@@ -202,7 +205,7 @@ function tagsOf(containerType: 'project' | 'event', containerId: string) {
 }
 
 async function relationsOf(
-  type: 'project' | 'event' | 'diary-entry',
+  type: RelationEntityType,
   id: string,
 ): Promise<McpRelation[]> {
   const rows = readRelationRows({ type, id });
@@ -313,12 +316,19 @@ async function editableFields(
 ): Promise<Record<string, unknown>> {
   const loaded = await loadForm(key).catch(() => undefined);
   if (!loaded) return {};
-  if (key.kind !== 'project-section')
-    return formView(key.kind as FormKind, loaded.form);
-  const section = (loaded.form.sections ?? []).find(
-    (item: { sectionUuid?: string }) => item.sectionUuid === key.id,
-  );
-  return section ? { banner: section.bannerAssetUuid ?? null } : {};
+  if (key.kind === 'project-section') {
+    const section = (loaded.form.sections ?? []).find(
+      (item: { sectionUuid?: string }) => item.sectionUuid === key.id,
+    );
+    return section ? { banner: section.bannerAssetUuid ?? null } : {};
+  }
+  if (key.kind === 'excerpt') {
+    const excerpt = (loaded.form.excerpts ?? []).find(
+      (item: { excerptUuid?: string }) => item.excerptUuid === key.id,
+    );
+    return excerpt ? { banner: excerpt.bannerAssetUuid ?? null } : {};
+  }
+  return formView(key.kind as FormKind, loaded.form);
 }
 
 /** A section's place among the dated sections of its project, by first date. */
@@ -471,6 +481,38 @@ async function readEntityView(
             ),
           ),
         },
+      };
+    }
+
+    case 'excerpt': {
+      const row = db
+        .select()
+        .from(schema.excerpts)
+        .where(eq(schema.excerpts.excerptUuid, key.id))
+        .get()!;
+      const parentKey: EntityKey = { kind: row.parentType, id: row.parentId };
+      const parent = entityFace(parentKey);
+      const relations = await relationsOf('excerpt', key.id);
+      return {
+        ref: refOf(key),
+        kind: key.kind,
+        title: row.title,
+        version: row.updatedAt,
+        fields: {
+          title: row.title,
+          summary: row.summary,
+          isPrivate: row.isPrivate,
+          slug: row.humanReadableSlug,
+          publicId: row.publicId,
+        },
+        texts: stripData(texts),
+        relations,
+        parent: {
+          ref: parent?.ref ?? refOf(parentKey),
+          title: parent?.title ?? '',
+        },
+        linkedInText: await linkedInText(texts, relations),
+        urls: { admin },
       };
     }
 

@@ -61,6 +61,8 @@ export const FORM_KEYS = {
     updatedStatuses: null,
     deletedStatusIds: null,
     statusTexts: 'statuses',
+    // The project's excerpts: edited in the form, no change proposes them yet.
+    excerpts: null,
   },
   'project-section': {
     // Its id, by which a change of it is merged.
@@ -89,6 +91,8 @@ export const FORM_KEYS = {
     externalLinks: 'links',
     tags: 'tags',
     relations: 'relations',
+    // The event's excerpts: edited in the form, no change proposes them yet.
+    excerpts: null,
     // Its button: no change proposes it, unlike a project's words on one.
     action: null,
     reminder: 'reminder',
@@ -101,6 +105,8 @@ export const FORM_KEYS = {
     access: 'access',
     content: 'body',
     relations: 'relations',
+    // The entry's excerpts: edited in the form, no change proposes them yet.
+    excerpts: null,
     reminder: 'reminder',
     notes: 'notes',
     version: null,

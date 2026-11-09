@@ -25,6 +25,7 @@ export const AI_ENTITY_TYPES = [
   'project-section',
   'event',
   'diary-entry',
+  'excerpt',
   'page',
   'tag',
   'asset',

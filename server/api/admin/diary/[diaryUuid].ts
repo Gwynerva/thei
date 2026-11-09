@@ -1,4 +1,5 @@
 import type { DiaryEditData } from '#layers/thei/shared/diary';
+import { excerptsOnTargetDeleteOf } from '../../../thei/excerpts';
 import { formVersion } from '../../../thei/entity-edit';
 import {
   deleteDiaryEntry,
@@ -22,7 +23,9 @@ export default defineEventHandler(async (event) => {
       });
     }
     case 'DELETE':
-      await deleteDiaryEntry(stored);
+      await deleteDiaryEntry(stored, {
+        excerpts: excerptsOnTargetDeleteOf(getQuery(event).excerpts),
+      });
       return;
   }
 

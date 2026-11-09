@@ -1,6 +1,6 @@
 import type { TabItem } from '#layers/thei/app/components/UnderlineTabs.vue';
 import {
-  RELATION_ENTITY_TYPES,
+  RELATION_TARGET_TYPES,
   type RelationEntityType,
 } from '#layers/thei/shared/relation';
 import { relationEntityIcon } from '#layers/thei/shared/relation-display';
@@ -37,13 +37,15 @@ export function sectionGroupTabs(
  */
 export function relationKindTabs(
   counts: Partial<Record<RelationEntityType, number>>,
+  kinds: readonly RelationEntityType[] = RELATION_TARGET_TYPES,
 ): TabItem<RelationEntityType>[] {
   const labels: Record<RelationEntityType, string> = {
     project: phrase.value.projects,
     event: phrase.value.events,
     'diary-entry': phrase.value.diary,
+    excerpt: phrase.value.excerpts,
   };
-  return RELATION_ENTITY_TYPES.map((type) => ({
+  return kinds.map((type) => ({
     key: type,
     label: labels[type],
     icon: relationEntityIcon(type),
