@@ -27,7 +27,7 @@ import { REVIEW_VIEW_ICONS, storedReviewView, storeReviewView } from './review';
  */
 const props = defineProps<{
   review: ContentReview;
-  mode: 'ai' | 'version';
+  mode: 'ai' | 'version' | 'written';
   title: string;
   /** What is gone through, said under the title. */
   context?: string;
@@ -78,9 +78,12 @@ const pending = computed(() =>
 const accepted = computed(() =>
   open.value.filter((part) => stateOf(part.id) === 'accepted'),
 );
-/** Whether «take the sure ones» would take a part: words an AI is sure of, or all. */
+/**
+ * Whether «take the sure ones» would take a part: words an AI is sure of —
+ * or all, of a version or of a text written whole.
+ */
 const takenAsSure = (part: (typeof open.value)[number]) =>
-  props.mode === 'version' || (part.sure && !part.whole);
+  props.mode !== 'ai' || (part.sure && !part.whole);
 const sure = computed(() => pending.value.filter(takenAsSure));
 /** An edit with nothing it could take that way — a new order — offers none. */
 const offersSure = computed(() => open.value.some(takenAsSure));
@@ -98,7 +101,9 @@ function finishWord(count: number) {
 const summary = computed(() => {
   const left = pending.value;
   return {
-    words: left.filter((part) => !part.whole && !part.link).length,
+    // A remark changes no words: it counts among the owner's to decide.
+    words: left.filter((part) => !part.whole && !part.link && !part.remark)
+      .length,
     links: left.filter((part) => part.link).length,
     blocks: left.filter((part) => part.whole).length,
     unsure: props.mode === 'ai' ? left.filter((part) => !part.sure).length : 0,

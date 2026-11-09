@@ -8,6 +8,7 @@ import {
 } from '#layers/thei/shared/ai-actions';
 import {
   actionTexts,
+  writtenTexts,
   type AiActionText,
 } from '#layers/thei/shared/ai-action-texts';
 
@@ -183,8 +184,9 @@ const parts = computed<PartRow[]>(() => {
 
 /**
  * A text edit is gone through on its own screen, over the text: in a form,
- * the text's editor; anywhere else, the review of the edit. Only a new
- * entity's parts unfold in the row.
+ * the text's editor; anywhere else, the review of the edit. A text written
+ * whole — a new entity's texts too — is read there as it would stand, block
+ * by block, while it waits. Only a new entity's parts unfold in the row.
  */
 function openParts() {
   if (props.from) emit('open');
@@ -196,6 +198,12 @@ const revisable = computed(
   () =>
     props.action.kind === 'revise' &&
     ((payload.value.parts ?? []) as unknown[]).length > 0,
+);
+/** A text written whole, waiting to be read before it is taken. */
+const writes = computed(
+  () =>
+    pending.value &&
+    writtenTexts(props.action.kind, props.action.payload).length > 0,
 );
 
 function partOn(part: PartRow) {
@@ -305,6 +313,15 @@ async function saveEdit() {
 
 /** What a text is, when a proposal carries several. */
 function textLabel(text: AiActionText) {
+  if (text.section !== undefined) {
+    const sections = (payload.value.fields as { sections?: unknown[] })
+      ?.sections;
+    const title = (sections?.[text.section] as { title?: unknown } | undefined)
+      ?.title;
+    return phrase.value.ai_review_written_section(
+      typeof title === 'string' ? publicText(title) : '',
+    );
+  }
   if (text.field) return fieldName(text.field);
   return text.role ? phrase.value.ai_action_text_roles[text.role] : '';
 }
@@ -383,7 +400,8 @@ const sessionPath = computed(() =>
  */
 const tools = computed(() => ({
   editable: editable.value,
-  opens: revisable.value && !props.from,
+  opens: (revisable.value || writes.value) && !props.from,
+  commented: writes.value,
   saving: saving.value,
   busy: props.busy,
   applyWord: applyWord.value,

@@ -250,6 +250,42 @@ describe('every kind with words to correct', () => {
       expect(parsed.success).toBe(true);
     },
   );
+
+  it('a new project’s texts are corrected each by its own key, its sections’ too', () => {
+    const payload = {
+      kind: 'create',
+      entity: 'project',
+      fields: {
+        title: 'P',
+        description: 'About it.',
+        sections: [
+          { title: 'Start', body: 'First.' },
+          { title: 'Empty' },
+          { title: 'End', body: 'Last.' },
+        ],
+      },
+    };
+    const texts = actionTexts('create', payload);
+    expect(texts.map((text) => [text.key, text.shape, text.section])).toEqual([
+      ['fields.title', 'line', undefined],
+      ['fields.description', 'markdown', undefined],
+      ['fields.sections.0.body', 'markdown', 0],
+      ['fields.sections.2.body', 'markdown', 2],
+    ]);
+    const changed = withActionTexts('create', payload, {
+      'fields.sections.2.body': 'Corrected.',
+    });
+    expect(changed.fields).toMatchObject({
+      description: 'About it.',
+      sections: [
+        { title: 'Start', body: 'First.' },
+        { title: 'Empty' },
+        { title: 'End', body: 'Corrected.' },
+      ],
+    });
+    // The proposal it was made from stays as it was.
+    expect(payload.fields.sections[2]!.body).toBe('Last.');
+  });
 });
 
 describe('the model, told of the owner’s corrections', () => {

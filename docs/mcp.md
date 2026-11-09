@@ -184,7 +184,10 @@ whatever the owner typed — the texts, with the captions and titles of their
 pictures and files, and every short text beside them: titles, summaries,
 reminders, what a dated stretch is called, status lines, notes on links and
 relations, the titles and captions of placed files, the owner's name and
-slogan, a project's button, the descriptions of files; **File descriptions**
+slogan, a project's button, the descriptions of files — and, in the texts,
+marks what reads as a mistake of meaning: a fact repeated, a step that does
+not follow, a contradiction, words a reader stumbles on, each a remark the
+owner answers, with a rewording at most, never sure; **File descriptions**
 describes the files of the archive that have none yet, a few a run, each
 from the file and the places it is used in — a file the model cannot be
 shown is left alone, and counted as looked at until its bytes change;

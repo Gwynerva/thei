@@ -34,9 +34,11 @@ function counts(action: AiActionItem) {
   const words = waiting.filter(
     (part) => part.type === 'correction' || part.type === 'relink',
   ).length;
+  // A remark changes no words: it counts among the unsure alone.
+  const remarks = waiting.filter((part) => part.type === 'remark').length;
   return {
     words,
-    blocks: waiting.length - words,
+    blocks: waiting.length - words - remarks,
     unsure: waiting.filter((part) => part.certainty === 'unsure').length,
   };
 }

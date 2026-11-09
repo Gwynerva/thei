@@ -15,7 +15,7 @@ import { reviewChangesLine, reviewPartIcon } from './review';
  */
 const props = defineProps<{
   part: ReviewPart;
-  mode: 'ai' | 'version';
+  mode: 'ai' | 'version' | 'written';
   decision: ReviewDecision;
   /** Its place among the parts, from 1, and how many there are. */
   index: number;
@@ -35,6 +35,9 @@ const goes = computed(
   () => props.part.kind === 'removed' || props.part.kind === 'removal',
 );
 const changes = computed(() => reviewChangesLine(props.part));
+const keepWords = computed(() =>
+  props.part.remark ? phrase.value.ai_review_remark.keep : words.value.keep,
+);
 const commenting = ref(false);
 const commented = ref(false);
 
@@ -109,6 +112,22 @@ function send(text: string) {
                 : phrase.ai_review_link_off
           }}</ReviewMark
         >
+      </dd>
+    </dl>
+    <!-- A remark: the words it points at, which stay. -->
+    <dl
+      v-else-if="part.words && part.remark"
+      class="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2.5
+        text-sm wrap-anywhere"
+      data-review-remark
+    >
+      <dt class="text-2xs font-bold tracking-wide text-text-3 uppercase">
+        {{ phrase.ai_review_remark.words }}
+      </dt>
+      <dd>
+        {{ part.words.around[0]
+        }}<ReviewMark kind="noted">{{ part.words.before }}</ReviewMark
+        >{{ part.words.around[1] }}
       </dd>
     </dl>
     <!-- Words: as they are, and as they would be. -->
@@ -193,6 +212,12 @@ function send(text: string) {
     <p v-if="part.reason" class="text-xs leading-snug text-text-2">
       {{ publicText(part.reason) }}
     </p>
+    <p
+      v-if="part.remark && !part.settled && decision === 'pending'"
+      class="text-xs leading-snug text-text-2"
+    >
+      {{ phrase.ai_review_remark.hint }}
+    </p>
     <p v-if="part.settled" class="flex items-center gap-1 text-xs text-text-2">
       <Icon :name="part.settled === 'applied' ? 'check' : 'warning'" />{{
         part.link && part.settled === 'stale'
@@ -245,7 +270,13 @@ function send(text: string) {
             :class="
               decision === 'accepted' ? 'text-text-success' : 'text-text-2'
             "
-            >{{ decision === 'accepted' ? words.accepted : words.kept }}</span
+            >{{
+              decision === 'accepted'
+                ? words.accepted
+                : part.remark
+                  ? phrase.ai_review_remark.kept
+                  : words.kept
+            }}</span
           >
           <Button
             variant="secondary"
@@ -274,13 +305,15 @@ function send(text: string) {
             variant="secondary"
             size="icon-sm"
             class="pointer-coarse:size-11"
-            :aria-label="words.keep"
-            :data-title-popup="words.keep"
+            :aria-label="keepWords"
+            :data-title-popup="keepWords"
             data-review-keep
             @click="emit('decide', 'kept')"
             ><Icon name="close"
           /></Button>
+          <!-- A remark is answered by writing its words otherwise. -->
           <Button
+            v-if="!part.remark"
             size="icon-sm"
             class="pointer-coarse:size-11"
             :aria-label="words.accept"

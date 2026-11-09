@@ -5,6 +5,7 @@ import {
   partComment,
   storedDecisions,
   textEditReview,
+  writtenReview,
 } from '../content-editor/review/review';
 import ModalContainer from '../ModalContainer.vue';
 import ContentReview from '../content-editor/review/ContentReview.vue';
@@ -15,6 +16,11 @@ import ContentReview from '../content-editor/review/ContentReview.vue';
  * accepted goes into the stored text at once — the text before stays in its
  * history — and what is left undecided waits in the session, the owner's
  * word on the rest kept with it.
+ *
+ * A text written whole — a written one, a new entity's texts — is gone
+ * through the same way, each block it brings a part. What is left out is
+ * taken out of the proposal's own words, which are then applied as they
+ * stand; closed undecided, nothing of it is kept.
  */
 const { modalData } = defineProps<{ modalData: { actionUuid: string } }>();
 const emit = defineEmits<{ modalResult: [{ type: 'applied' }] }>();
@@ -36,19 +42,50 @@ onMounted(async () => {
 });
 
 const payload = computed(
-  () => text.value?.action.payload as { text: string } | undefined,
+  () =>
+    text.value?.action.payload as
+      | { text?: string; mode?: 'new' | 'append' | 'replace'; entity?: string }
+      | undefined,
+);
+const written = computed(() =>
+  text.value ? writtenReview(text.value) : undefined,
 );
 const review = computed(() =>
-  text.value ? textEditReview(text.value.action, text.value.data) : undefined,
+  text.value
+    ? (written.value?.review ??
+      textEditReview(text.value.action, text.value.data))
+    : undefined,
 );
 /** The owner's word on parts so far, as the action keeps it. */
 const initial = computed(() =>
-  text.value ? storedDecisions(text.value.action) : {},
+  text.value && !written.value ? storedDecisions(text.value.action) : {},
 );
+
+const title = computed(() => {
+  const action = text.value?.action;
+  if (action?.kind === 'write' && payload.value?.mode)
+    return phrase.value.ai_action_write_modes[payload.value.mode];
+  if (action?.kind === 'create' && payload.value?.entity)
+    return (
+      phrase.value.ai_action_create[
+        payload.value.entity as keyof typeof phrase.value.ai_action_create
+      ] ?? phrase.value.ai_review_title
+    );
+  return phrase.value.ai_review_title;
+});
 
 const context = computed(() => {
   const action = text.value?.action;
-  if (!action?.target || !payload.value) return '';
+  if (action?.kind === 'create')
+    return publicText(
+      String(
+        (action.payload as { fields?: { title?: unknown; date?: unknown } })
+          .fields?.title ??
+          (action.payload as { fields?: { date?: unknown } }).fields?.date ??
+          '',
+      ),
+    );
+  if (!action?.target || !payload.value?.text) return '';
   const name =
     phrase.value.ai_action_texts[
       payload.value.text as keyof typeof phrase.value.ai_action_texts
@@ -61,9 +98,15 @@ async function done(decisions: Record<string, ReviewDecision>) {
   busy.value = true;
   error.value = '';
   try {
-    const outcome = await aiApi.apply([modalData.actionUuid], {
-      [modalData.actionUuid]: decisions,
-    });
+    // A text written whole is applied as its words, with what was left out
+    // taken out of them first.
+    const values = written.value?.texts(decisions);
+    if (values && Object.keys(values).length)
+      await aiApi.editAction(modalData.actionUuid, values);
+    const outcome = await aiApi.apply(
+      [modalData.actionUuid],
+      written.value ? {} : { [modalData.actionUuid]: decisions },
+    );
     tellEntitiesChanged(outcome.changed);
     if (outcome.failed) {
       error.value = outcome.failed.error;
@@ -88,6 +131,8 @@ async function done(decisions: Record<string, ReviewDecision>) {
 /** Closed undecided: the owner's word on what they did decide is kept. */
 async function close(decisions: Record<string, ReviewDecision>) {
   closeModal();
+  // A written text keeps no word on its blocks: they are no parts of it.
+  if (written.value) return;
   const said = Object.entries(decisions).filter(
     ([id, decision]) => decision !== (initial.value[id] ?? 'pending'),
   );
@@ -109,8 +154,8 @@ function comment(partId: string, words: string) {
   <ContentReview
     v-if="review"
     :review
-    mode="ai"
-    :title="phrase.ai_review_title"
+    :mode="written ? 'written' : 'ai'"
+    :title
     :context
     :why="text?.action.reason ? publicText(text.action.reason) : undefined"
     :why-link="

@@ -1697,11 +1697,16 @@ export type LanguagePhrases = {
   /** Where words outside the running text stand. */
   ai_review_where: Record<'caption' | 'file' | 'link', string>;
   ai_review_unsure: string;
+  /** A remark on meaning: the words it points at, kept as meant, and how it closes. */
+  ai_review_remark: { words: string; keep: string; kept: string; hint: string };
   ai_review_private: string;
   ai_review_settled: Record<'applied' | 'stale', string>;
-  /** The words of each way through: an AI's edit, or another version. */
+  /**
+   * The words of each way through: an AI's edit, another version, or a text
+   * an AI wrote whole.
+   */
   ai_review_modes: Record<
-    'ai' | 'version',
+    'ai' | 'version' | 'written',
     {
       accept: string;
       keep: string;
@@ -1763,6 +1768,8 @@ export type LanguagePhrases = {
   ai_review_comment_placeholder: string;
   ai_review_comment_sent: string;
   ai_review_from_session: (title: string) => string;
+  /** A new project's section, at the head of the text written for it. */
+  ai_review_written_section: (title: string) => string;
   ai_review_applied: (count: number) => string;
   ai_review_taken: (count: number) => string;
   ai_memory_search: string;

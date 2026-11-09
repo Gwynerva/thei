@@ -2314,6 +2314,10 @@ export default defineI18nModule({
       case: 'Заглавная буква',
       'missing-letter': 'Пропущенная буква',
       link: 'Ссылка',
+      repeat: 'Повтор',
+      logic: 'Логика',
+      contradiction: 'Противоречие',
+      clumsy: 'Косноязычие',
       changed: 'Блок изменён',
       added: 'Новый блок',
       removed: 'Блок уходит',
@@ -2329,6 +2333,12 @@ export default defineI18nModule({
       link: 'в заметке к ссылке',
     },
     ai_review_unsure: 'на ваше решение',
+    ai_review_remark: {
+      words: 'Слова',
+      keep: 'Так задумано',
+      kept: 'Так задумано',
+      hint: 'Поправьте сами: замечание закроется, когда эти слова изменятся.',
+    },
     ai_review_private: 'приватная часть',
     ai_review_settled: {
       applied: 'Уже в тексте',
@@ -2362,6 +2372,20 @@ export default defineI18nModule({
         finish: (decided, total) => `Отмечено ${decided} из ${total}`,
         finish_hint:
           'Взятое ляжет в текст окна; остальное останется как сейчас.',
+      },
+      written: {
+        accept: 'Взять',
+        keep: 'Не брать',
+        sure: 'Взять всё',
+        take_sure: (count) => `Взять всё · ${count}`,
+        was: 'Было',
+        will: 'Будет',
+        accepted: 'Взято',
+        kept: 'Не взято',
+        apply: (count) => `Применить · ${count}`,
+        finish: (decided, total) => `Решено ${decided} из ${total}`,
+        finish_hint:
+          'Взятое ляжет в текст сейчас — прежний останется в истории версий. Невзятое уйдёт вместе с предложением.',
       },
     },
     ai_review_put: (count) => `Подставить · ${count}`,
@@ -2421,6 +2445,8 @@ export default defineI18nModule({
       'Комментарий в сессии: модель пришлёт новую версию правки.',
     ai_review_from_session: (title) =>
       title ? `Из сессии «${title}»` : 'Из сессии',
+    ai_review_written_section: (title) =>
+      title ? `Раздел «${title}»` : 'Раздел',
     ai_review_applied: (count) =>
       `В тексте ${plural(count, 'правка', 'правки', 'правок')}`,
     ai_review_taken: (count) =>

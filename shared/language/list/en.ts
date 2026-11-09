@@ -2236,6 +2236,10 @@ export default defineI18nBase({
       case: 'Capital letter',
       'missing-letter': 'Missing letter',
       link: 'Link',
+      repeat: 'Repeat',
+      logic: 'Logic',
+      contradiction: 'Contradiction',
+      clumsy: 'Clumsy wording',
       changed: 'Block changed',
       added: 'New block',
       removed: 'Block goes',
@@ -2251,6 +2255,12 @@ export default defineI18nBase({
       link: 'in a link’s note',
     },
     ai_review_unsure: 'yours to decide',
+    ai_review_remark: {
+      words: 'Words',
+      keep: 'Meant so',
+      kept: 'Meant so',
+      hint: 'Mend it yourself: the remark closes once these words change.',
+    },
     ai_review_private: 'private part',
     ai_review_settled: {
       applied: 'In the text already',
@@ -2284,6 +2294,20 @@ export default defineI18nBase({
         finish: (decided, total) => `${decided} of ${total} marked`,
         finish_hint:
           'What you take goes into the text here; the rest stays as it is.',
+      },
+      written: {
+        accept: 'Take',
+        keep: 'Leave out',
+        sure: 'Take all',
+        take_sure: (count) => `Take all · ${count}`,
+        was: 'Was',
+        will: 'Will be',
+        accepted: 'Taken',
+        kept: 'Left out',
+        apply: (count) => `Apply · ${count}`,
+        finish: (decided, total) => `${decided} of ${total} decided`,
+        finish_hint:
+          'What you took goes into the text now — the text before stays in its history. What you did not take goes with the proposal.',
       },
     },
     ai_review_put: (count) => `Put in · ${count}`,
@@ -2343,6 +2367,8 @@ export default defineI18nBase({
       'The comment is in the session: the model will send a new version of the edit.',
     ai_review_from_session: (title) =>
       title ? `From the session “${title}”` : 'From the session',
+    ai_review_written_section: (title) =>
+      title ? `Section “${title}”` : 'Section',
     ai_review_applied: (count) =>
       `${plural(count, 'change', 'changes')} in the text`,
     ai_review_taken: (count) => `${plural(count, 'part', 'parts')} taken`,

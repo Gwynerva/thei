@@ -1,5 +1,5 @@
 import type { IconName } from '#thei/icons';
-import type { AiActionItem } from '#layers/thei/shared/ai';
+import type { AiActionItem, AiReviewText } from '#layers/thei/shared/ai';
 import type {
   AiRevisePart,
   AiRevisePartState,
@@ -11,13 +11,17 @@ import {
   type ContentOutputData,
 } from '#layers/thei/shared/content';
 import type { BlockChange } from '#layers/thei/shared/content-block-changes';
+import { contentToEditMarkdown } from '#layers/thei/shared/content-edit-markdown/serialize';
+import { escapeHtmlText } from '#layers/thei/shared/content-edit-markdown/html';
 import {
   orderReview,
   proofreadReview,
   REVIEW_VIEWS,
+  versionReview,
   type ContentReview,
   type ReviewDecision,
   type ReviewPart,
+  type ReviewRow,
   type ReviewView,
 } from '#layers/thei/shared/content-review';
 import { browserStorage } from '#layers/thei/app/composables/browser-storage';
@@ -30,6 +34,10 @@ const KIND_ICONS: Record<ReviewPart['kind'], IconName> = {
   case: 'text',
   'missing-letter': 'text',
   link: 'link',
+  repeat: 'arrow-cycle',
+  logic: 'question',
+  contradiction: 'warning',
+  clumsy: 'thought',
   changed: 'edit',
   added: 'plus',
   removed: 'minus',
@@ -236,4 +244,116 @@ export function textEditReview(
   return payload.mode === 'order' && payload.plan
     ? orderReview(text, payload.parts, payload.plan, states)
     : proofreadReview(text, payload.parts, states);
+}
+
+/** A text written whole, gone through over the text it is written into. */
+export interface WrittenReview {
+  review: ContentReview;
+  /**
+   * The words each text is to be written with, by its key, the blocks left
+   * out gone; a text taken whole is not named.
+   */
+  texts(
+    decisions: Readonly<Record<string, ReviewDecision>>,
+  ): Record<string, string>;
+}
+
+/** What a new entity's text is, at the head of it. */
+function writtenTitle(text: NonNullable<AiReviewText['written']>[number]) {
+  if (text.section !== undefined)
+    return phrase.value.ai_review_written_section(publicText(text.section));
+  return fieldName(text.field ?? 'body');
+}
+
+/**
+ * The review of a text written whole: each block it brings, changes or
+ * takes away is a part, as another version of the text would be. A new
+ * entity's texts are gone through as one, each under its name.
+ */
+export function writtenReview(text: AiReviewText): WrittenReview | undefined {
+  const written = text.written ?? [];
+  if (!written.length) return undefined;
+  const appends = (text.action.payload as { mode?: string }).mode === 'append';
+  const before = new Set(text.data.blocks.map((block) => block.id));
+  const many = written.length > 1;
+  const pieces = written.map((each, index) => ({
+    key: each.key,
+    title: many ? writtenTitle(each) : '',
+    prefix: many ? `t${index}:` : '',
+    review: versionReview(text.data, each.proposed, {
+      formatText: publicText,
+      describeBlock: describeReviewBlock,
+    }),
+  }));
+  /** A piece's own decisions, by its parts' own ids. */
+  const own = (
+    piece: (typeof pieces)[number],
+    decisions: Readonly<Record<string, ReviewDecision>>,
+  ) =>
+    Object.fromEntries(
+      piece.review.parts.map((part) => [
+        part.id,
+        decisions[piece.prefix + part.id] ?? 'pending',
+      ]),
+    );
+  const marked = (piece: (typeof pieces)[number], id: string) =>
+    piece.prefix + id;
+  const review: ContentReview = many
+    ? {
+        parts: pieces.flatMap((piece) =>
+          piece.review.parts.map((part) => ({
+            ...part,
+            id: marked(piece, part.id),
+            heading: part.heading ?? piece.title,
+          })),
+        ),
+        rows: (decisions, view) =>
+          pieces.flatMap((piece, index): ReviewRow[] => [
+            {
+              type: 'block',
+              block: {
+                id: `written-${index}`,
+                type: 'header',
+                data: { text: escapeHtmlText(piece.title), level: 2 },
+              } as ContentOutputBlock,
+              parts: [],
+            },
+            ...piece.review
+              .rows(own(piece, decisions), view)
+              .map((row): ReviewRow =>
+                row.type === 'block'
+                  ? {
+                      ...row,
+                      parts: row.parts.map((id) => marked(piece, id)),
+                      ...(row.part ? { part: marked(piece, row.part) } : {}),
+                    }
+                  : row.type === 'gone'
+                    ? { ...row, part: marked(piece, row.part) }
+                    : row,
+              ),
+          ]),
+        // Each text has a result of its own: `texts` gives them.
+        result: (decisions) =>
+          pieces[0]!.review.result(own(pieces[0]!, decisions)),
+      }
+    : pieces[0]!.review;
+  return {
+    review,
+    texts(decisions) {
+      const out: Record<string, string> = {};
+      for (const piece of pieces) {
+        const mine = own(piece, decisions);
+        if (Object.values(mine).every((decision) => decision === 'accepted'))
+          continue;
+        const blocks = piece.review.result(mine).blocks;
+        // Added after the text, it is written of the blocks it brings alone.
+        out[piece.key] = contentToEditMarkdown({
+          blocks: appends
+            ? blocks.filter((block) => !block.id || !before.has(block.id))
+            : blocks,
+        });
+      }
+      return out;
+    },
+  };
 }

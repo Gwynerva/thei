@@ -342,6 +342,18 @@ export interface AiActionItem {
 export interface AiReviewText {
   action: AiActionItem;
   data: import('./content').ContentOutputData;
+  /**
+   * Of a text written whole — a written one, a new entity's texts — each as
+   * it would stand, by the key its words are corrected under, over `data`;
+   * a new entity's are over nothing. A new entity's text names its field, or
+   * the title of the section it is written for.
+   */
+  written?: {
+    key: string;
+    field?: string;
+    section?: string;
+    proposed: import('./content').ContentOutputData;
+  }[];
   /** The session it came from, while that session lives. */
   session?: { sessionUuid: string; title: string };
 }

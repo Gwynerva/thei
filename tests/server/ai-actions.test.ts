@@ -767,6 +767,146 @@ describe('a text edit', () => {
     });
   });
 
+  describe('mistakes of meaning', () => {
+    const meaning = [
+      {
+        find: 'Finished the bos of the first level today.',
+        replace: 'Today I finished the boss of the first level.',
+        category: 'clumsy',
+        certainty: 'sure',
+        reason: 'The words stumble',
+      },
+      {
+        find: 'Tomorow I will draw the second one.',
+        category: 'logic',
+        reason: 'The second level comes before the first was planned',
+      },
+    ];
+
+    it('are remarks, or rewordings never sure, and need their reason', async () => {
+      const { results } = await propose(session(), {
+        kind: 'revise',
+        target: 'diary-entry:2026-10-13',
+        text: 'body',
+        mode: 'proofread',
+        corrections: [
+          ...meaning,
+          { find: 'first level', category: 'repeat', reason: '' },
+          { find: 'second one', category: 'spelling', reason: 'No words' },
+        ],
+      });
+      const actionUuid = (results[0] as { actionUuid: string }).actionUuid;
+      expect(findAction(actionUuid)!.payload).toMatchObject({
+        parts: [
+          {
+            id: 'c1',
+            type: 'correction',
+            category: 'clumsy',
+            certainty: 'unsure',
+            replace: 'Today I finished the boss of the first level.',
+          },
+          {
+            id: 'c2',
+            type: 'remark',
+            category: 'logic',
+            certainty: 'unsure',
+            find: 'Tomorow I will draw the second one.',
+          },
+        ],
+      });
+      expect(results[0]).toMatchObject({
+        dropped: [
+          expect.stringMatching(/says what is wrong/),
+          expect.stringMatching(/give the words it becomes/),
+        ],
+      });
+    });
+
+    it('waits on a remark until the owner writes its words otherwise', async () => {
+      const actionUuid = await proposed(session(), {
+        kind: 'revise',
+        target: 'diary-entry:2026-10-13',
+        text: 'body',
+        mode: 'proofread',
+        corrections: meaning,
+      });
+      // A remark taken changes nothing: only the rewording lands.
+      await applyActions({
+        actionUuids: [actionUuid],
+        by: 'owner',
+        parts: { [actionUuid]: { c1: 'accepted', c2: 'accepted' } },
+      });
+      expect(words()).toEqual([
+        'Today I finished the boss of the first level.',
+        'Tomorow I will draw the second one.',
+      ]);
+      expect(findAction(actionUuid)).toMatchObject({
+        state: 'pending',
+        parts: [
+          { id: 'c1', state: 'applied' },
+          { id: 'c2', state: 'pending' },
+        ],
+      });
+
+      context.rawDb
+        .prepare("UPDATE content SET data = ? WHERE contentUuid = 'c-2'")
+        .run(
+          JSON.stringify({
+            blocks: [
+              {
+                id: 'b1',
+                type: 'paragraph',
+                data: { text: 'Today I finished the boss of the first level.' },
+              },
+              {
+                id: 'b2',
+                type: 'paragraph',
+                data: { text: 'Next week the second.' },
+              },
+            ],
+          }),
+        );
+      await settleActions([findAction(actionUuid)!]);
+      expect(findAction(actionUuid)).toMatchObject({
+        state: 'applied',
+        parts: [
+          { id: 'c1', state: 'applied' },
+          { id: 'c2', state: 'applied' },
+        ],
+      });
+    });
+
+    it('offers nothing more on words the owner meant as they stand', async () => {
+      const actionUuid = await proposed(session(), {
+        kind: 'revise',
+        target: 'diary-entry:2026-10-13',
+        text: 'body',
+        mode: 'proofread',
+        corrections: [meaning[1]!],
+      });
+      decideParts(actionUuid, { c1: 'kept' });
+      await settleActions([findAction(actionUuid)!]);
+      expect(findAction(actionUuid)?.state).toBe('rejected');
+      const again = await propose(session(), {
+        kind: 'revise',
+        target: 'diary-entry:2026-10-13',
+        text: 'body',
+        mode: 'proofread',
+        corrections: [
+          {
+            find: 'Tomorow I will draw the second one.',
+            replace: 'Tomorrow I will draw the second level.',
+            category: 'clumsy',
+            reason: 'Another way to say it',
+          },
+        ],
+      });
+      expect(again.results[0]).toMatchObject({
+        refused: expect.stringMatching(/kept it as written/),
+      });
+    });
+  });
+
   describe('mending links', () => {
     const link = (id: string, words: string, fragment?: string) =>
       `<a data-content-link="entity" data-entity-type="project" data-entity-id="${id}"${fragment ? ` data-entity-fragment="${fragment}"` : ''}>${words}</a>`;
