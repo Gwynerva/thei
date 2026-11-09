@@ -50,6 +50,30 @@ class FakeField {
     this.dispatchEvent({ type: 'input', inputType: 'insertText' });
   }
 
+  /** Pastes text over the selection, as the browser does when let. */
+  paste(text: string) {
+    let prevented = false;
+    this.dispatchEvent({
+      type: 'paste',
+      clipboardData: {
+        getData: (type: string) => (type === 'text/plain' ? text : ''),
+      },
+      preventDefault: () => {
+        prevented = true;
+      },
+    });
+    if (prevented) return;
+    this.value =
+      this.value.slice(0, this.selectionStart) +
+      text +
+      this.value.slice(this.selectionEnd);
+    this.setSelectionRange(
+      this.selectionStart + text.length,
+      this.selectionStart + text.length,
+    );
+    this.dispatchEvent({ type: 'input', inputType: 'insertFromPaste' });
+  }
+
   /** Presses backspace, honouring a handler that prevents the default. */
   backspace() {
     let prevented = false;
@@ -105,9 +129,59 @@ describe('bindSmartTypography', () => {
     expect(element.value).toBe('one —');
   });
 
+  it('formats a paste as it goes in, reading the words beside it', () => {
+    element.type('Say ');
+    element.paste('-- well... see https://a.b/c...d --flag');
+    expect(element.value).toBe('Say — well… see https://a.b/c...d --flag');
+    expect(element.selectionStart).toBe(element.value.length);
+  });
+
+  it('reads the letter before a paste, and leaves hyphens glued to it', () => {
+    element.type('well');
+    element.paste('-- known');
+    expect(element.value).toBe('well-- known');
+  });
+
+  it('leaves a paste with nothing to format to the browser', () => {
+    let inputs = 0;
+    element.addEventListener('input', () => inputs++);
+    element.paste('plain words');
+    expect(element.value).toBe('plain words');
+    expect(inputs).toBe(1);
+  });
+
+  it('gives a formatted paste nothing to take back by backspace', () => {
+    element.paste('one --');
+    expect(element.value).toBe('one —');
+    element.backspace();
+    expect(element.value).toBe('one ');
+  });
+
   it('stops touching the field once released', () => {
     release();
     element.type('one --');
     expect(element.value).toBe('one --');
+    element.paste(' and...');
+    expect(element.value).toBe('one -- and...');
+  });
+});
+
+describe('a password field', () => {
+  it('is never bound: what is typed or pasted stays as it came', () => {
+    const listened: string[] = [];
+    const password = {
+      type: 'password',
+      value: '',
+      selectionStart: 0,
+      selectionEnd: 0,
+      setSelectionRange() {},
+      addEventListener: (type: string) => listened.push(type),
+      removeEventListener() {},
+    };
+    const release = bindSmartTypography(
+      password as unknown as HTMLInputElement,
+    );
+    expect(listened).toEqual([]);
+    release();
   });
 });

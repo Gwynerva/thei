@@ -97,9 +97,7 @@ test('a hand-made link the description repeats is marked', async ({ page }) => {
   ).toHaveValue('By hand');
 });
 
-test('the page shows each note where it was written', async ({
-  page,
-}) => {
+test('the page shows each note where it was written', async ({ page }) => {
   const project = await createProject(page);
   await page.goto(project.path);
   await page.waitForLoadState('networkidle');
@@ -154,9 +152,7 @@ test.describe('in the text editor', () => {
     await page.goto(`/admin/pages/${result.pageUuid}/edit/`);
     await page.waitForLoadState('networkidle');
     await page.locator('button[data-field]').first().click();
-    const save = page
-      .locator('dialog')
-      .getByRole('button', { name: 'Save', exact: true });
+    const save = page.locator('dialog [data-editor-save]');
     await expect(save).toHaveText('Saved', { timeout: 15_000 });
     return { uuid: result.pageUuid as string, save };
   }
@@ -164,9 +160,7 @@ test.describe('in the text editor', () => {
   /** Every text the save control shows from now on, to catch a flash. */
   async function recordSaveTexts(page: Page) {
     await page.evaluate(() => {
-      const button = [...document.querySelectorAll('dialog button')].find(
-        (item) => item.getAttribute('aria-label') === 'Save',
-      )!;
+      const button = document.querySelector('dialog [data-editor-save]')!;
       const texts: string[] = [];
       (window as unknown as { saveTexts: string[] }).saveTexts = texts;
       new MutationObserver(() => {

@@ -1545,6 +1545,7 @@ export default defineI18nBase({
     content_choose_media: 'Choose image or video',
     content_gallery_tile: 'Show this picture',
     content_add_media: 'Add image or video',
+    content_add_media_after: 'Add image or video after this one',
     content_choose_file: 'Choose file',
     content_choose_audio: 'Choose audio',
     content_show_as_player: 'Show as a player',

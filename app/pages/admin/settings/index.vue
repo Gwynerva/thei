@@ -266,6 +266,7 @@ async function save() {
               ><FieldInput
                 v-model="data.secretPhrase"
                 autocomplete="off"
+                spellcheck="false"
               /><FieldHint>{{ phrase.secret_phrase_hint }}</FieldHint></Field
             >
             <div class="grid gap-md sm:grid-cols-2">

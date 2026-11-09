@@ -8,7 +8,8 @@ import {
 const SETTINGS_BUTTON_SELECTOR = '.ce-toolbar__settings-btn';
 const DROP_TARGET_CLASS = 'ce-block--drop-target';
 const DROP_TARGET_BEFORE_CLASS = 'ce-block--drop-target-before';
-const BLOCK_DRAG_MIME = 'application/x-thei-editor-block';
+/** What a block dragged by its handle carries: its id, and nothing to drop. */
+export const BLOCK_DRAG_MIME = 'application/x-thei-editor-block';
 const CLICK_GUARD_MS = 250;
 /** How near the scroller's edge, in px, a dragged block starts it moving. */
 const EDGE_SCROLL_ZONE = 56;

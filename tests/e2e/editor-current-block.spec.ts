@@ -862,6 +862,117 @@ test.describe('in the text editor of a page', () => {
     await expect(items.nth(1)).toBeFocused();
   });
 
+  /**
+   * Backspace as a phone's keyboard sends it: a key it does not name, then
+   * the deletion as `beforeinput` alone.
+   */
+  async function phoneBackspace(page: Page) {
+    await page.evaluate(() => {
+      const target = document.activeElement!;
+      target.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Unidentified',
+          keyCode: 229,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      const input = new InputEvent('beforeinput', {
+        inputType: 'deleteContentBackward',
+        bubbles: true,
+        cancelable: true,
+      });
+      // Nothing the editor took: the browser deletes a letter itself.
+      if (target.dispatchEvent(input)) document.execCommand('delete');
+    });
+  }
+
+  const listItem = (content: string) => ({ content, meta: {}, items: [] });
+
+  for (const [how, backspace] of [
+    ['a keyboard', (page: Page) => page.keyboard.press('Backspace')],
+    ['a phone', phoneBackspace],
+  ] as const) {
+    test(`Backspace from ${how} in an empty first item turns it into a paragraph`, async ({
+      page,
+    }) => {
+      await openEditor(page, 'list-backspace', [
+        {
+          type: 'list',
+          data: {
+            style: 'unordered',
+            meta: {},
+            items: [listItem(''), listItem('Two')],
+          },
+        },
+        { type: 'paragraph', data: { text: 'After' } },
+      ]);
+      const blocks = editorBlocks(page);
+      const items = page.locator(
+        'dialog .content-editor .cdx-list__item-content',
+      );
+
+      await items.nth(0).click();
+      await backspace(page);
+      await expect(blocks).toHaveCount(3);
+      await expect(blocks.nth(0).locator('.ce-paragraph')).toBeFocused();
+      await expect(blocks.nth(0)).toHaveText('');
+      await expect(items).toHaveCount(1);
+      await expect(items.nth(0)).toHaveText('Two');
+
+      // Past the start of an item, a letter goes as usual.
+      await items.nth(0).click();
+      await page.keyboard.press('End');
+      await backspace(page);
+      await expect(items.nth(0)).toHaveText('Tw');
+    });
+
+    test(`Backspace from ${how} in the one empty item of a text leaves one paragraph`, async ({
+      page,
+    }) => {
+      await openEditor(page, 'list-only', [
+        {
+          type: 'list',
+          data: { style: 'unordered', meta: {}, items: [listItem('x')] },
+        },
+      ]);
+      const blocks = editorBlocks(page);
+
+      // A text is never stored empty: its one item is emptied here.
+      await blocks.nth(0).locator('.cdx-list__item-content').click();
+      await page.keyboard.press('End');
+      await page.keyboard.press('Backspace');
+      await expect(blocks.nth(0)).toHaveText('');
+      await backspace(page);
+      await expect(blocks).toHaveCount(1);
+      await expect(blocks.nth(0).locator('.ce-paragraph')).toBeFocused();
+      await expect(blocks.nth(0)).toHaveText('');
+    });
+  }
+
+  test('Backspace from a phone at the start of an item joins it to the one before', async ({
+    page,
+  }) => {
+    await openEditor(page, 'list-join', [
+      { type: 'paragraph', data: { text: 'Before' } },
+      {
+        type: 'list',
+        data: {
+          style: 'unordered',
+          meta: {},
+          items: [listItem('One'), listItem('Two')],
+        },
+      },
+    ]);
+    const items = editorBlocks(page).nth(1).locator('.cdx-list__item-content');
+
+    await items.nth(1).click();
+    await page.keyboard.press('Home');
+    await phoneBackspace(page);
+    await expect(items).toHaveCount(1);
+    await expect(items.nth(0)).toHaveText('OneTwo');
+  });
+
   test('dragging a block to the edge of the modal scrolls it', async ({
     page,
   }) => {

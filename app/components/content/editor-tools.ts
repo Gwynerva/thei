@@ -14,6 +14,7 @@ import {
   createPendingUploadList,
   PendingMediaUpload,
   type PendingMediaHandover,
+  type PendingUpload,
 } from '#layers/thei/app/composables/pending-upload';
 import {
   insertPlacedFiles,
@@ -102,6 +103,7 @@ export type ContentEditorEditAsset = (
 interface ContentToolLabels {
   chooseMedia: string;
   addMedia: string;
+  addMediaAfter: string;
   removeMedia: string;
   chooseFile: string;
   chooseAudio: string;
@@ -1033,14 +1035,48 @@ export class ContentMediaTool
       caption: this.caption,
       editable: !this.options.readOnly,
       editLabel: this.labels.chooseMedia,
+      addLabel: this.labels.addMedia,
       captionPlaceholder: this.labels.caption,
       onEdit: () => void this.edit(),
+      onAdd: () => void this.addMore(),
       onCaption: (value: string) => {
         if (value === this.caption) return;
         this.caption = value;
         this.commit();
       },
     });
+  }
+
+  /**
+   * More pictures and videos beside this one: the block becomes a gallery
+   * that starts with it, as «Turn into a gallery» makes it, and the picked
+   * ones follow — new files once each has landed. Nothing picked, nothing
+   * changes.
+   */
+  private async addMore() {
+    if (this.options.readOnly || !this.asset) return;
+    const picked = await this.config.pickFiles('media');
+    if (this.destroyed || !this.asset) return;
+    if (!picked.assets.length && !picked.files.length) return;
+    const gallery = fileShownAs('contentGallery', this.asset, {
+      caption: this.caption,
+    }) as { items: ContentGalleryItem[] };
+    await replaceBlock(
+      this.options.api,
+      this.options.block,
+      'contentGallery',
+      {
+        items: [
+          ...gallery.items,
+          ...picked.assets.map((asset) => ({
+            id: crypto.randomUUID(),
+            asset,
+          })),
+        ],
+        files: picked.files,
+      },
+      true,
+    );
   }
 
   private setLayout(layout: ContentMediaLayout) {
@@ -1064,7 +1100,8 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
    * only when a file lands; while any is under way, closing the editor asks.
    */
   private readonly uploads = createPendingUploadList({
-    onLanded: (asset) => this.append([contentAssetFromVariant(asset)]),
+    onLanded: (asset, upload) =>
+      this.land(contentAssetFromVariant(asset), upload),
     onChange: (uploads) => {
       const track = contentToolConfig(this.options.config).uploads.track;
       if (uploads.length && !this.tracking) track?.(1);
@@ -1074,6 +1111,16 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
     },
   });
   private tracking = false;
+  /**
+   * Where a file added after a tile goes once it lands: after that tile, and
+   * after the files picked before it in the same go that have landed, so the
+   * picked order holds whatever order they land in. A file without a place
+   * here goes to the end.
+   */
+  private readonly placeOf = new WeakMap<
+    PendingUpload,
+    { anchorId: string; batch: (string | undefined)[]; index: number }
+  >();
 
   constructor(
     private options: ContentToolOptions<
@@ -1095,7 +1142,7 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
    * New pictures and videos, stored at the defaults through the slots every
    * new file shares, a tile each until it lands.
    */
-  adoptFiles(files: File[]) {
+  adoptFiles(files: File[], after?: string) {
     if (!files.length || this.options.readOnly) return;
     if (this.destroyed) return;
     const { constraints } = contentToolConfig(this.options.config).uploads;
@@ -1106,6 +1153,12 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
           request: (draft) => contentFileRequest('contentGallery', draft),
         }),
     );
+    if (after) {
+      const batch: (string | undefined)[] = uploads.map(() => undefined);
+      uploads.forEach((upload, index) =>
+        this.placeOf.set(upload, { anchorId: after, batch, index }),
+      );
+    }
     this.uploads.follow(uploads);
     for (const upload of uploads) void withPasteUploadSlot(() => upload.run());
   }
@@ -1148,6 +1201,8 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
       onRetryPending: (id: string) =>
         this.uploads.uploads.find((other) => other.id === id)?.retry(),
       onAdd: () => void this.add(),
+      addAfterLabel: this.labels.addMediaAfter,
+      onAddAfter: (id: string) => void this.addAfter(id),
       onEdit: (id: string) => void this.edit(id),
       onRemove: (id: string) => this.remove(id),
       onReorder: (items: ContentGalleryItem[]) => {
@@ -1175,18 +1230,80 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
     this.adoptFiles(picked.files);
   }
 
+  /**
+   * More pictures right after the tile shown: the ones from the library at
+   * once, the first of them shown, new files in their place as they land.
+   */
+  private async addAfter(id: string) {
+    if (this.options.readOnly) return;
+    const picked = await contentToolConfig(this.options.config).pickFiles(
+      'media',
+    );
+    if (this.destroyed) return;
+    const anchor = this.items.findIndex((item) => item.id === id);
+    const added = this.insertAt(
+      anchor < 0 ? this.items.length : anchor + 1,
+      picked.assets,
+    );
+    if (added[0]) {
+      this.selectedId = added[0].id;
+      this.commit();
+    } else this.renderContent();
+    const last = added.at(-1)?.id ?? (anchor < 0 ? undefined : id);
+    this.adoptFiles(picked.files, last);
+  }
+
   private append(assets: ContentAssetData[]) {
-    if (!assets.length) {
+    const wasEmpty = this.items.length === 0;
+    const added = this.insertAt(this.items.length, assets);
+    if (!added.length) {
       this.renderContent();
       return;
     }
+    if (wasEmpty) this.selectedId = added[0]?.id;
+    this.commit();
+  }
+
+  /** Puts the pictures among the items at `index`, and says which they are. */
+  private insertAt(index: number, assets: readonly ContentAssetData[]) {
     const added = assets.map((asset) => ({
       id: crypto.randomUUID(),
       asset,
     }));
-    const wasEmpty = this.items.length === 0;
-    this.items = [...this.items, ...added];
-    if (wasEmpty) this.selectedId = added[0]?.id;
+    if (added.length)
+      this.items = [
+        ...this.items.slice(0, index),
+        ...added,
+        ...this.items.slice(index),
+      ];
+    return added;
+  }
+
+  /**
+   * A new file has landed: in the place it was added at, when it has one —
+   * after the files of its go picked before it, else after the tile it was
+   * added after — while that place is still there; else at the end.
+   */
+  private land(asset: ContentAssetData, upload: PendingUpload) {
+    const place = this.placeOf.get(upload);
+    if (!place) {
+      this.append([asset]);
+      return;
+    }
+    this.placeOf.delete(upload);
+    const indexOf = (id: string | undefined) =>
+      id === undefined ? -1 : this.items.findIndex((item) => item.id === id);
+    let after = -1;
+    for (let earlier = place.index - 1; earlier >= 0 && after < 0; earlier--)
+      after = indexOf(place.batch[earlier]);
+    if (after < 0) after = indexOf(place.anchorId);
+    if (after < 0) {
+      this.append([asset]);
+      place.batch[place.index] = this.items.at(-1)?.id;
+      return;
+    }
+    const [added] = this.insertAt(after + 1, [asset]);
+    place.batch[place.index] = added?.id;
     this.commit();
   }
 
@@ -1740,6 +1857,7 @@ function getLabels(
     config?.labels ?? {
       chooseMedia: 'Choose image or video',
       addMedia: 'Add image or video',
+      addMediaAfter: 'Add image or video after this one',
       removeMedia: 'Remove image or video',
       chooseFile: 'Choose file',
       chooseAudio: 'Choose audio',

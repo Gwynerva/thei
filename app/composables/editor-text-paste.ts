@@ -2,6 +2,7 @@ import {
   insertHtmlAt,
   runEditCommand,
 } from '#layers/thei/app/components/content/editor-edit-commands';
+import { EDITOR_JS_CLIPBOARD_MIME } from './editor-dom';
 import { editableFieldOf } from './editor-inline-dom';
 import type { EditorInlineKeep } from './editor-inline-keep';
 import {
@@ -37,7 +38,7 @@ export function bindEditorTextPaste(
   function onPaste(event: ClipboardEvent) {
     const data = event.clipboardData;
     if (!data || data.types.includes('Files')) return;
-    if (data.getData('application/x-editor-js')) return;
+    if (data.getData(EDITOR_JS_CLIPBOARD_MIME)) return;
     const html = data.getData('text/html');
     const text = data.getData('text/plain');
     if (/^https?:\/\/\S+$/i.test(text.trim())) return;

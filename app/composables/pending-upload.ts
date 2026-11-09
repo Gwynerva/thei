@@ -173,7 +173,7 @@ abstract class PendingUploadBase implements PendingUpload {
  * whole list, lets its upload go.
  */
 export function createPendingUploadList(options: {
-  onLanded(asset: AssetVariantInfo): void;
+  onLanded(asset: AssetVariantInfo, upload: PendingUpload): void;
   onChange(uploads: readonly PendingUpload[]): void;
 }) {
   let uploads: readonly PendingUpload[] = [];
@@ -210,7 +210,7 @@ export function createPendingUploadList(options: {
         void upload.result.then((asset) => {
           if (disposed || !uploads.includes(upload)) return;
           forget(upload);
-          if (asset) options.onLanded(asset);
+          if (asset) options.onLanded(asset, upload);
         });
       }
     },

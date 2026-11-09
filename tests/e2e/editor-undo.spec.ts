@@ -27,6 +27,15 @@ test.afterEach(() => {
 });
 
 async function openEditor(page: Page, name: string, blocks: object[]) {
+  await openForm(page, name, blocks);
+  await page.locator('button[data-field]').first().click();
+  await expect(
+    page.locator('dialog .content-editor [contenteditable="true"]').first(),
+  ).toBeVisible({ timeout: 15_000 });
+}
+
+/** A new page's form, the editor still closed. */
+async function openForm(page: Page, name: string, blocks: object[]) {
   const slug = `undo-${name}-${Date.now()}`;
   const response = await page.request.post('/api/admin/pages', {
     data: {
@@ -44,10 +53,6 @@ async function openEditor(page: Page, name: string, blocks: object[]) {
   expect(result.type, JSON.stringify(result)).toBe('success');
   await page.goto(`/admin/pages/${result.pageUuid}/edit/`);
   await page.waitForLoadState('networkidle');
-  await page.locator('button[data-field]').first().click();
-  await expect(
-    page.locator('dialog .content-editor [contenteditable="true"]').first(),
-  ).toBeVisible({ timeout: 15_000 });
 }
 
 const fields = (page: Page) =>
@@ -165,6 +170,15 @@ async function paste(page: Page, data: Record<string, string>) {
       }),
     );
   }, data);
+}
+
+/** Announces a copy of the selection, as the browser does before it writes it. */
+async function copy(page: Page) {
+  await page.evaluate(() =>
+    document.activeElement!.dispatchEvent(
+      new ClipboardEvent('copy', { bubbles: true, cancelable: true }),
+    ),
+  );
 }
 
 /** Puts the caret right after the first `text` in a field. */
@@ -425,6 +439,171 @@ test.describe('pasting', () => {
       .toBe('read the docs today');
     await redo(page);
     await expect(field.locator('a')).toHaveText('the docs');
+  });
+});
+
+test.describe('pasted typography', () => {
+  test('a pasted line gets its dash and ellipsis, and one undo takes it all out', async ({
+    page,
+  }) => {
+    await openEditor(page, 'paste-typography', [
+      { type: 'paragraph', data: { text: 'start end' } },
+    ]);
+    const field = fields(page).first();
+    await caretAfter(field, 'start ');
+    await paste(page, {
+      'text/html': '<p>a -- <i>pasted</i> line... --flag </p>',
+      'text/plain': 'a -- pasted line... --flag ',
+    });
+    await expect(field.locator('i')).toHaveText('pasted');
+    await expect
+      .poll(async () => (await texts(page))[0])
+      .toBe('start a — pasted line… --flag end');
+    await undo(page);
+    await expect.poll(async () => (await texts(page))[0]).toBe('start end');
+    await redo(page);
+    await expect
+      .poll(async () => (await texts(page))[0])
+      .toBe('start a — pasted line… --flag end');
+  });
+
+  test('words pasted beside markup and into a heading are formatted too', async ({
+    page,
+  }) => {
+    await openEditor(page, 'paste-typography-plain', [
+      { type: 'header', data: { text: 'Title', level: 2 } },
+      { type: 'paragraph', data: { text: 'see <b>this</b>' } },
+    ]);
+    const heading = fields(page).first();
+    await caretAfter(heading, 'Title');
+    await paste(page, { 'text/plain': ' -- and more...' });
+    await expect(heading).toHaveText('Title — and more…');
+    const paragraph = fields(page).nth(1);
+    await caretAfter(paragraph, 'see ');
+    await paste(page, { 'text/plain': 'wait... ' });
+    await expect
+      .poll(async () => (await texts(page))[1])
+      .toBe('see wait… this');
+    // The words went where they always go; the bold kept its own.
+    await expect(paragraph.locator('b')).toHaveText('this');
+    await undo(page);
+    await expect.poll(async () => (await texts(page))[1]).toBe('see this');
+  });
+
+  test('several pasted paragraphs become blocks with their typography', async ({
+    page,
+  }) => {
+    await openEditor(page, 'paste-typography-many', [
+      { type: 'paragraph', data: { text: 'Seed' } },
+    ]);
+    await fields(page).first().click();
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    await expect(fields(page)).toHaveCount(2);
+    await paste(page, {
+      'text/html': '<p>first -- one</p><p>second... <code>--x...</code></p>',
+      'text/plain': 'first -- one\nsecond... --x...',
+    });
+    await expect(fields(page)).toHaveCount(3);
+    await expect
+      .poll(async () => (await texts(page)).slice(1))
+      .toEqual(['first — one', 'second… --x...']);
+  });
+
+  test('addresses are pasted as they are, alone or among words', async ({
+    page,
+  }) => {
+    await page.route('**/api/admin/external-links**', (route) =>
+      route.fulfill({ json: null }),
+    );
+    await openEditor(page, 'paste-typography-links', [
+      { type: 'paragraph', data: { text: 'read the docs -- today' } },
+      { type: 'paragraph', data: { text: 'end' } },
+    ]);
+    const field = fields(page).first();
+    await select(field, 'the docs');
+    await paste(page, { 'text/plain': 'https://example.com/a...b/--c' });
+    await expect(field.locator('a')).toHaveText('the docs');
+    await expect(field.locator('a')).toHaveAttribute(
+      'href',
+      'https://example.com/a...b/--c',
+    );
+    // The words already there are not the paste's to format.
+    await expect
+      .poll(async () => (await texts(page))[0])
+      .toBe('read the docs -- today');
+
+    const second = fields(page).nth(1);
+    await caretAfter(second, 'end');
+    await paste(page, {
+      'text/html':
+        ' see <a href="https://example.com/x...y">the x...</a> -- https://example.com/z...',
+      'text/plain': ' see the x... -- https://example.com/z...',
+    });
+    await expect(second.locator('a')).toHaveText('the x…');
+    await expect(second.locator('a')).toHaveAttribute(
+      'href',
+      'https://example.com/x...y',
+    );
+    await expect
+      .poll(async () => (await texts(page))[1])
+      .toBe('end see the x… — https://example.com/z...');
+  });
+
+  test('words copied in the editor are pasted as the owner left them', async ({
+    page,
+  }) => {
+    await openEditor(page, 'paste-own-words', [
+      { type: 'paragraph', data: { text: 'kept a -- b on purpose' } },
+      { type: 'paragraph', data: { text: 'end' } },
+    ]);
+    await select(fields(page).first(), 'a -- b');
+    await copy(page);
+    const second = fields(page).nth(1);
+    await caretAfter(second, 'end');
+    await paste(page, { 'text/plain': 'a -- b' });
+    await expect.poll(async () => (await texts(page))[1]).toBe('enda -- b');
+    // Words that were not copied here are still formatted.
+    await paste(page, { 'text/plain': ' c -- d' });
+    await expect
+      .poll(async () => (await texts(page))[1])
+      .toBe('enda -- b c — d');
+  });
+
+  test('words dropped from outside are formatted where they land', async ({
+    page,
+  }) => {
+    await openEditor(page, 'drop-typography', [
+      { type: 'paragraph', data: { text: 'left right' } },
+    ]);
+    const field = fields(page).first();
+    await dropFromOutside(page, await pointBefore(field, 'right'), {
+      'text/plain': 'Hi -- there... ',
+    });
+    await expect
+      .poll(async () => (await texts(page))[0])
+      .toBe('left Hi — there… right');
+  });
+
+  test('a paste into a field of the form is formatted, and a technical one is not', async ({
+    page,
+  }) => {
+    await openForm(page, 'field-typography', [
+      { type: 'paragraph', data: { text: 'Seed' } },
+    ]);
+    const title = page.locator('input[spellcheck="true"]').first();
+    await title.fill('Title');
+    await title.press('End');
+    await paste(page, { 'text/plain': ' -- and more...' });
+    await expect(title).toHaveValue('Title — and more…');
+    await title.press('ControlOrMeta+z');
+    await expect(title).toHaveValue('Title');
+
+    const summary = page.locator('textarea[spellcheck="true"]').first();
+    await summary.fill('One');
+    await summary.press('End');
+    await paste(page, { 'text/plain': ' -- two...\nthree --' });
+    await expect(summary).toHaveValue('One — two…\nthree —');
   });
 });
 

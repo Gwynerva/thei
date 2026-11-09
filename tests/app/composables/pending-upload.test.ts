@@ -214,9 +214,13 @@ describe('a list of pending uploads', () => {
   it('shows each upload until it lands, places what landed, and lets the rest go', async () => {
     const { calls, send } = fakeSend();
     const landed: AssetVariantInfo[] = [];
+    const landedFrom: unknown[] = [];
     const seen: number[] = [];
     const list = createPendingUploadList({
-      onLanded: (stored) => landed.push(stored),
+      onLanded: (stored, from) => {
+        landed.push(stored);
+        landedFrom.push(from);
+      },
       onChange: (uploads) => seen.push(uploads.length),
     });
     const first = upload(send, 'one.png');
@@ -231,6 +235,8 @@ describe('a list of pending uploads', () => {
     await settle();
     expect(landed).toEqual([asset]);
     expect(list.uploads).toEqual([second, third]);
+    // The place a file goes may depend on which upload it was.
+    expect(landedFrom).toEqual([first]);
 
     // Given up by hand: nothing lands, and its request is stopped.
     list.forget(second);

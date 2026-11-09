@@ -165,6 +165,12 @@ button does under the pointer.
 buttons of one height; `app/components/ai/AiActionRow.vue` the square buttons
 of an AI card.
 
+Over a picture or a video in a text's editor
+(`app/components/content/ContentMediaCard.vue`) stand two buttons of `h-9`
+on the translucent `bg-bg-1/80`: a round «+» that adds pictures — a single
+one becomes a gallery, a gallery takes them after the picture shown — and
+the edit button, `rounded-normal`, its icon followed by the file's size.
+
 ## Why
 
 - The owner found the buttons of the AI page "terribly" off, their words

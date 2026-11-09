@@ -1102,6 +1102,7 @@ export type LanguagePhrases = {
   content_choose_media: string;
   content_gallery_tile: string;
   content_add_media: string;
+  content_add_media_after: string;
   content_choose_file: string;
   content_choose_audio: string;
   content_show_as_player: string;

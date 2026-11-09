@@ -1610,6 +1610,7 @@ export default defineI18nModule({
     content_choose_media: 'Выбрать изображение или видео',
     content_gallery_tile: 'Показать это изображение',
     content_add_media: 'Добавить изображение или видео',
+    content_add_media_after: 'Добавить изображение или видео после этого',
     content_choose_file: 'Выбрать файл',
     content_choose_audio: 'Выбрать аудио',
     content_show_as_player: 'Показать плеером',

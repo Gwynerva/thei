@@ -35,6 +35,11 @@ import {
 import { bindEditorFilePaste } from '#layers/thei/app/composables/editor-file-paste';
 import { bindEditorPlainFields } from '#layers/thei/app/composables/editor-plain-fields';
 import {
+  bindListBackspace,
+  keepListInText,
+  type ListTabulator,
+} from '#layers/thei/app/composables/editor-list-backspace';
+import {
   prepareContentFiles,
   skippedContentFilesMessage,
 } from '#layers/thei/app/composables/content-files';
@@ -122,6 +127,7 @@ import {
 } from '#layers/thei/app/composables/editor-inline-keep';
 import { bindEditorTextDrop } from '#layers/thei/app/composables/editor-text-drop';
 import { bindEditorTextPaste } from '#layers/thei/app/composables/editor-text-paste';
+import { bindEditorPasteTypography } from '#layers/thei/app/composables/paste-typography';
 import { bindEditorNativeUndo } from '#layers/thei/app/composables/editor-native-undo';
 import { bindEditorKeyboardBoundary } from '#layers/thei/app/composables/editor-keyboard-boundary';
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
@@ -1098,6 +1104,22 @@ async function startEditor() {
   }
 
   class TheiList extends List {
+    // The list's own parts, kept private in its types: its block, and the
+    // part that answers its keys, made anew when the style changes.
+    private get parts() {
+      return this as unknown as { block: BlockAPI; list: ListTabulator };
+    }
+
+    override render() {
+      keepListInText(this.parts.list);
+      return super.render();
+    }
+
+    // The block's holder stays while the list inside it is drawn anew.
+    rendered() {
+      bindListBackspace(this.parts.block.holder, () => this.parts.list);
+    }
+
     override renderSettings() {
       const settings = super.renderSettings();
       const styleIcons = [
@@ -1114,6 +1136,9 @@ async function startEditor() {
     }
   }
 
+  // Bound before the editor and every other paste and drop: they all read
+  // the words with their typography.
+  bound(bindEditorPasteTypography(holder.value!));
   // Bound before the editor, so its listeners stand in front of Editor.js's
   // own drop handling on the same holder.
   bound(
@@ -1697,6 +1722,7 @@ function contentToolLabels() {
   return {
     chooseMedia: phrase.value.content_choose_media,
     addMedia: phrase.value.content_add_media,
+    addMediaAfter: phrase.value.content_add_media_after,
     removeMedia: phrase.value.delete,
     chooseFile: phrase.value.content_choose_file,
     chooseAudio: phrase.value.content_choose_audio,
