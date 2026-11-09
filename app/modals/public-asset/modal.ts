@@ -1,4 +1,5 @@
 import type { PublicAssetDescriptor } from '#layers/thei/shared/api/public';
+import type { LandingPlace } from '#layers/thei/shared/landing';
 import { assetFormatLabel } from '#layers/thei/app/composables/asset-library-labels';
 
 export const publicAssetModal = defineModal(
@@ -29,16 +30,23 @@ export type PublicAssetModalData = {
    * rather than a key, since one file may stand twice in a gallery.
    */
   start?: number;
+  /**
+   * Where each file stands on the page (`shared/landing.ts`), so the
+   * window's address names it open there; one with none has no address.
+   */
+  places?: (LandingPlace | undefined)[];
 };
 
 export function openPublicAssets(
   items: PublicAssetDescriptor[],
   start?: PublicAssetDescriptor,
+  places?: (LandingPlace | undefined)[],
 ) {
   if (!items.length) return;
   const index = start ? items.indexOf(start) : -1;
   void openModal(publicAssetModal, {
     items,
     start: index < 0 ? undefined : index,
+    ...(places ? { places } : {}),
   });
 }

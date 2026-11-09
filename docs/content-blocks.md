@@ -103,7 +103,8 @@ A heading's place is the anchor its page gives it (`contentHeadingAnchors`
 in `shared/content-headings.ts`): the headings a stranger reads are numbered
 first and the private ones after them, so the owner and a stranger read the
 same anchors, and the fixed anchors of a page — `project-description`,
-`project-sections`, `related-entities` — are never a heading's.
+`project-sections`, `related-entities`, and `statuses`, `avatars` and
+`owner-notes`, the parts a link lands on — are never a heading's.
 
 An address of this very site is never stored as an external link when the
 editor can tell what it opens: pasted into an empty paragraph, pasted over

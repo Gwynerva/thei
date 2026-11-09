@@ -8,7 +8,7 @@ import {
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { richTextToPlainText } from '#layers/thei/shared/rich-text';
 import type { SearchFindWhere } from '#layers/thei/shared/search/api';
-import type { LandingZone } from '#layers/thei/shared/search/landing';
+import type { LandingZone } from '#layers/thei/shared/landing';
 
 /**
  * The columns of the index, each weighed by how much a word in it says about

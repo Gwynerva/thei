@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { defineComponent, nextTick, type Component } from 'vue';
+import { defineComponent, nextTick, ref, type Component } from 'vue';
 import {
   closeModal,
   dismissOneStep,
@@ -541,4 +541,62 @@ test('a flow begun inside a modal waits over it, and one handed over keeps its w
   expect(modalWait.value).toBeNull();
   settleModal(parent, { type: 'done', value: 0 });
   await parentResult;
+});
+
+test('the entry of a modal shows its address, kept in step in place', async () => {
+  vi.stubGlobal('tryUseNuxtApp', () => undefined);
+  const location = { href: 'http://localhost/projects/lamp/' };
+  const history = {
+    state: {} as Record<string, unknown>,
+    scrollRestoration: 'auto',
+    pushState: vi.fn(
+      (state: Record<string, unknown>, _title: string, href: string) => {
+        history.state = state;
+        location.href = href;
+      },
+    ),
+    replaceState: vi.fn(
+      (state: Record<string, unknown>, _title: string, href: string) => {
+        history.state = state;
+        location.href = href;
+      },
+    ),
+    back: vi.fn(),
+  };
+  vi.stubGlobal('window', {
+    history,
+    location,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  });
+  installInterceptor(stubRouter().router);
+
+  // A sheet with no address of its own keeps the page's.
+  const sheet = openModal(testModal);
+  await Promise.resolve();
+  expect(location.href).toBe('http://localhost/projects/lamp/');
+
+  const file = ref(1);
+  const fileWindow = openModal(testModal);
+  await Promise.resolve();
+  modalStack.value[1]!.address.value = () =>
+    `/projects/lamp/#b-x~f${file.value}~open`;
+  await nextTick();
+  expect(location.href).toBe('http://localhost/projects/lamp/#b-x~f1~open');
+
+  file.value = 2;
+  await nextTick();
+  expect(location.href).toBe('http://localhost/projects/lamp/#b-x~f2~open');
+  expect(history.pushState).toHaveBeenCalledOnce();
+
+  // Closed, the window gives the sheet the page's address back in place.
+  closeModal();
+  await fileWindow;
+  await nextTick();
+  expect(location.href).toBe('http://localhost/projects/lamp/');
+  expect(history.back).not.toHaveBeenCalled();
+
+  closeModal();
+  await sheet;
+  expect(history.back).toHaveBeenCalledOnce();
 });

@@ -52,6 +52,24 @@ const title = (page: Page) =>
 const signOut = (page: Page) =>
   page.getByRole('button', { name: 'Sign Out', exact: true });
 
+/** Presses Sign Out, answers its question «Cancel», and says what was asked. */
+async function signOutRefused(page: Page) {
+  const asked: string[] = [];
+  const dismissed = new Promise<void>((resolve) =>
+    page.once('dialog', async (dialog) => {
+      asked.push(dialog.type());
+      await dialog.dismiss();
+      resolve();
+    }),
+  );
+  await signOut(page).click();
+  await dismissed;
+  // The page goes on from the answer at once: a task later, its press has
+  // run to its end.
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve)));
+  return asked;
+}
+
 test('signing out from an unsaved form asks first and «Cancel» stays', async ({
   page,
 }) => {
@@ -62,15 +80,19 @@ test('signing out from an unsaved form asks first and «Cancel» stays', async (
     'true',
   );
   await title(page).fill('Not saved yet');
-
-  const asked: string[] = [];
-  page.once('dialog', (dialog) => {
-    asked.push(dialog.type());
-    void dialog.dismiss();
+  // Every sign-out the page begins ends its session, asked or not.
+  const endings: string[] = [];
+  page.on('request', (request) => {
+    if (
+      request.method() === 'DELETE' &&
+      new URL(request.url()).pathname.endsWith('/api/admin/session')
+    )
+      endings.push(request.url());
   });
-  await signOut(page).click();
-  await expect.poll(() => asked).toEqual(['confirm']);
-  await page.waitForTimeout(500);
+
+  const asked = await signOutRefused(page);
+  expect(asked).toEqual(['confirm']);
+  expect(endings).toEqual([]);
   expect(new URL(page.url()).pathname).toBe('/admin/events/new/');
   await expect(title(page)).toHaveValue('Not saved yet');
   expect(await signedIn(page)).toBe(true);
@@ -83,5 +105,19 @@ test('signing out from an unsaved form asks first and «Cancel» stays', async (
   await signOut(page).click();
   await page.waitForURL('**/sign-in/');
   expect(asked).toEqual(['confirm', 'confirm']);
+  expect(endings).toHaveLength(1);
   expect(await signedIn(page)).toBe(false);
+});
+
+test('signing out from a tag being written asks too', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/admin/tags/new/');
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-nuxt-hydrated',
+    'true',
+  );
+  await title(page).fill('Not saved either');
+  expect(await signOutRefused(page)).toEqual(['confirm']);
+  expect(new URL(page.url()).pathname).toBe('/admin/tags/new/');
+  expect(await signedIn(page)).toBe(true);
 });

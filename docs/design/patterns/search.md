@@ -188,38 +188,19 @@ and behaves.
 
 ## Landing where it was found
 
-A find leads to its place on the page, written into the address's hash
-(`shared/search/landing.ts`), and the page brings it out of whatever hides it
-(`app/composables/search-landing.ts`): it opens a spoiler, turns a gallery to
-the file, shows a list cut short in full, opens the history of statuses and
-reads it on to the day, turns the relations block to the kind and its pages
-to the entity, shows «About me» and the facts in full, opens the sidebar's
-sheet on a phone, and opens the hint, the link's card or the file's window
-where the words are only there. The place is lit by a layer laid over it,
-so a picture never hides it: tinted, ringed and glowing in the accent, two
-seconds as it is and four fading, every click going through it. The words
-are marked in it, and what it cuts short is read in full while the reader is
-there. The router looks for no element by such a hash (`app/router.options.ts`):
-another page opens at its top, and the landing brings the place into view.
-
-- A part of a page that hides what a find may lead to takes part: it marks
-  its places (`data-block`, `data-file`, `data-relation-href`, `data-link`,
-  `data-status-date`, `data-landing-zone`) and brings them in when asked
-  (`useLandingReveal`, or the `theilanding` event sent from the place).
-- A new hiding part — a slider, a tab, a «show more» — does the same in the
-  same change.
+A find leads to its place on the page, written into the address's hash, and
+the page brings it out of whatever hides it and lights it, the words found
+marked in it. It lands as every link to a place on a page does: see
+[Landing](landing.md).
 
 ## Why
 
 - Two searches on one screen confused the owner; a stranger and the owner
   now meet one popup, which only holds more for the owner.
 - The kind's icon is on every result, so a group's name needs none.
-- A find that led to the top of a long page, or to a text under a spoiler,
-  made the reader look for it again.
 
 ## How it is checked
 
-- `tests/shared/search/landing.test.ts` writes and reads every kind of place.
 - `tests/app/composables/shortcut.test.ts` presses the keys on other layouts.
 - `tests/app/composables/search-history.test.ts` keeps, orders and forgets
   queries, the owner's apart; `tests/e2e/search.spec.ts` searches again from

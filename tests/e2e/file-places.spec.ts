@@ -100,11 +100,15 @@ test('the window names the other public pages the file is on, and goes there', a
   expect(answer).not.toContain('Private');
   await screenshot(guest, 'file-places-960');
 
-  // The chip goes to the page, the window closing on the way.
+  // The chip goes to where the page shows the file first — its icon, lit —
+  // the window closing on the way.
   await chips.click();
   await expect(guest).toHaveURL(
-    new RegExp(`/pages/places-lighthouse-${run}/$`),
+    new RegExp(`/pages/places-lighthouse-${run}/#icon$`),
   );
+  await expect(
+    guest.locator('[data-landing-zone="icon"][data-landing-found]'),
+  ).toHaveCount(1);
   await expect(guest.locator('dialog[open]')).toHaveCount(0);
   await guest.goBack();
   await expect(guest).toHaveURL(new RegExp(`${opened}$`));

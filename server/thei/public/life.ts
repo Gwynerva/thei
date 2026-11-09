@@ -4,6 +4,7 @@ import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { diaryContentExcerpt } from '#layers/thei/shared/diary-text';
+import { landingHash } from '#layers/thei/shared/landing';
 import {
   buildLifeUrl,
   isLifeDay,
@@ -861,7 +862,8 @@ async function hydrateLifePoint(
         visibility: 'visible',
         title: getProfile().displayName,
         summary: '',
-        href: '/#avatars',
+        // The avatar itself, in its history (`shared/landing.ts`).
+        href: `/#${landingHash({ zone: 'avatars', avatar: record.id })}`,
         media: record.media,
       };
     }
@@ -874,7 +876,8 @@ async function hydrateLifePoint(
       kind: 'regular' | 'empty';
     };
     // A project's status is titled and linked by its project; the person's own
-    // keeps the profile's name and the block on the home page.
+    // keeps the profile's name and the block on the home page. Either leads
+    // to the status itself, by its day, in the history (`shared/landing.ts`).
     const owner = point.project;
     const record = await statusHistoryItem(
       statusRecord,
@@ -892,9 +895,9 @@ async function hydrateLifePoint(
       visibility: 'visible',
       title: owner ? owner.title : getProfile().displayName,
       summary: record.text,
-      href: owner
-        ? `${buildProjectUrl(owner.humanReadableSlug, owner.publicId)}#statuses`
-        : '/#statuses',
+      href: `${
+        owner ? buildProjectUrl(owner.humanReadableSlug, owner.publicId) : '/'
+      }#${landingHash({ zone: 'statuses', status: record.date })}`,
       media: record.media,
       statusKind: record.kind,
       statusOwner: owner ? 'project' : 'profile',

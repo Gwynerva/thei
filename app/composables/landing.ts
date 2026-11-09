@@ -1,19 +1,22 @@
 import { scrollIntoSight } from '#layers/thei/app/modals/layer-motion';
 import {
+  isLandingPlaceHash,
+  landingHash,
   parseLandingHash,
   type LandingTarget,
-} from '#layers/thei/shared/search/landing';
+} from '#layers/thei/shared/landing';
 
 /**
- * Landing where a find of the search led (`shared/search/landing.ts`): the
- * place is brought out of whatever hides it, into the middle of the window,
- * lit up for a moment, and the words found are marked in it.
+ * Landing where a link led on its page (`shared/landing.ts`): a find of the
+ * search, a heading of the contents, a part of the page, a status of the
+ * feed, a file's window. The place is brought out of whatever hides it, lit
+ * up for a moment, and the words found are marked in it.
  *
  * What hides a place takes part in two ways:
  *
  * - A part of the page that keeps the place out of it — the rest of a list
- *   cut short, the history of statuses, another tab or page of relations —
- *   brings it in when asked: `useLandingReveal`.
+ *   cut short, the history of statuses or of avatars, another tab or page of
+ *   relations — brings it in when asked: `useLandingReveal`.
  * - A part that holds the place hidden — a spoiler, a gallery on another
  *   slide — hears the `theilanding` event the landing sends from the place,
  *   with the target, and shows it. A closed `<details>` is opened here.
@@ -22,6 +25,14 @@ import {
  * Words that stand in no visible text — a hint, a link's note, a file's
  * description or caption — bring up the hint, the card of the link or the
  * file's window, where they are read.
+ *
+ * An anchor — the id of an element, a heading — is scrolled to by the router,
+ * as ever; the landing brings it in and scrolls only when it was hidden, or
+ * when its id reads as a place the router leaves alone. A place of a file
+ * named open has its window opened on it, the way a press of the page opens
+ * it, and the address keeps the place: the window writes its own while it is
+ * open. Going back or forth in the history lands nowhere: the page is put
+ * where it was, with nothing lit.
  */
 const LANDING_EVENT = 'theilanding';
 
@@ -62,7 +73,7 @@ export function holdsLandingBlock(
   });
 }
 
-const HIGHLIGHT = 'search-found';
+const HIGHLIGHT = 'landing-words';
 /** As long as the place stays lit: its fading in `app/styles/content.css`. */
 const LIT_MS = 6000;
 /** How far the light reaches past the place, in pixels. */
@@ -78,14 +89,41 @@ function attribute(name: string, value: string) {
 
 /** Where on the page a target stands, by what each part marks itself with. */
 function selectorOf(target: LandingTarget): string | undefined {
+  if (target.anchor) return attribute('id', target.anchor);
   if (target.block) return attribute('data-block', target.block);
-  if (target.file) return attribute('data-file', target.file);
+  if (target.file)
+    return `${attribute('data-landing-zone', target.zone ?? '')} ${attribute('data-file', target.file)}`;
   if (target.relation)
     return attribute('data-relation-href', target.relation.href);
   if (target.link) return attribute('data-link', target.link);
   if (target.status) return attribute('data-status-date', target.status);
+  if (target.avatar) return attribute('data-avatar', target.avatar);
   if (target.zone) return attribute('data-landing-zone', target.zone);
   return undefined;
+}
+
+/** The place of a hash without its words, as an element's id would read. */
+function hashId(hash: string) {
+  const place = hash.replace(/^#/u, '').split(':~:')[0] ?? '';
+  try {
+    return decodeURIComponent(place);
+  } catch {
+    return place;
+  }
+}
+
+/**
+ * An element the page names by the very words of the hash is what it means
+ * — a heading whose anchor happens to read as a block — unless it is a part
+ * of the page, which the hash names as such already.
+ */
+function byOwnId(target: LandingTarget, hash: string): LandingTarget {
+  if (target.anchor) return target;
+  const id = hashId(hash);
+  const element = id ? document.getElementById(id) : null;
+  return element && !element.hasAttribute('data-landing-zone')
+    ? { anchor: id, words: target.words }
+    : target;
 }
 
 function shown(element: Element) {
@@ -116,6 +154,13 @@ function fileWithin(block: Element, file: string | undefined) {
   if (!file) return block;
   const inner = [...block.querySelectorAll(attribute('data-file', file))];
   return inner.find(shown) ?? block;
+}
+
+/** What a press opens the place's window with. */
+function openerOf(place: Element) {
+  return place.matches('[data-opens-viewer]')
+    ? (place as HTMLElement)
+    : (place.querySelector<HTMLElement>('[data-opens-viewer]') ?? undefined);
 }
 
 async function revealAll(target: LandingTarget) {
@@ -205,7 +250,7 @@ function holderOfWords(element: Element, words: string[]) {
  */
 function light(place: Element): () => void {
   const layer = document.createElement('div');
-  layer.className = 'search-landing-light';
+  layer.className = 'landing-light';
   layer.setAttribute('aria-hidden', 'true');
   const radius = parseFloat(getComputedStyle(place).borderTopLeftRadius) || 0;
   layer.style.borderRadius = `${radius + LIGHT_PAD}px`;
@@ -240,8 +285,9 @@ function hover(element: Element) {
   );
 }
 
-export function useSearchLanding() {
+export function usePageLanding() {
   const route = useRoute();
+  const router = useRouter();
   let unlight: ReturnType<typeof setTimeout> | undefined;
   let putOut: (() => void) | undefined;
   let found: Element | undefined;
@@ -251,18 +297,43 @@ export function useSearchLanding() {
     clearTimeout(unlight);
     putOut?.();
     putOut = undefined;
-    found?.removeAttribute('data-search-found');
+    found?.removeAttribute('data-landing-found');
     found = undefined;
     if (typeof CSS !== 'undefined' && 'highlights' in CSS)
       CSS.highlights.delete(HIGHLIGHT);
   }
 
-  async function land(hash: string, first: boolean) {
+  /**
+   * The window of a place named open, opened as a press of the page opens
+   * it. The address is put back to the place first, so the page under the
+   * window — and a reload once it closes — names the file, not its window;
+   * the window writes its own address while it is open (`useModalAddress`).
+   */
+  async function openWindow(
+    target: LandingTarget,
+    place: Element,
+    traversal: boolean,
+  ) {
+    const opener = openerOf(place);
+    if (!opener || activeModal.value) return false;
+    const page = route.fullPath.replace(/#.*$/u, '');
+    const rest = landingHash({ ...target, open: false });
+    const next = rest ? `${page}#${rest}` : page;
+    landed = router.resolve(next).fullPath;
+    await router.replace(next);
+    if (!traversal) scrollIntoSight(place, { instant: true });
+    opener.click();
+    return true;
+  }
+
+  async function land(hash: string, { first = false, traversal = false } = {}) {
     clear();
     const mine = ++run;
-    const target = parseLandingHash(hash);
-    if (!target) return;
+    const parsed = parseLandingHash(hash);
+    if (!parsed || (traversal && !parsed.open)) return;
     await frame();
+    if (mine !== run) return;
+    const target = byOwnId(parsed, hash);
 
     // Brought into the page, and onto the phone's sheet when the sidebar
     // holds it there; what is still loading is waited for a little.
@@ -289,6 +360,7 @@ export function useSearchLanding() {
       await pause(150);
     }
     if (!element || mine !== run) return;
+    const hidden = !shown(element);
 
     // Shown where it was hidden: its details opened, its spoiler lifted,
     // its gallery turned to the file.
@@ -301,11 +373,19 @@ export function useSearchLanding() {
     if (mine !== run) return;
     const place = target.block ? fileWithin(element, target.file) : element;
 
+    if (target.open && (await openWindow(target, place, traversal))) return;
+    if (traversal) return;
+
+    if (target.anchor) {
+      // The router has scrolled to it, unless it was hidden from it.
+      if (hidden || isLandingPlaceHash(hash))
+        scrollIntoSight(place, { block: 'start' });
+    }
     // Opened afresh, the browser has scrolled to the words when it found
     // them; only where it did not is the place brought into view.
-    if (!first || window.scrollY === 0) scrollIntoSight(place);
+    else if (!first || window.scrollY === 0) scrollIntoSight(place);
     found = place;
-    place.setAttribute('data-search-found', '');
+    place.setAttribute('data-landing-found', '');
     putOut = light(place);
     unlight = setTimeout(() => {
       putOut?.();
@@ -327,11 +407,9 @@ export function useSearchLanding() {
       hover(holder);
       return;
     }
-    const opener = place.matches('[data-opens-viewer]')
-      ? place
-      : place.querySelector<HTMLElement>('[data-opens-viewer]');
+    const opener = openerOf(place);
     if (!opener) return;
-    (opener as HTMLElement).click();
+    opener.click();
     // The words marked where the file's window says them.
     for (let wait = 0; wait < 10 && mine === run; wait++) {
       await pause(150);
@@ -346,25 +424,53 @@ export function useSearchLanding() {
   }
 
   // Each address lands once: on the page loaded, then on each page the site
-  // goes to — once it is in — or on a new hash of the same page.
+  // goes to — once it is in — or on a new hash of the same page. One reached
+  // by going back or forth in the history is a traversal: its entry comes
+  // with the state the router keeps in each, while a press of a plain link
+  // to a hash comes to a new entry with none yet.
   const nuxtApp = useNuxtApp();
   let landed = '';
+  let popping = false;
+  let traversed: string | undefined;
+  const popped = (event: PopStateEvent) => (popping = event.state !== null);
   function landOnce(first: boolean) {
     if (route.fullPath === landed) return;
     landed = route.fullPath;
-    void land(route.hash, first);
+    void land(route.hash, { first, traversal: traversed === route.fullPath });
   }
+
+  /** A link to the place already in the address lands on it again. */
+  function followedLink(event: MouseEvent) {
+    if (!isPlainClick(event) || event.defaultPrevented) return;
+    const link = (event.target as Element | null)?.closest?.('a[href]');
+    if (!(link instanceof HTMLAnchorElement) || !link.hash) return;
+    const { origin, pathname, search, hash } = window.location;
+    if (
+      link.origin === origin &&
+      link.pathname === pathname &&
+      link.search === search &&
+      link.hash === hash
+    )
+      void land(link.hash);
+  }
+
   let stopPageHook: (() => void) | undefined;
   // A run still on its way stops when the page is left: what it waited for
   // would be looked for, opened or clicked on the next one.
-  const stopLeaving = useRouter().beforeEach((to, from) => {
+  const stopLeaving = router.beforeEach((to, from) => {
     if (to.path === from.path) return;
     run += 1;
     clear();
   });
+  const stopAfter = router.afterEach((to) => {
+    traversed = popping ? to.fullPath : undefined;
+    popping = false;
+  });
   onMounted(() => {
     landOnce(true);
     stopPageHook = nuxtApp.hook('page:finish', () => landOnce(false));
+    window.addEventListener('click', followedLink, { capture: true });
+    window.addEventListener('popstate', popped);
   });
   watch(
     () => route.hash,
@@ -373,7 +479,10 @@ export function useSearchLanding() {
   onBeforeUnmount(() => {
     run += 1;
     stopLeaving();
+    stopAfter();
     stopPageHook?.();
+    window.removeEventListener('click', followedLink, { capture: true });
+    window.removeEventListener('popstate', popped);
     clear();
   });
 }

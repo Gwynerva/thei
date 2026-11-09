@@ -23,11 +23,19 @@ import {
 /** The anchor of a page's block of related entities, in its contents. */
 export const PUBLIC_RELATED_SECTION_ID = 'related-entities';
 
-/** Places the pages themselves name, never taken by a heading. */
+/**
+ * Places the pages themselves name, never taken by a heading: the blocks of
+ * the contents, and the parts with ids of their own that a link lands on
+ * (`shared/landing.ts`) — the histories of statuses and of avatars, the
+ * owner's notes.
+ */
 export const RESERVED_CONTENT_ANCHORS: readonly string[] = [
   PROJECT_DESCRIPTION_ANCHOR,
   PROJECT_SECTIONS_ANCHOR,
   PUBLIC_RELATED_SECTION_ID,
+  'statuses',
+  'avatars',
+  'owner-notes',
 ];
 
 /**

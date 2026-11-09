@@ -22,7 +22,7 @@ import { SEARCH_FIELDS, type SearchUnit } from './units';
  * no migration, and may be deleted at any time: a file of another format, or
  * one made by another reading of words, is emptied and built again.
  */
-const FORMAT = 11;
+const FORMAT = 12;
 
 /** What a term may hold for FTS5 to keep it whole. */
 export function ftsTerm(term: string): string {

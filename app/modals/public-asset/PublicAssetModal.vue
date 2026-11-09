@@ -10,6 +10,7 @@ import FilePreviewContent from '#layers/thei/app/components/file-preview/FilePre
 import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';
 import { useContentLinkResolver } from '#layers/thei/app/composables/content-link-resolver';
 import { isAssetExtensionSafeInline } from '#layers/thei/shared/assets/formats';
+import { landingHash } from '#layers/thei/shared/landing';
 import type { PublicFilePlace } from '#layers/thei/shared/api/public';
 import {
   assetFormatLabel,
@@ -48,6 +49,19 @@ function step(delta: number) {
 }
 useArrowKeys({ previous: () => step(-1), next: () => step(1) });
 
+/**
+ * The window's own address: the page, with the file it shows named open
+ * where it stands on it, so the address can be sent and opens it again —
+ * the gallery turned to the file, the window on it (`app/composables/landing.ts`).
+ */
+const route = useRoute();
+useModalAddress(() => {
+  const place = props.modalData.places?.[index.value];
+  if (!place) return undefined;
+  const page = route.fullPath.replace(/#.*$/u, '');
+  return `${page}#${landingHash({ ...place, open: true })}`;
+});
+
 const mediaPreview =
   useTemplateRef<InstanceType<typeof AssetModalPreviewMedia>>('mediaPreview');
 const dimensions = computed(() => {
@@ -70,11 +84,11 @@ const { data: placesData } = useFetch<{ places: PublicFilePlace[] }>(
   () => `/api/files/${encodeURIComponent(current.value.key)}/places`,
   { server: false, lazy: true },
 );
-const route = useRoute();
 const withSlash = (path: string) => (path.endsWith('/') ? path : `${path}/`);
 const places = computed(() =>
   (placesData.value?.places ?? []).filter(
-    (place) => withSlash(place.href) !== withSlash(route.path),
+    (place) =>
+      withSlash(place.href.replace(/#.*$/u, '')) !== withSlash(route.path),
   ),
 );
 

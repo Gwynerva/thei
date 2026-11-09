@@ -66,11 +66,21 @@ describe('the anchors of a text’s headings', () => {
   it('never takes a place the page names itself', async () => {
     const { slugify } = await loadLanguage('en');
     const data = {
-      blocks: [header('Related entities'), header('Project sections')],
+      blocks: [
+        header('Related entities'),
+        header('Project sections'),
+        header('Statuses'),
+        header('Owner notes'),
+      ],
     };
     expect(
       contentHeadingAnchors(data as never, slugify).map((item) => item.id),
-    ).toEqual(['related-entities-2', 'project-sections-2']);
+    ).toEqual([
+      'related-entities-2',
+      'project-sections-2',
+      'statuses-2',
+      'owner-notes-2',
+    ]);
   });
 
   it('keeps the words of a heading plain, with its level and place', async () => {

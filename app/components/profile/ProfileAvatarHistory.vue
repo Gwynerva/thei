@@ -10,6 +10,11 @@ const props = defineProps<{
   error?: boolean;
   autoplay?: boolean;
   shortDate?: boolean;
+  /**
+   * The part of the page the history is, which the address of an avatar's
+   * window names it in (`shared/landing.ts`); none in the admin.
+   */
+  zone?: 'avatars';
 }>();
 defineEmits<{ remove: [id: string]; load: [] }>();
 function descriptor(
@@ -27,14 +32,19 @@ function descriptor(
   };
 }
 
-/** Every avatar loaded so far travels along, to be stepped through. */
+/**
+ * Every avatar loaded so far travels along, to be stepped through; on the
+ * page, the window's address names each among the avatars of the history.
+ */
 function view(item: ProfileAvatarHistoryItem) {
   const all = props.items
     .map(descriptor)
     .filter((entry) => entry !== undefined);
+  const zone = props.zone;
   openPublicAssets(
     all,
     all.find((entry) => entry.key === item.id),
+    zone && all.map((entry) => ({ zone, avatar: entry.key })),
   );
 }
 </script>
@@ -54,6 +64,8 @@ function view(item: ProfileAvatarHistoryItem) {
         class="size-24 cursor-pointer"
         hover-accent-border
         :aria-label="phrase.profile_avatar"
+        :data-avatar="item.id"
+        data-opens-viewer
         @click="view(item)"
       />
       <Button

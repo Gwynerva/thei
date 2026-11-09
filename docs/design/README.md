@@ -139,4 +139,7 @@ Patterns:
 - [AI in the UI](patterns/ai-in-the-ui.md) — where the ✦ goes, proposals at
   labels, nothing when AI is off.
 - [Search](patterns/search.md) — one quick search and one page for everyone,
-  the result card, landing on a find and bringing it out of what hides it.
+  the result card, a find leading to its place.
+- [Landing](patterns/landing.md) — a link to a place on a page: the address
+  of a place, bringing it out of what hides it, the light, anchors, a file's
+  window by its address.

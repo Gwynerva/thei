@@ -196,6 +196,8 @@ describe("a project's chronology through its share link", () => {
       (point) => point.entityKind === 'profile-status',
     );
     expect(status).toMatchObject({ summary: 'Working on it' });
+    // It leads to the status itself, by its day, in the project's history.
+    expect(status?.href).toMatch(/#statuses~2026-05-01$/);
   });
 
   it('counts its own points as visible on the activity grid', async () => {

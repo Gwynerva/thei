@@ -173,6 +173,14 @@ A visitor's window:
   `app/modals/upload-settings/ModalUploadSettings.vue`,
   `app/modals/asset-details/AssetDetailsModal.vue`,
   `app/modals/public-asset/PublicAssetModal.vue`.
+- `PublicAssetModal.vue` is opened by `openPublicAssets`
+  (`app/modals/public-asset/modal.ts`) with the places of its files on the
+  page, and names the one it shows in its address (`useModalAddress`): while
+  the window is open, the address is the page with the file named open
+  where it stands, changing as the window steps to another file, and sent,
+  it opens the same window on the same file (see
+  [Landing](../patterns/landing.md)). A visitor's chip leads to where its
+  page shows the file first, lit there as a find is.
 - `server/thei/assets/usage-media.ts` gives the library's places their
   pictures; `server/thei/public/file-places.ts` finds a visitor's places,
   answered at `/api/files/<slug>/places`: the library says where the file is

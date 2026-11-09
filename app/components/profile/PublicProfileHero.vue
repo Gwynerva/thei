@@ -30,7 +30,25 @@ async function toggle() {
   open.value = !open.value;
   if (open.value) await history.load();
 }
-useHashDisclosure('#avatars', open, history.load);
+// An avatar point of the life timeline lands on its avatar: the history
+// opens and is read on to it.
+useLandingReveal(async (target) => {
+  if (target.zone !== 'avatars') return;
+  open.value = true;
+  await history.load();
+  const id = target.avatar;
+  const listed = () => history.items.value.some((item) => item.id === id);
+  for (
+    let more = 0;
+    id &&
+    more < 40 &&
+    !listed() &&
+    history.cursor.value &&
+    !history.error.value;
+    more++
+  )
+    await history.load();
+});
 </script>
 <template>
   <section
@@ -104,11 +122,13 @@ useHashDisclosure('#avatars', open, history.load);
     <div
       v-if="open"
       id="avatars"
+      data-landing-zone="avatars"
       class="scroll-mt-[var(--public-anchor-offset,8rem)] border-t
         border-border-1 bg-bg-1/40 p-md"
     >
       <ProfileAvatarHistory
         :items="history.items.value"
+        zone="avatars"
         autoplay
         short-date
         :more="!history.loaded.value || Boolean(history.cursor.value)"

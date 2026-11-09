@@ -137,6 +137,7 @@ export type PublicFilePlace = {
   kind: PublicFilePlaceKind;
   /** A diary entry's day, which is its title. */
   title: string;
+  /** The page, at where it shows the file first (`shared/landing.ts`). */
   href: string;
   /** What stands for the page on a card: its icon, banner or first picture. */
   media?: MediaDescriptor;

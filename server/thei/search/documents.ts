@@ -21,7 +21,7 @@ import {
   buildProjectUrl,
 } from '#layers/thei/shared/project-url';
 import type { SearchKind } from '#layers/thei/shared/search/api';
-import { landingHash } from '#layers/thei/shared/search/landing';
+import { landingHash } from '#layers/thei/shared/landing';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
 import { OWNER, STRANGER, type PublicViewer } from '../access-links/viewer';
 import { readFamilyDescriptions } from '../assets/descriptions';
@@ -967,13 +967,9 @@ export function placeHref(
   const page = place.section?.href ?? document.href;
   const hash = landingHash({
     ...(place.block ? { block: place.block } : {}),
-    // The hero's picture is found by its part of the page, the rest by
-    // the file.
-    ...(place.file &&
-    (place.block ||
-      (place.zone && place.zone !== 'icon' && place.zone !== 'banner'))
-      ? { file: place.file.assetUuid }
-      : {}),
+    // The hero's picture is found by its part of the page, the rest by the
+    // file in its block, its showcase or its files (`landingHash`).
+    ...(place.file ? { file: place.file.assetUuid } : {}),
     ...(place.relation?.kind && place.relation.href
       ? { relation: { kind: place.relation.kind, href: place.relation.href } }
       : {}),

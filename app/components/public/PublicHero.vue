@@ -186,8 +186,12 @@ const heroPill = `inline-flex items-center gap-2 rounded-full bg-white/9 text-sm
         <PublicAction v-if="action" :action />
       </div>
       <!-- md from the column gap plus md here: the gallery gets lg. -->
-      <div v-if="showcase?.length" class="relative z-2 mt-md min-w-0">
-        <PublicAssetGallery :items="showcase" variant="hero" />
+      <div
+        v-if="showcase?.length"
+        class="relative z-2 mt-md min-w-0"
+        data-landing-zone="showcase"
+      >
+        <PublicAssetGallery :items="showcase" variant="hero" zone="showcase" />
       </div>
       <PublicTagLinks
         v-if="visibleTags.length"

@@ -128,7 +128,9 @@ Motion:
   faded out.
 - `app/composables/modal.ts` opens them — `openModal(descriptor, data)` puts
   the modal on the stack at once and resolves with its result — keeps the
-  stack, ties it to browser history, and keeps the dismiss layers: an open
+  stack, ties it to browser history — one entry for the stack, showing the
+  address of the modal on top when it names one (`useModalAddress`), or the
+  page's — and keeps the dismiss layers: an open
   popup calls `registerDismissLayer`, and `dismissOneStep` closes the
   innermost layer or else the top modal. `useModalCloseGuard` asks before an
   unsaved modal closes. A text's editor counts as unsaved what is on the

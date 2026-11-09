@@ -145,7 +145,7 @@ for (const width of [1280, 375]) {
 
     await expect(page).toHaveURL(/#b-hidden1/);
     const block = page.locator('[data-block="hidden1"]');
-    await expect(block).toHaveAttribute('data-search-found', '');
+    await expect(block).toHaveAttribute('data-landing-found', '');
     await expect(page.locator('.content-spoiler')).toHaveAttribute(
       'data-revealed',
       'true',
