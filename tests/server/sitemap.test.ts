@@ -40,6 +40,7 @@ function input(overrides: Partial<SitemapInput> = {}): SitemapInput {
   return {
     projects: [],
     sections: [],
+    excerpts: [],
     events: [],
     pages: [],
     diaryEntries: [],
@@ -235,11 +236,13 @@ describe('sitemap privacy', () => {
       input({
         diaryEntries: [
           {
+            diaryUuid: 'd-open',
             date: '2026-04-28',
             access: ProjectEventAccessLevel.Public,
             updatedAt: EPOCH,
           },
           {
+            diaryUuid: 'd-closed',
             date: '2026-04-29',
             access: ProjectEventAccessLevel.Private,
             updatedAt: EPOCH,
@@ -249,6 +252,63 @@ describe('sitemap privacy', () => {
     );
     expect(listed).toContain('/diary/2026-04-28/');
     expect(listed).not.toContain('/diary/2026-04-29/');
+  });
+
+  it('lists an excerpt under a listable parent, never a private one', () => {
+    const excerpt = (
+      parentType: 'project' | 'event' | 'diary-entry',
+      parentId: string,
+      publicId: string,
+      isPrivate = false,
+    ) => ({
+      parentType,
+      parentId,
+      humanReadableSlug: `slug-${publicId}`,
+      publicId,
+      isPrivate,
+      updatedAt: EPOCH,
+    });
+    const listed = paths(
+      input({
+        projects: [
+          project('Open', ProjectEventAccessLevel.Public),
+          project('Link', ProjectEventAccessLevel.LinkOnly),
+        ],
+        events: [event('Ev', ProjectEventAccessLevel.Public)],
+        diaryEntries: [
+          {
+            diaryUuid: 'd1',
+            date: '2026-04-28',
+            access: ProjectEventAccessLevel.Public,
+            updatedAt: EPOCH,
+          },
+          {
+            diaryUuid: 'd2',
+            date: '2026-04-29',
+            access: ProjectEventAccessLevel.Private,
+            updatedAt: EPOCH,
+          },
+        ],
+        excerpts: [
+          excerpt('project', 'project-Open', 'X1'),
+          excerpt('project', 'project-Open', 'X2', true),
+          excerpt('project', 'project-Link', 'X3'),
+          excerpt('event', 'event-Ev', 'X4'),
+          excerpt('diary-entry', 'd1', 'X5'),
+          excerpt('diary-entry', 'd2', 'X6'),
+        ],
+      }),
+    );
+    expect(listed).toContain('/projects/slug-Open-Open/excerpts/slug-X1-X1/');
+    expect(listed).not.toContain(
+      '/projects/slug-Open-Open/excerpts/slug-X2-X2/',
+    );
+    expect(listed).not.toContain(
+      '/projects/slug-Link-Link/excerpts/slug-X3-X3/',
+    );
+    expect(listed).toContain('/events/slug-Ev-Ev/excerpts/slug-X4-X4/');
+    expect(listed).toContain('/diary/2026-04-28/excerpts/slug-X5-X5/');
+    expect(listed).not.toContain('/diary/2026-04-29/excerpts/slug-X6-X6/');
   });
 });
 

@@ -97,6 +97,7 @@ export function chooseLayout(
     case 'project':
       return 'project';
     case 'section':
+    case 'excerpt':
     case 'event':
       return 'media';
     case 'diary':

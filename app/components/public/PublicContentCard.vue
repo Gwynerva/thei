@@ -9,7 +9,11 @@ import type { DateRange } from '#layers/thei/shared/date-range';
 import type { IconName } from '#thei/icons';
 import type { PublicPeriodMark } from '#layers/thei/shared/public-timeline';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
-import { continuationOutlinePath } from '#layers/thei/shared/continuation-outline';
+import {
+  continuationOutlinePath,
+  tornStripOutlinePath,
+} from '#layers/thei/shared/continuation-outline';
+import type { RelationType } from '#layers/thei/shared/relation';
 import {
   boxRadius,
   useMeasuredOutline,
@@ -77,6 +81,17 @@ const props = defineProps<{
    * began on an older one. The edge on that side says so.
    */
   continues?: 'up' | 'down';
+  /**
+   * The card is an excerpt: a strip torn off above and below, with big
+   * regular teeth, cut out of a longer text. Never with `continues` or
+   * `cloud`.
+   */
+  torn?: boolean;
+  /**
+   * How the card's subject relates to the page it is on, under its words:
+   * the relation's word when it has a direction, and the owner's reason.
+   */
+  relation?: { type: RelationType; note?: string };
 }>();
 
 const datePresentation = computed(
@@ -114,17 +129,26 @@ const cloudPath = useCloudOutline(
  * it can.
  */
 const continuationPath = useMeasuredOutline(
-  computed(() => (props.continues && !props.cloud ? card.value : null)),
+  computed(() =>
+    (props.continues || props.torn) && !props.cloud ? card.value : null,
+  ),
   (width, height) =>
-    props.continues
-      ? continuationOutlinePath(width, height, props.continues, boxRadius())
-      : '',
+    props.torn
+      ? tornStripOutlinePath(width, height)
+      : props.continues
+        ? continuationOutlinePath(width, height, props.continues, boxRadius())
+        : '',
 );
 const outlinePath = computed(() =>
   props.cloud ? cloudPath.value : continuationPath.value,
 );
 /** Whether the card is drawn by an outline rather than bordered as a box. */
-const drawn = computed(() => props.cloud || Boolean(continuationPath.value));
+const drawn = computed(
+  () => props.cloud || props.torn || Boolean(continuationPath.value),
+);
+const relationText = computed(() =>
+  props.relation?.note ? publicText(props.relation.note) : '',
+);
 
 const visibleTags = computed(() => props.tags?.slice(0, 3) ?? []);
 const visibleProjects = computed(() => props.projects ?? []);
@@ -154,6 +178,7 @@ const hasFooter = computed(
     :style="cardStyle"
     :data-secret="secret || undefined"
     :data-continues="continues"
+    :data-torn="torn || undefined"
   >
     <!--
       A cloud, or the torn edge of a period's start or end, is drawn rather
@@ -161,7 +186,7 @@ const hasFooter = computed(
       hidden until the card has been measured.
     -->
     <svg
-      v-if="cloud || continuationPath"
+      v-if="cloud || torn || continuationPath"
       class="public-outline pointer-events-none absolute inset-0 -z-1 size-full
         overflow-visible transition"
       :class="outlinePath ? 'opacity-100' : 'opacity-0'"
@@ -338,6 +363,13 @@ const hasFooter = computed(
             {{ publicText(summary) }}
           </p>
         </div>
+        <RelationLine
+          v-if="relation && (relation.type !== 'related' || relationText)"
+          :type="relation.type"
+          :text="relationText"
+          italic
+          class="-mx-[0.75em] line-clamp-2 px-[0.75em] text-sm text-text-2"
+        />
       </div>
 
       <div

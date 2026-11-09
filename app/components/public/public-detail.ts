@@ -1,4 +1,5 @@
 import type {
+  PublicExcerpt,
   PublicNeighbours,
   PublicReferences,
   PublicTagSummary,
@@ -47,13 +48,15 @@ export function createdAndUpdatedTimelineItems(
   ];
 }
 
-/** Where a section or a diary entry sits among its own kind. */
+/** Where a section, an excerpt or a diary entry sits among its own kind. */
 export type PublicDetailNeighbours = PublicNeighbours & {
-  kind: 'project-section' | 'diary-entry';
+  kind: 'project-section' | 'excerpt' | 'diary-entry';
 };
 
 export type PublicDetailPanelData = {
   contents?: ContentHeading[];
+  /** The page's own excerpts, listed under the contents, each leading to its place. */
+  excerpts?: PublicExcerpt[];
   neighbours?: PublicDetailNeighbours;
   chronology?: PublicDetailTimelineItem[];
   periods?: Period[];

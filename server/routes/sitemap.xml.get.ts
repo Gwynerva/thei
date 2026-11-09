@@ -46,6 +46,17 @@ export default defineEventHandler(async (event) => {
       })
       .from(schema.projectContentSections)
       .all(),
+    excerpts: db
+      .select({
+        parentType: schema.excerpts.parentType,
+        parentId: schema.excerpts.parentId,
+        humanReadableSlug: schema.excerpts.humanReadableSlug,
+        publicId: schema.excerpts.publicId,
+        isPrivate: schema.excerpts.isPrivate,
+        updatedAt: schema.excerpts.updatedAt,
+      })
+      .from(schema.excerpts)
+      .all(),
     events: db
       .select({
         eventUuid: schema.events.eventUuid,
@@ -66,6 +77,7 @@ export default defineEventHandler(async (event) => {
       .all(),
     diaryEntries: db
       .select({
+        diaryUuid: schema.diaryEntries.diaryUuid,
         date: schema.diaryEntries.date,
         access: schema.diaryEntries.access,
         updatedAt: schema.diaryEntries.updatedAt,

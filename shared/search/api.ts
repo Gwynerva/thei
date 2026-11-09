@@ -13,6 +13,7 @@ export const SEARCH_KINDS = [
   'project-section',
   'event',
   'diary-entry',
+  'excerpt',
   'page',
   'file',
   'tag',
@@ -30,6 +31,7 @@ export type SearchFindWhere =
   | 'summary'
   | 'heading'
   | 'section'
+  | 'excerpt'
   | 'text'
   | 'caption'
   | 'file'
@@ -46,7 +48,7 @@ export type SearchFindWhere =
 
 export interface SearchFind {
   where: SearchFindWhere;
-  /** What the place is called: a section's title, a related entity's, a day. */
+  /** What the place is called: a section's or an excerpt's title, a related entity's, a day. */
   label?: string;
   /**
    * The label is not the owner's words — a linked page's own title, or its
@@ -59,8 +61,8 @@ export interface SearchFind {
   segments: SearchSegment[];
   /** A file's preview, beside a find in a file. */
   media?: MediaDescriptor;
-  /** For the owner: the ids of the place — a section, a block, a file. */
-  place?: { section?: string; block?: string; file?: string };
+  /** For the owner: the ids of the place — a section, an excerpt, a block, a file. */
+  place?: { section?: string; excerpt?: string; block?: string; file?: string };
 }
 
 export interface SearchHit {
@@ -68,7 +70,7 @@ export interface SearchHit {
   /** `project:<uuid>`, `diary-entry:<uuid>`, `file:<family>`… */
   ref: string;
   title: string;
-  /** Of a section: the project it is a part of, with its icon. */
+  /** Of a section or an excerpt: what it is a part of, with its picture. */
   parent?: { title: string; href: string; media?: MediaDescriptor };
   /**
    * Of a file: what shows it first, by its own name alone — a section's

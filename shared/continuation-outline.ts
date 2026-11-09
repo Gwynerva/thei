@@ -9,6 +9,30 @@
  * number of them fits the width, so both corners of that side meet it at the
  * same height whatever the card's size.
  */
+/**
+ * The outline of an excerpt's card: a strip torn off above and below, with
+ * big regular teeth along both edges and straight sides — cut out of a
+ * longer text, as the excerpt is. The teeth stay inside the box, within
+ * `depth` of each edge, and a whole number of them fits the width.
+ */
+export function tornStripOutlinePath(
+  width: number,
+  height: number,
+  { tooth = 18, depth = 7 }: { tooth?: number; depth?: number } = {},
+): string {
+  if (width <= 0 || height <= depth * 2) return '';
+  const count = Math.max(1, Math.round(width / tooth));
+  const step = width / count;
+  const n = (value: number) => Number(value.toFixed(2));
+  let path = `M0 ${n(depth)}`;
+  for (let index = 0; index < count; index++)
+    path += `L${n((index + 0.5) * step)} 0L${n((index + 1) * step)} ${n(depth)}`;
+  path += `V${n(height - depth)}`;
+  for (let index = count; index > 0; index--)
+    path += `L${n((index - 0.5) * step)} ${n(height)}L${n((index - 1) * step)} ${n(height - depth)}`;
+  return `${path}Z`;
+}
+
 export function continuationOutlinePath(
   width: number,
   height: number,

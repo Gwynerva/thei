@@ -10,6 +10,9 @@ import { STRANGER } from '../access-links/viewer';
 import { readPlacements } from '../assets/library';
 import { withPublicPageSlot } from '../assets/queue';
 import { findContentEntity } from '../content-entities';
+import { findExcerpt } from '../excerpts';
+import { loadExcerptParent } from '../excerpts/parents';
+import { buildPublicExcerpt } from './excerpts';
 import { listProjectSections } from '../projects/content-sections';
 import {
   buildPublicDiaryEntry,
@@ -23,6 +26,7 @@ import {
 const PLACE_KINDS = [
   'project',
   'project-section',
+  'excerpt',
   'event',
   'page',
   'diary-entry',
@@ -87,6 +91,21 @@ async function pageParts(
         );
       if (!project || !section) return [];
       const page = await buildPublicProjectSection(project, section, STRANGER);
+      return [
+        ['banner', page.bannerMedia],
+        ['content', page.content],
+      ];
+    }
+    case 'excerpt': {
+      const excerpt = findExcerpt(id);
+      const parent =
+        excerpt &&
+        (await loadExcerptParent(excerpt.parentType, excerpt.parentId));
+      if (!excerpt || !parent) return [];
+      const page = await buildPublicExcerpt(excerpt, parent, STRANGER, {
+        number: 1,
+        count: 1,
+      });
       return [
         ['banner', page.bannerMedia],
         ['content', page.content],

@@ -12,6 +12,7 @@ const ENTITY_TYPE_ICONS = {
   'project-section': 'project-section',
   event: 'event',
   'diary-entry': 'thought',
+  excerpt: 'excerpt',
   page: 'page',
   tag: 'tag',
 } as const satisfies Record<ContentEntityType, string>;

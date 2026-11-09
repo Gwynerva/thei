@@ -35,6 +35,21 @@ export function buildExcerptUrl(
   return `${buildExcerptParentUrl(parent)}excerpts/${part}/`;
 }
 
+/**
+ * An excerpt's parent as the context its text is served in: an excerpt's
+ * pictures come from under its parent's address, the way a section's come
+ * from its project's.
+ */
+export function excerptParentContentEntity(parent: ExcerptParentAddress) {
+  return parent.type === 'diary-entry'
+    ? ({ type: 'diary-entry', date: parent.date } as const)
+    : ({
+        type: parent.type,
+        humanReadableSlug: parent.humanReadableSlug,
+        publicId: parent.publicId,
+      } as const);
+}
+
 export function publicIdFromExcerptUrlPart(value: string): string {
   return value.slice(value.lastIndexOf('-') + 1);
 }

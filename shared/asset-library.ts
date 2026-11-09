@@ -11,12 +11,14 @@ import { normalizeAssetExtension } from './assets/formats';
 
 /**
  * What holds a file, as the library groups files: an entity of the site, a
- * section of a project (with the project as its parent), an AI session the
- * file was brought into, or nothing at all.
+ * section of a project or an excerpt of an entity (with what it is a part of
+ * as its parent), an AI session the file was brought into, or nothing at
+ * all.
  */
 export const ASSET_SOURCE_TYPES = [
   'project',
   'project-section',
+  'excerpt',
   'event',
   'page',
   'diary-entry',
@@ -94,6 +96,7 @@ export const ASSET_LIBRARY_QUERY_LIMIT = 500;
 export const ASSET_LIBRARY_SOURCE_FILTERS = [
   'project',
   'project-section',
+  'excerpt',
   'event',
   'diary-entry',
   'page',

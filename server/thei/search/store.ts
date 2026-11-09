@@ -22,7 +22,7 @@ import { SEARCH_FIELDS, type SearchUnit } from './units';
  * no migration, and may be deleted at any time: a file of another format, or
  * one made by another reading of words, is emptied and built again.
  */
-const FORMAT = 12;
+const FORMAT = 13;
 
 /** What a term may hold for FTS5 to keep it whole. */
 export function ftsTerm(term: string): string {
@@ -493,18 +493,19 @@ function filePlacesOf(document: SearchDocument): StoredFilePlace[] {
   for (const unit of document.units) {
     const file = unit.place?.file;
     if (!file || (unit.where !== 'file' && unit.where !== 'caption')) continue;
-    const key = `${file.familyUuid}:${unit.place?.block ?? ''}:${unit.place?.section?.id ?? ''}`;
+    const part = unit.place?.section ?? unit.place?.excerpt;
+    const key = `${file.familyUuid}:${unit.place?.block ?? ''}:${part?.id ?? ''}`;
     const entry = byFamily.get(key) ?? {
       familyUuid: file.familyUuid,
       assetUuid: file.assetUuid,
       ...(file.title ? { title: file.title } : {}),
       href: placeHref(document, unit.place!),
-      placeTitle: unit.place?.section
-        ? `${document.title} · ${unit.place.section.title}`
+      placeTitle: part
+        ? `${document.title} · ${part.title}`
         : document.parent
           ? `${document.parent.title} · ${document.title}`
           : document.title,
-      placeName: unit.place?.section?.title ?? document.title,
+      placeName: part?.title ?? document.title,
       ...(document.sort ? { sort: document.sort } : {}),
       visibleFrom: Math.max(document.visibleFrom, unit.visibleFrom ?? 0),
     };

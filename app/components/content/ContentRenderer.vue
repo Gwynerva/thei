@@ -40,8 +40,13 @@ const props = withDefaults(
     pathPrefix?: string;
     /** Spoilers drawn open: a text compared, whose change must be seen. */
     spoilersOpen?: boolean;
+    /**
+     * Headings drawn one level down: a text embedded under a heading of
+     * the page — an excerpt on its parent's — keeps its outline under it.
+     */
+    headingShift?: 0 | 1;
   }>(),
-  { pathPrefix: '' },
+  { pathPrefix: '', headingShift: 0 },
 );
 
 const root = useTemplateRef<HTMLElement>('root');
@@ -77,7 +82,7 @@ function blockAnchor(block: PublicContentOutputBlock) {
 }
 
 function headerTag(level: unknown) {
-  return level === 3 ? 'h3' : 'h2';
+  return `h${(level === 3 ? 3 : 2) + props.headingShift}`;
 }
 
 function asset(value: unknown) {
@@ -416,6 +421,7 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
             :asset-viewer="assetViewer"
             :content-headings="allHeadings"
             :path-prefix="path"
+            :heading-shift="headingShift"
           />
           <div class="content-private-bracket" data-private-section-edge="end">
             <span class="content-private-bracket__label">

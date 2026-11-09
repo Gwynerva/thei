@@ -5,6 +5,7 @@ import { dateFromDiaryUrlPart } from '#layers/thei/shared/diary-url';
 import {
   renderDiaryMarkdown,
   renderEventMarkdown,
+  renderExcerptMarkdown,
   renderPageMarkdown,
   renderProjectSectionMarkdown,
   renderProjectMarkdown,
@@ -55,13 +56,36 @@ function resolve(
         publicId,
         publicIdOf(childPart),
       );
+    if (segments.length === 4 && childKind === 'excerpts' && childPart)
+      return renderExcerptMarkdown(
+        event,
+        { type: 'project', publicId },
+        publicIdOf(childPart),
+      );
     return undefined;
   }
-  if (section === 'events' && part && segments.length === 2)
-    return renderEventMarkdown(event, publicIdOf(part));
-  if (section === 'diary' && part && segments.length === 2) {
+  if (section === 'events' && part) {
+    const publicId = publicIdOf(part);
+    if (segments.length === 2) return renderEventMarkdown(event, publicId);
+    if (segments.length === 4 && childKind === 'excerpts' && childPart)
+      return renderExcerptMarkdown(
+        event,
+        { type: 'event', publicId },
+        publicIdOf(childPart),
+      );
+    return undefined;
+  }
+  if (section === 'diary' && part) {
     const date = dateFromDiaryUrlPart(part);
-    return date ? renderDiaryMarkdown(event, date) : undefined;
+    if (!date) return undefined;
+    if (segments.length === 2) return renderDiaryMarkdown(event, date);
+    if (segments.length === 4 && childKind === 'excerpts' && childPart)
+      return renderExcerptMarkdown(
+        event,
+        { type: 'diary-entry', date },
+        publicIdOf(childPart),
+      );
+    return undefined;
   }
   if (section === 'pages' && part && segments.length === 2)
     return renderPageMarkdown(event, part);

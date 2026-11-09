@@ -27,12 +27,13 @@ const props = defineProps<{
   iconMedia?: MediaDescriptor;
   /** What the page is, when it has no icon of its own. */
   kind?: { icon: IconName; label: string };
-  /** What the page is a part of, and what it is of it: a section's project. */
+  /** What the page is a part of, and what it is of it: a section's project, an excerpt's parent. */
   parent?: {
     label: string;
     href: string;
     title: string;
     iconMedia?: MediaDescriptor;
+    icon?: IconName;
   };
   action?: PublicAction;
   showcase?: (PublicAssetDescriptor | PublicSecretReference)[];

@@ -334,6 +334,38 @@ export function listExcerpts(parent: ExcerptParent) {
 
 export type ExcerptRecord = ReturnType<typeof listExcerpts>[number];
 
+/** One excerpt by its uuid, with its banner, or nothing when it is gone. */
+export function findExcerpt(excerptUuid: string): ExcerptRecord | undefined {
+  const { db, schema } = THEI_SERVER.useDb();
+  const row = db
+    .select({
+      parentType: schema.excerpts.parentType,
+      parentId: schema.excerpts.parentId,
+    })
+    .from(schema.excerpts)
+    .where(eq(schema.excerpts.excerptUuid, excerptUuid))
+    .get();
+  return (
+    row &&
+    listExcerpts({ type: row.parentType, id: row.parentId }).find(
+      (item) => item.excerptUuid === excerptUuid,
+    )
+  );
+}
+
+/** One excerpt by its public id, with its banner, or nothing. */
+export function findExcerptByPublicId(
+  publicId: string,
+): ExcerptRecord | undefined {
+  const { db, schema } = THEI_SERVER.useDb();
+  const row = db
+    .select({ excerptUuid: schema.excerpts.excerptUuid })
+    .from(schema.excerpts)
+    .where(eq(schema.excerpts.publicId, publicId))
+    .get();
+  return row && findExcerpt(row.excerptUuid);
+}
+
 /** How many excerpts a parent holds. */
 export function countExcerptsOfParent(parent: ExcerptParent): number {
   const { db, schema } = THEI_SERVER.useDb();
@@ -412,7 +444,7 @@ export function excerptsOnTargetDeleteOf(
 }
 
 /** The relation rows joining a target to excerpts, with the excerpt's id. */
-function excerptRelationRowsOf(
+export function excerptRelationRowsOf(
   db: any,
   schema: any,
   target: RelationEndpoint,

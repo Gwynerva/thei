@@ -11,7 +11,43 @@ const subfolder = {
 };
 
 describe('parseInternalUrl', () => {
-  it('recognises all six kinds of entity address', () => {
+  it('recognises every kind of entity address', () => {
+    expect(
+      parseInternalUrl(
+        'https://example.com/projects/studio-Pr0j/excerpts/glue-X1/',
+        site,
+      ),
+    ).toEqual({
+      entityType: 'excerpt',
+      parent: { type: 'project', publicId: 'Pr0j' },
+      publicId: 'X1',
+    });
+    expect(
+      parseInternalUrl(
+        'https://example.com/events/day-Ev3nt/excerpts/X2/',
+        site,
+      ),
+    ).toEqual({
+      entityType: 'excerpt',
+      parent: { type: 'event', publicId: 'Ev3nt' },
+      publicId: 'X2',
+    });
+    expect(
+      parseInternalUrl(
+        'https://example.com/diary/2024-05-12/excerpts/a-X3/',
+        site,
+      ),
+    ).toEqual({
+      entityType: 'excerpt',
+      parent: { type: 'diary-entry', date: '2024-05-12' },
+      publicId: 'X3',
+    });
+    expect(
+      parseInternalUrl(
+        'https://example.com/diary/2024-05-12/files/a-X3/',
+        site,
+      ),
+    ).toBeUndefined();
     expect(
       parseInternalUrl('https://example.com/projects/studio-Pr0j/', site),
     ).toEqual({ entityType: 'project', publicId: 'Pr0j' });

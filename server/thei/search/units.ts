@@ -38,6 +38,8 @@ export interface SearchPlace {
   href?: string;
   /** A section of a project: its title and address. */
   section?: { id: string; title: string; href: string };
+  /** An excerpt of the page: its title and its own address. */
+  excerpt?: { id: string; title: string; href: string };
   /** The block of a text, by the id it keeps; the page anchors it. */
   block?: string;
   /**

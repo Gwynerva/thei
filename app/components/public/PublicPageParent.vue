@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import type { IconName } from '#thei/icons';
 
 /**
  * "Project section — <project>", as a line of text above a title.
@@ -16,6 +17,8 @@ defineProps<{
     href: string;
     title: string;
     iconMedia?: MediaDescriptor;
+    /** The kind's icon, where the parent has no picture: a project's. */
+    icon?: IconName;
   };
   /** Over a banner, in white, as everything in the hero is. */
   onDark?: boolean;
@@ -51,7 +54,7 @@ defineProps<{
     >
       <EntityTokenIcon
         :media="parent.iconMedia"
-        icon="project"
+        :icon="parent.icon ?? 'project'"
         plain
         class="size-6"
       />

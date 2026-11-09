@@ -6,6 +6,7 @@ import { drawableContent } from '../text';
 import {
   diaryContent,
   eventContent,
+  excerptContent,
   pageContent,
   sectionContent,
   projectContent,
@@ -39,6 +40,9 @@ export async function resolveOgContent(
       break;
     case 'section':
       content = await sectionContent(target.id, site);
+      break;
+    case 'excerpt':
+      content = await excerptContent(target.id, site);
       break;
     case 'event':
       content = await eventContent(target.id, site);

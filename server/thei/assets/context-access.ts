@@ -24,6 +24,7 @@ interface AttachmentContext {
   ownerType:
     | 'project'
     | 'project-section'
+    | 'excerpt'
     | 'event'
     | 'page'
     | 'diary-entry'
@@ -98,6 +99,40 @@ export async function contentAttachmentAccess(
     for (const section of sections)
       if (section.isPrivate)
         privateOwners.add(`project-section:${section.sectionUuid}`);
+  }
+  // An excerpt's pictures are served from its parent's address, as a
+  // section's are from its project's; a private excerpt is a private part.
+  if (
+    ownerType === 'project' ||
+    ownerType === 'event' ||
+    ownerType === 'diary-entry'
+  ) {
+    const excerpts = db
+      .select({
+        excerptUuid: schema.excerpts.excerptUuid,
+        isPrivate: schema.excerpts.isPrivate,
+      })
+      .from(schema.excerpts)
+      .where(
+        and(
+          eq(schema.excerpts.parentType, ownerType),
+          eq(schema.excerpts.parentId, ownerId),
+        ),
+      )
+      .all();
+    if (excerpts.length)
+      owners.push(
+        and(
+          eq(schema.content.ownerType, 'excerpt'),
+          inArray(
+            schema.content.ownerId,
+            excerpts.map((excerpt) => excerpt.excerptUuid),
+          ),
+        )!,
+      );
+    for (const excerpt of excerpts)
+      if (excerpt.isPrivate)
+        privateOwners.add(`excerpt:${excerpt.excerptUuid}`);
   }
   const uses = db
     .select({

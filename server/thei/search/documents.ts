@@ -29,6 +29,17 @@ import { adminPath } from '../entity-kinds';
 import { getProfile, getProfileIdentity, getProfileLinks } from '../profile';
 import { getEventPeriods } from '../events/periods';
 import { listProjectSections } from '../projects/content-sections';
+import { findExcerpt, listExcerpts } from '../excerpts';
+import {
+  diaryExcerptParent,
+  eventExcerptParent,
+  excerptListed,
+  loadExcerptParent,
+  projectExcerptParent,
+  type ExcerptParentInfo,
+} from '../excerpts/parents';
+import { buildExcerptUrl } from '#layers/thei/shared/excerpt-url';
+import { buildPublicExcerpt } from '../public/excerpts';
 import { buildPublicContentData } from '../public/content';
 import {
   buildPublicDiaryEntry,
@@ -69,7 +80,7 @@ export interface SearchDocument {
    */
   publicRef?: string;
   title: string;
-  /** Of a section: the project it is a part of, with its icon. */
+  /** Of a section or an excerpt: what it is a part of, with its picture; a diary entry by its day. */
   parent?: { title: string; href: string; media?: MediaDescriptor };
   /** Of a file: what shows it first, by its own name alone. */
   shownAt?: string;
@@ -308,7 +319,7 @@ function pageFileUnits(
  * the page shows it. A stranger names a file by its slug, never its id.
  */
 function heroFileUnits(
-  containerType: 'project' | 'project-section' | 'event' | 'page',
+  containerType: 'project' | 'project-section' | 'excerpt' | 'event' | 'page',
   id: string,
   audience: SearchAudience,
   media: Partial<Record<'icon' | 'banner', MediaDescriptor | undefined>>,
@@ -413,6 +424,34 @@ function withFamilies(units: SearchUnit[]): SearchUnit[] {
   });
 }
 
+/**
+ * A parent's excerpts by their titles: parts of it, as a project's sections
+ * are. Each is found whole as a result of its own (`excerptDocument`); the
+ * find in the parent leads to the excerpt's own page.
+ */
+function excerptTitleUnits(
+  parent: ExcerptParentInfo,
+  audience: SearchAudience,
+): SearchUnit[] {
+  return listExcerpts(parent)
+    .filter((excerpt) => audience === 'owner' || !excerpt.isPrivate)
+    .flatMap((excerpt) =>
+      fieldUnit('headings', 'excerpt', excerpt.title, {
+        place: {
+          excerpt: {
+            id: excerpt.excerptUuid,
+            title: excerpt.title,
+            href: buildExcerptUrl(
+              parent.address,
+              excerpt.humanReadableSlug,
+              excerpt.publicId,
+            ),
+          },
+        },
+      }),
+    );
+}
+
 function placed(units: SearchUnit[], place: SearchPlace): SearchUnit[] {
   return units.map((unit) => ({ ...unit, place: { ...place, ...unit.place } }));
 }
@@ -505,6 +544,7 @@ export async function projectDocument(
         banner: page.bannerMedia,
       }),
       ...sectionUnits,
+      ...excerptTitleUnits(projectExcerptParent(project), audience),
       ...showcaseUnits,
       ...fileUnits,
       ...referenceUnits(page.references),
@@ -604,6 +644,78 @@ export async function sectionDocument(
   };
 }
 
+/**
+ * An excerpt as a result of its own: its title, summary and text, found by
+ * those who may open its page — a stranger not a private one, nor one of a
+ * parent that is not public. It carries its parent's tags and names its
+ * parent, and waits for the parent's day as the parent does.
+ */
+export async function excerptDocument(
+  excerptUuid: string,
+  audience: SearchAudience,
+): Promise<SearchDocument | undefined> {
+  const excerpt = findExcerpt(excerptUuid);
+  const parent =
+    excerpt && (await loadExcerptParent(excerpt.parentType, excerpt.parentId));
+  if (!excerpt || !parent) return undefined;
+  if (audience === 'public' && !excerptListed(excerpt, parent, false))
+    return undefined;
+  const viewer = viewerOf(audience);
+  const visible = listExcerpts(parent).filter(
+    (item) => audience === 'owner' || !item.isPrivate,
+  );
+  const built = await buildPublicExcerpt(excerpt, parent, viewer, {
+    number: visible.findIndex((item) => item.excerptUuid === excerptUuid) + 1,
+    count: visible.length,
+  });
+  const tags =
+    parent.type === 'diary-entry' ? [] : tagUuidsOf(parent.type, parent.id);
+  return {
+    audience,
+    kind: 'excerpt',
+    ref: `excerpt:${excerpt.excerptUuid}`,
+    publicRef: `excerpt:${excerpt.publicId}`,
+    title: excerpt.title,
+    parent: {
+      title: built.parent.title || built.parent.date || '',
+      href: built.parent.href,
+      ...(built.parent.media ? { media: built.parent.media } : {}),
+    },
+    href: built.href,
+    ...(audience === 'owner'
+      ? {
+          editHref: adminPath(
+            'excerpt',
+            excerpt.excerptUuid,
+            undefined,
+            excerpt.publicId,
+            { kind: parent.type, id: parent.id },
+          ),
+        }
+      : {}),
+    ...(parent.date ? { date: parent.date } : {}),
+    sort: parent.date
+      ? { from: parent.date, to: parent.date, life: true }
+      : sortOf(undefined, excerpt.createdAt),
+    visibleFrom: audience === 'public' ? parent.arrives : 0,
+    ...accessOf(audience, excerpt.isPrivate ? 'private' : parent.access),
+    summary: excerpt.summary,
+    media: built.media,
+    tags,
+    units: withFamilies([
+      ...fieldUnit('title', 'title', excerpt.title),
+      ...fieldUnit('summary', 'summary', excerpt.summary),
+      ...names([excerpt.humanReadableSlug]),
+      ...tagUnits(tags),
+      ...heroFileUnits('excerpt', excerpt.excerptUuid, audience, {
+        banner: built.bannerMedia,
+      }),
+      ...contentUnits(built.content),
+      ...(await relationUnits('excerpt', excerpt.excerptUuid, viewer)),
+    ]),
+  };
+}
+
 export async function eventDocument(
   eventUuid: string,
   audience: SearchAudience,
@@ -655,6 +767,7 @@ export async function eventDocument(
         banner: page.bannerMedia,
       }),
       ...contentUnits(page.content),
+      ...excerptTitleUnits(eventExcerptParent(event), audience),
       ...pageFileUnits(page.references.files, 'files'),
       ...referenceUnits(page.references),
       ...(await relationUnits('event', event.eventUuid, viewer)),
@@ -691,6 +804,7 @@ export async function diaryDocument(
     tags: [],
     units: withFamilies([
       ...contentUnits(page.content),
+      ...excerptTitleUnits(diaryExcerptParent(entry), audience),
       ...(await relationUnits('diary-entry', entry.diaryUuid, viewer)),
       ...noteUnits(page.notes),
     ]),
@@ -964,7 +1078,7 @@ export function placeHref(
   place: SearchPlace,
 ): string {
   if (place.href) return place.href;
-  const page = place.section?.href ?? document.href;
+  const page = place.section?.href ?? place.excerpt?.href ?? document.href;
   const hash = landingHash({
     ...(place.block ? { block: place.block } : {}),
     // The hero's picture is found by its part of the page, the rest by the

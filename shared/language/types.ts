@@ -318,6 +318,11 @@ export type LanguagePhrases = {
   projects: string;
   events: string;
   excerpts: string;
+  excerpt: string;
+  /** "Excerpt 2 of 5": an excerpt's place among its parent's. */
+  excerpt_position: (index: number, total: number) => string;
+  /** The block of what an excerpt is about: its relations. */
+  excerpt_about: string;
   pages: string;
   tags: string;
   settings: string;
@@ -421,6 +426,7 @@ export type LanguagePhrases = {
   /** Where in a result a find stands. */
   search_where: (where: SearchFindWhere) => string;
   search_where_section: (title: string) => string;
+  search_where_excerpt: (title: string) => string;
   search_access_private: string;
   search_access_link: string;
   search_access_private_short: string;
@@ -481,6 +487,7 @@ export type LanguagePhrases = {
   public_project_description: string;
   public_details_neighbour_sections: string;
   public_details_neighbour_entries: string;
+  public_details_neighbour_excerpts: string;
   public_neighbour_next: string;
   public_neighbour_previous: string;
   public_details_chronology: string;
@@ -491,6 +498,14 @@ export type LanguagePhrases = {
   page_chronology_updated: string;
   section_chronology_created: string;
   section_chronology_updated: string;
+  excerpt_chronology_created: string;
+  excerpt_chronology_updated: string;
+  /** The hint of the link from an excerpt on its parent's page to its own. */
+  excerpt_page_hint: string;
+  /** An excerpt without a summary, described by its parent. */
+  excerpt_of_project: (title: string) => string;
+  excerpt_of_event: (title: string) => string;
+  excerpt_of_diary_entry: (day: string) => string;
   event_chronology_created: string;
   event_chronology_updated: string;
   diary_chronology_created: string;
@@ -1039,6 +1054,8 @@ export type LanguagePhrases = {
   public_section_dates_only_description: string;
   public_section_content_empty: string;
   public_section_content_empty_description: string;
+  public_excerpt_content_empty: string;
+  public_excerpt_content_empty_description: string;
   content_section_title: string;
   content_section_summary: string;
   content_section_banner: string;

@@ -26,6 +26,7 @@ const props = defineProps<{
     href: string;
     title: string;
     iconMedia?: MediaDescriptor;
+    icon?: IconName;
   };
 }>();
 

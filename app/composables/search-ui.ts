@@ -23,6 +23,7 @@ export const SEARCH_KIND_ICONS: Record<SearchKind, IconName> = {
   'project-section': 'project-section',
   event: 'event',
   'diary-entry': 'thought',
+  excerpt: 'excerpt',
   page: 'page',
   file: 'file',
   tag: 'tag',
@@ -35,6 +36,7 @@ const FIND_ICONS: Record<SearchFind['where'], IconName> = {
   summary: 'text',
   heading: 'subheading',
   section: 'project-section',
+  excerpt: 'excerpt',
   text: 'paragraph',
   caption: 'media',
   file: 'file',
@@ -211,6 +213,8 @@ export function searchFindPlace(find: SearchFind): {
     : '';
   if (find.place?.section && label)
     return { icon: 'project-section', text: value.search_where_section(label) };
+  if (find.place?.excerpt && label)
+    return { icon: 'excerpt', text: value.search_where_excerpt(label) };
   const where = value.search_where(find.where);
   // A tag found by its name shows the name in its words: once is enough.
   const named =

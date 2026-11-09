@@ -11,6 +11,9 @@ import {
   publicRelatedHeading,
   publicRelatedTotal,
 } from '#layers/thei/app/components/public/PublicRelatedBlock.vue';
+import { publicExcerptsHeading } from '#layers/thei/app/components/public/PublicExcerptsBlock.vue';
+import { buildExcerptContentsEntries } from '#layers/thei/app/components/content/content-headings';
+import { publicExcerptParts } from '#layers/thei/app/components/public/PublicExcerptInline.vue';
 
 definePageMeta({ layout: 'public', key: (route) => route.path });
 const route = useRoute();
@@ -21,6 +24,9 @@ const data = useRequiredResource(resource);
 const canonical = computed(() => buildDiaryUrl(data.value.date));
 const relatedUrl = computed(
   () => `/api/diary/${encodeURIComponent(data.value.date)}/related`,
+);
+const excerptsUrl = computed(
+  () => `/api/diary/${encodeURIComponent(data.value.date)}/excerpts`,
 );
 if (route.path !== canonical.value)
   await navigateTo(canonical.value, { redirectCode: 301 });
@@ -73,6 +79,7 @@ usePublicSeo({
       datePublished: data.value.date,
       ...(seoModified.value ? { dateModified: seoModified.value } : {}),
       ...(seoImage.value ? { image: seoImage.value } : {}),
+      ...publicExcerptParts(data.value.excerpts),
     },
   ],
 });
@@ -84,6 +91,7 @@ const details = computed(
         kind: 'diary-entry',
         ...data.value.neighbours,
       },
+      excerpts: data.value.excerpts,
       // The day the entry is about is its heading, not a technical date.
       chronology: createdAndUpdatedTimelineItems(data.value.chronology, {
         created: phrase.value.diary_chronology_created,
@@ -93,10 +101,17 @@ const details = computed(
 );
 
 /**
- * The sections below the entry that belong in its table: what it is related
+ * The sections below the entry that belong in its table: its excerpts, each
+ * with the headings of its text, the excerpts about it, what it is related
  * to, then the owner's notes, which nobody else gets at all.
  */
 const extraContents = computed(() => [
+  ...data.value.excerpts.flatMap((excerpt) =>
+    buildExcerptContentsEntries(excerpt, language.value.slugify),
+  ),
+  ...(data.value.excerptsAbout.total
+    ? [publicExcerptsHeading(phrase.value.excerpts)]
+    : []),
   ...(publicRelatedTotal(data.value.related)
     ? [publicRelatedHeading(phrase.value.related_entities)]
     : []),
@@ -119,6 +134,23 @@ const extraContents = computed(() => [
         v-if="data.content.blocks.length"
         :data="data.content"
         asset-viewer
+      />
+      <div
+        v-if="data.excerpts.length"
+        data-landing-zone="excerpts"
+        class="flex flex-col gap-lg"
+        :class="{ 'mt-lg': data.content.blocks.length }"
+      >
+        <PublicExcerptInline
+          v-for="excerpt in data.excerpts"
+          :key="excerpt.publicId"
+          :excerpt
+        />
+      </div>
+      <PublicExcerptsBlock
+        :about="data.excerptsAbout"
+        :url="excerptsUrl"
+        class="mt-lg"
       />
       <PublicRelatedBlock
         :counts="data.related"

@@ -25,11 +25,17 @@ async function headingsOf(type: ContentEntityType, id: string) {
 }
 
 function titleOf(
-  type: 'project' | 'project-section' | 'event' | 'page',
+  type: 'project' | 'project-section' | 'excerpt' | 'event' | 'page',
   id: string,
 ) {
   const { db, schema } = THEI_SERVER.useDb();
   switch (type) {
+    case 'excerpt':
+      return db
+        .select({ title: schema.excerpts.title })
+        .from(schema.excerpts)
+        .where(eq(schema.excerpts.excerptUuid, id))
+        .get()?.title;
     case 'project':
       return db
         .select({ title: schema.projects.title })
@@ -61,7 +67,7 @@ function titleOf(
  * Where inside an entity a link may lead, for a picker; nothing for one that
  * is gone. A project lists its sections as its page does — the general ones
  * in the owner's order, then the stages newest first, each with its number
- * from the oldest — and a section names its project.
+ * from the oldest — and a section names its project, an excerpt its parent.
  */
 export async function entityOutline(
   type: ContentEntityType,
@@ -116,6 +122,27 @@ export async function entityOutline(
     const project = row && titleOf('project', row.projectUuid);
     if (row && project !== undefined)
       parent = { entityId: row.projectUuid, title: project };
+  }
+  if (type === 'excerpt') {
+    const row = db
+      .select({
+        parentType: schema.excerpts.parentType,
+        parentId: schema.excerpts.parentId,
+      })
+      .from(schema.excerpts)
+      .where(eq(schema.excerpts.excerptUuid, id))
+      .get();
+    const name =
+      row &&
+      (row.parentType === 'diary-entry'
+        ? db
+            .select({ date: schema.diaryEntries.date })
+            .from(schema.diaryEntries)
+            .where(eq(schema.diaryEntries.diaryUuid, row.parentId))
+            .get()?.date
+        : titleOf(row.parentType, row.parentId));
+    if (row && name !== undefined)
+      parent = { entityId: row.parentId, title: name };
   }
 
   return {

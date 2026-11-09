@@ -11,6 +11,8 @@ const neighboursTitle = computed(() => {
   switch (data.neighbours?.kind) {
     case 'project-section':
       return phrase.value.public_details_neighbour_sections;
+    case 'excerpt':
+      return phrase.value.public_details_neighbour_excerpts;
     default:
       return phrase.value.public_details_neighbour_entries;
   }
@@ -24,6 +26,12 @@ const neighboursTitle = computed(() => {
       :title="phrase.public_details_contents"
     >
       <PublicContentContents :items="data.contents" :active="activeContent" />
+    </PublicCollapsibleSection>
+    <PublicCollapsibleSection
+      v-if="data.excerpts?.length"
+      :title="phrase.excerpts"
+    >
+      <PublicExcerptList :excerpts="data.excerpts" />
     </PublicCollapsibleSection>
     <PublicCollapsibleSection
       v-if="data.neighbours?.next || data.neighbours?.previous"

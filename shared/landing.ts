@@ -35,6 +35,7 @@ const LANDING_ZONES = [
   'statuses',
   'avatars',
   'owner-notes',
+  'excerpts',
 ] as const;
 export type LandingZone = (typeof LANDING_ZONES)[number];
 

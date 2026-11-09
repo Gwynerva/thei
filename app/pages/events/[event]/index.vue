@@ -12,6 +12,9 @@ import {
   publicRelatedHeading,
   publicRelatedTotal,
 } from '#layers/thei/app/components/public/PublicRelatedBlock.vue';
+import { publicExcerptsHeading } from '#layers/thei/app/components/public/PublicExcerptsBlock.vue';
+import { buildExcerptContentsEntries } from '#layers/thei/app/components/content/content-headings';
+import { publicExcerptParts } from '#layers/thei/app/components/public/PublicExcerptInline.vue';
 
 definePageMeta({ layout: 'public', key: (route) => route.path });
 const route = useRoute();
@@ -24,6 +27,10 @@ const canonical = computed(() =>
 );
 const relatedUrl = computed(
   () => `/api/events/${encodeURIComponent(String(route.params.event))}/related`,
+);
+const excerptsUrl = computed(
+  () =>
+    `/api/events/${encodeURIComponent(String(route.params.event))}/excerpts`,
 );
 if (route.path !== canonical.value)
   await navigateTo(canonical.value, { redirectCode: 301 });
@@ -66,6 +73,7 @@ usePublicSeo({
       ...(data.value.tags.length
         ? { keywords: data.value.tags.map((tag) => tag.title).join(', ') }
         : {}),
+      ...publicExcerptParts(data.value.excerpts),
     },
   ],
 });
@@ -73,6 +81,7 @@ const details = computed(
   () =>
     ({
       periods: data.value.periods,
+      excerpts: data.value.excerpts,
       chronology: createdAndUpdatedTimelineItems(data.value.chronology, {
         created: phrase.value.event_chronology_created,
         updated: phrase.value.event_chronology_updated,
@@ -89,6 +98,12 @@ const details = computed(
  * notes, which nobody else gets at all, stay last.
  */
 const extraContents = computed(() => [
+  ...data.value.excerpts.flatMap((excerpt) =>
+    buildExcerptContentsEntries(excerpt, language.value.slugify),
+  ),
+  ...(data.value.excerptsAbout.total
+    ? [publicExcerptsHeading(phrase.value.excerpts)]
+    : []),
   ...(publicRelatedTotal(data.value.related)
     ? [publicRelatedHeading(phrase.value.related_entities)]
     : []),
@@ -128,6 +143,23 @@ const extraContents = computed(() => [
           v-if="data.content.blocks.length"
           :data="data.content"
           asset-viewer
+        />
+        <div
+          v-if="data.excerpts.length"
+          data-landing-zone="excerpts"
+          class="flex flex-col gap-lg"
+          :class="{ 'mt-lg': data.content.blocks.length }"
+        >
+          <PublicExcerptInline
+            v-for="excerpt in data.excerpts"
+            :key="excerpt.publicId"
+            :excerpt
+          />
+        </div>
+        <PublicExcerptsBlock
+          :about="data.excerptsAbout"
+          :url="excerptsUrl"
+          class="mt-lg"
         />
         <PublicRelatedBlock
           :counts="data.related"

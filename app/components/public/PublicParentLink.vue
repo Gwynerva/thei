@@ -1,8 +1,10 @@
 <script lang="ts" setup>
 import type { PublicEntityReference } from '#layers/thei/shared/api/public';
+import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 
 /**
- * The project a card's subject belongs to, with its icon.
+ * What a card's subject belongs to, with its picture: a section's project,
+ * an excerpt's parent — a diary entry named by its day.
  *
  * A section names it above its title, with an arrow down to what
  * follows; a status names it `below` its words, where no arrow is needed. A
@@ -24,10 +26,10 @@ defineProps<{ parent: PublicEntityReference; below?: boolean }>();
     >
       <EntityTokenIcon
         :media="parent.iconMedia"
-        icon="project"
+        :icon="entityTypeIcon(parent.entityType)"
         class="size-5"
       />
-      <span class="min-w-0 truncate">{{ publicText(parent.title) }}</span>
+      <span class="min-w-0 truncate">{{ entityListName(parent) }}</span>
     </TheiLink>
     <Icon
       v-if="!below"

@@ -29,20 +29,20 @@ follows a hover like the words beside it.
 
 Icons with fixed meanings:
 
-| Icon                                                            | Means                                                                                                        |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `project`, `project-section`, `event`, `thought`, `page`, `tag` | The kinds of entity: a diary entry is `thought` (`shared/entity-icon.ts`).                                   |
-| `relation-related`, `relation-depends`, `relation-affects`      | The three readings of a relation (`shared/relation-display.ts`).                                             |
-| `sparkles`                                                      | AI: the ✦ of a form and of the admin bar, a proposal at a label, the AI page.                                |
-| `ai-chat`                                                       | An AI session, and what it answered with nothing to propose: a speech bubble with the sparkle in it.         |
-| `history`                                                       | The past: a text's drafts and versions, the undo of an applied AI action, the archive of sessions, "rewind". |
-| `undo`                                                          | Bringing back from the archive: a session the owner archived, to be written in again.                        |
-| `face-dead`                                                     | Nothing there: a search with no results, a session or a file that is gone.                                   |
-| `done-all`                                                      | Accepting at once all that an AI is sure of: the sure parts of a text edit, in its card and on its review.   |
-| `action-click`                                                  | A call to act: a project's action button, and what waits for the owner's decision in AI.                     |
-| `save`                                                          | Saving a form: its Save on a phone, where the words give way to it; `check` there once all of it is saved.   |
-| `loading`                                                       | Work in progress.                                                                                            |
-| `missing`                                                       | Drawn in place of a name the sprite does not know.                                                           |
+| Icon                                                                       | Means                                                                                                             |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `project`, `project-section`, `excerpt`, `event`, `thought`, `page`, `tag` | The kinds of entity: a diary entry is `thought`, an excerpt a strip torn out of a text (`shared/entity-icon.ts`). |
+| `relation-related`, `relation-depends`, `relation-affects`                 | The three readings of a relation (`shared/relation-display.ts`).                                                  |
+| `sparkles`                                                                 | AI: the ✦ of a form and of the admin bar, a proposal at a label, the AI page.                                     |
+| `ai-chat`                                                                  | An AI session, and what it answered with nothing to propose: a speech bubble with the sparkle in it.              |
+| `history`                                                                  | The past: a text's drafts and versions, the undo of an applied AI action, the archive of sessions, "rewind".      |
+| `undo`                                                                     | Bringing back from the archive: a session the owner archived, to be written in again.                             |
+| `face-dead`                                                                | Nothing there: a search with no results, a session or a file that is gone.                                        |
+| `done-all`                                                                 | Accepting at once all that an AI is sure of: the sure parts of a text edit, in its card and on its review.        |
+| `action-click`                                                             | A call to act: a project's action button, and what waits for the owner's decision in AI.                          |
+| `save`                                                                     | Saving a form: its Save on a phone, where the words give way to it; `check` there once all of it is saved.        |
+| `loading`                                                                  | Work in progress.                                                                                                 |
+| `missing`                                                                  | Drawn in place of a name the sprite does not know.                                                                |
 
 Things AI makes wear the sparkle in their own icon, so their nature reads at a
 glance, and their buttons prefer that icon to a word.

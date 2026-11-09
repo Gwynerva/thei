@@ -31,6 +31,13 @@ import { buildEventUrl } from '../../../shared/event-url';
 import { buildPageUrl } from '../../../shared/page-url';
 import { buildDiaryUrl } from '../../../shared/diary-url';
 import { buildTagUrl } from '../../../shared/tag-url';
+import {
+  buildExcerptAdminPath,
+  buildExcerptParentUrl,
+  buildExcerptUrl,
+  type ExcerptParentAddress,
+} from '../../../shared/excerpt-url';
+import type { ExcerptParentType } from '../../../shared/excerpt';
 import { describeStoredAsset } from './storage';
 import { readAssetRetention } from './retention';
 
@@ -47,21 +54,30 @@ export interface LibraryQuery extends AssetSelectionConstraints {
 
 // Resolve owners in SQL. Only page assets and their placements are materialized;
 // rendering the library never hydrates content or invokes media processing.
-// A section is a source of its own, carrying its project as the parent; a private project makes everything in it private.
+// A section or an excerpt is a source of its own, carrying what it is a part of as the parent; a private parent makes everything in it private.
 const ownersSql = `
 WITH sources AS (
   SELECT 'project' AS sourceType, projectUuid AS sourceId, title, summary,
     humanReadableSlug AS slug, publicId, updatedAt, access='private' AS sourcePrivate,
-    '' AS parentId, '' AS parentTitle, '' AS parentSlug, '' AS parentPublicId FROM projects
-  UNION ALL SELECT 'event',eventUuid,title,summary,humanReadableSlug,publicId,updatedAt,access='private','','','','' FROM events
-  UNION ALL SELECT 'page',pageUuid,title,summary,slug,'',updatedAt,access='private','','','','' FROM pages
-  UNION ALL SELECT 'diary-entry',diaryUuid,date,'',date,'',updatedAt,access='private','','','','' FROM "diary-entries"
-  UNION ALL SELECT 'tag',tagUuid,title,description,slug,publicId,0,0,'','','','' FROM tags
-  UNION ALL SELECT 'profile',profileId,displayName,slogan,'','',0,0,'','','','' FROM profiles
-  UNION ALL SELECT 'ai-session',sessionUuid,title,'','','',lastActiveAt,1,'','','','' FROM "ai-sessions"
+    '' AS parentId, '' AS parentTitle, '' AS parentSlug, '' AS parentPublicId, '' AS parentType FROM projects
+  UNION ALL SELECT 'event',eventUuid,title,summary,humanReadableSlug,publicId,updatedAt,access='private','','','','','' FROM events
+  UNION ALL SELECT 'page',pageUuid,title,summary,slug,'',updatedAt,access='private','','','','','' FROM pages
+  UNION ALL SELECT 'diary-entry',diaryUuid,date,'',date,'',updatedAt,access='private','','','','','' FROM "diary-entries"
+  UNION ALL SELECT 'tag',tagUuid,title,description,slug,publicId,0,0,'','','','','' FROM tags
+  UNION ALL SELECT 'profile',profileId,displayName,slogan,'','',0,0,'','','','','' FROM profiles
+  UNION ALL SELECT 'ai-session',sessionUuid,title,'','','',lastActiveAt,1,'','','','','' FROM "ai-sessions"
   UNION ALL SELECT 'project-section',se.sectionUuid,se.title,se.summary,se.humanReadableSlug,se.publicId,se.updatedAt,
-    (se.isPrivate OR p.access='private'),p.projectUuid,p.title,p.humanReadableSlug,p.publicId
+    (se.isPrivate OR p.access='private'),p.projectUuid,p.title,p.humanReadableSlug,p.publicId,'project'
     FROM "project-content-sections" se JOIN projects p ON p.projectUuid=se.projectUuid
+  UNION ALL SELECT 'excerpt',x.excerptUuid,x.title,x.summary,x.humanReadableSlug,x.publicId,x.updatedAt,
+    (x.isPrivate OR p.access='private'),p.projectUuid,p.title,p.humanReadableSlug,p.publicId,'project'
+    FROM excerpts x JOIN projects p ON x.parentType='project' AND p.projectUuid=x.parentId
+  UNION ALL SELECT 'excerpt',x.excerptUuid,x.title,x.summary,x.humanReadableSlug,x.publicId,x.updatedAt,
+    (x.isPrivate OR e.access='private'),e.eventUuid,e.title,e.humanReadableSlug,e.publicId,'event'
+    FROM excerpts x JOIN events e ON x.parentType='event' AND e.eventUuid=x.parentId
+  UNION ALL SELECT 'excerpt',x.excerptUuid,x.title,x.summary,x.humanReadableSlug,x.publicId,x.updatedAt,
+    (x.isPrivate OR d.access='private'),d.diaryUuid,d.date,d.date,'','diary-entry'
+    FROM excerpts x JOIN "diary-entries" d ON x.parentType='diary-entry' AND d.diaryUuid=x.parentId
 ),
 contexts AS (
   SELECT sourceType AS containerType,sourceId AS containerId,sourceType,sourceId,'' AS detail,'' AS description FROM sources
@@ -220,11 +236,13 @@ interface SourceRow {
   publicId: string;
   updatedAt: number;
   sourcePrivate: number;
-  /** The project of a section; empty for every other source. */
+  /** The project of a section, the parent of an excerpt; empty for every other source. */
   parentId: string;
   parentTitle: string;
   parentSlug: string;
   parentPublicId: string;
+  /** Which kind the parent of an excerpt is; empty otherwise. */
+  parentType: '' | ExcerptParentType;
 }
 interface PlacementRow extends SourceRow {
   assetUuid: string;
@@ -257,6 +275,24 @@ function sourceInfo(row: SourceRow): AssetSource {
         title: row.parentTitle,
         url: buildProjectUrl(row.parentSlug, row.parentPublicId),
       },
+    };
+  }
+  if (type === 'excerpt' && row.parentType) {
+    // An excerpt has no editor of its own either: its parent's form opens
+    // with its modal already up. A diary parent is named by its day.
+    const parent: ExcerptParentAddress =
+      row.parentType === 'diary-entry'
+        ? { type: 'diary-entry', date: row.parentSlug }
+        : {
+            type: row.parentType,
+            humanReadableSlug: row.parentSlug,
+            publicId: row.parentPublicId,
+          };
+    return {
+      ...base,
+      url: buildExcerptUrl(parent, slug, publicId),
+      editUrl: buildExcerptAdminPath(row.parentType, row.parentId, publicId),
+      parent: { title: row.parentTitle, url: buildExcerptParentUrl(parent) },
     };
   }
   const url =

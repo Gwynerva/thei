@@ -15,6 +15,7 @@ export const CONTENT_ENTITY_TYPES = [
   'project-section',
   'event',
   'diary-entry',
+  'excerpt',
   'page',
   'tag',
 ] as const;
@@ -114,7 +115,7 @@ export type ResolvedContentEntityLink = ContentEntityReference & {
    * same day and a reader formats it as a date.
    */
   date?: string;
-  /** The project a section belongs to. */
+  /** The project a section belongs to; the parent of an excerpt. */
   parent?: { title: string; href: string };
 };
 

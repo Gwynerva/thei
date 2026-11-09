@@ -9,6 +9,10 @@ import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
+import {
+  buildExcerptUrl,
+  type ExcerptParentAddress,
+} from '#layers/thei/shared/excerpt-url';
 import { buildStoredMediaDescriptor, type StoredAssetRecord } from './storage';
 import { describedText } from './descriptions';
 
@@ -95,6 +99,19 @@ export async function buildPublicProjectSectionMedia(
 ) {
   const media = await buildStoredMediaDescriptor(asset);
   const src = `${buildProjectSectionUrl(project.humanReadableSlug, project.publicId, section.humanReadableSlug, section.publicId)}media/${role}/${asset.slug}.${asset.extension}`;
+  return publicMedia(media, asset, src, alt);
+}
+
+/** An excerpt's own file — its banner — served from under its own address. */
+export async function buildPublicExcerptMedia(
+  parent: ExcerptParentAddress,
+  excerpt: { humanReadableSlug: string; publicId: string },
+  asset: StoredAssetRecord,
+  role: AssetRole,
+  alt?: string,
+) {
+  const media = await buildStoredMediaDescriptor(asset);
+  const src = `${buildExcerptUrl(parent, excerpt.humanReadableSlug, excerpt.publicId)}media/${role}/${asset.slug}.${asset.extension}`;
   return publicMedia(media, asset, src, alt);
 }
 

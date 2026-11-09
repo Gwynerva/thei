@@ -104,6 +104,13 @@ import {
   findEntityBannerAsset,
 } from '../entity-banner';
 import { utcDayOf } from '#layers/thei/shared/date-range';
+import {
+  buildParentExcerpts,
+  countPublicExcerptsAbout,
+  diaryExcerptParent,
+  eventExcerptParent,
+  projectExcerptParent,
+} from './excerpts';
 
 /**
  * The two fields only the owner sees: the reminder that flags the entity, and
@@ -462,6 +469,13 @@ export async function buildPublicProject(
     files,
     own,
   );
+  const [excerpts, excerptsAbout] = await Promise.all([
+    buildParentExcerpts(projectExcerptParent(project), viewer),
+    countPublicExcerptsAbout(
+      { type: 'project', id: project.projectUuid },
+      viewer,
+    ),
+  ]);
   return {
     title: project.title,
     summary: project.summary,
@@ -480,6 +494,8 @@ export async function buildPublicProject(
       ...sectionItems.filter((section) => !isDatedSection(section)),
       ...sortStagesNewestFirst(sectionItems),
     ],
+    excerpts,
+    excerptsAbout,
     showcase,
     files,
     tags: head.tags,
@@ -647,6 +663,10 @@ export async function buildPublicEvent(
     }),
   );
   const manual = buildPublicManualReferenceGroup(rawLinks, files, own);
+  const [excerpts, excerptsAbout] = await Promise.all([
+    buildParentExcerpts(eventExcerptParent(stored), viewer),
+    countPublicExcerptsAbout({ type: 'event', id: stored.eventUuid }, viewer),
+  ]);
   return {
     title: stored.title,
     summary: stored.summary,
@@ -658,6 +678,8 @@ export async function buildPublicEvent(
     media,
     ...(bannerMedia ? { bannerMedia } : {}),
     content: content ?? { blocks: [] },
+    excerpts,
+    excerptsAbout,
     references: await buildPublicReferences(manual, viewer),
     tags: await buildPublicTags(tags),
     related: countPublicRelated(relations),
@@ -721,30 +743,41 @@ export async function buildPublicDiaryEntry(
   viewer: PublicViewer,
 ): Promise<PublicDiaryResponse> {
   const own = opensPrivate(viewer, 'diary-entry', stored.diaryUuid);
-  const [media, content, relations] = await Promise.all([
-    buildPublicEntityPreviewMedia(
-      'diary-entry',
-      stored.diaryUuid,
-      'diary-body',
-      { type: 'diary-entry', date: stored.date },
-      own,
-    ),
-    buildPublicContentData(
-      'diary-entry',
-      stored.diaryUuid,
-      'diary-body',
-      { type: 'diary-entry', date: stored.date },
-      own,
-      viewer,
-    ),
-    resolvePublicRelated({ type: 'diary-entry', id: stored.diaryUuid }, viewer),
-  ]);
+  const [media, content, relations, excerpts, excerptsAbout] =
+    await Promise.all([
+      buildPublicEntityPreviewMedia(
+        'diary-entry',
+        stored.diaryUuid,
+        'diary-body',
+        { type: 'diary-entry', date: stored.date },
+        own,
+      ),
+      buildPublicContentData(
+        'diary-entry',
+        stored.diaryUuid,
+        'diary-body',
+        { type: 'diary-entry', date: stored.date },
+        own,
+        viewer,
+      ),
+      resolvePublicRelated(
+        { type: 'diary-entry', id: stored.diaryUuid },
+        viewer,
+      ),
+      buildParentExcerpts(diaryExcerptParent(stored), viewer),
+      countPublicExcerptsAbout(
+        { type: 'diary-entry', id: stored.diaryUuid },
+        viewer,
+      ),
+    ]);
   return {
     date: stored.date,
     access: stored.access,
     chronology: buildPublicEntityChronology(stored),
     media,
     content: content ?? { blocks: [] },
+    excerpts,
+    excerptsAbout,
     related: countPublicRelated(relations),
     ...(await buildOwnerOnlyNotes(
       'diary-entry',

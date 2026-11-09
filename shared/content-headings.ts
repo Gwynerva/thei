@@ -23,6 +23,23 @@ import {
 /** The anchor of a page's block of related entities, in its contents. */
 export const PUBLIC_RELATED_SECTION_ID = 'related-entities';
 
+/** The anchor of the block of excerpts about a page's entity. */
+export const PUBLIC_EXCERPTS_ABOUT_ID = 'excerpts-about';
+
+/** The anchor of an excerpt embedded on its parent's page, by its public id. */
+export function excerptAnchorId(publicId: string): string {
+  return `excerpt-${publicId}`;
+}
+
+/**
+ * The anchor of a heading inside an embedded excerpt: the excerpt's own
+ * anchor first, so two excerpts with the same heading never share one, and
+ * a link to the heading on the excerpt's own page still names it by `id`.
+ */
+export function excerptHeadingId(publicId: string, id: string): string {
+  return `${excerptAnchorId(publicId)}--${id}`;
+}
+
 /**
  * Places the pages themselves name, never taken by a heading: the blocks of
  * the contents, and the parts with ids of their own that a link lands on
@@ -33,6 +50,8 @@ export const RESERVED_CONTENT_ANCHORS: readonly string[] = [
   PROJECT_DESCRIPTION_ANCHOR,
   PROJECT_SECTIONS_ANCHOR,
   PUBLIC_RELATED_SECTION_ID,
+  PUBLIC_EXCERPTS_ABOUT_ID,
+  'excerpts',
   'statuses',
   'avatars',
   'owner-notes',
