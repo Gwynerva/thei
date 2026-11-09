@@ -27,6 +27,8 @@ import {
   takenParts,
 } from '#layers/thei/shared/content-revise';
 import {
+  isMeaningCategory,
+  MEANING_FIND_MAX,
   PROOFREAD_CATEGORIES,
   TIDY_COMMENT_KINDS,
   type TidyComment,
@@ -78,6 +80,7 @@ import { clipped, target } from './common';
 
 type Correction = Extract<AiRevisePart, { type: 'correction' }>;
 type Relink = Extract<AiRevisePart, { type: 'relink' }>;
+type Remark = Extract<AiRevisePart, { type: 'remark' }>;
 
 /** Words alone, for telling whether a text already says something. */
 function words(value: string) {
@@ -138,10 +141,29 @@ export const noteAction: AiActionKindDef<'note'> = {
   summary: (payload) => `Note: ${clipped(payload.markdown, 100)}`,
 };
 
+/**
+ * A text as a written one leaves it: in place of it, after it, or into it
+ * empty. What applies it and what shows it beforehand read it here alike.
+ */
+export async function writtenText(
+  stored: ContentOutputData | null | undefined,
+  payload: { mode: 'new' | 'append' | 'replace'; markdown: string },
+): Promise<ContentOutputData> {
+  const written = await textFromMarkdown(payload.markdown, stored ?? null);
+  const before = stored?.blocks ?? [];
+  const blocks =
+    payload.mode === 'append'
+      ? [...before, ...mergeEditedBlocks([], written.data.blocks)]
+      : payload.mode === 'replace'
+        ? mergeEditedBlocks(before, written.data.blocks)
+        : mergeEditedBlocks([], written.data.blocks);
+  return { ...(stored ?? {}), blocks } as ContentOutputData;
+}
+
 export const writeAction: AiActionKindDef<'write'> = {
   kind: 'write',
   reference:
-    'A text written at the owner’s request: text (its name, as read_entity gives it — body, notes, description, about), mode new (only into an empty text) | append | replace, and markdown in editing Markdown. Never for rewording the owner’s own words: that is revise.',
+    'A text written at the owner’s request: text (its name, as read_entity gives it — body, notes, description, about), mode new (only into an empty text) | append | replace, and markdown in editing Markdown. Never for rewording the owner’s own words unless they asked for the text anew: a fix of their words is revise.',
   schema: z.object({
     text: z.string(),
     mode: z.enum(['new', 'append', 'replace']).default('append'),
@@ -150,6 +172,7 @@ export const writeAction: AiActionKindDef<'write'> = {
   targets: [
     'project',
     'project-section',
+    'excerpt',
     'event',
     'diary-entry',
     'page',
@@ -196,17 +219,7 @@ export const writeAction: AiActionKindDef<'write'> = {
       entity,
       payload.text,
       row.actionUuid,
-      async (stored) => {
-        const written = await textFromMarkdown(payload.markdown, stored.data);
-        const before = stored.data?.blocks ?? [];
-        const blocks =
-          payload.mode === 'append'
-            ? [...before, ...mergeEditedBlocks([], written.data.blocks)]
-            : payload.mode === 'replace'
-              ? mergeEditedBlocks(before, written.data.blocks)
-              : mergeEditedBlocks([], written.data.blocks);
-        return { ...(stored.data ?? {}), blocks } as ContentOutputData;
-      },
+      (stored) => writtenText(stored.data, payload),
       write,
     );
     return entity;
@@ -329,9 +342,11 @@ async function prepareRelinks(
   data: ContentOutputData,
   relinks: z.infer<typeof relinkInput>[],
   dropped: string[],
+  /** Applied by an app at once: what the owner kept before does not stop it. */
+  direct: boolean,
 ): Promise<AiRevisePart[]> {
   const parts: Relink[] = [];
-  const kept = partsKeptLately(entity, textName);
+  const kept = direct ? new Set<string>() : partsKeptLately(entity, textName);
   for (const relink of relinks) {
     const why = (problem: string) => dropped.push(`${relink.link}: ${problem}`);
     if (parts.some((part) => part.link === relink.link)) {
@@ -398,7 +413,10 @@ async function prepareRelinks(
       place,
       to && theiLinkUrl(to),
     );
-    if (kept.has(fingerprint) || neverOffered([fingerprint]).size) {
+    if (
+      kept.has(fingerprint) ||
+      (!direct && neverOffered([fingerprint]).size)
+    ) {
       why('the owner has kept it as it is.');
       continue;
     }
@@ -436,24 +454,103 @@ function relinkState(
 /**
  * A fix of a text — a correction, a mended link — as the text has it now:
  * made, whoever made it, once its words or its link read as it would have
- * them; waiting while they read as they did; overtaken otherwise.
+ * them; waiting while they read as they did; overtaken otherwise. A remark
+ * waits while its words stand, and is answered once the owner has written
+ * them otherwise.
  */
 export function fixState(
   data: ContentOutputData | null | undefined,
-  part: Correction | Relink,
+  part: Correction | Relink | Remark,
 ): 'applied' | 'stale' | 'pending' {
   if (part.type === 'relink') return relinkState(data, part);
+  if (part.type === 'remark')
+    return countTextMatches(data, part.find) ? 'pending' : 'applied';
   if (correctionPending(data, part)) return 'pending';
   return countTextMatches(data, part.replacePlain) ? 'applied' : 'stale';
 }
 
 const correctionInput = z.object({
   find: z.string(),
-  replace: z.string(),
+  // None only for a remark on meaning, which says what is wrong and leaves
+  // the words to the owner.
+  replace: z.string().optional(),
   category: z.enum(PROOFREAD_CATEGORIES).default('spelling'),
   certainty: z.enum(['sure', 'unsure']).default('sure'),
   reason: z.string().default(''),
 });
+
+/**
+ * A remark on what reads as a mistake of meaning — a fact said again, a step
+ * that does not follow, the text against itself, words a reader stumbles
+ * on — with a rewording when the model has one. Never sure: only the author
+ * knows what was meant. A rewording may say more otherwise than a local fix,
+ * but no more than the words pointed at, and keeps the owner's own words.
+ */
+function prepareMeaning(
+  data: ContentOutputData,
+  correction: z.infer<typeof correctionInput>,
+): { part: Omit<Correction, 'id'> | Omit<Remark, 'id'> } | { problem: string } {
+  const category = correction.category;
+  if (!isMeaningCategory(category))
+    return { problem: 'not a remark on meaning.' };
+  const reason = correction.reason.trim();
+  if (!reason)
+    return {
+      problem:
+        'a remark on meaning says what is wrong: give the reason, with what it repeats or contradicts.',
+    };
+  if (correction.find.length > MEANING_FIND_MAX)
+    return {
+      problem: `point at a sentence or two, at most ${MEANING_FIND_MAX} characters.`,
+    };
+  const matches = countTextMatches(data, correction.find);
+  if (matches !== 1)
+    return {
+      problem: matches
+        ? `"${correction.find}" stands ${matches} times; give more of the words around it.`
+        : `"${correction.find}" is not in the text as one run of words, inside one block.`,
+    };
+  const said = {
+    category,
+    certainty: 'unsure' as const,
+    reason: clipped(reason, 300),
+  };
+  if (correction.replace === undefined)
+    return { part: { type: 'remark', ...said, find: correction.find } };
+  const fix = { ...correction, replace: correction.replace };
+  if (!stripMarks(fix.replace).trim())
+    return {
+      problem:
+        'a rewording says the words otherwise: to drop a repeat, take in the words beside it and keep those.',
+    };
+  const lost = keptWordsIn(fix.find).filter(
+    (word) => !keptWordsIn(fix.replace).includes(word),
+  );
+  if (lost.length)
+    return {
+      problem: `"${lost.join('", "')}" is in the owner's dictionary: a rewording keeps it.`,
+    };
+  if (editChangesOnlyTypography(fix))
+    return {
+      problem: 'it changes only typography, which the site sets itself.',
+    };
+  const prepared = prepareTextEdit(fix);
+  if (prepared.links)
+    return {
+      problem:
+        'a rewording adds no link: make a mention a link as a correction of its own, category "link".',
+    };
+  return {
+    part: {
+      type: 'correction',
+      ...said,
+      find: fix.find,
+      replace: fix.replace,
+      replaceHtml: prepared.replaceHtml,
+      replacePlain: plainOfHtml(prepared.replaceHtml),
+    },
+  };
+}
 
 /** Parts as decided now: the stored decisions with the owner's latest over them. */
 function partStates(
@@ -466,9 +563,14 @@ function partStates(
   );
   for (const row of (stored ?? []) as PartStateRow[])
     if (states.has(row.id)) states.set(row.id, row.state);
+  // A remark is never taken: it waits, or is kept.
+  const remarks = new Set(
+    parts.filter((part) => part.type === 'remark').map((part) => part.id),
+  );
   if (given)
     for (const [id, state] of Object.entries(given)) {
       const now = states.get(id);
+      if (remarks.has(id) && state === 'accepted') continue;
       if (now && now !== 'applied' && now !== 'stale') states.set(id, state);
     }
   // What the owner said nothing of: a sure part is taken, the rest wait.
@@ -485,7 +587,7 @@ function partStates(
 export const reviseAction: AiActionKindDef<'revise'> = {
   kind: 'revise',
   reference:
-    'An edit of the owner’s text, decided part by part. text, then either mode proofread with corrections [{ find, replace, category, certainty?, reason }] — local fixes of clear mistakes, find standing once in the text, never typography; category link makes a mention a link to an entity, every word kept: the few words that say most plainly where it leads, never a sentence nor a «here» — only its first mention in a part of the text, from one level-two heading to the next — or mode relink with relinks [{ link, to, certainty?, reason }]: a link by its id — broken_links names those that lead nowhere, links_in every link of an entity — pointed at to, thei:<kind>/<id>#<anchor> — the heading it became, or another place outline gives — or to null: its words kept without the link, when what it led to is gone, or with the reason a link that leads somewhere is plainly wrong or a repeat in its part of the text; or mode order with markdown: the whole text with its blocks moved, split, given headings or a repeat dropped, nothing reworded, with expectedVersion (the version you read), removals [{ quote, reason, duplicateOf? }] and comments [{ quote?, kind, comment }].',
+    'An edit of the owner’s text, decided part by part. text, then either mode proofread with corrections [{ find, replace, category, certainty?, reason }] — local fixes of clear mistakes, find standing once in the text, never typography; categories repeat, logic, contradiction and clumsy are remarks on meaning, always unsure: find is the sentence or two at fault (inside one block, at most 400 characters), reason says what is wrong — what it repeats or contradicts, quoted — and replace is left out, or given as the same words said otherwise when you have a rewording, keeping the owner’s words and voice; category link makes a mention a link to an entity, every word kept: the few words that say most plainly where it leads, never a sentence nor a «here» — only its first mention in a part of the text, from one level-two heading to the next — or mode relink with relinks [{ link, to, certainty?, reason }]: a link by its id — broken_links names those that lead nowhere, links_in every link of an entity — pointed at to, thei:<kind>/<id>#<anchor> — the heading it became, or another place outline gives — or to null: its words kept without the link, when what it led to is gone, or with the reason a link that leads somewhere is plainly wrong or a repeat in its part of the text; or mode order with markdown: the whole text with its blocks moved, split, given headings or a repeat dropped, nothing reworded, with expectedVersion (the version you read), removals [{ quote, reason, duplicateOf? }] and comments [{ quote?, kind, comment }].',
   schema: z.object({
     text: z.string(),
     mode: z.enum(['proofread', 'relink', 'order']),
@@ -515,6 +617,7 @@ export const reviseAction: AiActionKindDef<'revise'> = {
   targets: [
     'project',
     'project-section',
+    'excerpt',
     'event',
     'diary-entry',
     'page',
@@ -569,6 +672,7 @@ export const reviseAction: AiActionKindDef<'revise'> = {
         text.data,
         relinks,
         dropped,
+        context.direct ?? false,
       );
       if (!parts.length) fail(`Nothing left to propose: ${dropped.join(' ')}`);
       return {
@@ -582,16 +686,22 @@ export const reviseAction: AiActionKindDef<'revise'> = {
       typeof correctionInput
     >[];
     if (!corrections.length) fail('Give the corrections.');
-    const kept = partsKeptLately(entity, input.text);
-    const never = neverOffered(
-      corrections.map((c) => correctionFingerprint(entity, input.text, c)),
-    );
+    // What the owner kept of the site's model's corrections does not stop an
+    // app: the owner asked it for this one in the app's own conversation.
+    const kept = context.direct
+      ? new Set<string>()
+      : partsKeptLately(entity, input.text);
+    const never = context.direct
+      ? new Set<string>()
+      : neverOffered(
+          corrections.map((c) => correctionFingerprint(entity, input.text, c)),
+        );
     const parts: AiRevisePart[] = [];
     const outlines = outlineCache();
     for (const correction of corrections) {
       const why = (problem: string) =>
         dropped.push(
-          `"${correction.find}" → "${correction.replace}": ${problem}`,
+          `"${correction.find}"${correction.replace === undefined ? '' : ` → "${correction.replace}"`}: ${problem}`,
         );
       const fingerprint = correctionFingerprint(entity, input.text, correction);
       if (!correction.find || correction.find === correction.replace) {
@@ -602,15 +712,35 @@ export const reviseAction: AiActionKindDef<'revise'> = {
         why('the owner has kept it as written.');
         continue;
       }
-      if (correction.category === 'link') {
-        const link = await prepareLinkCorrection(entity, text.data, correction);
+      if (isMeaningCategory(correction.category)) {
+        // A remark changes no words, and nobody here would read it.
+        if (context.direct && correction.replace === undefined) {
+          why(
+            'a remark changes no words: say it to the owner in your conversation, and give a rewording if they want one.',
+          );
+          continue;
+        }
+        const meant = prepareMeaning(text.data, correction);
+        if ('problem' in meant) why(meant.problem);
+        else parts.push({ ...meant.part, id: `c${parts.length + 1}` });
+        continue;
+      }
+      if (correction.replace === undefined) {
+        why(
+          'give the words it becomes: only a remark on meaning goes without them.',
+        );
+        continue;
+      }
+      const fix = { ...correction, replace: correction.replace };
+      if (fix.category === 'link') {
+        const link = await prepareLinkCorrection(entity, text.data, fix);
         if ('problem' in link) {
           why(link.problem);
           continue;
         }
         const { places } = placeTextEdits(
           text.data,
-          [{ id: 'link', find: correction.find }],
+          [{ id: 'link', find: fix.find }],
           (_id, stored) => stored,
         );
         if (!places.get('link')?.html) {
@@ -632,68 +762,74 @@ export const reviseAction: AiActionKindDef<'revise'> = {
           id: `c${parts.length + 1}`,
           type: 'correction',
           category: 'link',
-          certainty: correction.certainty,
-          reason: correction.reason.slice(0, 200),
-          find: correction.find,
-          replace: correction.replace,
+          certainty: fix.certainty,
+          reason: fix.reason.slice(0, 200),
+          find: fix.find,
+          replace: fix.replace,
           replaceHtml: link.replaceHtml,
           replacePlain: plainOfHtml(link.replaceHtml),
           ...(toTitle ? { toTitle } : {}),
         });
         continue;
       }
-      const ownWords = keptWordsIn(correction.find);
+      const ownWords = keptWordsIn(fix.find);
       if (ownWords.length) {
         why(
           `"${ownWords.join('", "')}" is in the owner's dictionary: written so on purpose.`,
         );
         continue;
       }
-      if (editChangesOnlyTypography(correction)) {
+      if (editChangesOnlyTypography(fix)) {
         why('it changes only typography, which the site sets itself.');
         continue;
       }
-      if (!editIsLocalFix(correction)) {
+      if (!editIsLocalFix(fix)) {
         why(
           'it rephrases rather than fixes: proofreading changes a few letters or words and keeps them recognisable.',
         );
         continue;
       }
-      const prepared = prepareTextEdit(correction);
+      const prepared = prepareTextEdit(fix);
       if (prepared.links) {
         why(
           'a correction of a mistake adds no link: make a mention a link as a correction of its own, category "link".',
         );
         continue;
       }
-      const matches = countTextMatches(text.data, correction.find);
+      const matches = countTextMatches(text.data, fix.find);
       if (matches !== 1) {
         why(
           matches
-            ? `"${correction.find}" stands ${matches} times; give more of the words around it.`
-            : `"${correction.find}" is not in the text as one run of words.`,
+            ? `"${fix.find}" stands ${matches} times; give more of the words around it.`
+            : `"${fix.find}" is not in the text as one run of words.`,
         );
         continue;
       }
       parts.push({
         id: `c${parts.length + 1}`,
         type: 'correction',
-        category: correction.category,
-        certainty: correction.certainty,
-        reason: correction.reason.slice(0, 200),
-        find: correction.find,
-        replace: correction.replace,
+        category: fix.category,
+        certainty: fix.certainty,
+        reason: fix.reason.slice(0, 200),
+        find: fix.find,
+        replace: fix.replace,
         replaceHtml: prepared.replaceHtml,
         replacePlain: plainOfHtml(prepared.replaceHtml),
       });
     }
-    // Two corrections of the same words cannot both be made.
-    const overlapping = overlappingEdits(text.data, parts as Correction[]);
+    // Two corrections of the same words cannot both be made, nor a remark
+    // stand on words a correction changes.
+    const overlapping = overlappingEdits(
+      text.data,
+      parts as (Correction | Remark)[],
+    );
     const apart = parts.filter((part, index) => {
       if (!overlapping.has(index)) return true;
-      const correction = part as Correction;
+      const correction = part as Correction | Remark;
       dropped.push(
-        `"${correction.find}" → "${correction.replace}": its words overlap another correction's; make them one.`,
+        correction.type === 'remark'
+          ? `"${correction.find}": a remark on words another correction changes; mend the mistake in a rewording of the remark, or leave the remark on the words beside it.`
+          : `"${correction.find}" → "${correction.replace}": its words overlap another correction's; make them one.`,
       );
       return false;
     });
@@ -727,7 +863,11 @@ export const reviseAction: AiActionKindDef<'revise'> = {
             payload.text,
             payload.parts
               .flatMap((part) =>
-                part.type === 'correction' ? [[part.find, part.replace]] : [],
+                part.type === 'correction'
+                  ? [[part.find, part.replace]]
+                  : part.type === 'remark'
+                    ? [[part.find, part.category]]
+                    : [],
               )
               .sort(),
           ],
@@ -814,7 +954,12 @@ export const reviseAction: AiActionKindDef<'revise'> = {
     const fresh: PartStateRow[] = payload.parts.map((part) => {
       const kept = stored.get(part.id) ?? { id: part.id, state: 'pending' };
       if (!open(part)) return kept;
-      if (part.type !== 'correction' && part.type !== 'relink') return kept;
+      if (
+        part.type !== 'correction' &&
+        part.type !== 'relink' &&
+        part.type !== 'remark'
+      )
+        return kept;
       const state = fixState(text.data, part);
       return state === 'pending' ? kept : { id: part.id, state };
     });
@@ -848,7 +993,9 @@ export const reviseAction: AiActionKindDef<'revise'> = {
       .flatMap((part) =>
         part.type === 'correction'
           ? [`"${clipped(part.find, 40)}" → "${clipped(part.replace, 40)}"`]
-          : [],
+          : part.type === 'remark'
+            ? [`"${clipped(part.find, 40)}": ${part.category}`]
+            : [],
       )
       .slice(0, 3);
     const more = payload.parts.length - shown.length;

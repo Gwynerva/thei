@@ -6,14 +6,17 @@ const props = defineProps<{
   modalData: { diaryUuid: string; date: string };
 }>();
 const deleting = ref(false);
+/** What becomes of the excerpts about the entry. */
+const excerpts = ref<'keep' | 'delete'>('keep');
 
 async function handleDelete() {
   if (deleting.value) return;
   deleting.value = true;
   try {
-    await useRequestFetch()(`/api/admin/diary/${props.modalData.diaryUuid}`, {
-      method: 'DELETE',
-    });
+    await useRequestFetch()(
+      `/api/admin/diary/${props.modalData.diaryUuid}?excerpts=${excerpts.value}`,
+      { method: 'DELETE' },
+    );
     emit('modalResult', { type: 'deleted' });
   } finally {
     deleting.value = false;
@@ -29,5 +32,10 @@ async function handleDelete() {
     :confirmation-name="modalData.date"
     :deleting="deleting"
     @confirm="handleDelete"
-  />
+  >
+    <AdminExcerptsOnDelete
+      v-model="excerpts"
+      :target="{ type: 'diary-entry', id: modalData.diaryUuid }"
+    />
+  </DeleteConfirmationPane>
 </template>

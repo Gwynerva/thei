@@ -11,6 +11,9 @@ import {
   type RelationType,
 } from '#layers/thei/shared/relation';
 import type { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
+import { readExcerptSubjects } from './excerpts/subjects';
+import { excerptAccess } from './excerpts/parents';
+import type { ExcerptParentType } from '#layers/thei/shared/excerpt';
 import type {
   StoredRelationNote,
   StoredRelationType,
@@ -48,14 +51,16 @@ export async function relationIconMedia(endpoint: RelationEndpoint) {
       icon ? (await buildAdminAssetUrls(icon.asset)).media! : undefined,
     );
   }
-  if (endpoint.type === 'event') {
-    const banner = await buildAdminEntityBanner('event', endpoint.id);
+  if (endpoint.type === 'event' || endpoint.type === 'excerpt') {
+    const banner = await buildAdminEntityBanner(endpoint.type, endpoint.id);
     if (banner) return banner;
   }
   const [ownerType, slot] =
     endpoint.type === 'event'
       ? (['event', 'event-body'] as const)
-      : (['diary-entry', 'diary-body'] as const);
+      : endpoint.type === 'excerpt'
+        ? (['excerpt', 'excerpt-body'] as const)
+        : (['diary-entry', 'diary-body'] as const);
   const content = await THEI_SERVER.content.buildFieldValue(
     ownerType,
     endpoint.id,
@@ -145,6 +150,28 @@ function rowWhere(schema: any, key: RelationRowKey) {
 }
 
 /**
+ * The rows an owner's form holds, which is what its save replaces: every
+ * relation it has — except, for a project, an event or a diary entry, those
+ * drawn by an excerpt about it. An excerpt's relations are the excerpt's
+ * own: only its form writes them, and the target's save never carries them,
+ * so it can never wipe them.
+ */
+export function relationRowsOf(
+  db: any,
+  schema: any,
+  owner: RelationEndpoint,
+): any[] {
+  const rows: any[] = db
+    .select()
+    .from(schema.entityRelations)
+    .where(rowMatches(schema, owner))
+    .all();
+  return owner.type === 'excerpt'
+    ? rows
+    : rows.filter((row) => otherEndOf(row, owner).type !== 'excerpt');
+}
+
+/**
  * The other end of a relation, described the way a list needs it.
  *
  * A diary entry has no title, slug or public ID, so its day stands in for all
@@ -158,8 +185,15 @@ export type RelationTarget = {
   summary: string;
   humanReadableSlug: string;
   publicId: string;
+  /** A diary entry's day; an excerpt's, when its parent is an entry. */
   date?: string;
+  /**
+   * Who may see it: an excerpt's the strictest of its own privacy, its
+   * parent's access and its subject's (`excerptAccess`).
+   */
   access: ProjectEventAccessLevel;
+  /** An excerpt's parent, named the way its cards name it. */
+  parent?: { type: ExcerptParentType; id: string; title: string };
 };
 
 /**
@@ -231,6 +265,47 @@ export async function loadRelationTargets(
         access: entry.access,
       });
 
+  for (const ids of inChunks(idsOf('excerpt'))) {
+    const rows = db
+      .select()
+      .from(schema.excerpts)
+      .where(inArray(schema.excerpts.excerptUuid, ids))
+      .all();
+    const parents = await loadRelationTargets(
+      rows.map((row) => ({ type: row.parentType, id: row.parentId })),
+    );
+    const subjects = readExcerptSubjects(
+      db,
+      schema,
+      rows.map((row) => row.excerptUuid),
+    );
+    for (const row of rows) {
+      const parent = parents.get(
+        relationEndpointKey({ type: row.parentType, id: row.parentId }),
+      );
+      // An excerpt whose parent is gone is a broken row, left out as a
+      // target whose entity is gone would be.
+      if (!parent) continue;
+      set({
+        type: 'excerpt',
+        id: row.excerptUuid,
+        title: row.title,
+        summary: row.summary,
+        humanReadableSlug: row.humanReadableSlug,
+        publicId: row.publicId,
+        ...(parent.date ? { date: parent.date } : {}),
+        access: excerptAccess(
+          {
+            isPrivate: row.isPrivate,
+            subject: subjects.get(row.excerptUuid) ?? null,
+          },
+          parent,
+        ),
+        parent: { type: row.parentType, id: row.parentId, title: parent.title },
+      });
+    }
+  }
+
   return targets;
 }
 
@@ -284,11 +359,7 @@ export function applyRelations(
   relations: PreparedRelation[] | undefined,
 ) {
   if (relations === undefined) return;
-  const existing = tx
-    .select()
-    .from(schema.entityRelations)
-    .where(rowMatches(schema, owner))
-    .all();
+  const existing = relationRowsOf(tx, schema, owner);
   const nextRows = new Set(relations.map((item) => rowKeyString(item.row)));
 
   for (const row of existing) {
@@ -349,14 +420,17 @@ export function applyRelations(
   }
 }
 
+/**
+ * Drops an owner's own relations. The relations of the excerpts about a
+ * target are not the target's: whoever deletes a target decides about them
+ * first (`detachExcerptsFromTarget`).
+ */
 export function deleteRelations(tx: any, schema: any, owner: RelationEndpoint) {
-  const rows = tx
-    .select()
-    .from(schema.entityRelations)
-    .where(rowMatches(schema, owner))
-    .all();
-  tx.delete(schema.entityRelations).where(rowMatches(schema, owner)).run();
-  for (const row of rows) touchEndpoint(tx, schema, otherEndOf(row, owner));
+  const rows = relationRowsOf(tx, schema, owner);
+  for (const row of rows) {
+    tx.delete(schema.entityRelations).where(rowWhere(schema, row)).run();
+    touchEndpoint(tx, schema, otherEndOf(row, owner));
+  }
 }
 
 function otherEndOf(row: any, owner: RelationEndpoint): RelationEndpoint {
@@ -369,13 +443,37 @@ function otherEndOf(row: any, owner: RelationEndpoint): RelationEndpoint {
  * Moves the version of the other end of a relation that changed. Its form
  * holds its relations whole, so one read before the change would write the
  * relation back as it was; a moved version makes that save refused instead.
+ * An excerpt is edited in its parent's form, so its parent moves with it.
  */
 function touchEndpoint(tx: any, schema: any, endpoint: RelationEndpoint) {
+  const now = Date.now();
   const { table, id } = contentOwnerKeys(schema)[endpoint.type];
-  tx.update(table)
-    .set({ updatedAt: Date.now() })
-    .where(eq(id, endpoint.id))
+  tx.update(table).set({ updatedAt: now }).where(eq(id, endpoint.id)).run();
+  if (endpoint.type !== 'excerpt') return;
+  const excerpt = tx
+    .select({
+      parentType: schema.excerpts.parentType,
+      parentId: schema.excerpts.parentId,
+    })
+    .from(schema.excerpts)
+    .where(eq(schema.excerpts.excerptUuid, endpoint.id))
+    .get();
+  if (!excerpt) return;
+  const parent =
+    contentOwnerKeys(schema)[excerpt.parentType as RelationEntityType];
+  tx.update(parent.table)
+    .set({ updatedAt: now })
+    .where(eq(parent.id, excerpt.parentId))
     .run();
+}
+
+/** The same, for whoever changes a relation outside its owner's save. */
+export function touchRelationEndpoint(
+  tx: any,
+  schema: any,
+  endpoint: RelationEndpoint,
+) {
+  touchEndpoint(tx, schema, endpoint);
 }
 
 /** One relation read from its owner's side, before its target is looked up. */
@@ -396,12 +494,8 @@ export type RelationRow = {
  */
 export function readRelationRows(owner: RelationEndpoint): RelationRow[] {
   const { db, schema } = THEI_SERVER.useDb();
-  return db
-    .select()
-    .from(schema.entityRelations)
-    .where(rowMatches(schema, owner))
-    .all()
-    .map((row): RelationRow => {
+  return relationRowsOf(db, schema, owner)
+    .map((row: any): RelationRow => {
       const first = ownerIsFirst(row, owner);
       const [a, b] = rowEndpoints(row);
       return {
@@ -438,6 +532,7 @@ export async function getRelations(
         humanReadableSlug: found.humanReadableSlug,
         publicId: found.publicId,
         ...(found.date ? { date: found.date } : {}),
+        access: found.access,
         type: row.type,
         note: row.note,
         iconMedia: await relationIconMedia(row.other),

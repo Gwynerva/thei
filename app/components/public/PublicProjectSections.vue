@@ -42,6 +42,7 @@ const shown = computed(() =>
     <PublicSectionHeader
       heading-id="sections-heading"
       :title="phrase.project_content_sections"
+      :description="phrase.project_content_sections_description"
       :icon="entityTypeIcon('project-section')"
     />
     <UnderlineTabs

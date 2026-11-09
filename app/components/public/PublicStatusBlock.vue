@@ -21,10 +21,8 @@ async function toggle() {
   expanded.value = !expanded.value;
   if (expanded.value) await history.load();
 }
-// The life timeline links a status point straight at this block.
-useHashDisclosure('#statuses', expanded, history.load);
-// A find of the search lands on a status: the history opens and is read on
-// to its day.
+// A status point of the life timeline, or a find of the search, lands on a
+// status: the history opens and is read on to its day.
 useLandingReveal(async (target) => {
   if (target.zone !== 'statuses') return;
   expanded.value = true;

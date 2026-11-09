@@ -2,9 +2,8 @@ import type {
   ContentEntityReference,
   ContentLinkApiResponse,
 } from '#layers/thei/shared/content-link';
-import { findContentEntity } from '../content-entities';
+import { contentEntityOpens, findContentEntity } from '../content-entities';
 import { opensGrantOwner, type PublicViewer } from '../access-links/viewer';
-import { canResolveContentEntityLink } from './access';
 
 /**
  * What a link to an entity shows this reader.
@@ -24,12 +23,14 @@ export async function resolveContentEntityLink(
 ): Promise<ContentLinkApiResponse> {
   const entity = await findContentEntity(reference, viewer);
   if (!entity) return { ...reference, state: 'broken', reason: 'not-found' };
-  const opens = opensGrantOwner(viewer, entity.grantOwner);
-  if (!canResolveContentEntityLink(entity.access, opens))
+  if (!contentEntityOpens(entity, viewer))
     return isAuthenticatedAdmin
       ? { state: 'restricted' }
       : { ...reference, state: 'broken', reason: 'not-found' };
-  const media = await entity.media(viewer.isAdmin ? 'admin' : 'public', opens);
+  const media = await entity.media(
+    viewer.isAdmin ? 'admin' : 'public',
+    opensGrantOwner(viewer, entity.grantOwner),
+  );
   return {
     ...reference,
     state: 'resolved',

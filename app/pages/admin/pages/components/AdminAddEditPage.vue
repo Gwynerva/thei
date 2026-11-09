@@ -185,7 +185,7 @@ useRegisterAdminBarContextButton(
     if (!isEdit.value) return undefined;
     const { slug } = JSON.parse(savedSnapshot.value) as PageEditData;
     return {
-      to: { href: buildPageUrl(slug), external: true },
+      to: { href: buildPageUrl(slug), external: true, target: '_blank' },
       icon: 'visibility',
       title: phrase.value.view_page,
     };

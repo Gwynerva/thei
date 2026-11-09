@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import { resolveFfmpegTools } from '../../../update/ffmpeg/tools';
 import sharp from 'sharp';
 import {
   createApp,
@@ -85,7 +85,7 @@ afterEach(async () => {
 
 function run(args: string[]) {
   return new Promise<void>((resolve, reject) => {
-    const child = spawn(ffmpegInstaller.path, args, { stdio: 'ignore' });
+    const child = spawn(resolveFfmpegTools().ffmpeg, args, { stdio: 'ignore' });
     child.on('error', reject);
     child.on('close', (code) =>
       code === 0 ? resolve() : reject(new Error(`ffmpeg exited ${code}`)),

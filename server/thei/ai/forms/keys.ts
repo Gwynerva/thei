@@ -1,5 +1,6 @@
 import type { ProjectEditData } from '#layers/thei/shared/admin/project';
 import type { ProjectSectionItem } from '#layers/thei/shared/project-content-item';
+import type { ExcerptItem } from '#layers/thei/shared/excerpt';
 import type { EventEditData } from '#layers/thei/shared/event';
 import type { DiaryEditData } from '#layers/thei/shared/diary';
 import type { PageEditData } from '#layers/thei/shared/page';
@@ -14,6 +15,7 @@ type StatusTexts = { statusTexts?: Record<string, string> };
 type Forms = {
   project: ProjectEditData & StatusTexts;
   'project-section': ProjectSectionItem;
+  excerpt: ExcerptItem;
   event: EventEditData;
   'diary-entry': DiaryEditData;
   page: PageEditData;
@@ -61,6 +63,8 @@ export const FORM_KEYS = {
     updatedStatuses: null,
     deletedStatusIds: null,
     statusTexts: 'statuses',
+    // Its excerpts, changed or added, each by its id.
+    excerpts: 'excerpts',
   },
   'project-section': {
     // Its id, by which a change of it is merged.
@@ -72,6 +76,20 @@ export const FORM_KEYS = {
     isPrivate: 'private',
     periods: 'periods',
     content: 'body',
+    bannerAssetUuid: 'banner',
+    // How the form shows its banner; no save reads it.
+    bannerMedia: null,
+  },
+  excerpt: {
+    // Its id, by which a change of it is merged.
+    excerptUuid: null,
+    title: 'title',
+    summary: 'summary',
+    humanReadableSlug: 'slug',
+    publicId: 'publicId',
+    isPrivate: 'private',
+    content: 'body',
+    about: 'subject',
     bannerAssetUuid: 'banner',
     // How the form shows its banner; no save reads it.
     bannerMedia: null,
@@ -89,6 +107,7 @@ export const FORM_KEYS = {
     externalLinks: 'links',
     tags: 'tags',
     relations: 'relations',
+    excerpts: 'excerpts',
     // Its button: no change proposes it, unlike a project's words on one.
     action: null,
     reminder: 'reminder',
@@ -101,6 +120,7 @@ export const FORM_KEYS = {
     access: 'access',
     content: 'body',
     relations: 'relations',
+    excerpts: 'excerpts',
     reminder: 'reminder',
     notes: 'notes',
     version: null,

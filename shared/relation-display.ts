@@ -130,5 +130,5 @@ export function relationSentencePartsFromOther(
 
 /** The icon for the kind of thing on the other end of a relation. */
 export function relationEntityIcon(type: RelationEntityType) {
-  return entityTypeIcon(type);
+  return type === 'excerpt' ? 'excerpt' : entityTypeIcon(type);
 }

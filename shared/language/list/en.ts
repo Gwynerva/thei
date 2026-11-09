@@ -190,6 +190,7 @@ export default defineI18nBase({
   phrases: {
     asset_library: 'File storage',
     asset_library_search: 'Search files',
+    asset_library_search_hint: 'Words, a day, “video”, “diary”…',
     asset_aspect_hint: (ratio, size) =>
       `Works best with an image or video in ${ratio}, for example ${size} pixels`,
     asset_library_pending_deletion: (date) =>
@@ -205,13 +206,20 @@ export default defineI18nBase({
     asset_library_anywhere: 'Anywhere',
     asset_library_widen: 'Look wider',
     asset_library_used: 'In use',
-    asset_library_more: 'Show more',
-    asset_library_insert: 'Insert selected',
+    asset_library_insert: 'Insert',
     asset_library_usage: 'Used in',
-    asset_library_described: 'Description',
-    asset_library_described_any: 'With a description or without',
-    asset_library_described_none: 'Without a description',
-    asset_library_described_some: 'With a description',
+    asset_library_here: 'Here and related',
+    asset_library_named: 'Places of that name',
+    asset_library_recent: 'Used lately',
+    asset_library_order_new: 'Newest first',
+    asset_library_order_old: 'Oldest first',
+    asset_library_undated: 'No date',
+    asset_library_years: 'Years',
+    asset_library_clear_selection: 'Clear selection',
+    asset_library_unselect: 'Remove from selection',
+    asset_library_search_part_remove: (label) =>
+      `Remove “${label}” from the search`,
+    asset_library_uploaded: (when) => `Uploaded: ${when}`,
     asset_used_elsewhere: 'Also used in',
     asset_about: 'About the file',
     asset_format: (kind, extension) => {
@@ -238,7 +246,6 @@ export default defineI18nBase({
     asset_recipe_quality_level: (level) => `${level.toLowerCase()} quality`,
     asset_recipe_lossless: 'lossless',
     asset_recipe_no_audio: 'no sound',
-    asset_recipe_fast: 'fast conversion',
     asset_recipe_bitrate: (kbps) => `${kbps} kbit/s`,
     asset_recipe_mono: 'mono',
     asset_quality_minimal: 'Minimal',
@@ -375,6 +382,18 @@ export default defineI18nBase({
     profile_personal_hint:
       'Personal preferences apply immediately in this browser',
     profile_avatar_count: (count: number) => `1 of ${count}`,
+    profile_counter: (kind, count) =>
+      ({
+        project: () => plural(count, 'project', 'projects', false),
+        event: () => plural(count, 'event', 'events', false),
+        'diary-entry': () => plural(count, 'entry', 'entries', false),
+      })[kind](),
+    profile_counter_label: (kind, count) =>
+      ({
+        project: () => plural(count, 'project', 'projects'),
+        event: () => plural(count, 'event', 'events'),
+        'diary-entry': () => plural(count, 'diary entry', 'diary entries'),
+      })[kind](),
     profile_age: (age: number) => `${age} years old`,
     profile_reorder: 'Drag to reorder',
     profile_more: 'Load more',
@@ -397,8 +416,13 @@ export default defineI18nBase({
       plural(count, 'hidden entry', 'hidden entries'),
     life_activity_diary: (count) =>
       plural(count, 'diary entry', 'diary entries'),
+    life_activity_excerpts: (count) => plural(count, 'excerpt', 'excerpts'),
     projects: 'Projects',
     events: 'Events',
+    excerpts: 'Excerpts',
+    excerpt: 'Excerpt',
+    excerpt_position: (index, total) => `Excerpt ${index} of ${total}`,
+    excerpt_about: 'About',
     pages: 'Pages',
     tags: 'Tags',
     settings: 'Settings',
@@ -439,11 +463,13 @@ export default defineI18nBase({
     section_ongoing: 'A section is in progress',
     section_was_ongoing: 'A section was under way',
     diary_written: 'Written in the diary',
+    excerpt_written: 'An excerpt was written',
     secret_event: (codename: string) => `Secret event ${codename}`,
     secret_project: (codename: string) => `Secret project ${codename}`,
     secret_page: (codename: string) => `Secret page ${codename}`,
     secret_diary_entry: (codename: string) => `Secret entry ${codename}`,
     secret_section: (codename: string) => `Secret section ${codename}`,
+    secret_excerpt: (codename: string) => `Secret excerpt ${codename}`,
     secret_media: (codename: string) => `Secret media ${codename}`,
     secret_file: (codename: string) => `Secret file ${codename}`,
     secret_hint: 'Hidden from visitors',
@@ -461,6 +487,7 @@ export default defineI18nBase({
         'profile-avatar': 'Avatars',
         'profile-status': 'Statuses',
         'diary-entry': 'Diary entries',
+        excerpt: 'Excerpts',
       })[kind] ?? kind,
     public_timeline_from: (date) => `From ${date}`,
     public_timeline_until: (date) => `To ${date}`,
@@ -469,7 +496,7 @@ export default defineI18nBase({
       'A continuous timeline of events, projects and diary entries.',
     home: 'Home',
     llms_txt_intro:
-      'A personal archive of one life. Three main kinds of record, simplest first: a diary entry is a dated thought with no title, an event is a memorable moment written up, a project is a substantial episode made of its own sections — general ones about a part of it, and stages, the sections with dates it went through. Relations join projects, events and diary entries: each lists the others it is related to, marking those that influence it or depend on it. Alongside them, pages are standalone writing, tags are threads across all of it, and Life is the single timeline they land on.',
+      'A personal archive of one life. Three main kinds of record, simplest first: a diary entry is a dated thought with no title, an event is a memorable moment written up, a project is a substantial episode made of its own sections — general ones about a part of it, and stages, the sections with dates it went through. Relations join projects, events and diary entries: each lists the others it is related to, marking those that influence it or depend on it. An excerpt is a named part of a diary entry, an event or a project about something else in the archive, shown whole on the page of its parent and as a card on the pages of what it is about. Alongside them, pages are standalone writing, tags are threads across all of it, and Life is the single timeline they land on.',
     llms_txt_sections: 'Sections',
     llms_txt_home:
       'who this is, current status, best projects and the latest moments',
@@ -482,7 +509,7 @@ export default defineI18nBase({
     llms_txt_sitemap: 'every public address on this site',
     llms_txt_markdown_title: 'Markdown',
     llms_txt_markdown:
-      'Any public project, project section, event, page or diary entry is also served as Markdown: add index.md to its address, for example /projects/name-id/index.md. Private parts are absent there, exactly as they are for any other visitor.',
+      'Any public project, project section, event, page, diary entry or excerpt is also served as Markdown: add index.md to its address, for example /projects/name-id/index.md. Private parts are absent there, exactly as they are for any other visitor.',
     public_life_period_description: (period, siteName) =>
       `Events, projects and diary entries for ${period} — ${siteName}.`,
     public_pages_description:
@@ -527,6 +554,7 @@ export default defineI18nBase({
         'project-section': 'Project section',
         event: 'Event',
         'diary-entry': 'Diary',
+        excerpt: 'Excerpt',
         page: 'Page',
         file: 'File',
         tag: 'Tag',
@@ -538,6 +566,7 @@ export default defineI18nBase({
         'project-section': 'Project sections',
         event: 'Events',
         'diary-entry': 'Diary',
+        excerpt: 'Excerpts',
         page: 'Pages',
         file: 'Files',
         tag: 'Tags',
@@ -550,6 +579,7 @@ export default defineI18nBase({
         summary: 'Description',
         heading: 'Heading',
         section: 'Project section',
+        excerpt: 'Excerpt',
         text: 'Text',
         caption: 'Caption',
         file: 'File description',
@@ -565,6 +595,7 @@ export default defineI18nBase({
         day: 'Day',
       })[where],
     search_where_section: (title) => `Section “${title}”`,
+    search_where_excerpt: (title) => `Excerpt “${title}”`,
     search_access_private: 'Only you see it',
     search_access_link: 'Only those with the link see it',
     search_access_private_short: 'Only you',
@@ -585,7 +616,7 @@ export default defineI18nBase({
     search_busy: 'The search is busy: an answer is on its way.',
     search_failed: 'Could not search. Try again.',
     search_quick_hint:
-      'Projects, events, the diary, pages, files and tags — by any word in them.',
+      'Projects, events, the diary, excerpts, pages, files and tags — by any word in them.',
     search_years: 'Years',
     search_sort: 'Sort',
     search_sort_best: 'Best match',
@@ -608,8 +639,6 @@ export default defineI18nBase({
     search_action_diary_today_new: 'Write today’s diary entry',
     search_action_diary_day: (day) => `Diary entry of ${day}`,
     search_action_diary_day_new: (day) => `Write the diary entry of ${day}`,
-    search_action_edit: (title) => `Edit “${title}”`,
-    search_action_view: (title) => `Open “${title}” on the site`,
     search_action_section: 'A section of the admin',
     search_action_new_project: (title) => `New project “${title}”`,
     search_action_new_event: (title) => `New event “${title}”`,
@@ -624,6 +653,7 @@ export default defineI18nBase({
     error_description: 'The page could not be opened right now.',
     back_home: 'Back home',
     open_life: 'Open Life',
+    open_project_chronology: 'Show in the chronology',
     pagination: 'Pagination',
     previous: 'Previous page',
     next: 'Next page',
@@ -634,8 +664,16 @@ export default defineI18nBase({
     public_details_overview: 'Summary',
     public_details_contents: 'Contents',
     public_project_description: 'Project description',
+    public_event_description: 'Event description',
+    public_diary_text: 'Entry text',
+    public_excerpt_text: 'Excerpt text',
+    public_excerpt_position_in: (index, total) =>
+      `Excerpt ${index} of ${total} in`,
+    public_excerpt_in: 'Excerpt in',
+    public_excerpt_about: 'About',
     public_details_neighbour_sections: 'Nearby sections',
     public_details_neighbour_entries: 'Nearby entries',
+    public_details_neighbour_excerpts: 'Nearby excerpts',
     public_neighbour_next: 'Next',
     public_neighbour_previous: 'Back',
     public_details_chronology: 'Technical dates',
@@ -646,6 +684,13 @@ export default defineI18nBase({
     page_chronology_updated: 'Page updated',
     section_chronology_created: 'Section created',
     section_chronology_updated: 'Section updated',
+    excerpt_chronology_created: 'Excerpt written',
+    excerpt_chronology_updated: 'Excerpt updated',
+    excerpt_page_hint: 'The excerpt’s own page',
+    excerpt_of_project: (title) => `An excerpt from the project “${title}”`,
+    excerpt_of_event: (title) => `An excerpt from the event “${title}”`,
+    excerpt_of_diary_entry: (day) =>
+      `An excerpt from the diary entry of ${day}`,
     event_chronology_created: 'Event created',
     event_chronology_updated: 'Event updated',
     diary_chronology_created: 'Entry created',
@@ -896,11 +941,10 @@ export default defineI18nBase({
     api_token_label_required: 'Name the key: say what it is for.',
     api_token_access: 'Access',
     api_token_preset_reader: 'Reader',
-    api_token_preset_reader_hint:
-      'Reads everything and proposes changes for you to take or not. Changes nothing itself.',
+    api_token_preset_reader_hint: 'Reads everything. Changes nothing.',
     api_token_preset_editor: 'Editor',
     api_token_preset_editor_hint:
-      'May do whatever you can: create, edit, upload files, publish and delete. Every change shows in its session and can be undone; a deletion cannot.',
+      'May do whatever you can: create, edit, upload files, publish and delete. It changes at once what you ask it for in your conversation with the app; Thei keeps no journal of it, and a deletion cannot be undone.',
     api_token_preset_custom: 'Custom',
     api_token_empty: 'No access keys yet',
     api_token_never_used: 'Never used',
@@ -921,9 +965,10 @@ export default defineI18nBase({
     ai_switch: 'AI in Thei',
     ai_welcome:
       'AI in Thei works in sessions: you talk about the archive with a ' +
-      'model or an app, and it reads, proofreads and proposes actions — ' +
-      'relations, tags, notes, edits. Nothing changes without you; what an ' +
-      'Editor key applied shows in its session and can be undone.',
+      'model, and it reads, proofreads and proposes actions — relations, ' +
+      'tags, notes, edits. Nothing changes without you. An AI app works ' +
+      'in your conversation with it: with an Editor key it makes the ' +
+      'changes you ask for there.',
     ai_ways_facts: {
       what: 'What',
       how: 'How',
@@ -937,7 +982,7 @@ export default defineI18nBase({
         how: 'Thei gives out an access key, and the app connects with it.',
         pays: 'The app, on your usual subscription. Thei spends nothing.',
         rights:
-          'A Reader only reads and proposes. An Editor makes changes itself; every one shows in its session and can be undone.',
+          'A Reader only reads. An Editor makes the changes you ask for in the app, at once and as you would.',
       },
       model: {
         title: 'Thei calls a model itself',
@@ -1020,8 +1065,6 @@ export default defineI18nBase({
     },
     oauth_restart:
       'Nothing was sent to the app. Start connecting in it again; if that fails, connect it with an access key.',
-    api_token_history: 'What it did',
-    api_token_history_empty: 'Nothing has been done with this key yet.',
     ai_settings_link:
       'AI apps and their access keys, the model with your API key and your ' +
       'rules for AI live on the AI page.',
@@ -1153,9 +1196,6 @@ export default defineI18nBase({
       'Write the first one: a date and some text is all it takes.',
     admin_tags_empty_description:
       'Tags group projects and events by topic. Create your first tag to get started.',
-    admin_assets_empty: 'The file library is empty',
-    admin_assets_empty_description:
-      'Files will appear here once you upload them to projects, events or pages.',
     public_tags_empty: 'No tags yet',
     public_tags_empty_description:
       'Tags will appear here once projects or events are tagged.',
@@ -1337,11 +1377,15 @@ export default defineI18nBase({
     project_action_issue_background: 'a background image',
     project_action_issue_color: 'a background color as #RRGGBB',
     project_content_sections: 'Project sections',
+    project_content_sections_description:
+      'The parts of the project and the stages it went through.',
     project_content_sections_hint:
       "Detailed write-ups of the project's parts and of the stages it went through.",
     project_sections_dated: 'Dated stages',
     project_sections_undated: 'General sections',
     related_entities: 'Relations',
+    related_entities_description:
+      'Projects, events and diary entries the author has linked to this.',
     related_entities_hint:
       'Projects, events and diary entries tied to this one. A relation is visible from both sides.',
     related_entity_add: 'Add a relation',
@@ -1409,6 +1453,9 @@ export default defineI18nBase({
     public_section_dates_only: 'This section has no text',
     public_section_dates_only_description:
       'The details were never written down…',
+    public_excerpt_content_empty: 'Nothing to read here',
+    public_excerpt_content_empty_description:
+      'What this excerpt holds is not shown to visitors.',
     public_section_content_empty: 'Nothing to read here yet',
     public_section_content_empty_description:
       'This section has no content open to readers.',
@@ -1423,6 +1470,43 @@ export default defineI18nBase({
     content_section_add: 'Add section',
     content_section_sort: 'Reorder project section',
     delete_content_section: 'Delete section',
+    excerpts_hint:
+      'Named parts of this text about something else in the archive, each with a page of its own.',
+    excerpt_add: 'Add excerpt',
+    excerpt_title: 'Excerpt title',
+    excerpt_summary: 'Excerpt summary',
+    excerpt_content: 'Excerpt text',
+    excerpt_banner: 'Banner',
+    excerpt_banner_hint:
+      'Wide image at the top of the excerpt page and on its cards.',
+    excerpt_private: 'Private excerpt',
+    excerpt_sort: 'Reorder excerpt',
+    delete_excerpt: 'Delete excerpt',
+    excerpt_delete_entity: 'excerpt',
+    edit_excerpt: 'Edit excerpt',
+    excerpt_about_hint:
+      'The one project, event or diary entry this excerpt is about.',
+    excerpts_empty: 'No excerpts yet.',
+    excerpt_about_pick: 'Choose what it is about',
+    excerpt_about_orphan:
+      'About nothing yet: what it was about was deleted. Choose what it is about now.',
+    excerpt_about_clear: 'Clear what it is about',
+    excerpt_about_take: (title) => `About «${title}»`,
+    excerpt_hidden_by_subject: (title) =>
+      `Hidden from visitors while «${title}» is private.`,
+    excerpt_link_only_by_subject: (title) =>
+      `Shown only by its link while «${title}» is open by its link only.`,
+    excerpt_without_about: 'About nothing yet',
+    excerpt_without_about_hint:
+      'What it was about is gone. Open the excerpt and say what it is about now.',
+    excerpts_about_description: 'Written elsewhere in the archive, about this.',
+    relation_recommendation_excerpt: 'Has an excerpt about this',
+    excerpts_on_delete_keep: 'Keep the excerpts about it',
+    excerpts_on_delete_delete: 'Delete the excerpts too',
+    excerpts_on_delete_count: (related) =>
+      related === 1
+        ? 'One excerpt is about it. Kept, it is about nothing until you say what it is about.'
+        : `${related} excerpts are about it. Kept, they are about nothing until you say what each is about.`,
     content_empty: 'No content yet',
     content_text_empty: 'No text content',
     edit_content: (title) => `Edit: ${title}`,
@@ -1435,6 +1519,7 @@ export default defineI18nBase({
     content_editor_save_error: 'Failed to save content.',
     content_editor_title: 'Content editor',
     content_never_saved: 'Never saved',
+    content_in_form: 'In the form, not saved yet',
     content_history: 'Version history',
     content_history_empty: 'No versions yet.',
     content_history_unavailable: 'Version history is unavailable right now.',
@@ -1535,6 +1620,7 @@ export default defineI18nBase({
     content_choose_media: 'Choose image or video',
     content_gallery_tile: 'Show this picture',
     content_add_media: 'Add image or video',
+    content_add_media_after: 'Add image or video after this one',
     content_choose_file: 'Choose file',
     content_choose_audio: 'Choose audio',
     content_show_as_player: 'Show as a player',
@@ -1760,19 +1846,17 @@ export default defineI18nBase({
     upload_apply_settings: 'Create variant',
     upload_processing: 'Processing...',
     upload_queued: 'Waiting in queue...',
-    upload_finishing: 'Finishing…',
     upload_cancel: 'Cancel',
     upload_dismiss: 'Dismiss',
     upload_pending_leave_confirm:
       'Files are still being stored. Leave and lose them?',
     upload_error_job_lost:
       'The server was restarted while the file was being stored.',
+    upload_error_ffmpeg_missing:
+      'Video and sound cannot be processed: the server has no ffmpeg. In the site’s folder, run bun node_modules/thei/update/ffmpeg/cli.ts to fetch it.',
     upload_quality: 'Quality',
     upload_audio: 'Sound',
     upload_audio_none: 'none in the source',
-    upload_fast_conversion: 'Fast conversion',
-    upload_fast_conversion_hint:
-      'One quick pass instead of two: much faster, the same size, a little less quality.',
     upload_compress_to_zip: 'Compress to ZIP',
     upload_compress_to_zip_hint:
       'Packaging the file into an archive can reduce its size.',
@@ -1866,6 +1950,7 @@ export default defineI18nBase({
       'Something still to do here. While it is set, a yellow mark follows it through every list.',
     entity_reminder_placeholder: 'Find the photos from that week',
     entity_notes: 'Notes',
+    entity_notes_description: 'Only for you: visitors never see them.',
     entity_notes_hint: 'Anything worth keeping at hand without publishing it.',
     entity_notes_show_all: 'Show all',
     entity_reminder_badge: 'There is a reminder on this one',
@@ -1933,6 +2018,7 @@ export default defineI18nBase({
         'project-section': 'The whole section',
         event: 'The whole event',
         'diary-entry': 'The whole entry',
+        excerpt: 'The whole excerpt',
         page: 'The whole page',
         tag: 'The whole tag',
       })[kind],
@@ -1981,7 +2067,6 @@ export default defineI18nBase({
       waiting: 'Waiting for you',
       applied: 'With something applied',
       rejected: 'With something declined',
-      app: 'From apps',
       template: 'From ready requests',
     },
     ai_session_new: 'New session',
@@ -2010,7 +2095,7 @@ export default defineI18nBase({
     ai_sessions_back: 'To sessions',
     ai_no_model_title: 'No model is set up',
     ai_no_model_text:
-      'Sessions here are answered by the model from “Connection”: a service’s, by its API key, or your own, with Ollama or LM Studio. Sessions of apps over MCP are below.',
+      'Sessions here are answered by the model from “Connection”: a service’s, by its API key, or your own, with Ollama or LM Studio.',
     ai_no_model_action: 'Set up',
     ai_session_menu: 'Session',
     ai_session_pin: 'Pin',
@@ -2022,11 +2107,8 @@ export default defineI18nBase({
     ai_session_delete_confirm: (title) =>
       `Delete the session “${title}”? What it applied stays, but can no longer be undone from it.`,
     ai_session_by_you: (when) => `Started by you · ${when}`,
-    ai_session_via_app: (client) => `${client} over MCP`,
     ai_session_tokens: (amount) =>
       amount === '1' ? '1 token' : `${amount} tokens`,
-    ai_session_app_note:
-      'Here is what the app proposed and applied. The conversation itself stayed in the app: write to it there.',
     ai_session_archived_note: 'Archived: nothing can be written here',
     ai_session_model: 'Model',
     ai_steps: {
@@ -2225,6 +2307,10 @@ export default defineI18nBase({
       case: 'Capital letter',
       'missing-letter': 'Missing letter',
       link: 'Link',
+      repeat: 'Repeat',
+      logic: 'Logic',
+      contradiction: 'Contradiction',
+      clumsy: 'Clumsy wording',
       changed: 'Block changed',
       added: 'New block',
       removed: 'Block goes',
@@ -2240,6 +2326,12 @@ export default defineI18nBase({
       link: 'in a link’s note',
     },
     ai_review_unsure: 'yours to decide',
+    ai_review_remark: {
+      words: 'Words',
+      keep: 'Meant so',
+      kept: 'Meant so',
+      hint: 'Mend it yourself: the remark closes once these words change.',
+    },
     ai_review_private: 'private part',
     ai_review_settled: {
       applied: 'In the text already',
@@ -2273,6 +2365,20 @@ export default defineI18nBase({
         finish: (decided, total) => `${decided} of ${total} marked`,
         finish_hint:
           'What you take goes into the text here; the rest stays as it is.',
+      },
+      written: {
+        accept: 'Take',
+        keep: 'Leave out',
+        sure: 'Take all',
+        take_sure: (count) => `Take all · ${count}`,
+        was: 'Was',
+        will: 'Will be',
+        accepted: 'Taken',
+        kept: 'Left out',
+        apply: (count) => `Apply · ${count}`,
+        finish: (decided, total) => `${decided} of ${total} decided`,
+        finish_hint:
+          'What you took goes into the text now — the text before stays in its history. What you did not take goes with the proposal.',
       },
     },
     ai_review_put: (count) => `Put in · ${count}`,
@@ -2332,6 +2438,10 @@ export default defineI18nBase({
       'The comment is in the session: the model will send a new version of the edit.',
     ai_review_from_session: (title) =>
       title ? `From the session “${title}”` : 'From the session',
+    ai_review_written_section: (title) =>
+      title ? `Section “${title}”` : 'Section',
+    ai_review_written_excerpt: (title) =>
+      title ? `Excerpt “${title}”` : 'Excerpt',
     ai_review_applied: (count) =>
       `${plural(count, 'change', 'changes')} in the text`,
     ai_review_taken: (count) => `${plural(count, 'part', 'parts')} taken`,
@@ -2370,6 +2480,7 @@ export default defineI18nBase({
       'project-section': 'project section',
       event: 'event',
       'diary-entry': 'diary entry',
+      excerpt: 'excerpt',
       page: 'page',
       tag: 'tag',
       asset: 'file',
@@ -2450,6 +2561,7 @@ export default defineI18nBase({
       'project-section': 'All project sections',
       event: 'All events',
       'diary-entry': 'All diary entries',
+      excerpt: 'All excerpts',
       page: 'All pages',
       tag: 'All tags',
       asset: 'All files',
@@ -2476,8 +2588,7 @@ export default defineI18nBase({
     ai_action_never: 'Never offer again',
     ai_action_pick: 'Include in applying',
     ai_action_unsure: 'Your call.',
-    ai_action_applied: (by, when) => `Applied ${by} · ${when}`,
-    ai_action_by: { owner: 'by you', app: 'by the app' },
+    ai_action_applied: (when) => `Applied by you · ${when}`,
     ai_action_states: {
       rejected: 'Declined',
       never: 'Never offered again',
@@ -2542,9 +2653,11 @@ export default defineI18nBase({
       links: 'Links',
       tags: 'Tags',
       relations: 'Relations',
+      subject: 'About',
       notes: 'Notes',
       sections: 'Sections',
       sectionOrder: 'Order of sections',
+      excerpts: 'Excerpts',
       private: 'Private',
       periods: 'Dates',
       body: 'Text',
@@ -2569,6 +2682,7 @@ export default defineI18nBase({
     },
     ai_action_parts: {
       sections: 'Sections',
+      excerpts: 'Excerpts',
       tags: 'Tags',
       relations: 'Relations',
     },

@@ -87,6 +87,7 @@ if (tagUuid) {
 }
 saved.value = JSON.stringify(data.value);
 const dirty = computed(() => JSON.stringify(data.value) !== saved.value);
+useLeaveGuard({ dirty: () => dirty.value });
 
 // The public page lives at the saved address, not at whatever is being typed.
 useRegisterAdminBarContextButton(
@@ -94,7 +95,11 @@ useRegisterAdminBarContextButton(
     if (!isEdit.value) return undefined;
     const { slug, publicId } = JSON.parse(saved.value) as TagEditData;
     return {
-      to: { href: buildTagUrl(slug, publicId), external: true },
+      to: {
+        href: buildTagUrl(slug, publicId),
+        external: true,
+        target: '_blank',
+      },
       icon: 'visibility',
       title: phrase.value.view_tag,
     };

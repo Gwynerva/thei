@@ -94,9 +94,12 @@ const of = computed<{ entity?: AiEntityRef; words?: string }[]>(() => {
     return [...named(target), ...named(other)];
   }
   // A new entity is named under it, with the rest of its fields; a section
-  // says whose it is.
+  // or an excerpt says whose it is.
   if (action.kind === 'create')
-    return payload.value.entity === 'project-section' ? named(target) : [];
+    return payload.value.entity === 'project-section' ||
+      payload.value.entity === 'excerpt'
+      ? named(target)
+      : [];
   // A word of the dictionary is told apart by its letters: said as stored.
   if (action.kind === 'term') return [{ words: String(payload.value.word) }];
   // A relation names both its ends under it.

@@ -1,4 +1,5 @@
 import type { EventEditData } from '#layers/thei/shared/event';
+import { excerptsOnTargetDeleteOf } from '../../../thei/excerpts';
 import { formVersion } from '../../../thei/entity-edit';
 import {
   deleteEvent,
@@ -24,7 +25,9 @@ export default defineEventHandler(async (event) => {
       });
     }
     case 'DELETE':
-      await deleteEvent(stored.eventUuid);
+      await deleteEvent(stored.eventUuid, {
+        excerpts: excerptsOnTargetDeleteOf(getQuery(event).excerpts),
+      });
       return;
   }
 

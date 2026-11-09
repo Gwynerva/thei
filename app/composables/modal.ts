@@ -8,6 +8,7 @@ import {
   watch,
 } from 'vue';
 import type { Router } from 'vue-router';
+import { sitePath } from './site-url';
 import type {
   ActiveModal,
   BaseModalResult,
@@ -186,6 +187,26 @@ export function interceptModalNavigation() {
   return true;
 }
 
+/**
+ * The address of what a modal shows, which the browser's address shows while
+ * the modal is on top: a file's window over a page names the file, so the
+ * address can be sent and opens the window again (`app/composables/landing.ts`).
+ * A base-relative path; none keeps the address of the page under it.
+ *
+ * It is written into the modal's entry of the history, the one Back closes
+ * it by, and kept in step there as it changes — a window stepping through
+ * its files — without adding entries. The router never learns of it: for the
+ * router the entry stays the page's, so Back still only closes the modal.
+ */
+export function useModalAddress(address: () => string | undefined) {
+  const modal = activeModal.value;
+  if (!modal) throw new Error('A modal address must be set inside a modal');
+  modal.address.value = address;
+  onBeforeUnmount(() => {
+    if (modal.address.value === address) modal.address.value = undefined;
+  });
+}
+
 const MODAL_HISTORY_STATE = '__theiModal';
 
 /** Released sentinel entries whose router navigation has not finished yet. */
@@ -206,6 +227,17 @@ export function installModalNavigationInterceptor(router: Router) {
   let sentinelActive = false;
   /** `history.back()` calls we issued ourselves, not user Back presses. */
   let pendingDiscards = 0;
+  /** The address of the page under the modals, as the sentinel found it. */
+  let pageHref = '';
+  const modalAddress = computed(() => activeModal.value?.address?.value?.());
+
+  /** What the sentinel's entry shows: the top modal's address, or the page's. */
+  function sentinelHref() {
+    const address = modalAddress.value;
+    return address
+      ? new URL(sitePath(address), window.location.href).href
+      : pageHref;
+  }
 
   function pushSentinel() {
     if (sentinelActive || !activeModal.value || activeModal.value.leaving)
@@ -215,13 +247,24 @@ export function installModalNavigationInterceptor(router: Router) {
     // first navigation, that trip restores the scroll the page had when the
     // modal opened, undoing whatever a link in the modal scrolled to.
     window.history.scrollRestoration = 'manual';
+    pageHref = window.location.href;
     window.history.pushState(
       { ...window.history.state, [MODAL_HISTORY_STATE]: true },
       '',
-      window.location.href,
+      sentinelHref(),
     );
     sentinelActive = true;
   }
+
+  // The modal on top names what it shows, or a modal over it names nothing:
+  // its entry follows, replaced in place.
+  const stopAddressWatch = watch(modalAddress, () => {
+    if (!sentinelActive || window.history.state?.[MODAL_HISTORY_STATE] !== true)
+      return;
+    const href = sentinelHref();
+    if (href !== window.location.href)
+      window.history.replaceState(window.history.state, '', href);
+  });
 
   function releaseSentinel() {
     if (!sentinelActive) return;
@@ -295,6 +338,7 @@ export function installModalNavigationInterceptor(router: Router) {
 
   return () => {
     stopStackWatch();
+    stopAddressWatch();
     removeRouteGuard();
     removeAfterHook();
     settleRelease();
@@ -396,6 +440,7 @@ export function openModal<
       returnFocus,
       resolve: resolve as (result: { type: string }) => void,
       close: (result: BaseModalResult) => resolve(result as TResult),
+      address: shallowRef(),
     };
     modalStack.value = [...modalStack.value, modal];
     if (modal.component) return;

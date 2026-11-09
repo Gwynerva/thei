@@ -11,16 +11,40 @@ import { CONTENT_INLINE_MARKUP_SELECTOR as INLINE_MARKUP } from '#layers/thei/sh
 export type InlineSide = 'before' | 'after';
 type InlineEdge = 'start' | 'end';
 
+/** A field of text that keeps markup. */
+const RICH_FIELD = '[contenteditable="true"]';
+/** Any field of text: one that keeps markup, or one of plain words alone. */
+const ANY_FIELD = `${RICH_FIELD}, [contenteditable="plaintext-only"]`;
+
+function fieldOf(
+  node: Node | null | undefined,
+  within: HTMLElement | undefined,
+  selector: string,
+) {
+  if (!node) return undefined;
+  const element = node instanceof Element ? node : node.parentElement;
+  const field = element?.closest<HTMLElement>(selector) ?? undefined;
+  return field && (!within || within.contains(field)) ? field : undefined;
+}
+
 /** The editable field a node is in; with `within`, only one under it. */
 export function editableFieldOf(
   node: Node | null | undefined,
   within?: HTMLElement,
 ) {
-  if (!node) return undefined;
-  const element = node instanceof Element ? node : node.parentElement;
-  const field =
-    element?.closest<HTMLElement>('[contenteditable="true"]') ?? undefined;
-  return field && (!within || within.contains(field)) ? field : undefined;
+  return fieldOf(node, within, RICH_FIELD);
+}
+
+/**
+ * The same, a field of plain words — `contenteditable="plaintext-only"`, a
+ * file's title — counted too: what words typed or pasted anywhere in the
+ * text go into.
+ */
+export function textFieldOf(
+  node: Node | null | undefined,
+  within?: HTMLElement,
+) {
+  return fieldOf(node, within, ANY_FIELD);
 }
 
 /** The caret in a text under `root`; with `collapsed`, only a caret. */

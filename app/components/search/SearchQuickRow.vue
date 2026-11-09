@@ -14,7 +14,8 @@ export interface SearchQuickRowData {
   /** The title with the words found marked. */
   titleSegments?: SearchSegment[];
   /** What it is a part of, quiet after the title: a section's project. */
-  parent?: { title: string; media?: MediaDescriptor };
+  /** `whole`: a name never cut short, such as a day's date. */
+  parent?: { title: string; media?: MediaDescriptor; whole?: boolean };
   /** Its day or period, quiet after the title. */
   when?: string;
   /** Its years, for a phone's line that has no room for its days. */
@@ -127,9 +128,10 @@ defineEmits<{
                left: there it would cloud the title's last letters. -->
           <span
             v-if="row.parent"
-            class="-my-[0.75em] -mr-[0.75em] flex min-w-0 shrink-[1000]
-              items-center gap-1 overflow-hidden py-[0.75em] pr-[0.75em] text-xs
-              font-normal text-text-3"
+            class="-my-[0.75em] -mr-[0.75em] flex min-w-0 items-center gap-1
+              overflow-hidden py-[0.75em] pr-[0.75em] text-xs font-normal
+              text-text-3"
+            :class="row.parent.whole ? 'shrink-0' : 'shrink-[1000]'"
           >
             <span aria-hidden="true">·</span>
             <EntityTokenIcon
@@ -137,7 +139,11 @@ defineEmits<{
               icon="project"
               class="size-3.5 rounded-xs"
             />
-            <span class="min-w-0 truncate">{{ row.parent.title }}</span>
+            <span
+              class="min-w-0"
+              :class="row.parent.whole ? 'whitespace-nowrap' : 'truncate'"
+              >{{ row.parent.title }}</span
+            >
           </span>
           <Icon
             v-if="row.access"

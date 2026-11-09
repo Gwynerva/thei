@@ -107,7 +107,6 @@ export interface AssetVideoTransformSettings extends AssetTransformGeometry {
   type: 'video-transform';
   quality: number;
   stripAudio: boolean;
-  fastConversion: boolean;
 }
 
 /**
@@ -162,7 +161,6 @@ export interface AssetVideoTransformRequest extends AssetTransformRequestGeometr
   type: 'video-transform';
   quality: number;
   stripAudio: boolean;
-  fastConversion: boolean;
 }
 
 export type AssetTransformRequest =
@@ -331,7 +329,6 @@ export function resolveAssetUploadSettings(
     // Removing audio from a silent source changes nothing, so the request is
     // described as keeping it: both spellings must map to one settings key.
     stripAudio: Boolean(request.stripAudio) && source.hasAudio !== false,
-    fastConversion: Boolean(request.fastConversion),
   };
 }
 
@@ -527,11 +524,7 @@ export function buildAssetSettingsKey(settings: AssetUploadSettings): string {
   ];
 
   if (settings.type === 'video-transform') {
-    return [
-      ...baseParts,
-      `strip:${settings.stripAudio ? 1 : 0}`,
-      `fast:${settings.fastConversion ? 1 : 0}`,
-    ].join(':');
+    return [...baseParts, `strip:${settings.stripAudio ? 1 : 0}`].join(':');
   }
 
   return [...baseParts, `fmt:${settings.format}`].join(':');

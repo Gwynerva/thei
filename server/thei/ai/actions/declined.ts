@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { and, eq, inArray, isNotNull, or } from 'drizzle-orm';
 import type { AiRevisePart } from '#layers/thei/shared/ai-actions';
+import { isMeaningCategory } from '#layers/thei/shared/ai-revise';
 import type { EntityKey } from '../../entity-kinds';
 
 /**
@@ -14,12 +15,18 @@ export function fingerprintOf(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
-/** One correction of a text edit, known apart: "keep as written" is per word. */
+/**
+ * One correction of a text edit, known apart: "keep as written" is per word.
+ * A remark on meaning, or its rewording, is known by its words alone: words
+ * the owner meant as they stand are meant whatever else is offered for them.
+ */
 export function correctionFingerprint(
   key: EntityKey,
   text: string,
-  correction: { find: string; replace: string },
+  correction: { find: string; replace?: string; category?: string },
 ): string {
+  if (correction.category && isMeaningCategory(correction.category))
+    return fingerprintOf([key.kind, key.id, 'meaning', text, correction.find]);
   return fingerprintOf([
     key.kind,
     key.id,
@@ -130,7 +137,7 @@ export function partsKeptLately(key: EntityKey, text: string): Set<string> {
     );
     for (const part of row.payload.parts ?? [])
       if (states.get(part.id) !== 'kept') continue;
-      else if (part.type === 'correction')
+      else if (part.type === 'correction' || part.type === 'remark')
         kept.add(correctionFingerprint(key, text, part));
       else if (part.type === 'relink')
         kept.add(relinkFingerprint(key, text, part, part.to));

@@ -1,18 +1,20 @@
 import { writeFile, rm, readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import ffmpeg from 'fluent-ffmpeg';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import sharp from 'sharp';
 import {
   FRAME_SCORE_SAMPLE_SIDE,
   VIDEO_PREVIEW_FRAME_POSITIONS,
   frameScore,
 } from '#layers/thei/shared/media-frame-score';
+import { runFfmpeg } from './ffmpeg';
 import { theiTempPath } from './temp';
 import type { AssetBytes } from './bytes';
-import { inspectVideoFile } from './process';
-
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+import { unlessUnreadable } from './probe';
+import {
+  inspectVideoFile,
+  videoColorFilters,
+  type VideoColorSource,
+} from './process';
 
 /**
  * Frames ffmpeg's `thumbnail` filter weighs at each point, picking the one
@@ -36,6 +38,18 @@ export interface VideoThumbnailOptions {
    * or after: knowing how long a frame lasts, the seek starts a frame early.
    */
   fps?: number;
+  /**
+   * What is known of the video's colour, from a probe the caller made: an
+   * HDR recording's frames are mapped to SDR like its encode's, or the poster
+   * would be washed out. Left out, the file is probed for it.
+   */
+  color?: VideoColorSource;
+  /**
+   * The longest side the frame is written at, never enlarged: ffmpeg makes
+   * it small, so a frame of an 8K video is never read back whole. The
+   * preview passes its own size; left out, the frame keeps the video's.
+   */
+  maxSide?: number;
 }
 
 export interface VideoThumbnail {
@@ -74,9 +88,15 @@ export async function extractVideoThumbnail(
   try {
     if (stagedInput && bytes.buffer) await writeFile(stagedInput, bytes.buffer);
 
-    const duration =
-      options.duration ??
-      (await inspectVideoFile(inputPath).catch(() => undefined))?.duration;
+    const inspected =
+      options.duration === undefined || options.color === undefined
+        ? await inspectVideoFile(inputPath).catch(unlessUnreadable)
+        : undefined;
+    const duration = options.duration ?? inspected?.duration;
+    const filters = frameFilters(
+      options.maxSide,
+      videoColorFilters(options.color ?? inspected ?? {}),
+    );
     if (options.at !== undefined) {
       const at = Math.max(
         0,
@@ -89,9 +109,12 @@ export async function extractVideoThumbnail(
       const seek = frameLength ? Math.max(0, at - frameLength * 0.999) : at;
       // A moment at the very end has no frame after it: the last frame is
       // what a player paused there shows.
-      const frame = await grabExactFrame(inputPath, outputPath, seek).catch(
-        () => grabLastFrame(inputPath, outputPath),
-      );
+      const frame = await grabExactFrame(
+        inputPath,
+        outputPath,
+        seek,
+        filters,
+      ).catch(() => grabLastFrame(inputPath, outputPath, filters));
       return { frame, score: await scoreFrame(frame), at };
     }
     const positions =
@@ -108,9 +131,12 @@ export async function extractVideoThumbnail(
 
     let best: VideoThumbnail | undefined;
     for (const seconds of positions) {
-      const grabbed = await grabFrame(inputPath, outputPath, seconds).catch(
-        () => undefined,
-      );
+      const grabbed = await grabFrame(
+        inputPath,
+        outputPath,
+        seconds,
+        filters,
+      ).catch(() => undefined);
       if (!grabbed) continue;
       const score = await scoreFrame(grabbed.frame);
       if (!best || score > best.score)
@@ -123,7 +149,7 @@ export async function extractVideoThumbnail(
     // Nothing usable past the opening — a very short clip, or one the probe
     // misjudged: the first frame is still a frame.
     if (!best) {
-      const grabbed = await grabFrame(inputPath, outputPath, 0);
+      const grabbed = await grabFrame(inputPath, outputPath, 0, filters);
       best = {
         frame: grabbed.frame,
         score: await scoreFrame(grabbed.frame),
@@ -135,6 +161,27 @@ export async function extractVideoThumbnail(
     if (stagedInput) await rm(stagedInput, { force: true }).catch(() => {});
     await rm(outputPath, { force: true }).catch(() => {});
   }
+}
+
+/**
+ * What a frame goes through once it is picked: made no larger than
+ * `maxSide`, never enlarged, then mapped from HDR. The `thumbnail` filter
+ * still weighs the frames whole, so the frame picked is the one it always
+ * was; only what is written and read back is small, and the colour work is
+ * done on the small frame, as the encode's is. zscale takes a subsampled
+ * frame only at even sides, so before a mapping the sides are kept even.
+ */
+export function frameFilters(
+  maxSide: number | undefined,
+  color: string[],
+): string[] {
+  if (!maxSide) return color;
+  const box = `w='min(iw,${maxSide})':h='min(ih,${maxSide})'`;
+  const even = color.length ? ':force_divisible_by=2' : '';
+  return [
+    `scale=${box}:force_original_aspect_ratio=decrease${even}:flags=lanczos`,
+    ...color,
+  ];
 }
 
 /**
@@ -150,16 +197,40 @@ async function writeFrame(
   onLog?: (line: string) => void,
 ): Promise<Buffer> {
   await rm(outputPath, { force: true });
-  await new Promise<void>((resolve, reject) => {
-    const command = ffmpeg(inputPath)
-      .inputOptions(inputOptions)
-      .outputOptions(outputOptions)
-      .output(outputPath)
-      .on('end', () => resolve())
-      .on('error', (err: Error) => reject(err));
-    if (onLog) command.on('stderr', onLog);
-    command.run();
-  });
+  let pending = '';
+  let tail = '';
+  const code = await runFfmpeg(
+    [
+      '-hide_banner',
+      '-y',
+      ...inputOptions,
+      '-i',
+      inputPath,
+      ...outputOptions,
+      outputPath,
+    ],
+    {
+      onStderr: (chunk) => {
+        // ffmpeg ends a progress line with a carriage return and a log line
+        // with a newline; the filter's report is one of the latter, and the
+        // last line of all says why a run failed.
+        pending += chunk;
+        const lines = pending.split(/\r\n|\r|\n/);
+        pending = lines.pop() ?? '';
+        for (const line of lines) {
+          if (line.trim()) tail = line;
+          onLog?.(line);
+        }
+      },
+    },
+  );
+  if (pending.trim()) {
+    tail = pending;
+    onLog?.(pending);
+  }
+  if (code !== 0) {
+    throw new Error(`ffmpeg exited with ${code}: ${tail.trim()}`);
+  }
   return await readFile(outputPath);
 }
 
@@ -172,13 +243,19 @@ async function grabFrame(
   inputPath: string,
   outputPath: string,
   seconds: number,
+  filters: string[],
 ): Promise<{ frame: Buffer; picked?: number }> {
   let picked: number | undefined;
   const frame = await writeFrame(
     inputPath,
     outputPath,
     ['-ss', seconds.toFixed(3)],
-    ['-vf', `thumbnail=${THUMBNAIL_BATCH}`, '-frames:v', '1'],
+    [
+      '-vf',
+      [`thumbnail=${THUMBNAIL_BATCH}`, ...filters].join(','),
+      '-frames:v',
+      '1',
+    ],
     (line) => {
       const match = /pts_time=(\d+(?:\.\d+)?)\)? selected/.exec(line);
       if (match) picked = Number(match[1]);
@@ -192,21 +269,35 @@ function grabExactFrame(
   inputPath: string,
   outputPath: string,
   seconds: number,
+  filters: string[],
 ) {
   return writeFrame(
     inputPath,
     outputPath,
     ['-ss', seconds.toFixed(6)],
-    ['-frames:v', '1'],
+    [...filterOption(filters), '-frames:v', '1'],
   );
+}
+
+function filterOption(filters: string[]): string[] {
+  return filters.length ? ['-vf', filters.join(',')] : [];
 }
 
 /**
  * The video's last frame: every frame of its final second is written over
  * the one before it.
  */
-function grabLastFrame(inputPath: string, outputPath: string) {
-  return writeFrame(inputPath, outputPath, ['-sseof', '-1'], ['-update', '1']);
+function grabLastFrame(
+  inputPath: string,
+  outputPath: string,
+  filters: string[],
+) {
+  return writeFrame(
+    inputPath,
+    outputPath,
+    ['-sseof', '-1'],
+    [...filterOption(filters), '-update', '1'],
+  );
 }
 
 /** `frameScore` of a frame, read from a small copy of it. */

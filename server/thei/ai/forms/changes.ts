@@ -2,6 +2,7 @@ import { inArray } from 'drizzle-orm';
 import type { ContentFieldModelValue } from '#layers/thei/shared/content';
 import type { ProjectEditData } from '#layers/thei/shared/admin/project';
 import type { ProjectSectionItem } from '#layers/thei/shared/project-content-item';
+import type { ExcerptItem } from '#layers/thei/shared/excerpt';
 import type { EventEditData } from '#layers/thei/shared/event';
 import type { DiaryEditData } from '#layers/thei/shared/diary';
 import type { PageEditData } from '#layers/thei/shared/page';
@@ -19,7 +20,7 @@ import { randomId } from '#layers/thei/shared/utils/random-id';
 import { refuse as fail } from '../../entity-patch/text';
 import type { ProfileEditData } from '#layers/thei/shared/profile';
 import type { StatusHistoryItem } from '#layers/thei/shared/status';
-import { tagIdOf, type EntityKey } from '../../entity-kinds';
+import { refOf, tagIdOf, type EntityKey } from '../../entity-kinds';
 import { textFromMarkdown } from '../../mcp/text-input';
 import { normalizeSynonyms } from '#layers/thei/shared/synonyms';
 import {
@@ -63,6 +64,7 @@ export const FORM_FIELDS = {
     'notes',
     'sections',
     'sectionOrder',
+    'excerpts',
     'statuses',
     'actionText',
   ],
@@ -73,6 +75,16 @@ export const FORM_FIELDS = {
     'periods',
     'body',
     'banner',
+    'slug',
+    'publicId',
+  ],
+  excerpt: [
+    'title',
+    'summary',
+    'private',
+    'body',
+    'banner',
+    'subject',
     'slug',
     'publicId',
   ],
@@ -92,8 +104,17 @@ export const FORM_FIELDS = {
     'relations',
     'body',
     'notes',
+    'excerpts',
   ],
-  'diary-entry': ['date', 'access', 'reminder', 'body', 'notes', 'relations'],
+  'diary-entry': [
+    'date',
+    'access',
+    'reminder',
+    'body',
+    'notes',
+    'relations',
+    'excerpts',
+  ],
   page: [
     'title',
     'summary',
@@ -122,10 +143,11 @@ export type FormKind = keyof typeof FORM_FIELDS;
 
 export const FORM_REFERENCE = `\
 Fields by kind — a change names only the fields it changes:
-- project: title, summary, access (public | link-only | private), showcase and cv (true/false: among chosen projects, in the résumé), reminder, synonyms [names], slug, publicId, icon and banner (a file id, or null), showcaseFiles [{ file, caption?, private? }], files [{ file, title, caption?, private? }], links [{ url, note?, private? }], tags [names], relations [{ ref, kind?: related | depends-on | affects, note? or notes? }], description and notes (editing Markdown), sections [{ id?, …section fields }] (merged by id; one without an id is added; remove one with a delete action on its ref), sectionOrder [section ids], statuses [{ id, text }] (its status lines rewritten in place, each by its id; the rest stay), actionText (the words on its button).
+- project: title, summary, access (public | link-only | private), showcase and cv (true/false: among chosen projects, in the résumé), reminder, synonyms [names], slug, publicId, icon and banner (a file id, or null), showcaseFiles [{ file, caption?, private? }], files [{ file, title, caption?, private? }], links [{ url, note?, private? }], tags [names], relations [{ ref, kind?: related | depends-on | affects, note? or notes? }], description and notes (editing Markdown), sections [{ id?, …section fields }] (merged by id; one without an id is added; remove one with a delete action on its ref), sectionOrder [section ids], excerpts [{ id?, …excerpt fields }] (merged by id, as sections are), statuses [{ id, text }] (its status lines rewritten in place, each by its id; the rest stay), actionText (the words on its button).
 - project-section: title, summary, private (true/false), periods [{ startDate, endDate, precision?, precisionNote?, label? }], body (editing Markdown), banner, slug, publicId. A section with periods is a stage; it needs a body or periods.
-- event: title, summary, access, reminder, synonyms [names], slug, publicId, periods (at least one), banner, files, links, tags, relations, body (needed) and notes.
-- diary-entry: date (YYYY-MM-DD, one entry a day), access (public | private), reminder, body (needed), notes, relations. No title, no tags, ever.
+- excerpt: title, summary, private (true/false), body (editing Markdown, needed), banner, subject ({ ref, kind?: related | depends-on | affects, note? or notes? }: the one project, event or diary entry the excerpt is about, never the parent it is part of, and never null: one whose subject was deleted is about nothing until it is given one, and takes other changes as it is), slug, publicId. An excerpt is a named part of a diary entry, an event or a project, read with its parent and on the page of what it is about; a stranger sees it only where both its parent and what it is about are open.
+- event: title, summary, access, reminder, synonyms [names], slug, publicId, periods (at least one), banner, files, links, tags, relations, body (needed) and notes, excerpts (as a project's).
+- diary-entry: date (YYYY-MM-DD, one entry a day), access (public | private), reminder, body (needed, unless the day is told by its excerpts), notes, relations, excerpts (as a project's). No title, no tags, ever.
 - page: title, summary, access, reminder, synonyms [names], slug, icon, body, notes.
 - tag: title, description, synonyms [names], slug, publicId, icon.
 - profile: displayName, slogan, nickname, about (editing Markdown), banner, favicon, links [{ url, name?, note?, private? }], statuses [{ id, text }] (as a project's).
@@ -516,6 +538,145 @@ function newSection(title: string): ProjectSectionItem {
   };
 }
 
+/**
+ * An excerpt's fields laid over the excerpt, or over a new one. What it is
+ * about is one relation of its own, to something other than the parent it
+ * is part of.
+ */
+async function excerptChanges(
+  excerpt: ExcerptItem,
+  changes: Changes,
+  parent: EntityKey,
+): Promise<ExcerptItem> {
+  const next = { ...excerpt };
+  const self = { kind: 'excerpt', id: excerpt.excerptUuid ?? '' } as EntityKey;
+  for (const [key, value] of Object.entries(changes)) {
+    switch (key) {
+      case 'id':
+        break;
+      case 'title':
+        next.title = heading(value, key);
+        break;
+      case 'summary':
+        next.summary = plainText(value, key);
+        break;
+      case 'private':
+        next.isPrivate = flag(value, key);
+        break;
+      case 'body':
+        next.content =
+          (await markdown(value, excerpt.content, key)) ??
+          ({ data: { blocks: [] } } as unknown as ContentFieldModelValue);
+        break;
+      case 'banner': {
+        const banner = file(value, key);
+        if (banner) next.bannerAssetUuid = banner;
+        else delete next.bannerAssetUuid;
+        break;
+      }
+      case 'subject':
+        // Never cleared: an excerpt is about nothing only once what it was
+        // about is deleted, and stays so until it is given a subject again.
+        if (!value || typeof value !== 'object' || Array.isArray(value))
+          fail(
+            'subject takes one { ref, kind?, note? }: an excerpt is about one thing, never about nothing.',
+          );
+        {
+          // A subject named without its kind keeps the one it has; a new
+          // one is plainly related.
+          const given = value as Record<string, unknown>;
+          const other = checkedRelationEnd(self, given.ref);
+          const kept =
+            excerpt.about?.entityType === other.kind &&
+            excerpt.about.entityId === other.id;
+          next.about =
+            relations(
+              [
+                given.kind === undefined && !kept
+                  ? { ...given, kind: 'related' }
+                  : given,
+              ],
+              self,
+              excerpt.about ? [excerpt.about] : [],
+            )[0] ?? null;
+        }
+        break;
+      case 'slug':
+        next.humanReadableSlug = text(value, key);
+        break;
+      case 'publicId':
+        next.publicId = text(value, key);
+        break;
+      default:
+        unknownField('excerpt', key);
+    }
+  }
+  if (
+    next.about &&
+    next.about.entityType === parent.kind &&
+    next.about.entityId === parent.id
+  )
+    fail('An excerpt is not about its own parent: it is a part of it.');
+  // One whose subject was deleted takes other changes as it is.
+  if (!next.about && !excerpt.excerptUuid)
+    fail(
+      'An excerpt says what it is about: one project, event or diary entry (subject).',
+    );
+  return next;
+}
+
+function newExcerpt(title: string): ExcerptItem {
+  return {
+    title,
+    summary: '',
+    humanReadableSlug: THEI_SERVER.language.slugify(title),
+    publicId: randomId(14),
+    isPrivate: false,
+    content: { data: { blocks: [] } } as unknown as ContentFieldModelValue,
+    about: null,
+  };
+}
+
+/** A parent's excerpts: each change merged by id, one without an id added. */
+async function excerptListChanges(
+  current: ExcerptItem[],
+  value: unknown,
+  parent: EntityKey,
+): Promise<ExcerptItem[]> {
+  const next = [...current];
+  for (const change of list(value, 'excerpts')) {
+    const id = change.id;
+    if (id !== undefined) {
+      const at = next.findIndex((excerpt) => excerpt.excerptUuid === id);
+      if (at < 0) fail(`${refOf(parent)} has no excerpt ${String(id)}.`);
+      next[at] = await excerptChanges(next[at]!, change, parent);
+    } else {
+      if (typeof change.title !== 'string' || !change.title.trim())
+        fail('A new excerpt needs its title.');
+      next.push(await excerptChanges(newExcerpt(change.title), change, parent));
+    }
+  }
+  return next;
+}
+
+/** A change laid over the form of an excerpt's parent, whichever kind it is. */
+export function parentChanges(
+  form: any,
+  changes: Changes,
+  parent: EntityKey,
+): Promise<ProjectEditData | EventEditData | DiaryEditData> {
+  switch (parent.kind) {
+    case 'project':
+      return projectChanges(form, changes, parent);
+    case 'event':
+      return eventChanges(form, changes, parent);
+    case 'diary-entry':
+      return diaryChanges(form, changes, parent);
+    default:
+      return fail(`A ${parent.kind} has no excerpts.`);
+  }
+}
+
 export async function projectChanges(
   form: ProjectEditData,
   changes: Changes,
@@ -633,6 +794,13 @@ export async function projectChanges(
         ];
         break;
       }
+      case 'excerpts':
+        next.excerpts = await excerptListChanges(
+          next.excerpts ?? form.excerpts ?? [],
+          value,
+          key,
+        );
+        break;
       default:
         unknownField('project', field);
     }
@@ -694,6 +862,13 @@ export async function eventChanges(
       case 'notes':
         next.notes = await markdown(value, form.notes, field);
         break;
+      case 'excerpts':
+        next.excerpts = await excerptListChanges(
+          next.excerpts ?? form.excerpts ?? [],
+          value,
+          key,
+        );
+        break;
       default:
         unknownField('event', field);
     }
@@ -726,6 +901,13 @@ export async function diaryChanges(
         break;
       case 'relations':
         next.relations = relations(value, key, form.relations);
+        break;
+      case 'excerpts':
+        next.excerpts = await excerptListChanges(
+          next.excerpts ?? form.excerpts ?? [],
+          value,
+          key,
+        );
         break;
       default:
         unknownField('diary-entry', field);

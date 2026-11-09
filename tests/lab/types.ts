@@ -10,6 +10,7 @@ import type { Page } from '@playwright/test';
 export type Ref =
   | `project:${string}`
   | `section:${string}/${string}`
+  | `excerpt:${string}/${string}/${string}`
   | `event:${string}`
   | `diary:${string}`
   | `page:${string}`
@@ -17,7 +18,14 @@ export type Ref =
   | 'profile';
 
 export type RefKind =
-  'project' | 'section' | 'event' | 'diary' | 'page' | 'tag' | 'profile';
+  | 'project'
+  | 'section'
+  | 'excerpt'
+  | 'event'
+  | 'diary'
+  | 'page'
+  | 'tag'
+  | 'profile';
 
 export type Access = 'public' | 'link-only' | 'private';
 
@@ -95,6 +103,8 @@ export interface SiteEntity {
   access?: Access;
   /** A section's project. */
   project?: Ref;
+  /** An excerpt's parent: the project, event or diary entry it is part of. */
+  parent?: Ref;
   /** Base-relative addresses (AGENTS.md, "Addresses"). */
   adminUrl: string;
   publicUrl?: string;
@@ -377,6 +387,8 @@ export interface StepRecord {
   answer?: { firstFeedbackMs?: number; answerMs?: number; timedOut?: boolean };
   blockedMs?: number;
   coveredBy?: string;
+  /** The step opened a new tab, which the play went on in. */
+  newTab?: boolean;
   probe: { counts: Partial<Record<ProbeRule, number>>; fps: string[] };
   note?: string;
 }

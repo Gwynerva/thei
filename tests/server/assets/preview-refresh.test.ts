@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import { resolveFfmpegTools } from '../../../update/ffmpeg/tools';
 import sharp from 'sharp';
 import { mkdir, writeFile } from 'node:fs/promises';
 import {
@@ -58,6 +58,7 @@ beforeEach(async () => {
       type text NOT NULL,
       size integer NOT NULL,
       touchedAt integer NOT NULL,
+      createdAt integer NOT NULL DEFAULT 0,
       meta text
     );
     CREATE UNIQUE INDEX assets_family_content_settings_idx
@@ -108,7 +109,7 @@ afterEach(async () => {
 
 function run(args: string[]) {
   return new Promise<void>((resolve, reject) => {
-    const child = spawn(ffmpegInstaller.path, args, { stdio: 'ignore' });
+    const child = spawn(resolveFfmpegTools().ffmpeg, args, { stdio: 'ignore' });
     child.on('error', reject);
     child.on('close', (code) =>
       code === 0 ? resolve() : reject(new Error(`ffmpeg exited ${code}`)),

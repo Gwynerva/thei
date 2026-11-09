@@ -19,6 +19,8 @@ const props = withDefaults(
     selectedId?: string;
     chooseLabel?: string;
     addLabel?: string;
+    /** Named, the picture shown has a «+» that adds right after it. */
+    addAfterLabel?: string;
     removeLabel?: string;
     captionPlaceholder?: string;
     openable?: boolean;
@@ -49,6 +51,7 @@ const emit = defineEmits<{
   title: [value: string];
   'update:selectedId': [id: string | undefined];
   add: [];
+  'add-after': [id: string];
   edit: [id: string];
   remove: [id: string];
   reorder: [items: ContentGalleryItem[]];
@@ -138,6 +141,7 @@ const dragSort = useDragSort(
         :data-drag-id="editable ? item.id : undefined"
         :media="item.asset.media"
         :selected="item.id === activeItem?.id"
+        :check="false"
         :overlay="{
           showVideo: !editable,
           showSize: editable,
@@ -207,6 +211,7 @@ const dragSort = useDragSort(
       :caption="activeItem.caption"
       :editable
       :edit-label="chooseLabel"
+      :add-label="addAfterLabel"
       :caption-placeholder
       :media-rounded="false"
       :media-natural-size="false"
@@ -217,6 +222,7 @@ const dragSort = useDragSort(
       data-gallery-view
       :data-file="activeItem.asset.assetUuid"
       @edit="emit('edit', activeItem.id)"
+      @add="emit('add-after', activeItem.id)"
       @caption="emit('caption', activeItem.id, $event)"
       @open="emit('open', activeItem)"
     />

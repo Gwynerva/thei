@@ -22,10 +22,17 @@ import { caretIn } from './editor-inline-dom';
  *
  * Every replacement can be taken back. Pressing backspace right after one
  * restores exactly what was typed instead of eating a character — the person
- * meant two hyphens, and the editor does not get to insist otherwise.
+ * meant two hyphens, and the editor does not get to insist otherwise. The
+ * replacement is an editing command, so the browser's Ctrl+Z steps through
+ * it like any other edit.
  *
- * Only typing is replaced, never a paste, and the replacement is an editing
- * command, so the browser's Ctrl+Z steps through it like any other edit.
+ * Pasted words get the same typography, by rules of their own
+ * (`PASTE_TYPOGRAPHY_RULES`): a paste shows both sides of every shorthand at
+ * once, so a dash is made only of two hyphens standing alone, and a command
+ * line's `--flag` stays as it is. A paste is formatted before it goes in, as
+ * part of the one step Ctrl+Z takes it back by; there is nothing to undo by
+ * backspace. A field formats its own pastes here; the editor's go through
+ * `paste-typography.ts`.
  */
 export interface SmartTypographyRule {
   /**
@@ -37,13 +44,143 @@ export interface SmartTypographyRule {
   replacement: string;
 }
 
+/** What a dash may follow: the start, a space or an opening mark. */
+const DASH_OPENING = '\\s(«“';
+
 export const SMART_TYPOGRAPHY_RULES: readonly SmartTypographyRule[] = [
   // Three dots are always an ellipsis; nothing else is written that way.
   { pattern: /\.\.\.$/, replacement: '…' },
   // Two hyphens are a dash only where a dash could stand: between words with
   // a space in front. Glued hyphens belong to a compound or a command line.
-  { pattern: /(^|[\s(«“])--$/, replacement: '$1—' },
+  { pattern: new RegExp(`(^|[${DASH_OPENING}])--$`), replacement: '$1—' },
 ];
+
+/**
+ * A shorthand found in a whole text: `pattern` is global, its first group is
+ * what stands before the shorthand and stays, and the rest of the match is
+ * the shorthand itself, which becomes `replacement`. What follows it is a
+ * lookahead, so it stays too.
+ */
+export interface PasteTypographyRule {
+  pattern: RegExp;
+  replacement: string;
+}
+
+export const PASTE_TYPOGRAPHY_RULES: readonly PasteTypographyRule[] = [
+  // Exactly three dots: a longer row of them is drawn on purpose.
+  { pattern: /(^|[^.])\.\.\.(?=[^.]|$)/g, replacement: '…' },
+  // Two hyphens standing alone, between words or before a mark that closes
+  // a phrase. Glued to a word on either side they are a compound, a flag or
+  // a row of hyphens, and stay.
+  {
+    pattern: new RegExp(`(^|[${DASH_OPENING}])--(?=$|[\\s,.;:!?)»”…])`, 'g'),
+    replacement: '—',
+  },
+];
+
+/** The letters on either side of where a paste goes, which it reads by. */
+export interface PasteTypographyContext {
+  /** What stands right before the paste, if anything. */
+  before?: string;
+  /** What stands right after it. */
+  after?: string;
+}
+
+/** One change a paste's typography makes, as offsets into the pasted text. */
+export interface PasteTypographyEdit {
+  start: number;
+  length: number;
+  replacement: string;
+}
+
+/**
+ * Web addresses in a text, left exactly as they are: a path may hold three
+ * dots or two hyphens, and an address with a changed letter leads nowhere.
+ */
+const ADDRESS = /\S*:\/\/\S+|\bwww\.\S+/g;
+
+/**
+ * What a pasted text's shorthands should become, as edits of the text alone:
+ * the context is only read, never changed. Spaces and line breaks are never
+ * touched, so a paste keeps its lines, its paragraphs and the spaces at its
+ * edges. Formatted text has nothing left to format.
+ */
+export function smartTypographyEdits(
+  text: string,
+  context: PasteTypographyContext = {},
+  rules: readonly PasteTypographyRule[] = PASTE_TYPOGRAPHY_RULES,
+): PasteTypographyEdit[] {
+  // One letter either side is all any rule reads.
+  const before = (context.before ?? '').slice(-1);
+  const after = (context.after ?? '').slice(0, 1);
+  const whole = before + text + after;
+  const from = before.length;
+  const to = from + text.length;
+  const kept: [number, number][] = [];
+  for (const match of whole.matchAll(ADDRESS))
+    kept.push([match.index, match.index + match[0].length]);
+  const edits: PasteTypographyEdit[] = [];
+  for (const rule of rules)
+    for (const match of whole.matchAll(rule.pattern)) {
+      const start = match.index + (match[1]?.length ?? 0);
+      const end = match.index + match[0].length;
+      if (start < from || end > to) continue;
+      // Neither inside an address nor over what another rule changes.
+      if (kept.some(([a, b]) => start < b && end > a)) continue;
+      kept.push([start, end]);
+      edits.push({
+        start: start - from,
+        length: end - start,
+        replacement: rule.replacement,
+      });
+    }
+  return edits.sort((a, b) => a.start - b.start);
+}
+
+/** A text with its edits made. */
+export function applyTypographyEdits(
+  text: string,
+  edits: readonly PasteTypographyEdit[],
+) {
+  let result = '';
+  let at = 0;
+  for (const edit of edits) {
+    result += text.slice(at, edit.start) + edit.replacement;
+    at = edit.start + edit.length;
+  }
+  return result + text.slice(at);
+}
+
+/** A pasted text as it goes in, its shorthands made typography. */
+export function smartTypographyText(
+  text: string,
+  context: PasteTypographyContext = {},
+) {
+  return applyTypographyEdits(text, smartTypographyEdits(text, context));
+}
+
+/**
+ * The same over a run of texts read as one — the text nodes of a paragraph,
+ * which markup splits. Each text is changed only within itself: a shorthand
+ * split by markup, a hyphen bold and the next not, is left as it is.
+ */
+export function smartTypographyRun(
+  texts: readonly string[],
+  context: PasteTypographyContext = {},
+): string[] {
+  const edits = smartTypographyEdits(texts.join(''), context);
+  let offset = 0;
+  return texts.map((text) => {
+    const start = offset;
+    offset += text.length;
+    const own = edits
+      .filter(
+        (edit) => edit.start >= start && edit.start + edit.length <= offset,
+      )
+      .map((edit) => ({ ...edit, start: edit.start - start }));
+    return own.length ? applyTypographyEdits(text, own) : text;
+  });
+}
 
 export interface SmartTypographyEdit {
   /** Where the replaced text starts, as an offset into the text. */
@@ -83,6 +220,26 @@ interface PendingUndo {
 type TypographyTarget = HTMLInputElement | HTMLTextAreaElement | HTMLElement;
 
 /**
+ * Whether a form's field takes typography, by the attributes it is given.
+ * A field marked as prose gets dashes and ellipses; one marked technical —
+ * `spellcheck="false"`: a slug, a URL, a colour, a token — or turned off by
+ * hand (`off`) is left exactly as typed. So is a password, whatever it is
+ * marked: its every letter is the secret, compared as it was typed, and a
+ * pasted «...» made «…» would be saved as a password nobody knows.
+ */
+export function fieldTakesTypography(
+  attrs: Record<string, unknown>,
+  off = false,
+) {
+  return (
+    !off &&
+    attrs.type !== 'password' &&
+    attrs.spellcheck !== 'false' &&
+    attrs.spellcheck !== false
+  );
+}
+
+/**
  * An input or a textarea, recognised by what the binder needs from it rather
  * than by its constructor: `instanceof` is answered by the realm the class
  * came from, and a field rendered in another document would fail it while
@@ -107,12 +264,51 @@ export function bindSmartTypography(
   element: TypographyTarget,
   rules: readonly SmartTypographyRule[] = SMART_TYPOGRAPHY_RULES,
 ): () => void {
+  // A password is never typography's, however it came to be bound.
+  if (isFieldElement(element) && element.type === 'password') return () => {};
   let pending: PendingUndo | undefined;
+
+  /**
+   * Words pasted into an input or a textarea, formatted on the way in as one
+   * editing command; false, and the browser's own paste, when there is
+   * nothing to format.
+   */
+  function pasteIntoField(text: string | null | undefined) {
+    if (!text || !isFieldElement(element)) return false;
+    const start = element.selectionStart;
+    const end = element.selectionEnd;
+    if (start === null || end === null) return false;
+    const formatted = smartTypographyText(text, {
+      before: element.value.slice(0, start),
+      after: element.value.slice(end),
+    });
+    if (formatted === text) return false;
+    pending = undefined;
+    replaceInField(element, start, end, formatted);
+    return true;
+  }
+
+  function onPaste(event: Event) {
+    const paste = event as ClipboardEvent;
+    if (paste.defaultPrevented) return;
+    if (pasteIntoField(paste.clipboardData?.getData('text/plain')))
+      paste.preventDefault();
+  }
 
   function onBeforeInput(event: Event) {
     const input = event as InputEvent;
     if (input.defaultPrevented) {
       pending = undefined;
+      return;
+    }
+    // A paste the browser announces without a paste event — a phone's
+    // clipboard strip — is formatted the same.
+    if (
+      input.inputType === 'insertFromPaste' &&
+      input.cancelable &&
+      pasteIntoField(input.data ?? input.dataTransfer?.getData('text/plain'))
+    ) {
+      input.preventDefault();
       return;
     }
     if (input.inputType !== 'deleteContentBackward') {
@@ -169,8 +365,11 @@ export function bindSmartTypography(
   element.addEventListener('compositionend', onCompositionEnd);
   element.addEventListener('focusout', onSelectionChange);
   element.addEventListener('pointerdown', onSelectionChange);
+  // Editable text is the editor's, which formats its pastes itself.
+  if (isFieldElement(element)) element.addEventListener('paste', onPaste);
 
   return () => {
+    element.removeEventListener('paste', onPaste);
     element.removeEventListener('beforeinput', onBeforeInput, true);
     element.removeEventListener('input', onInput);
     element.removeEventListener(TYPED_BY_COMMAND, onTypedByCommand);

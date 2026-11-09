@@ -5,6 +5,7 @@ import {
 import {
   contentBlockPath,
   contentHeadingAnchors,
+  excerptHeadingId,
   type ContentHeadingLevel,
 } from '#layers/thei/shared/content-headings';
 import type { IconName } from '#thei/icons';
@@ -34,6 +35,27 @@ export function visibleContentBlocks(
     block,
     path: contentBlockPath(pathPrefix, index),
   }));
+}
+
+type EmbeddedExcerpt = {
+  publicId: string;
+  title: string;
+  content: PublicContentOutputData;
+};
+
+/**
+ * The headings of an excerpt embedded on its parent's page, as its renderer
+ * anchors them: each under the excerpt's own anchor. The paths stay the
+ * text's own, which is how the renderer finds each heading's block.
+ */
+export function buildExcerptContentHeadings(
+  excerpt: EmbeddedExcerpt,
+  slugify: (value: string) => string,
+): ContentHeading[] {
+  return buildContentHeadings(excerpt.content, slugify).map((heading) => {
+    const id = excerptHeadingId(excerpt.publicId, heading.id);
+    return { ...heading, id, href: `#${id}` };
+  });
 }
 
 /** A text's headings as the page lists and anchors them (`content-headings`). */

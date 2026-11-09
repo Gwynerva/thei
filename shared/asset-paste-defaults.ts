@@ -42,7 +42,6 @@ export function pastedMediaRequest(
       quality: ASSET_QUALITY_LEVEL_QUALITY[DEFAULT_VIDEO_QUALITY_LEVEL],
       dimensions: {},
       stripAudio: false,
-      fastConversion: false,
     };
   }
   // Already what an encode would write — a recording downloaded from here

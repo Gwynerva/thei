@@ -42,10 +42,73 @@ export interface ProjectSectionItem {
 
 export type ProjectSectionValue = ProjectSectionItem & { sectionUuid: string };
 
-function normalizeProjectContentItemId(value: unknown) {
+/** An id a form sends back, or none. */
+export function normalizeContentItemId(value: unknown) {
   if (typeof value !== 'string') return undefined;
   const id = value.trim();
   return id || undefined;
+}
+
+/**
+ * What a project's section and an excerpt are both made of: a part with a
+ * title, a text and a page of its own.
+ */
+export type ContentItemFields = {
+  title: string;
+  summary: string;
+  humanReadableSlug: string;
+  publicId: string;
+  isPrivate: boolean;
+  content: ContentFieldModelValue;
+  bannerAssetUuid?: string;
+};
+
+/**
+ * The fields a project's section and an excerpt share, as they are saved:
+ * a title, a summary, an address, the owner's privacy, a text and a banner.
+ * What neither may be is refused with the part's own error, by its name.
+ */
+export function normalizeContentItemFields(
+  source: Record<string, unknown>,
+  part: { name: 'section' | 'excerpt'; error: new (message: string) => Error },
+): ContentItemFields {
+  const title =
+    typeof source.title === 'string'
+      ? normalizeHeadingText(source.title.trim())
+      : '';
+  if (!title)
+    throw new part.error(
+      `${part.name === 'section' ? 'Section' : 'Excerpt'} title cannot be empty`,
+    );
+  if (typeof source.isPrivate !== 'boolean')
+    throw new part.error(`Invalid ${part.name} privacy`);
+  const contentSource =
+    source.content && typeof source.content === 'object'
+      ? (source.content as Record<string, unknown>)
+      : undefined;
+  const content: ContentFieldModelValue = contentSource
+    ? {
+        contentUuid: normalizeContentItemId(contentSource.contentUuid),
+        data: normalizeContentData(contentSource.data),
+        ...(typeof contentSource.updatedAt === 'number'
+          ? { updatedAt: contentSource.updatedAt }
+          : {}),
+        ...optionalContentDraftRef(contentSource.draftRef),
+      }
+    : createEmptyContentFieldValue();
+  const publicId = normalizePublicId(source.publicId);
+  if (!publicIdIsValid(publicId)) throw new part.error('Invalid public ID');
+  return {
+    title,
+    summary: typeof source.summary === 'string' ? source.summary.trim() : '',
+    humanReadableSlug: normalizeHumanReadableSlug(source.humanReadableSlug),
+    publicId,
+    isPrivate: source.isPrivate,
+    content,
+    ...(typeof source.bannerAssetUuid === 'string' && source.bannerAssetUuid
+      ? { bannerAssetUuid: source.bannerAssetUuid }
+      : {}),
+  };
 }
 
 export function isDatedSection(section: Pick<ProjectSectionItem, 'periods'>) {
@@ -104,52 +167,22 @@ function normalizeProjectSection(value: unknown): ProjectSectionItem {
   if (!value || typeof value !== 'object')
     throw new ProjectContentItemError('Invalid section');
   const source = value as Record<string, unknown>;
-  const title =
-    typeof source.title === 'string'
-      ? normalizeHeadingText(source.title.trim())
-      : '';
-  if (!title)
-    throw new ProjectContentItemError('Section title cannot be empty');
-  if (typeof source.isPrivate !== 'boolean')
-    throw new ProjectContentItemError('Invalid section privacy');
+  const fields = normalizeContentItemFields(source, {
+    name: 'section',
+    error: ProjectContentItemError,
+  });
   const periods =
     Array.isArray(source.periods) && source.periods.length
       ? normalizePeriods(source.periods)
       : [];
-  const contentSource =
-    source.content && typeof source.content === 'object'
-      ? (source.content as Record<string, unknown>)
-      : undefined;
-  const content: ContentFieldModelValue = contentSource
-    ? {
-        contentUuid: normalizeProjectContentItemId(contentSource.contentUuid),
-        data: normalizeContentData(contentSource.data),
-        ...(typeof contentSource.updatedAt === 'number'
-          ? { updatedAt: contentSource.updatedAt }
-          : {}),
-        ...optionalContentDraftRef(contentSource.draftRef),
-      }
-    : createEmptyContentFieldValue();
-  if (!periods.length && isContentEmpty(content.data))
+  if (!periods.length && isContentEmpty(fields.content.data))
     throw new ProjectContentItemError('A section needs a body or a period');
+  const { content, bannerAssetUuid, ...named } = fields;
   return {
-    sectionUuid: normalizeProjectContentItemId(source.sectionUuid),
-    title,
-    summary: typeof source.summary === 'string' ? source.summary.trim() : '',
-    humanReadableSlug: normalizeHumanReadableSlug(source.humanReadableSlug),
-    publicId: normalizeProjectContentItemPublicId(source.publicId),
-    isPrivate: source.isPrivate,
+    sectionUuid: normalizeContentItemId(source.sectionUuid),
+    ...named,
     periods,
     content,
-    ...(typeof source.bannerAssetUuid === 'string' && source.bannerAssetUuid
-      ? { bannerAssetUuid: source.bannerAssetUuid }
-      : {}),
+    ...(bannerAssetUuid ? { bannerAssetUuid } : {}),
   };
-}
-
-function normalizeProjectContentItemPublicId(value: unknown) {
-  const publicId = normalizePublicId(value);
-  if (!publicIdIsValid(publicId))
-    throw new ProjectContentItemError('Invalid public ID');
-  return publicId;
 }

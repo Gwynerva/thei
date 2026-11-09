@@ -1,7 +1,9 @@
 import { ProjectEventAccessLevel } from '../access-level';
+import { ExcerptError, normalizeExcerpts, type ExcerptItem } from '../excerpt';
 import { normalizeSynonyms } from '../synonyms';
 import type { StatusEditData } from '../status';
 import {
+  RELATION_TARGET_TYPES,
   RelationValidationError,
   validateRelations,
   type RelationEditItem,
@@ -78,6 +80,8 @@ export type ProjectEditData = Partial<StatusEditData> & {
   descriptionContent?: ContentFieldModelValue | null;
   /** The project's sections in their order; absent leaves them as they are. */
   sections?: ProjectSectionItem[];
+  /** The project's excerpts in their order; absent leaves them as they are. */
+  excerpts?: ExcerptItem[];
   /** Showcase assets in display order. Array index = sort order. */
   showcaseAssets?: ShowcaseAssetEditItem[];
   /** Other files in display order. Array index = sort order. */
@@ -233,7 +237,10 @@ export function validateProjectData(
 
     const descriptionContent = validateContentField(data.descriptionContent);
     const sections = normalizeProjectSections(data.sections);
-    const relations = validateRelations(data.relations);
+    const excerpts = normalizeExcerpts(data.excerpts);
+    const relations = validateRelations(data.relations, {
+      allowed: RELATION_TARGET_TYPES,
+    });
     const externalLinks = validateProjectExternalLinks(data.externalLinks);
     const tags = validateProjectTags(data.tags);
     let action: ProjectActionEditData;
@@ -258,6 +265,7 @@ export function validateProjectData(
       synonyms,
       descriptionContent,
       sections,
+      excerpts,
       showcaseAssets,
       otherAssets,
       relations,
@@ -272,6 +280,7 @@ export function validateProjectData(
     if (error instanceof ContentValidationError) return error.message;
     if (
       error instanceof ProjectContentItemError ||
+      error instanceof ExcerptError ||
       error instanceof PeriodError
     )
       return error.message;

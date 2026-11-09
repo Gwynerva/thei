@@ -2,6 +2,7 @@ import {
   validateProjectData,
   type ProjectEditData,
 } from '#layers/thei/shared/admin/project';
+import { applyExcerpts, excerptIdentities, prepareExcerpts } from '../excerpts';
 import { and, eq } from 'drizzle-orm';
 import type { ProjectSaveResponse } from '#layers/thei/shared/api/project';
 import { ContentValidationError } from '#layers/thei/shared/content';
@@ -115,6 +116,18 @@ export async function createProject(
       message: error instanceof Error ? error.message : 'Invalid relations',
     };
   }
+  let preparedExcerpts;
+  try {
+    preparedExcerpts = await prepareExcerpts(
+      { type: 'project', id: projectUuid },
+      result.excerpts,
+    );
+  } catch (error) {
+    return {
+      type: 'error',
+      message: error instanceof Error ? error.message : 'Invalid excerpts',
+    };
+  }
   let preparedStatuses;
   try {
     preparedStatuses = prepareEntityStatusEdits(
@@ -186,6 +199,12 @@ export async function createProject(
       { type: 'project', id: projectUuid },
       preparedRelations,
     );
+    applyExcerpts(
+      tx,
+      schema,
+      { type: 'project', id: projectUuid },
+      preparedExcerpts,
+    );
     applyExternalLinkList(
       tx,
       schema,
@@ -255,6 +274,7 @@ export async function createProject(
       (section) => section.sectionUuid,
       (section) => section.publicId,
     ),
+    excerpts: excerptIdentities(preparedExcerpts),
     statuses: await getStatusHistory(
       { type: 'project', id: projectUuid },
       undefined,

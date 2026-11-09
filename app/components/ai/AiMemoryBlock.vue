@@ -109,7 +109,12 @@ const remembering = ref(false);
             pointer-coarse:h-9 hocus:bg-bg-accent hocus:text-accent"
           data-ai-memory-part
         >
-          <Icon name="project-section" class="shrink-0 text-text-2" />
+          <Icon
+            :name="
+              part.entity.type === 'excerpt' ? 'excerpt' : 'project-section'
+            "
+            class="shrink-0 text-text-2"
+          />
           <span class="truncate">{{ publicText(part.entity.title) }}</span>
           <span class="shrink-0 text-text-3">· {{ part.count }}</span>
         </TheiLink>

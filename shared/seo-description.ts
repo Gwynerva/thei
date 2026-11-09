@@ -1,5 +1,10 @@
-/** Search engines show roughly this many characters of a description. */
-export const SEO_DESCRIPTION_LIMIT = 160;
+/**
+ * How long a description may run. A search engine shows about the first
+ * 150 of it and cuts the rest itself, but reads it all, and may show a part
+ * that matches a query; a link's preview in a messenger shows more. What
+ * matters most goes first.
+ */
+export const SEO_DESCRIPTION_LIMIT = 300;
 
 /**
  * Joins description parts into one line that fits the snippet length, cut at

@@ -5,7 +5,7 @@ import {
   isApproximateDate,
   type DatedPeriod,
 } from '#layers/thei/shared/date-precision';
-import { diaryContentExcerpt } from '#layers/thei/shared/diary-text';
+import { diaryLead } from '#layers/thei/shared/diary-text';
 import {
   formatAbsolutePublicDate,
   formatCompactPublicPeriod,
@@ -17,6 +17,12 @@ import { STRANGER } from '../../access-links/viewer';
 import { getEventPeriods } from '../../events/periods';
 import { ownerText } from '../../owner-text';
 import { listProjectSections } from '../../projects/content-sections';
+import { findExcerptByPublicId, listExcerpts } from '../../excerpts';
+import {
+  excerptOpens,
+  excerptShownWithParent,
+  loadExcerptParent,
+} from '../../excerpts/parents';
 import {
   isDatedSection,
   sortStagesNewestFirst,
@@ -276,6 +282,81 @@ export async function sectionContent(
   };
 }
 
+/**
+ * An excerpt's card: a part of its parent, like a section of its project,
+ * with its own picture and its place among its parent's excerpts a stranger
+ * sees. Nothing where the excerpt or its parent is closed.
+ */
+export async function excerptContent(
+  publicId: string,
+  site: OgSite,
+): Promise<OgCardContent | undefined> {
+  const excerpt = findExcerptByPublicId(publicId);
+  if (!excerpt) return undefined;
+  const parent = await loadExcerptParent(excerpt.parentType, excerpt.parentId);
+  if (!parent || !canOpenPublicEntity(parent.access, false)) return undefined;
+  if (!excerptOpens(STRANGER, excerpt, parent)) return undefined;
+  const visible = listExcerpts(parent).filter(
+    (item) =>
+      item.excerptUuid === excerpt.excerptUuid ||
+      excerptShownWithParent(STRANGER, item, parent),
+  );
+  const number =
+    visible.findIndex((item) => item.excerptUuid === excerpt.excerptUuid) + 1;
+  const [picture, parentPicture] = await Promise.all([
+    ogBodyPicture('excerpt', excerpt.excerptUuid, 'excerpt-body'),
+    parent.type === 'project'
+      ? buildPublicEntityReference(parent.row).then((reference) =>
+          ogPictureOfMedia(reference.iconMedia),
+        )
+      : parent.type === 'event'
+        ? ogBodyPicture('event', parent.id, 'event-body')
+        : ogBodyPicture('diary-entry', parent.id, 'diary-body'),
+  ]);
+  const periods = parent.type === 'event' ? getEventPeriods(parent.id) : [];
+  const chronology = buildPublicEntityChronology(excerpt);
+  return {
+    ...emptyOgContent(
+      'excerpt',
+      excerpt.excerptUuid,
+      ownerText(excerpt.title),
+      site,
+      accentOf(picture, excerpt.excerptUuid),
+    ),
+    parent: {
+      title:
+        parent.type === 'diary-entry'
+          ? formatAbsolutePublicDate(parent.row.date, locale())
+          : ownerText(parent.title),
+      ...(parentPicture ? { picture: parentPicture } : {}),
+    },
+    chips: [
+      {
+        icon: OG_KIND_ICONS.excerpt,
+        label:
+          visible.length > 1
+            ? phrase().excerpt_position(number, visible.length)
+            : phrase().excerpt,
+      },
+    ],
+    summary: ownerText(excerpt.summary),
+    meta: [
+      periods.length
+        ? dated(periods)
+        : {
+            icon: OG_META_ICONS.updated,
+            text: phrase().og_updated(
+              formatAbsolutePublicDate(
+                chronology.updatedAt ?? chronology.createdAt,
+                locale(),
+              ),
+            ),
+          },
+    ],
+    ...(picture ? { picture } : {}),
+  };
+}
+
 export async function eventContent(
   publicId: string,
   site: OgSite,
@@ -335,11 +416,15 @@ export async function diaryContent(
       STRANGER,
     ),
   ]);
-  const quote = diaryContentExcerpt(
-    body?.data,
-    false,
-    phrase().content_private_section,
-  );
+  // The card quotes how the day begins, not what it is about: a quotation
+  // reads as one, where a row of headings would not.
+  const quote = diaryLead({
+    data: body?.data,
+    excerptTitles: [],
+    includePrivate: false,
+    privateLabel: phrase().content_private_section,
+    headings: false,
+  });
   return {
     ...emptyOgContent(
       'diary',

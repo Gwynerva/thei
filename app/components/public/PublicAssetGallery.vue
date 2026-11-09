@@ -10,6 +10,11 @@ const props = withDefaults(
   defineProps<{
     items: (PublicAssetDescriptor | PublicSecretReference)[];
     variant?: 'default' | 'hero';
+    /**
+     * The part of the page the gallery is, which the address of a file's
+     * window names it in (`shared/landing.ts`).
+     */
+    zone?: 'showcase';
   }>(),
   { variant: 'default' },
 );
@@ -26,7 +31,12 @@ const active = computed(
     openable.value[0],
 );
 function openItem(item: PublicAssetDescriptor) {
-  openPublicAssets(openable.value, item);
+  const zone = props.zone;
+  openPublicAssets(
+    openable.value,
+    item,
+    zone && openable.value.map((each) => ({ zone, file: each.key })),
+  );
 }
 </script>
 

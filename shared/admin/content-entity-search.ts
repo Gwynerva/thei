@@ -1,3 +1,4 @@
+import type { ProjectEventAccessLevel } from '../access-level';
 import type { ContentEntityType } from '../content-link';
 import { dayQueryRank, parseDayQuery, type DayQuery } from '../day-query';
 import type { MediaDescriptor } from '../media';
@@ -25,6 +26,8 @@ export type ContentEntitySearchItem = {
   date?: string;
   /** The project a section belongs to. */
   parent?: { title: string; href: string };
+  /** How open it is: what an excerpt's form says of an excerpt about it. */
+  access?: ProjectEventAccessLevel;
   updatedAt: number;
   previewMedia?: MediaDescriptor;
 };

@@ -21,3 +21,8 @@
 - id: no-description
   file: photo-b
   traits: [no-description]
+- id: selenite
+  ref: excerpt:project/lamp/first-light
+  traits: [unique-word]
+  where: body
+  word: selenite

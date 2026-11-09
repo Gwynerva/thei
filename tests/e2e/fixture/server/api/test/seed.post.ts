@@ -30,6 +30,8 @@ export default defineEventHandler(async (event) => {
       schema.contentHistory,
       schema.pages,
       schema.projectContentSections,
+      schema.excerpts,
+      schema.entityRelations,
       schema.periods,
       schema.projects,
       schema.events,

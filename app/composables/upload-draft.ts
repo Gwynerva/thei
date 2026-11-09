@@ -308,8 +308,12 @@ export function deleteDraft(draftId: string) {
   void sendDelete(`/api/admin/assets/drafts/${draftId}`).catch(() => {});
 }
 
-/** What went wrong with a request, in the words the server gave if any. */
+/**
+ * What went wrong with a request, in the words the server gave if any — but
+ * a server without ffmpeg in the admin's own words, which say what to do.
+ */
 export function errorMessage(reason: unknown, fallback: string): string {
+  if (isFfmpegMissing(reason)) return phrase.value.upload_error_ffmpeg_missing;
   if (reason && typeof reason === 'object' && 'data' in reason) {
     const data = (reason as { data?: { message?: string } }).data;
     if (data?.message) return data.message;
@@ -332,6 +336,22 @@ export function isDraftExpired(reason: unknown): boolean {
       ? (reason as { data?: { data?: { draftExpired?: boolean } } }).data
       : undefined;
   return Boolean(data?.data?.draftExpired);
+}
+
+/**
+ * A request or a job refused because the server has no ffmpeg
+ * (`server/thei/assets/ffmpeg.ts`), in either shape a failure comes in.
+ */
+export function isFfmpegMissing(reason: unknown): boolean {
+  if (reason instanceof UploadJobError)
+    return Boolean(
+      (reason.data as { ffmpegMissing?: boolean } | undefined)?.ffmpegMissing,
+    );
+  const data =
+    reason && typeof reason === 'object' && 'data' in reason
+      ? (reason as { data?: { data?: { ffmpegMissing?: boolean } } }).data
+      : undefined;
+  return Boolean(data?.data?.ffmpegMissing);
 }
 
 export function isAbortError(reason: unknown): boolean {
@@ -358,7 +378,12 @@ function abortError() {
 
 function readXhrMessage(xhr: XMLHttpRequest): string {
   try {
-    const response = JSON.parse(xhr.responseText) as { message?: string };
+    const response = JSON.parse(xhr.responseText) as {
+      message?: string;
+      data?: { ffmpegMissing?: boolean };
+    };
+    if (response.data?.ffmpegMissing)
+      return phrase.value.upload_error_ffmpeg_missing;
     return (
       response.message ?? phrase.value.upload_error_request_failed(xhr.status)
     );

@@ -3,6 +3,8 @@ import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import {
   isPublicSecret,
   type PublicEntityReference,
+  type PublicExcerpt,
+  type PublicExcerptCard,
   type PublicProjectSection,
 } from '#layers/thei/shared/api/public';
 import {
@@ -11,9 +13,9 @@ import {
   withLinkFragment,
 } from '#layers/thei/shared/content-link';
 import {
-  RELATION_ENTITY_TYPES,
+  RELATION_TARGET_TYPES,
   type RelationEndpoint,
-  type RelationEntityType,
+  type RelationTargetType,
 } from '#layers/thei/shared/relation';
 import { relationLabel } from '#layers/thei/shared/relation-display';
 import {
@@ -38,6 +40,15 @@ import {
   canOpenPublicEntity,
 } from '../public/entities';
 import { listPublicRelatedAll } from '../public/related';
+import {
+  buildPublicExcerpt,
+  listPublicExcerptsAboutAll,
+  findOpenParentExcerpt,
+} from '../public/excerpts';
+import {
+  findExcerptParentByAddress,
+  type ExcerptParentInfo,
+} from '../excerpts/parents';
 import { listProjectSections } from '../projects/content-sections';
 import { siteUrl } from '../site-url';
 import { STRANGER } from '../access-links/viewer';
@@ -85,9 +96,16 @@ export async function renderProjectMarkdown(
     `# ${ownerText(data.title)}`,
     ownerText(data.summary),
     await body(event, data.description),
+    ...(await excerptParts(event, data.excerpts)),
   ];
 
   lines.push(...sectionList(event, data.sections));
+  lines.push(
+    ...(await excerptsAbout(event, {
+      type: 'project',
+      id: project.projectUuid,
+    })),
+  );
   lines.push(
     ...(await relatedEntities(event, {
       type: 'project',
@@ -130,6 +148,46 @@ export async function renderProjectSectionMarkdown(
   return { body: join(lines), canonical: siteUrl(event, canonical) };
 }
 
+export async function renderExcerptMarkdown(
+  event: H3Event,
+  address: Parameters<typeof findExcerptParentByAddress>[0],
+  excerptPart: string,
+): Promise<MarkdownDocument | undefined> {
+  const parent = await findExcerptParentByAddress(address);
+  if (!parent || !canOpenPublicEntity(parent.access, false)) return undefined;
+  const found = findOpenParentExcerpt(parent, STRANGER, excerptPart);
+  if (!found) return undefined;
+  const { excerpt, visible } = found;
+  const data = await buildPublicExcerpt(excerpt, parent, STRANGER, {
+    number: visible.indexOf(excerpt) + 1,
+    count: visible.length,
+  });
+  const lines = [
+    `# ${ownerText(data.title)}`,
+    ownerText(data.summary),
+    `${parentWord(parent)}: [${parentName(parent)}](${siteUrl(event, parent.href)})`,
+    ...aboutLine(event, data),
+    await body(event, data.content),
+  ];
+  return { body: join(lines), canonical: siteUrl(event, data.href) };
+}
+
+/** What a parent is called in a copy: a diary entry by its day. */
+function parentName(parent: ExcerptParentInfo) {
+  return parent.type === 'diary-entry'
+    ? parent.row.date
+    : ownerText(parent.title);
+}
+
+function parentWord(parent: ExcerptParentInfo) {
+  const phrase = THEI_SERVER.phrase;
+  return parent.type === 'project'
+    ? phrase.project
+    : parent.type === 'event'
+      ? phrase.event
+      : phrase.diary_entry;
+}
+
 export async function renderEventMarkdown(
   event: H3Event,
   part: string,
@@ -143,6 +201,8 @@ export async function renderEventMarkdown(
     ownerText(data.summary),
     ...periodLines(data.periods),
     await body(event, data.content),
+    ...(await excerptParts(event, data.excerpts)),
+    ...(await excerptsAbout(event, { type: 'event', id: stored.eventUuid })),
     ...(await relatedEntities(event, { type: 'event', id: stored.eventUuid })),
     ...tagList(event, data.tags),
   ];
@@ -207,6 +267,11 @@ export async function renderDiaryMarkdown(
   const lines = [
     `# ${data.date}`,
     await body(event, data.content),
+    ...(await excerptParts(event, data.excerpts)),
+    ...(await excerptsAbout(event, {
+      type: 'diary-entry',
+      id: stored.diaryUuid,
+    })),
     ...(await relatedEntities(event, {
       type: 'diary-entry',
       id: stored.diaryUuid,
@@ -342,6 +407,94 @@ export async function withEntityAddresses(
 }
 
 /**
+ * A parent's excerpts, whole, as its page embeds them: each under its own
+ * heading, which leads to the excerpt's own copy, with what it is about and
+ * its text one heading level down — a part of the page, not a page of its
+ * own, to a reader of the outline.
+ */
+async function excerptParts(
+  event: H3Event,
+  excerpts: PublicExcerpt[],
+): Promise<string[]> {
+  const lines: string[] = [];
+  for (const excerpt of excerpts) {
+    lines.push(
+      `## [${ownerText(excerpt.title)}](${siteUrl(event, excerpt.href)})`,
+      ownerText(excerpt.summary),
+      ...aboutLine(event, excerpt),
+      shiftHeadings(await body(event, excerpt.content)),
+    );
+  }
+  return lines;
+}
+
+/** What an excerpt is about, on one line; a codename is left out. */
+function aboutLine(event: H3Event, excerpt: PublicExcerptCard): string[] {
+  const links = excerpt.about.filter(
+    (link): link is PublicEntityReference => !isPublicSecret(link),
+  );
+  if (!links.length) return [];
+  return [
+    `${THEI_SERVER.phrase.excerpt_about}: ${links
+      .map((link) => `[${ownerText(link.title)}](${siteUrl(event, link.href)})`)
+      .join(', ')}`,
+  ];
+}
+
+/**
+ * The excerpts about an entity, as the block on its page lists them: each
+ * by its title, leading to its copy, with its parent and the owner's word
+ * on why.
+ */
+async function excerptsAbout(
+  event: H3Event,
+  target: RelationEndpoint,
+): Promise<string[]> {
+  const cards = await listPublicExcerptsAboutAll(target, STRANGER);
+  if (!cards.length) return [];
+  const phrase = THEI_SERVER.phrase;
+  return [
+    `## ${phrase.excerpts}`,
+    ...cards.map((card) => {
+      const parent = card.parent.date ?? ownerText(card.parent.title);
+      const said = [
+        card.relationType && card.relationType !== 'related'
+          ? relationLabel(phrase, card.relationType)
+          : '',
+        card.note
+          ? ownerText(card.note)
+          : card.summary
+            ? ownerText(card.summary)
+            : '',
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      return (
+        `- [${ownerText(card.title)}](${siteUrl(event, card.href)}) (${parent})` +
+        (said ? ` — ${said}` : '')
+      );
+    }),
+  ];
+}
+
+/**
+ * Markdown with every heading one level down, so a text embedded under a
+ * heading of the page keeps its outline under it. A line of a fenced code
+ * block is left as it is.
+ */
+export function shiftHeadings(markdown: string): string {
+  let fenced = false;
+  return markdown
+    .split('\n')
+    .map((line) => {
+      if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
+      if (fenced) return line;
+      return /^#{1,5} /.test(line) ? `#${line}` : line;
+    })
+    .join('\n');
+}
+
+/**
  * A project's sections as its page shows them: the general ones in the
  * owner's order, then the stages, newest first, each with its stretch.
  */
@@ -383,13 +536,13 @@ async function relatedEntities(
   );
   if (!links.length) return [];
   const phrase = THEI_SERVER.phrase;
-  const kindTitles: Record<RelationEntityType, string> = {
+  const kindTitles: Record<RelationTargetType, string> = {
     project: phrase.projects,
     event: phrase.events,
     'diary-entry': phrase.diary,
   };
   const lines = [`## ${phrase.related_entities}`];
-  for (const kind of RELATION_ENTITY_TYPES) {
+  for (const kind of RELATION_TARGET_TYPES) {
     const group = links.filter((link) => link.entityType === kind);
     if (!group.length) continue;
     lines.push(`### ${kindTitles[kind]}`);

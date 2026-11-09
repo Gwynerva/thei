@@ -1,4 +1,5 @@
 import { validateDiaryData } from '#layers/thei/shared/admin/diary';
+import { applyExcerpts, excerptIdentities, prepareExcerpts } from '../excerpts';
 import type { DiaryEditData } from '#layers/thei/shared/diary';
 import type { DiarySaveResponse } from '#layers/thei/shared/api/diary';
 import { EntityPrefix, generateUniqueId } from '../entity-id';
@@ -43,6 +44,18 @@ export async function createDiaryEntryFromForm(
       message: error instanceof Error ? error.message : 'Invalid relations',
     };
   }
+  const parent = { type: 'diary-entry', id: diaryUuid } as const;
+  let preparedExcerpts: Awaited<ReturnType<typeof prepareExcerpts>>;
+  try {
+    preparedExcerpts = await prepareExcerpts(parent, result.excerpts);
+  } catch (error) {
+    return {
+      type: 'error',
+      message: error instanceof Error ? error.message : 'Invalid excerpts',
+    };
+  }
+  // A day told by its excerpts alone needs no text of its own.
+  const hasExcerpts = Boolean(preparedExcerpts?.length);
   try {
     const [contentSave, notesSave] = await Promise.all([
       prepareContentForSave(
@@ -58,7 +71,7 @@ export async function createDiaryEntryFromForm(
         result.notes,
       ),
     ]);
-    if (contentSave.type !== 'save')
+    if (contentSave.type !== 'save' && !hasExcerpts)
       return { type: 'error', message: 'Diary entry content is required' };
 
     const { db, schema } = THEI_SERVER.useDb();
@@ -96,6 +109,7 @@ export async function createDiaryEntryFromForm(
         { type: 'diary-entry', id: diaryUuid },
         preparedRelations,
       );
+      applyExcerpts(tx, schema, parent, preparedExcerpts);
       options.onCreate?.(tx, schema, diaryUuid);
     });
     return {
@@ -103,6 +117,7 @@ export async function createDiaryEntryFromForm(
       diaryUuid,
       version: storedVersion('diary-entry', diaryUuid),
       date: result.date,
+      excerpts: excerptIdentities(preparedExcerpts),
     };
   } catch (error) {
     return {

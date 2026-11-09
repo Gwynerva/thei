@@ -11,8 +11,39 @@ export const PROOFREAD_CATEGORIES = [
   'missing-letter',
   /** A mention made a link to an entity of the site; the words stay. */
   'link',
+  // What reads as a mistake of meaning rather than of letters:
+  /** A fact said again, as though by mistake. */
+  'repeat',
+  /** A step of reasoning that does not follow. */
+  'logic',
+  /** The text says otherwise elsewhere. */
+  'contradiction',
+  /** Words so tangled a reader stumbles. */
+  'clumsy',
 ] as const;
 export type ProofreadCategory = (typeof PROOFREAD_CATEGORIES)[number];
+
+/**
+ * The mistakes of meaning: never sure, since only the author knows what was
+ * meant. Each is a remark on the words — with a way to say them otherwise,
+ * when the model has one, which may reword more than a local fix would.
+ */
+export const MEANING_CATEGORIES = [
+  'repeat',
+  'logic',
+  'contradiction',
+  'clumsy',
+] as const satisfies readonly ProofreadCategory[];
+export type MeaningCategory = (typeof MEANING_CATEGORIES)[number];
+
+export function isMeaningCategory(
+  category: string,
+): category is MeaningCategory {
+  return (MEANING_CATEGORIES as readonly string[]).includes(category);
+}
+
+/** The most a remark on meaning or its rewording takes in, in characters. */
+export const MEANING_FIND_MAX = 400;
 
 /**
  * Tidying a text: putting the owner's own blocks in order — moved, a

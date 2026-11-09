@@ -13,7 +13,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import { resolveFfmpegTools } from '../../../update/ffmpeg/tools';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import sharp from 'sharp';
@@ -58,6 +58,7 @@ beforeEach(async () => {
       type text NOT NULL,
       size integer NOT NULL,
       touchedAt integer NOT NULL,
+      createdAt integer NOT NULL DEFAULT 0,
       meta text
     );
     CREATE UNIQUE INDEX assets_family_content_settings_idx
@@ -142,7 +143,7 @@ const live = () => new AbortController().signal;
 async function ffmpeg(args: string[]) {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
-      ffmpegInstaller.path,
+      resolveFfmpegTools().ffmpeg,
       ['-y', '-loglevel', 'error', ...args],
       { windowsHide: true, stdio: 'ignore' },
     );
@@ -520,7 +521,7 @@ describe('editor drafts', () => {
       onStatus: (status) => statuses.push(status.phase),
     });
     expect(stored.settingsKey).toBe(render.settingsKey);
-    expect(statuses).toEqual(['processing', 'processing', 'finishing']);
+    expect(statuses).toEqual(['processing', 'processing', 'processing']);
   });
 
   it('keeps the directory of a draft closed under a commit until the commit is over', async () => {

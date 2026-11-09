@@ -1,58 +1,63 @@
 <script setup lang="ts">
-import {
-  isPublicSecret,
-  type PublicEntitySummary,
-  type PublicSecretReference,
-} from '#layers/thei/shared/api/public';
-defineProps<{
-  kind: 'project' | 'event';
-  count: number;
-  items: (PublicEntitySummary | PublicSecretReference)[];
-}>();
-const tileClass = `relative block size-9 shrink-0 overflow-hidden rounded-normal
-  border-2 border-bg-2 bg-bg-accent transition hocus:z-1 hocus:-translate-y-1`;
+import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
+import type { PublicProfileResponse } from '#layers/thei/shared/profile';
+import { buildLifeUrl } from '#layers/thei/shared/life';
+const props = defineProps<{ counts: PublicProfileResponse['counts'] }>();
+const compactNumber = useCompactNumber();
+/**
+ * One column per main kind the archive holds, each opening Life filtered to
+ * it; a kind with nothing in it is left out.
+ */
+const columns = computed(() =>
+  (
+    [
+      ['project', props.counts.projects],
+      ['event', props.counts.events],
+      ['diary-entry', props.counts.diaryEntries],
+    ] as const
+  )
+    .filter(([, count]) => count > 0)
+    .map(([kind, count]) => {
+      const exact = count.toLocaleString(language.value.code);
+      const label = phrase.value.profile_counter_label(kind, count);
+      return {
+        kind,
+        href: buildLifeUrl({ filter: [kind] }),
+        // Whole up to four digits; shortened past them, the hint says it whole.
+        shown: count < 10_000 ? exact : compactNumber(count),
+        word: phrase.value.profile_counter(kind, count),
+        label,
+        hint: count < 10_000 ? undefined : label,
+      };
+    }),
+);
 </script>
 <template>
-  <div
-    v-if="count > 0"
-    class="flex items-center justify-center gap-sm sm:contents"
-  >
-    <div
-      v-if="items.length"
-      class="flex -space-x-2 sm:self-center sm:justify-self-end"
-    >
-      <template
-        v-for="item in items"
-        :key="isPublicSecret(item) ? item.key : item.href"
-        ><PublicSecretIcon
-          v-if="isPublicSecret(item)"
-          :secret="item"
-          :class="tileClass" /><TheiLink
-          v-else
-          :to="item.href"
-          :aria-label="publicText(item.title)"
-          :data-title-popup="publicText(item.title)"
-          :class="tileClass"
-          ><Media
-            v-if="item.media"
-            v-bind="item.media"
-            :playback="kind === 'project' ? 'autoplay' : undefined"
-            :autoplay-reduced-motion="kind === 'project'"
-            :loop="kind === 'project'"
-            :muted="kind === 'project'"
-            class="size-full" /><span
-            v-else
-            class="flex size-full items-center justify-center text-accent"
-            ><Icon :name="kind" /></span></TheiLink
-      ></template>
-    </div>
-    <TheiLink
-      :to="kind === 'project' ? '/search/?type=project' : '/life/'"
-      class="justify-self-start text-sm font-bold text-text-2 tabular-nums
-        transition-colors sm:self-center hocus:text-accent"
-      ><span>{{
-        kind === 'project' ? phrase.x_projects(count) : phrase.x_events(count)
-      }}</span></TheiLink
+  <!-- The rule between columns is an element of its own: a border on a
+       rounded link would bend with its corners. -->
+  <div v-if="columns.length" class="flex items-stretch justify-center">
+    <template v-for="(column, index) in columns" :key="column.kind"
+      ><span
+        v-if="index"
+        class="w-px shrink-0 bg-border-1"
+        aria-hidden="true"
+      /><TheiLink
+        :to="column.href"
+        :aria-label="column.label"
+        :data-title-popup="column.hint"
+        class="group flex min-w-0 flex-1 flex-col items-center rounded-sm px-md
+          text-center focus-visible:ring-2 focus-visible:ring-accent
+          focus-visible:outline-none"
+        ><span
+          class="text-2xl leading-tight font-bold tabular-nums transition-colors
+            group-hocus:text-accent max-sm:text-xl"
+          >{{ column.shown }}</span
+        ><span
+          class="flex items-center gap-1 text-sm whitespace-nowrap text-text-2
+            transition-colors group-hocus:text-accent"
+          ><Icon :name="entityTypeIcon(column.kind)" />{{ column.word }}</span
+        ></TheiLink
+      ></template
     >
   </div>
 </template>

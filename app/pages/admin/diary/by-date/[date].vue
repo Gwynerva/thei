@@ -7,13 +7,18 @@
  * without a lookup. This page is that lookup and nothing else.
  */
 definePageMeta({ layout: 'admin' });
-const date = useRoute().params.date as string;
+const route = useRoute();
+const date = route.params.date as string;
 const entries = await useRequestFetch()<
   Array<{ date: string; diaryUuid: string }>
 >('/api/admin/diary/dates');
 const entry = entries.find((item) => item.date === date);
+// The query goes along: it may ask for an excerpt of the entry to be opened.
 await navigateTo(
-  entry ? `/admin/diary/${entry.diaryUuid}/edit/` : '/admin/diary/new/',
+  {
+    path: entry ? `/admin/diary/${entry.diaryUuid}/edit/` : '/admin/diary/new/',
+    query: route.query,
+  },
   { replace: true },
 );
 </script>

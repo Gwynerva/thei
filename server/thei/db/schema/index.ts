@@ -19,6 +19,7 @@ import { pages } from './pages';
 import { adminSessions } from './admin-sessions';
 import { shareLinks, signInLinks } from './access-links';
 import { projectContentSections } from './project-content-sections';
+import { excerpts } from './excerpts';
 import { periods } from './periods';
 import { entityRelations } from './entity-relations';
 import { tags } from './tags';
@@ -63,6 +64,7 @@ export const schema = {
   signInLinks,
   shareLinks,
   projectContentSections,
+  excerpts,
   periods,
   entityRelations,
   tags,

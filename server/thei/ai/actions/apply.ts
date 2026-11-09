@@ -63,7 +63,7 @@ interface ApplyRequest {
   parts?: Record<string, PartDecisions>;
 }
 
-interface ApplyOutcome {
+export interface ApplyOutcome {
   applied: { actionUuid: string; entity?: string }[];
   /** Why nothing was applied, when nothing was. */
   refused?: string;
@@ -92,8 +92,13 @@ export async function evaluateAction(
  * Marks actions that the archive has overtaken: done when the entity reads
  * as the action would leave it, stale when it moved another way. A text
  * edit's parts go stale one by one. Returns the rows as they stand now.
+ * What an app applies is counted nowhere, so its actions, made for one call,
+ * are settled with `cover: false`.
  */
-export async function settleActions(rows: ActionRow[]): Promise<ActionRow[]> {
+export async function settleActions(
+  rows: ActionRow[],
+  { cover = true }: { cover?: boolean } = {},
+): Promise<ActionRow[]> {
   const { db, schema } = THEI_SERVER.useDb();
   const now = Date.now();
   const sessions = new Set<string>();
@@ -164,7 +169,7 @@ export async function settleActions(rows: ActionRow[]): Promise<ActionRow[]> {
     });
   publishActions(touched);
   // What the owner's own hand made counts as checked as well.
-  coverApplied(touched.map((row) => row.actionUuid));
+  if (cover) coverApplied(touched.map((row) => row.actionUuid));
   return result;
 }
 
@@ -281,7 +286,11 @@ async function applyOne(
 export function movedBy(row: ActionRow): string[] {
   const target = targetOf(row);
   const refs = target ? [targetRef(target)] : [];
-  if (target && !isFileKey(target) && target.kind === 'project-section') {
+  if (
+    target &&
+    !isFileKey(target) &&
+    (target.kind === 'project-section' || target.kind === 'excerpt')
+  ) {
     const owner = formOwnerOf(target);
     if (owner) refs.push(refOf(owner));
   }
@@ -439,7 +448,9 @@ async function applyChosen(
     rows.flatMap((row) => actionLocks(row)),
     async () => {
       // Checked whole: what the archive overtook is marked, and nothing applies.
-      const settled = await settleActions(rows);
+      const settled = await settleActions(rows, {
+        cover: request.by !== 'app',
+      });
       const overtaken = settled.filter((row) => row.state !== 'pending');
       if (overtaken.length)
         return {
@@ -554,7 +565,9 @@ async function applyChosen(
         }
       });
       // Only what stands counts as checked: a bundle taken back leaves none.
-      coverApplied(done.map((item) => item.row.actionUuid));
+      // Nothing of an app's work counts: the owner follows it in the app.
+      if (request.by !== 'app')
+        coverApplied(done.map((item) => item.row.actionUuid));
       return {
         applied: done.map((item) => ({
           actionUuid: item.row.actionUuid,

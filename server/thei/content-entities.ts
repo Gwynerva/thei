@@ -12,7 +12,7 @@ import {
 } from '#layers/thei/shared/content';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import type { InternalUrlTarget } from '#layers/thei/shared/internal-url';
-import { diaryContentExcerpt } from '#layers/thei/shared/diary-text';
+import { diaryLead } from '#layers/thei/shared/diary-text';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
@@ -20,6 +20,25 @@ import {
   buildProjectSectionUrl,
   buildProjectUrl,
 } from '#layers/thei/shared/project-url';
+import {
+  buildExcerptUrl,
+  excerptParentContentEntity,
+} from '#layers/thei/shared/excerpt-url';
+import {
+  findExcerpt,
+  listExcerpts,
+  readExcerptSubjects,
+  type ExcerptRecord,
+} from './excerpts';
+import {
+  excerptAccess,
+  excerptOpens,
+  excerptShownWithParent,
+  findExcerptParentByAddress,
+  loadExcerptParent,
+  loadExcerptParents,
+  type ExcerptParentInfo,
+} from './excerpts/parents';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
 import type { ShareGrantOwner } from '#layers/thei/shared/share-link';
 import {
@@ -30,7 +49,12 @@ import {
 } from './assets/urls';
 import { resolveEntityIconMedia } from './media/generated-icon';
 import { buildAdminEntityBanner, buildPublicBanner } from './entity-banner';
-import { opensPrivate, type PublicViewer } from './access-links/viewer';
+import {
+  OWNER,
+  opensGrantOwner,
+  opensPrivate,
+  type PublicViewer,
+} from './access-links/viewer';
 import {
   buildPublicContentPreviewMedia,
   type PublicContentEntity,
@@ -63,13 +87,20 @@ export type ContentEntityRecord = {
   synonyms?: string[];
   /** The day of a diary entry, which is also its title. */
   date?: string;
-  /** The project a section belongs to. */
+  /** The project a section belongs to; the parent of an excerpt, a diary entry by its day. */
   parent?: { title: string; href: string };
   /**
-   * The entity whose share link opens this one: itself, or the project of a
-   * section. A tag has none; it is never private on its own.
+   * The entity whose share link opens this one's private side: itself, the
+   * project of a section, the parent of an excerpt. A tag has none; it is
+   * never private on its own.
    */
   grantOwner?: ShareGrantOwner;
+  /**
+   * Whether a viewer may open it, where one entity's link does not say it:
+   * an excerpt opens to whoever may open both its parent and what it is
+   * about (`excerptOpens`). Read through `contentEntityOpens`.
+   */
+  opens?: (viewer: PublicViewer) => boolean;
   /**
    * The picture that stands for the entity: its icon, its banner, or the
    * first picture of its body. Drawn on demand, because a search lists far more entities than
@@ -185,7 +216,7 @@ function bodyMedia(
 
 type BodyEntityKind = Extract<
   ContentOwnerType,
-  'event' | 'project-section' | 'diary-entry'
+  'event' | 'project-section' | 'excerpt' | 'diary-entry'
 >;
 
 function projectRecord(project: ProjectRow): ContentEntityRecord {
@@ -245,6 +276,62 @@ function sectionRecord(
               project,
               section: { ...child, sectionUuid: id },
             }),
+    ),
+  };
+}
+
+/**
+ * Whether a viewer may open an entity: by its access, its share link's
+ * holder and the owner beside, or by its own rule where it has one.
+ */
+export function contentEntityOpens(
+  entity: Pick<ContentEntityRecord, 'access' | 'grantOwner' | 'opens'>,
+  viewer: PublicViewer,
+): boolean {
+  if (entity.opens) return entity.opens(viewer);
+  return (
+    entity.access !== ProjectEventAccessLevel.Private ||
+    opensGrantOwner(viewer, entity.grantOwner)
+  );
+}
+
+/**
+ * An excerpt is as open as the stricter of its parent and what it is about,
+ * unless it is private, and is opened by whoever may open both; its parent
+ * is what it belongs to, and its private side. Its pictures are served from
+ * the parent's address.
+ */
+function excerptRecord(
+  excerpt: ExcerptRecord,
+  parent: ExcerptParentInfo,
+): ContentEntityRecord {
+  const holder = { type: 'excerpt', parent: parent.address, excerpt } as const;
+  return {
+    entityType: 'excerpt',
+    entityId: excerpt.excerptUuid,
+    title: excerpt.title,
+    summary: excerpt.summary,
+    href: buildExcerptUrl(
+      parent.address,
+      excerpt.humanReadableSlug,
+      excerpt.publicId,
+    ),
+    access: excerptAccess(excerpt, parent),
+    updatedAt: excerpt.updatedAt,
+    humanReadableSlug: excerpt.humanReadableSlug,
+    publicId: excerpt.publicId,
+    parent: { title: parent.title || parent.date || '', href: parent.href },
+    grantOwner: { entityType: parent.type, entityId: parent.id },
+    opens: (viewer) => excerptOpens(viewer, excerpt, parent),
+    media: bodyMedia(
+      'excerpt',
+      excerpt.excerptUuid,
+      'excerpt-body',
+      excerptParentContentEntity(parent.address),
+      (view) =>
+        view === 'admin'
+          ? buildAdminEntityBanner('excerpt', excerpt.excerptUuid)
+          : buildPublicBanner(holder),
     ),
   };
 }
@@ -354,23 +441,26 @@ function tagRecordOf(tag: TagRow | undefined) {
 }
 
 /**
- * A diary entry is called by its day, and its opening lines stand in for a
- * summary — cut, for a visitor, from the public part of its text only.
+ * A diary entry is called by its day, and its lead — what it is about, then
+ * how it begins — stands in for a summary, built for a visitor from the
+ * public part of its text and its public excerpts only.
  */
 function diaryRecord(
   entry: DiaryRow,
   body: ContentOutputData | null | undefined,
+  excerptTitles: string[],
   includePrivate: boolean,
 ): ContentEntityRecord {
   return {
     entityType: 'diary-entry',
     entityId: entry.diaryUuid,
     title: entry.date,
-    summary: diaryContentExcerpt(
-      body,
+    summary: diaryLead({
+      data: body,
+      excerptTitles,
       includePrivate,
-      THEI_SERVER.phrase.content_private_section,
-    ),
+      privateLabel: THEI_SERVER.phrase.content_private_section,
+    }),
     href: buildDiaryUrl(entry.date),
     access: entry.access,
     updatedAt: entry.updatedAt,
@@ -392,6 +482,65 @@ async function diaryBody(diaryUuid: string) {
       'diary-body',
     )
   )?.data;
+}
+
+/**
+ * The titles of the excerpts of each of several entries, in the owner's
+ * order, in one query: those the viewer sees on the entry's page
+ * (`excerptShownWithParent`) — a visitor's leave out the private ones and
+ * those about something the visitor may not see.
+ */
+function diaryExcerptTitles(
+  diaryUuids: string[],
+  viewer: PublicViewer,
+): Map<string, string[]> {
+  const titles = new Map<string, string[]>();
+  if (!diaryUuids.length) return titles;
+  const { db, schema } = THEI_SERVER.useDb();
+  const rows = db
+    .select({
+      excerptUuid: schema.excerpts.excerptUuid,
+      parentId: schema.excerpts.parentId,
+      title: schema.excerpts.title,
+      isPrivate: schema.excerpts.isPrivate,
+    })
+    .from(schema.excerpts)
+    .where(
+      and(
+        eq(schema.excerpts.parentType, 'diary-entry'),
+        inArray(schema.excerpts.parentId, diaryUuids),
+      ),
+    )
+    .orderBy(schema.excerpts.sortOrder)
+    .all();
+  const subjects = readExcerptSubjects(
+    db,
+    schema,
+    rows.map((row) => row.excerptUuid),
+  );
+  for (const row of rows) {
+    const excerpt = {
+      isPrivate: row.isPrivate,
+      subject: subjects.get(row.excerptUuid) ?? null,
+    };
+    const parent = { type: 'diary-entry', id: row.parentId } as const;
+    if (!excerptShownWithParent(viewer, excerpt, parent)) continue;
+    titles.set(row.parentId, [...(titles.get(row.parentId) ?? []), row.title]);
+  }
+  return titles;
+}
+
+async function diaryRecordOf(
+  entry: DiaryRow,
+  viewer: PublicViewer,
+): Promise<ContentEntityRecord> {
+  const includePrivate = opensPrivate(viewer, 'diary-entry', entry.diaryUuid);
+  return diaryRecord(
+    entry,
+    await diaryBody(entry.diaryUuid),
+    diaryExcerptTitles([entry.diaryUuid], viewer).get(entry.diaryUuid) ?? [],
+    includePrivate,
+  );
 }
 
 /**
@@ -423,6 +572,13 @@ export async function findContentEntity(
         ? sectionRecord(entityId, child, project)
         : undefined;
     }
+    case 'excerpt': {
+      const excerpt = findExcerpt(entityId);
+      const parent =
+        excerpt &&
+        (await loadExcerptParent(excerpt.parentType, excerpt.parentId));
+      return excerpt && parent ? excerptRecord(excerpt, parent) : undefined;
+    }
     case 'event': {
       const event = await THEI_SERVER.events.findByUuid(entityId);
       return event && eventRecord(event);
@@ -433,14 +589,7 @@ export async function findContentEntity(
     }
     case 'diary-entry': {
       const entry = await THEI_SERVER.diary.findByUuid(entityId);
-      return (
-        entry &&
-        diaryRecord(
-          entry,
-          await diaryBody(entry.diaryUuid),
-          opensPrivate(viewer, 'diary-entry', entry.diaryUuid),
-        )
-      );
+      return entry && (await diaryRecordOf(entry, viewer));
     }
     case 'tag': {
       const { db, schema } = THEI_SERVER.useDb();
@@ -491,6 +640,13 @@ export async function findContentEntityByTarget(
         ? sectionRecord(section.sectionUuid, section, project)
         : undefined;
     }
+    case 'excerpt': {
+      const parent = await findExcerptParentByAddress(target.parent);
+      const excerpt =
+        parent &&
+        listExcerpts(parent).find((item) => item.publicId === target.publicId);
+      return parent && excerpt ? excerptRecord(excerpt, parent) : undefined;
+    }
     case 'event': {
       const event = await THEI_SERVER.events.findByPublicId(target.publicId);
       return event && eventRecord(event);
@@ -501,14 +657,7 @@ export async function findContentEntityByTarget(
     }
     case 'diary-entry': {
       const entry = await THEI_SERVER.diary.findByDate(target.date);
-      return (
-        entry &&
-        diaryRecord(
-          entry,
-          await diaryBody(entry.diaryUuid),
-          opensPrivate(viewer, 'diary-entry', entry.diaryUuid),
-        )
-      );
+      return entry && (await diaryRecordOf(entry, viewer));
     }
     case 'tag': {
       const { db, schema } = THEI_SERVER.useDb();
@@ -581,11 +730,46 @@ export async function listContentEntities(
             .map((row) => [row.ownerId, row.data]),
         )
       : new Map();
+    const titles = diaryExcerptTitles(
+      entries.map((entry) => entry.diaryUuid),
+      OWNER,
+    );
     records.push(
       ...entries.map((entry) =>
-        diaryRecord(entry, bodies.get(entry.diaryUuid), true),
+        diaryRecord(
+          entry,
+          bodies.get(entry.diaryUuid),
+          titles.get(entry.diaryUuid) ?? [],
+          true,
+        ),
       ),
     );
+  }
+  if (types.has('excerpt')) {
+    // Each parent's list once, banners and all, the parents read a kind at a
+    // time; the picker lists every one.
+    const keys = new Map<
+      string,
+      { type: ExcerptParentInfo['type']; id: string }
+    >();
+    for (const row of db
+      .select({
+        parentType: schema.excerpts.parentType,
+        parentId: schema.excerpts.parentId,
+      })
+      .from(schema.excerpts)
+      .all())
+      keys.set(`${row.parentType}:${row.parentId}`, {
+        type: row.parentType,
+        id: row.parentId,
+      });
+    const parents = loadExcerptParents([...keys.values()]);
+    for (const key of keys.keys()) {
+      const parent = parents.get(key);
+      if (!parent) continue;
+      for (const excerpt of listExcerpts(parent))
+        records.push(excerptRecord(excerpt, parent));
+    }
   }
   if (types.has('tag')) {
     const open = publicTagUuids();

@@ -303,6 +303,16 @@ const revise = computed(() => {
         unsure,
         change: wordsChange(publicText(part.find), publicText(part.replace)),
       };
+    // A remark points at words and changes none.
+    if (part.type === 'remark')
+      return {
+        unsure,
+        name: kinds[part.category],
+        change: {
+          type: 'words',
+          pieces: [{ kind: 'same', text: publicText(part.find) }],
+        } as AiValueChange,
+      };
     if (part.type === 'relink')
       return {
         unsure,

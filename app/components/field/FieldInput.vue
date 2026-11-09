@@ -38,16 +38,16 @@ watch(inputElement, (newElement) => {
 /**
  * Smart typography follows the spellcheck flag: a field marked as prose gets
  * dashes and ellipses as it is typed, a field marked technical — a slug, a
- * URL, a colour, a token — is left exactly as typed. `noTypography` turns it
- * off for a prose field that is an exception.
+ * URL, a colour, a token — is left exactly as typed, and so is a password
+ * (`fieldTakesTypography`). `noTypography` turns it off for a prose field
+ * that is an exception.
  *
  * The opt-out is a flag rather than a three-state override on purpose: Vue
  * gives an absent boolean prop the value `false`, never `undefined`, so an
  * override could not tell "not set" from "set to off".
  */
-const typographyEnabled = computed(
-  () =>
-    !noTypography && attrs.spellcheck !== 'false' && attrs.spellcheck !== false,
+const typographyEnabled = computed(() =>
+  fieldTakesTypography(attrs, noTypography),
 );
 useSmartTypography(() =>
   typographyEnabled.value ? inputElement.value : undefined,

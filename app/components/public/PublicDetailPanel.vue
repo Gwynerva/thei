@@ -1,12 +1,18 @@
 <script lang="ts" setup>
 import type { PublicDetailPanelData } from './public-detail';
 
-const { data } = defineProps<{ data: PublicDetailPanelData }>();
+const { data } = defineProps<{
+  data: PublicDetailPanelData;
+  /** The id of the entry of the contents the reader is in. */
+  activeContent?: string;
+}>();
 
 const neighboursTitle = computed(() => {
   switch (data.neighbours?.kind) {
     case 'project-section':
       return phrase.value.public_details_neighbour_sections;
+    case 'excerpt':
+      return phrase.value.public_details_neighbour_excerpts;
     default:
       return phrase.value.public_details_neighbour_entries;
   }
@@ -19,7 +25,16 @@ const neighboursTitle = computed(() => {
       v-if="data.contents?.length"
       :title="phrase.public_details_contents"
     >
-      <PublicContentContents :items="data.contents" />
+      <PublicContentContents :items="data.contents" :active="activeContent" />
+    </PublicCollapsibleSection>
+    <PublicCollapsibleSection
+      v-if="data.excerpts?.length || data.excerptSecrets?.length"
+      :title="phrase.excerpts"
+    >
+      <PublicExcerptList
+        :excerpts="data.excerpts ?? []"
+        :secrets="data.excerptSecrets ?? []"
+      />
     </PublicCollapsibleSection>
     <PublicCollapsibleSection
       v-if="data.neighbours?.next || data.neighbours?.previous"

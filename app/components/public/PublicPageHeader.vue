@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { IconName } from '#thei/icons';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import type { RelationType } from '#layers/thei/shared/relation';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 
 const props = defineProps<{
@@ -26,6 +27,19 @@ const props = defineProps<{
     href: string;
     title: string;
     iconMedia?: MediaDescriptor;
+    icon?: IconName;
+  };
+  /**
+   * What the page is about, on a line under `parent` that turns down to the
+   * title: an excerpt's subject. No link where the reader may not open it.
+   */
+  subject?: {
+    label?: string;
+    href?: string;
+    title: string;
+    iconMedia?: MediaDescriptor;
+    icon?: IconName;
+    relation?: { type: RelationType; note?: string };
   };
 }>();
 
@@ -63,6 +77,13 @@ usePublicPageGlow({ color: accent });
         <!-- Desktop: above the title. On a phone it sits under the icon instead. -->
         <div v-if="parent" class="hidden max-w-full min-w-0 sm:block">
           <PublicPageParent :parent />
+          <PublicPageParent
+            v-if="subject"
+            :parent="subject"
+            arrow
+            class="mt-xs"
+            :data-relation-href="subject.href"
+          />
         </div>
         <div
           class="flex max-w-full min-w-0 flex-col items-center gap-sm
@@ -102,6 +123,13 @@ usePublicPageGlow({ color: accent });
           >
             <div v-if="parent" class="max-w-full min-w-0 sm:hidden">
               <PublicPageParent :parent />
+              <PublicPageParent
+                v-if="subject"
+                :parent="subject"
+                arrow
+                class="mt-xs"
+                :data-relation-href="subject.href"
+              />
             </div>
             <h1
               class="max-w-full text-3xl font-bold tracking-tight text-balance

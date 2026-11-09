@@ -17,5 +17,8 @@ export interface CreateAssetData {
 
 export async function createAsset(data: CreateAssetData) {
   const { db, schema } = THEI_SERVER.useDb();
-  await db.insert(schema.assets).values({ ...data, touchedAt: Date.now() });
+  const now = Date.now();
+  await db
+    .insert(schema.assets)
+    .values({ ...data, touchedAt: now, createdAt: now });
 }

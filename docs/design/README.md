@@ -120,6 +120,10 @@ Components:
   under small captions, facts, the file's description, a video's still chosen
   by hand, places as chips, the editor's screens, a visitor's «Где ещё
   используется».
+- [File library](components/file-library.md) — the stored files as one run
+  through time, in the picker and on the storage page: days of places, the
+  bar of the month and the years, here and used lately, words read as
+  filters, a click that takes a file as it is, chosen tiles and the footer.
 - [Review of a text](components/review.md) — an edit or a version gone
   through part by part: the views, parts left in reach, changes drawn, the
   foot, closing in one step.
@@ -138,5 +142,11 @@ Patterns:
   filters, empty states, suggesting in place, no mode switches.
 - [AI in the UI](patterns/ai-in-the-ui.md) — where the ✦ goes, proposals at
   labels, nothing when AI is off.
+- [Excerpts](patterns/excerpts.md) — a named part of an entry, an event or a
+  project: read with its parent, on its own page, as a torn card on what it
+  is about, and edited in its parent's form.
 - [Search](patterns/search.md) — one quick search and one page for everyone,
-  the result card, landing on a find and bringing it out of what hides it.
+  the result card, a find leading to its place.
+- [Landing](patterns/landing.md) — a link to a place on a page: the address
+  of a place, bringing it out of what hides it, the light, anchors, a file's
+  window by its address.

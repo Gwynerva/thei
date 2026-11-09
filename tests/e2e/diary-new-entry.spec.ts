@@ -102,7 +102,7 @@ for (const { name, size } of SIZES) {
     await expect(save).toHaveAttribute('data-editor-save', 'clean');
     if (name === 'desktop') await expect(save).toHaveText('Save');
     else await expectSquare(save, 'save', 'check');
-    await expect(editorFoot(page)).toContainText('Never saved');
+    await expect(editorFoot(page)).toContainText('In the form, not saved yet');
 
     const words = `Today I kept thinking about the fair ${Date.now()}.`;
     await paragraph(page).click();
@@ -177,7 +177,7 @@ test('saved into a form whose entry is not made yet, the text is not called save
   await expect(save).toBeDisabled();
   await expect(save).toHaveText('Save');
   await expect(save).toHaveAttribute('data-editor-save', 'clean');
-  await expect(editorFoot(page)).toContainText('Never saved');
+  await expect(editorFoot(page)).toContainText('In the form, not saved yet');
 });
 
 /** An entry made through the API, its text in the editor on its edit page. */
@@ -353,7 +353,7 @@ test('a Create that cannot create yet says what it still needs (desktop)', async
   const button = create(page);
   await expect(button).toBeDisabled();
   await expect(button).toHaveAccessibleDescription(
-    'Still to fill in: Entry content',
+    'Still to fill in: Entry content or Excerpts',
   );
   await button.hover();
   await expect(hint(page)).toBeVisible();
@@ -364,7 +364,7 @@ test('a Create that cannot create yet says what it still needs (desktop)', async
   // Ctrl+S asks for a save it cannot make: the header says why.
   await page.keyboard.press('ControlOrMeta+s');
   const alert = page.locator('[data-header-error]');
-  await expect(alert).toHaveText('Still to fill in: Entry content');
+  await expect(alert).toHaveText('Still to fill in: Entry content or Excerpts');
   await expect(alert).toHaveAttribute('role', 'alert');
   // Closed by hand, it comes back for the next press.
   await alert.getByRole('button', { name: 'Hide the message' }).click();

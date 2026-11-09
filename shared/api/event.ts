@@ -8,6 +8,8 @@ import type { TagItem } from '../tag';
 import type { MediaDescriptor } from '../media';
 import type { PaginatedResponse } from '../pagination';
 import type { RelationGetItem } from '../relation';
+import type { ExcerptValue } from '../excerpt';
+import type { ProjectContentItemIdentity } from './project';
 
 export type EventGetResponse = {
   eventUuid: string;
@@ -31,6 +33,7 @@ export type EventGetResponse = {
   externalLinks: ProjectExternalLink[];
   tags: TagItem[];
   relations: RelationGetItem[];
+  excerpts: ExcerptValue[];
   action: ProjectActionEditData;
   actionIconMedia?: MediaDescriptor;
   actionIconAssetSize?: number;
@@ -49,6 +52,8 @@ export type EventSaveResponse =
       eventUuid: string;
       action: ProjectActionEditData;
       version: number;
+      /** The identities the save gave the event's excerpts. */
+      excerpts: ProjectContentItemIdentity[];
     }
   | { type: 'error'; message: string; code?: 'public-id-taken' | 'changed' };
 

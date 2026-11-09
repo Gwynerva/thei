@@ -627,18 +627,16 @@ describe('files over MCP', () => {
     expect(read).toContain('- a-notes — (no description yet)');
   });
 
-  it('proposes a description, and an editor applies it', async () => {
+  it('lets an editor describe a file at once', async () => {
     const editor = tools(['read', 'edit']);
-    const proposed = text(
-      await editor.get('propose')!.call({
+    const applied = text(
+      await editor.get('apply_actions')!.call({
         actions: [
           { kind: 'describe', file: 'a-notes', text: 'Train tickets.' },
         ],
-        apply: true,
       }),
     );
-    expect(proposed).toContain('Applied:');
-    expect(proposed).toContain('asset:a-notes');
+    expect(applied).toBe('Applied 1: asset:a-notes.');
     expect(readAssetDescription('a-notes')?.text).toBe('Train tickets.');
     const kinds = text(
       await editor.get('describe_actions')!.call({ kinds: ['describe'] }),

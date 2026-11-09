@@ -2,7 +2,7 @@
 /**
  * The tools of an action's card, wherever they stand — the first line of a
  * row of a bundle, or the card's footer — one group at a time: the squares
- * that lead (correct its words, open its parts, or comment), the two that
+ * that lead (correct its words, open its parts, comment), the two that
  * end a correction, or the way back once it is decided. A row of a bundle
  * keeps a correction with a square (`inRow`): the bundle is applied at its
  * foot.
@@ -13,8 +13,13 @@ const props = defineProps<{
   variant: 'secondary' | 'raised';
   inRow?: boolean;
   editable?: boolean;
-  /** Its parts are gone through on a screen of their own, not commented. */
+  /**
+   * Its parts are gone through on a screen of their own, and commented there
+   * one by one — but a text written whole, which is also commented as a whole
+   * (`commented`).
+   */
   opens?: boolean;
+  commented?: boolean;
   saving?: boolean;
   busy?: boolean;
   /** What applying the corrected words does, said on it in a footer. */
@@ -70,7 +75,7 @@ const worded = computed(
     >
       <Icon name="chevron-right" />
     </Button>
-    <span v-else class="inline-flex">
+    <span v-if="!opens || commented" class="inline-flex">
       <Button
         ref="trigger"
         :variant

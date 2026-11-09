@@ -144,9 +144,7 @@ async function openEditor(page: Page, html: string, blocks: object[] = []) {
   await page.waitForLoadState('networkidle');
   await page.locator('button[data-field]').first().click();
   await expect(paragraph(page)).toBeVisible({ timeout: 15_000 });
-  const save = page
-    .locator('dialog')
-    .getByRole('button', { name: 'Save', exact: true });
+  const save = page.locator('dialog [data-editor-save]');
   const read = async () =>
     (
       await (

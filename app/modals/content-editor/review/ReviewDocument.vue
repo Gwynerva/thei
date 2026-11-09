@@ -24,7 +24,7 @@ const props = defineProps<{
   parts: ReadonlyMap<string, ReviewPart>;
   decisions: Readonly<Record<string, ReviewDecision>>;
   view: ReviewView;
-  mode: 'ai' | 'version';
+  mode: 'ai' | 'version' | 'written';
   /** The part in hand, once the owner goes through them. */
   current?: string;
   linkResolver?: ContentLinkResolver;
@@ -212,6 +212,7 @@ function paint() {
     const part = props.parts.get(id);
     element.dataset.state = stateOf(id);
     element.dataset.sure = String(part?.sure ?? true);
+    if (part?.remark) element.dataset.remark = '';
     if (id === props.current) element.dataset.current = '';
     else delete element.dataset.current;
   }
@@ -398,6 +399,10 @@ defineExpose({
 }
 .review-doc[data-view='diff'] :deep(.review-mark) {
   text-decoration-line: none;
+}
+/* A remark changes no words: it stays underlined where nothing is struck. */
+.review-doc[data-view='diff'] :deep(.review-mark[data-remark]) {
+  text-decoration-line: underline;
 }
 .review-doc :deep(del) {
   border-radius: 3px;

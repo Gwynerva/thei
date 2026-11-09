@@ -29,6 +29,7 @@ const KIND_HEADINGS: Record<SearchKind, string> = {
   'project-section': 'Project sections',
   event: 'Events',
   'diary-entry': 'Diary',
+  excerpt: 'Excerpts',
   page: 'Pages',
   file: 'Files',
   tag: 'Tags',

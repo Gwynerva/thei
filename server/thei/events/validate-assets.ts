@@ -21,6 +21,13 @@ export async function validateEventAssets(data: ValidatedEventEditData) {
       assetUuid: file.assetUuid,
       maxSize: ASSET_UPLOAD_LIMITS.file,
     });
+  for (const excerpt of data.excerpts ?? [])
+    if (excerpt.bannerAssetUuid)
+      checks.push({
+        assetUuid: excerpt.bannerAssetUuid,
+        maxSize: ASSET_UPLOAD_LIMITS.media,
+        mediaOnly: true,
+      });
   if (data.action.iconAssetUuid)
     checks.push({
       assetUuid: data.action.iconAssetUuid,

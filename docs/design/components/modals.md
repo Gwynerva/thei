@@ -56,10 +56,7 @@ Closing:
   nothing more. A card standing in another's place, as the review of a text
   does in its editor's, is left by that click instead (`ModalContainer`'s
   `dismiss`).
-- A modal holding unsaved work asks before it closes. Unsaved work is what
-  is on the screen: a text's editor reads its text before it decides, so a
-  word typed a moment ago — before Editor.js has told of it — asks too, and
-  Ctrl+S then Escape saves it and closes without asking.
+- A modal holding unsaved work asks before it closes.
 - Deleting an entity is confirmed against its name in
   `app/modals/DeleteConfirmationPane.vue`.
 
@@ -131,10 +128,15 @@ Motion:
   faded out.
 - `app/composables/modal.ts` opens them — `openModal(descriptor, data)` puts
   the modal on the stack at once and resolves with its result — keeps the
-  stack, ties it to browser history, and keeps the dismiss layers: an open
+  stack, ties it to browser history — one entry for the stack, showing the
+  address of the modal on top when it names one (`useModalAddress`), or the
+  page's — and keeps the dismiss layers: an open
   popup calls `registerDismissLayer`, and `dismissOneStep` closes the
   innermost layer or else the top modal. `useModalCloseGuard` asks before an
-  unsaved modal closes. `runModalFlow` marks a flow, `modalWait` is its wait
+  unsaved modal closes. A text's editor counts as unsaved what is on the
+  screen: it reads its text before it decides, so a word typed a moment ago —
+  before Editor.js has told of it — asks too, and Ctrl+S then Escape saves it
+  and closes without asking. `runModalFlow` marks a flow, `modalWait` is its wait
   between two steps, and `preloadModal` loads a modal's code ahead.
 - A modal is declared with `defineModal` (`app/modals/types.ts`), with its
   frame, and lazily imported.
@@ -145,7 +147,9 @@ Motion:
   shell. `app/modals/layer-motion.ts` fades the layers and the shells.
 - `app/modals/ModalContainer.vue` draws it: the full screen on a phone; from
   `sm:` a card of `rounded-normal`, `border` and `shadow-xl` over the blurred
-  page `Modal.vue` draws under every card. Around the card a click closes it.
+  page `Modal.vue` draws under every card. Around the card a click closes it,
+  when the press began there too: one begun in the card or in a popup — a
+  selection of its words — and let go around it closes nothing.
   Its `header` slot is sticky glass with a bottom border, `z-10`; the default
   slot is the body; the optional `footer` slot is sticky at the bottom. The
   width is the caller's, most often `max-w-140`; `ground="page"` puts it on

@@ -4,6 +4,7 @@ import { searchAnalyzer } from './analyzer';
 import {
   diaryDocument,
   eventDocument,
+  excerptDocument,
   fileDocuments,
   pageDocument,
   profileDocument,
@@ -41,13 +42,14 @@ const FIRST_PASS_DELAY_MS = 3000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type EntityKind =
-  'project' | 'project-section' | 'event' | 'diary-entry' | 'page';
+  'project' | 'project-section' | 'excerpt' | 'event' | 'diary-entry' | 'page';
 const BUILDERS: Record<
   EntityKind,
   (id: string, audience: SearchAudience) => Promise<SearchDocument | undefined>
 > = {
   project: projectDocument,
   'project-section': sectionDocument,
+  excerpt: excerptDocument,
   event: eventDocument,
   'diary-entry': diaryDocument,
   page: pageDocument,
@@ -162,6 +164,7 @@ function entityIds(): Record<EntityKind, string[]> {
     'project-section': ids(
       'SELECT sectionUuid AS id FROM "project-content-sections"',
     ),
+    excerpt: ids('SELECT excerptUuid AS id FROM excerpts'),
     event: ids('SELECT eventUuid AS id FROM events'),
     'diary-entry': ids('SELECT diaryUuid AS id FROM "diary-entries"'),
     page: ids('SELECT pageUuid AS id FROM pages'),
@@ -170,7 +173,7 @@ function entityIds(): Record<EntityKind, string[]> {
 
 /**
  * Who may see what, as one fingerprint: the access of every entity, the
- * privacy of sections and of placed files. When it moves, words can have
+ * privacy of sections, of excerpts and of placed files. When it moves, words can have
  * moved between entities — a note about an entity that has just turned
  * private — and a pass goes over everything.
  */
@@ -183,6 +186,7 @@ function readVisibility(): string {
        UNION ALL SELECT 'd' || diaryUuid || access FROM "diary-entries"
        UNION ALL SELECT 'g' || pageUuid || access FROM pages
        UNION ALL SELECT 's' || sectionUuid || isPrivate FROM "project-content-sections"
+       UNION ALL SELECT 'x' || excerptUuid || isPrivate FROM excerpts
        UNION ALL SELECT 'u' || assetUuid || containerType || containerId || role || meta FROM "asset-usages" WHERE meta LIKE '%"isPrivate":true%'`,
     )
     .pluck()
@@ -243,7 +247,11 @@ function changedSince(
   const add = (kind: EntityKind | 'profile' | 'tags', id: string) =>
     changed.set(kind, (changed.get(kind) ?? new Set()).add(id));
   const rows = (sql: string) =>
-    rawDb.prepare(sql).all(since) as { id: string; kind?: string }[];
+    rawDb.prepare(sql).all(since) as {
+      id: string;
+      kind?: string;
+      parent?: string;
+    }[];
   for (const row of rows(
     'SELECT projectUuid AS id FROM projects WHERE updatedAt > ?',
   ))
@@ -253,6 +261,13 @@ function changedSince(
   )) {
     add('project', row.id);
     add('project-section', row.kind!);
+  }
+  // An excerpt saved: itself, and its parent, which embeds it whole.
+  for (const row of rows(
+    'SELECT excerptUuid AS id, parentType AS kind, parentId AS parent FROM excerpts WHERE updatedAt > ?',
+  )) {
+    add('excerpt', row.id);
+    add(row.kind as EntityKind, row.parent!);
   }
   for (const row of rows(
     'SELECT eventUuid AS id FROM events WHERE updatedAt > ?',
@@ -292,6 +307,15 @@ function changedSince(
         )
         .all(kind, id, kind, id) as { kind: string; id: string }[])
         if (row.kind in BUILDERS) add(row.kind as EntityKind, row.id);
+  // A parent changed: its excerpts name it, carry its tags and its access.
+  for (const kind of ['project', 'event', 'diary-entry'] as const)
+    for (const id of changed.get(kind) ?? [])
+      for (const row of rawDb
+        .prepare(
+          'SELECT excerptUuid AS id FROM excerpts WHERE parentType = ? AND parentId = ?',
+        )
+        .all(kind, id) as { id: string }[])
+        add('excerpt', row.id);
   // A project changed: its sections name it, carry its tags and its access.
   for (const projectUuid of changed.get('project') ?? [])
     for (const row of rawDb

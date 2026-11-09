@@ -10,6 +10,7 @@ export const EntityPrefix = {
   // Sections that began as stages keep their `pst-` ids: an id is opaque, and
   // its prefix says nothing about what it names.
   ProjectContentSection: 'pcs',
+  Excerpt: 'x',
   Session: 's',
   Tag: 't',
   Share: 'sh',

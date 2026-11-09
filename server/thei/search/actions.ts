@@ -1,5 +1,4 @@
 import { resolveNamedDay, shiftDay } from '#layers/thei/shared/day-query';
-import { parseInternalUrl } from '#layers/thei/shared/internal-url';
 import {
   SEARCH_ADMIN_SECTIONS,
   searchAdminSectionName,
@@ -8,30 +7,23 @@ import {
 } from '#layers/thei/shared/search/api';
 import { matchName } from '#layers/thei/shared/search/match';
 import { isQuestion } from '#layers/thei/shared/search/tokens';
-import type { ContentEntityType } from '#layers/thei/shared/content-link';
-import { OWNER } from '../access-links/viewer';
-import {
-  findContentEntity,
-  findContentEntityByTarget,
-} from '../content-entities';
-import { adminPath, entityFace } from '../entity-kinds';
+import { adminPath } from '../entity-kinds';
 import { searchAnalyzer } from './analyzer';
 
 /**
  * What the owner may do from the quick search, besides finding.
  *
- * Each follows from how the archive is kept. A diary entry costs least, so
- * the day comes first: today's with no query, the day a query names with
- * one. Then the entity the owner is looking at, the other side of it — its
- * editor, or its page. A query also offers to make a project, an event or a
- * page with its words for a title, to go to a part of the admin by its name,
- * and, with AI on, to ask the site's model. Nothing that cannot be undone, and
- * nothing rare: those stay in their forms.
+ * Each follows from how the archive is kept. With nothing typed, what the
+ * owner saved last, and nothing more: the admin bar already leads to the
+ * diary and to the other side of the page they are on. A diary entry costs
+ * least, so the day a query names comes first. A query also offers to make
+ * a project, an event or a page with its words for a title, to go to a part
+ * of the admin by its name, and, with AI on, to ask the site's model.
+ * Nothing that cannot be undone, and nothing rare: those stay in their
+ * forms.
  */
 interface SearchActionContext {
   q: string;
-  /** The address the owner is on, without the base. */
-  path?: string;
   /** Today in the owner's own time: their diary's day. */
   today: string;
 }
@@ -88,54 +80,6 @@ function diaryAction(date: string, today: string): SearchAction {
   };
 }
 
-/** The kinds an editor's address names, by the part of the admin it is in. */
-const EDITORS: Record<string, ContentEntityType> = {
-  projects: 'project',
-  events: 'event',
-  pages: 'page',
-  diary: 'diary-entry',
-  tags: 'tag',
-};
-
-/**
- * The entity behind an address of the site or of its editor, as two sides:
- * on its page, its editor — a section's is its project's form, which opens
- * it; in its editor, its page.
- */
-async function sidesOf(
-  path: string | undefined,
-): Promise<SearchAction | undefined> {
-  if (!path) return undefined;
-  const editor = /^\/admin\/([a-z]+)\/([^/]+)\/edit\/?$/u.exec(path);
-  if (editor) {
-    const entityType = EDITORS[editor[1]!];
-    const found =
-      entityType &&
-      (await findContentEntity({ entityType, entityId: editor[2]! }, OWNER));
-    return (
-      found && {
-        type: 'view',
-        kind: found.entityType,
-        title: found.title,
-        href: found.href,
-      }
-    );
-  }
-  // The path is the site's own, without its base.
-  const target = parseInternalUrl(path, { origins: [], base: '/' });
-  const found = target && (await findContentEntityByTarget(target, OWNER));
-  const face =
-    found && entityFace({ kind: found.entityType, id: found.entityId });
-  return (
-    face && {
-      type: 'edit',
-      kind: found.entityType,
-      title: found.title,
-      href: face.path,
-    }
-  );
-}
-
 /** What the owner saved last: five entities, newest first. */
 function recentActions(): SearchAction[] {
   const { rawDb } = THEI_SERVER.useDb();
@@ -166,17 +110,9 @@ function recentActions(): SearchAction[] {
   }));
 }
 
-export async function searchActions(
-  context: SearchActionContext,
-): Promise<SearchAction[]> {
+export function searchActions(context: SearchActionContext): SearchAction[] {
   const q = context.q.trim();
-  const sides = await sidesOf(context.path);
-  if (!q)
-    return [
-      diaryAction(context.today, context.today),
-      ...(sides ? [sides] : []),
-      ...recentActions(),
-    ];
+  if (!q) return recentActions();
   const actions: SearchAction[] = [];
   const day = namedDay(q, context.today);
   if (day) actions.push(diaryAction(day, context.today));

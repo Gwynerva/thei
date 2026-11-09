@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import { resolveFfmpegTools } from '../../../update/ffmpeg/tools';
 import { AssetType, type AudioAssetMeta } from '../../../shared/asset';
 import { createOriginalAssetSettings } from '../../../shared/asset-upload-settings';
 import {
@@ -41,6 +41,7 @@ beforeEach(async () => {
       type text NOT NULL,
       size integer NOT NULL,
       touchedAt integer NOT NULL,
+      createdAt integer NOT NULL DEFAULT 0,
       meta text
     );
     CREATE UNIQUE INDEX assets_family_content_settings_idx
@@ -74,7 +75,7 @@ afterEach(async () => {
 
 function ffmpeg(args: string[]) {
   return new Promise<void>((resolve, reject) => {
-    const child = spawn(ffmpegInstaller.path, ['-y', ...args], {
+    const child = spawn(resolveFfmpegTools().ffmpeg, ['-y', ...args], {
       stdio: 'ignore',
     });
     child.on('error', reject);
@@ -149,12 +150,16 @@ describe('recordings stored before their waveforms were read', () => {
 
   it('fails the pass, rather than mark the files unreadable, when ffmpeg cannot run', async () => {
     const memo = await storeOld('memo', Buffer.from('anything'), 'wav');
-    const installed = ffmpegInstaller.path;
-    (ffmpegInstaller as { path: string }).path = join(root, 'no-ffmpeg');
+    const own = process.env.THEI_FFMPEG;
+    process.env.THEI_FFMPEG = join(root, 'no-ffmpeg');
     try {
-      await expect(completeAudioMetas()).rejects.toThrow();
+      await expect(completeAudioMetas()).rejects.toThrow(
+        /ffmpeg is not installed/,
+      );
     } finally {
-      (ffmpegInstaller as { path: string }).path = installed;
+      // An ffmpeg of one's own the run was given stays for the next test.
+      if (own === undefined) delete process.env.THEI_FFMPEG;
+      else process.env.THEI_FFMPEG = own;
     }
     expect(
       (await findAudioWithoutWaveforms()).map((asset) => asset.assetUuid),

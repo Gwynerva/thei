@@ -13,31 +13,23 @@ import type { AssetUploadResponse } from '#layers/thei/shared/api/asset';
 import { fileJob, runFileJob, type FileJob } from '../file-jobs';
 import { guardTool, McpToolError, toolResult } from '../result';
 import { requireScope, spendWrite } from '../scope';
-import { placeAppFile } from '../../ai/sessions/files';
-import { sessionForCall } from '../../ai/sessions/app';
-
 /**
  * Files for an editor token: brought in from the client or the web, and
  * re-encoded. A file is then put in place with an update action (icon, banner,
- * showcaseFiles, files) or in a text as ::media{asset=<id>}. Each new file is
- * kept in the app's session, shown in the library there, for as long as the
- * session lives.
+ * showcaseFiles, files) or in a text as ::media{asset=<id>}. Until then it is
+ * in the library like an upload of the owner's not yet placed, and one
+ * nothing uses within a day is let go by the library's own sweep.
  */
 
-/**
- * Runs a file's making as a job of the call's session, keeping what it
- * makes there — unless the job was cancelled meanwhile.
- */
-function runInSession(
+/** Runs a file's making as a job of the call's token. */
+function runJob(
   context: McpCallContext,
   what: string,
   make: (signal: AbortSignal) => Promise<AssetUploadResponse>,
 ) {
-  const sessionUuid = sessionForCall(context);
-  return runFileJob(context.principal, sessionUuid, what, async (signal) => {
+  return runFileJob(context.principal, what, async (signal) => {
     const file = await make(signal);
     signal.throwIfAborted();
-    placeAppFile(sessionUuid, file.assetUuid);
     return file;
   });
 }
@@ -54,7 +46,7 @@ function jobResult(
     );
   if (job.status === 'cancelled')
     throw new McpToolError(
-      `${job.what}: cancelled — the owner archived the session, or turned AI off. Nothing was kept.`,
+      `${job.what}: cancelled — the owner turned AI off. Nothing was kept.`,
     );
   return toolResult(
     `${job.what} is still on its way. Ask file_status with job ${job.job} in a minute; nothing else waits for it.`,
@@ -69,7 +61,7 @@ const settingsInput = z
       'stripped). A picture: { type: "image-transform", quality: 10–100, ' +
       'format?: "webp" | "avif" | "jpeg" | "png", dimensions: { width?, ' +
       'height? }, crop?: { x, y, width, height } }. A video: { type: ' +
-      '"video-transform", quality, dimensions, stripAudio, fastConversion }. ' +
+      '"video-transform", quality, dimensions, stripAudio }. ' +
       'Sound: { type: "audio-transform", quality, mono }. Any other file: ' +
       '{ type: "file-zip" } to pack it.',
   );
@@ -83,8 +75,8 @@ export function registerFileTools(server: McpServer, context: McpCallContext) {
         'Opens a one-time address for one file of yours: PUT its raw bytes ' +
         'there — curl --upload-file photo.jpg <url> — within 15 minutes, and ' +
         'the answer gives the new file id. For files on your side; a file on ' +
-        'the web is for import_file. A new file is kept in your session for ' +
-        'as long as it lives, used or not.',
+        'the web is for import_file. Put a new file in place within a day: ' +
+        'one nothing uses is let go then.',
       inputSchema: z.object({
         name: z.string().describe('The file name, with its extension'),
         settings: settingsInput,
@@ -99,7 +91,6 @@ export function registerFileTools(server: McpServer, context: McpCallContext) {
           context.principal,
           name,
           fileSettings(settings),
-          sessionForCall(context),
         );
         const url = siteUrl(context.event, `/api/mcp/upload/${ticket}`);
         return toolResult(
@@ -132,7 +123,7 @@ export function registerFileTools(server: McpServer, context: McpCallContext) {
       guardTool(async () => {
         requireScope(context, 'edit', 'import files');
         spendWrite(context);
-        const job = await runInSession(context, url, (signal) =>
+        const job = await runJob(context, url, (signal) =>
           importFile(url, name, fileSettings(settings), signal),
         );
         return jobResult(
@@ -163,7 +154,7 @@ export function registerFileTools(server: McpServer, context: McpCallContext) {
       guardTool(async () => {
         requireScope(context, 'edit', 're-encode files');
         spendWrite(context);
-        const job = await runInSession(context, file, (signal) =>
+        const job = await runJob(context, file, (signal) =>
           reprocessFile(file, fileSettings(settings), signal),
         );
         return jobResult(job, (made) =>

@@ -10,6 +10,7 @@ import type {
   ArchiveAction,
   ArchiveDiaryEntry,
   ArchiveEvent,
+  ArchiveExcerpt,
   ArchiveFile,
   ArchiveFilePlacement,
   ArchiveIssue,
@@ -25,12 +26,17 @@ import type {
   ArchiveSection,
   ArchiveStatus,
   ArchiveTag,
+  ExcerptParentKind,
   FileKind,
 } from './model';
 
 /** The format this reader knows, and the highest revision of it. */
 export const READS_FORMAT = 1;
-export const READS_REVISION = 1;
+/**
+ * 2: excerpts of projects, events and diary entries.
+ * 3: an excerpt is about one thing, its `about`, not a list of relations.
+ */
+export const READS_REVISION = 3;
 
 export const ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -233,26 +239,30 @@ const RELATION_KINDS = ['related', 'depends-on', 'affects'] as const;
 function relations(fields: Fields, issues: ArchiveIssue[]): ArchiveRelation[] {
   return fields.list('relations').flatMap((item): ArchiveRelation[] => {
     const relation = itemFields(item, fields, issues, 'a relation');
-    if (!relation) return [];
-    const result: ArchiveRelation = {
-      to: relation.string('to', true),
-      kind: relation.oneOf('kind', RELATION_KINDS, 'related'),
-    };
-    const note = relation.optionalString('note');
-    const notes = relation.object('notes');
-    if (note !== undefined && notes)
-      relation.error('a relation has a note or notes, not both');
-    if (note !== undefined) result.note = note;
-    if (notes) {
-      result.notes = {
-        this: notes.string('this'),
-        other: notes.string('other'),
-      };
-      notes.finish('in notes: ');
-    }
-    relation.finish('in a relation: ');
-    return [result];
+    return relation ? [relationOf(relation)] : [];
   });
+}
+
+/** One relation's fields: its other end, its kind, its note or its notes. */
+function relationOf(relation: Fields): ArchiveRelation {
+  const result: ArchiveRelation = {
+    to: relation.string('to', true),
+    kind: relation.oneOf('kind', RELATION_KINDS, 'related'),
+  };
+  const note = relation.optionalString('note');
+  const notes = relation.object('notes');
+  if (note !== undefined && notes)
+    relation.error('a relation has a note or notes, not both');
+  if (note !== undefined) result.note = note;
+  if (notes) {
+    result.notes = {
+      this: notes.string('this'),
+      other: notes.string('other'),
+    };
+    notes.finish('in notes: ');
+  }
+  relation.finish('in a relation: ');
+  return result;
 }
 
 function links(fields: Fields, issues: ArchiveIssue[]): ArchiveLink[] {
@@ -447,6 +457,82 @@ function checkId(
 export function readArchive(dir: string): ReadResult {
   const issues: ArchiveIssue[] = [];
   const at = (path: string) => relative(dir, path).replaceAll('\\', '/');
+  const error = (file: string, message: string) =>
+    issues.push({ level: 'error', file, message });
+
+  /**
+   * The excerpts of a parent: the `<NN>-<id>.md` files of its `excerpts/`
+   * folder, read like a project's sections. A parent of revision 1 has no
+   * such folder, and nothing else of the parent's folder is known.
+   */
+  const readExcerpts = (
+    folder: string,
+    parent: { kind: ExcerptParentKind; id: string },
+  ): ArchiveExcerpt[] => {
+    const excerpts: ArchiveExcerpt[] = [];
+    const seenOrder = new Map<number, string>();
+    for (const name of listDir(folder)) {
+      if (!name.endsWith('.md')) continue;
+      const path = join(folder, name);
+      const file = at(path);
+      const match = /^(\d{2,3})-(.+)\.md$/.exec(name);
+      if (!match) {
+        error(file, 'an excerpt file is named <NN>-<id>.md');
+        continue;
+      }
+      const order = Number(match[1]);
+      const id = match[2]!;
+      checkId(id, file, issues);
+      if (seenOrder.has(order))
+        error(file, `its number ${match[1]} is also ${seenOrder.get(order)}'s`);
+      seenOrder.set(order, name);
+      const read = readEntityFile(path, file, issues);
+      if (!read) continue;
+      const { fields, body } = read;
+      const result: ArchiveExcerpt = {
+        file,
+        id,
+        parent,
+        order,
+        title: fields.string('title', true),
+        summary: fields.string('summary'),
+        slug: fields.optionalString('slug'),
+        private: fields.boolean('private'),
+        banner: fields.optionalString('banner'),
+        about: { to: '', kind: 'related' },
+        body,
+      };
+      const about = fields.object('about');
+      if (about) result.about = relationOf(about);
+      else
+        fields.error(
+          'an excerpt needs about: the one thing it is about, as a relation',
+        );
+      if (fields.has('relations')) {
+        fields.error(
+          'an excerpt is about one thing: about, not relations (revision 3)',
+        );
+        fields.raw('relations');
+      }
+      for (const forbidden of ['periods', 'tags', 'access', 'notes'])
+        if (fields.has(forbidden)) {
+          fields.error(`an excerpt has no ${forbidden}`);
+          fields.raw(forbidden);
+        }
+      if (!result.body) fields.error('an excerpt needs a body');
+      fields.finish();
+      if (excerpts.some((other) => other.id === id))
+        fields.error(`excerpt id ${id} is taken in this ${parent.kind}`);
+      excerpts.push(result);
+    }
+    return excerpts;
+  };
+  /** A folder beside an event's or an entry's file holds its `excerpts/` only. */
+  const checkParentFolder = (folder: string, what: string) => {
+    for (const name of listDir(folder))
+      if (name !== 'excerpts')
+        error(at(join(folder, name)), `${what} holds only excerpts/`);
+  };
 
   // ---------------------------------------------------------- archive.yaml
   const metaPath = join(dir, 'archive.yaml');
@@ -675,6 +761,7 @@ export function readArchive(dir: string): ReadResult {
       relations: relations(fields, issues),
       body,
       sections,
+      excerpts: readExcerpts(join(folder, 'excerpts'), { kind: 'project', id }),
     });
     fields.finish();
   }
@@ -691,6 +778,13 @@ export function readArchive(dir: string): ReadResult {
       });
       continue;
     }
+    // An event's folder, `events/<YYYY>/<id>/`, stands beside its file and
+    // holds its excerpts.
+    const folders = new Set(
+      listDir(folder).filter((name) =>
+        statSync(join(folder, name)).isDirectory(),
+      ),
+    );
     for (const name of listDir(folder)) {
       if (!name.endsWith('.md')) continue;
       const path = join(folder, name);
@@ -699,6 +793,8 @@ export function readArchive(dir: string): ReadResult {
       if (!read) continue;
       const id = basename(name, '.md');
       checkId(id, file, issues);
+      if (folders.delete(id))
+        checkParentFolder(join(folder, id), `the folder of event ${id}`);
       const { fields, body } = read;
       const event: ArchiveEvent = {
         file,
@@ -719,6 +815,10 @@ export function readArchive(dir: string): ReadResult {
         action: action(fields),
         relations: relations(fields, issues),
         body,
+        excerpts: readExcerpts(join(folder, id, 'excerpts'), {
+          kind: 'event',
+          id,
+        }),
       };
       if (!event.periods.length)
         fields.error('an event needs at least one period');
@@ -726,11 +826,16 @@ export function readArchive(dir: string): ReadResult {
       fields.finish();
       events.push(event);
     }
+    for (const name of folders)
+      error(
+        at(join(folder, name)),
+        `a folder without its event: events/${year}/${name}.md is missing`,
+      );
   }
 
   // ----------------------------------------------------------------- diary
   const diary: ArchiveDiaryEntry[] = [];
-  const readDiaryFile = (path: string, date: string) => {
+  const readDiaryFile = (path: string, date: string, folder: string) => {
     const file = at(path);
     const read = readEntityFile(path, file, issues);
     if (!read) return;
@@ -738,6 +843,10 @@ export function readArchive(dir: string): ReadResult {
     for (const forbidden of ['title', 'summary', 'tags'])
       if (fields.has(forbidden))
         fields.error(`a diary entry has no ${forbidden}`);
+    const excerpts = readExcerpts(join(folder, date, 'excerpts'), {
+      kind: 'diary',
+      id: date,
+    });
     diary.push({
       file,
       date,
@@ -746,8 +855,10 @@ export function readArchive(dir: string): ReadResult {
       notes: fields.string('notes'),
       relations: relations(fields, issues),
       body,
+      excerpts,
     });
-    if (!body) fields.error('a diary entry needs a body');
+    if (!body && !excerpts.length)
+      fields.error('a diary entry needs a body, or an excerpt');
     // The forbidden keys were reported above, not as unknown ones.
     for (const forbidden of ['title', 'summary', 'tags']) fields.raw(forbidden);
     fields.finish();
@@ -755,10 +866,22 @@ export function readArchive(dir: string): ReadResult {
   for (const year of listDir(join(dir, 'diary'))) {
     const folder = join(dir, 'diary', year);
     if (!statSync(folder).isDirectory()) continue;
+    // An entry's folder, `diary/<YYYY>/<day>/`, stands beside its file and
+    // holds its excerpts.
+    const folders = new Set(
+      listDir(folder).filter((name) =>
+        statSync(join(folder, name)).isDirectory(),
+      ),
+    );
     for (const name of listDir(folder)) {
       if (!name.endsWith('.md')) continue;
       const day = basename(name, '.md');
       const path = join(folder, name);
+      if (folders.delete(day))
+        checkParentFolder(
+          join(folder, day),
+          `the folder of diary entry ${day}`,
+        );
       if (year === 'relative') {
         if (!/^today\+\d+$/.test(day))
           issues.push({
@@ -766,15 +889,20 @@ export function readArchive(dir: string): ReadResult {
             file: at(path),
             message: 'a relative entry is named today+<N>.md',
           });
-        else readDiaryFile(path, day);
+        else readDiaryFile(path, day, folder);
       } else if (!DAY.test(day) || !day.startsWith(`${year}-`)) {
         issues.push({
           level: 'error',
           file: at(path),
           message: `a diary file of ${year} is named ${year}-MM-DD.md`,
         });
-      } else readDiaryFile(path, day);
+      } else readDiaryFile(path, day, folder);
     }
+    for (const name of folders)
+      error(
+        at(join(folder, name)),
+        `a folder without its entry: diary/${year}/${name}.md is missing`,
+      );
   }
 
   // ----------------------------------------------------------------- files

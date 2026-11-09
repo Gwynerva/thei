@@ -19,6 +19,7 @@ import { contentLinkFrom, retargetContentLink } from './content-link-locate';
 
 export type Correction = Extract<AiRevisePart, { type: 'correction' }>;
 export type Relink = Extract<AiRevisePart, { type: 'relink' }>;
+export type Remark = Extract<AiRevisePart, { type: 'remark' }>;
 
 export interface RevisePayload {
   mode: 'proofread' | 'relink' | 'order';
@@ -48,7 +49,8 @@ const ON_THE_ORDER = new Set(['heading', 'delimiter', 'removal', 'split']);
 /**
  * Which parts are taken. A new order's heading, removal or split stands on
  * its moves: taking one takes the moves with it, and the moves left as they
- * were leave the rest as it is too.
+ * were leave the rest as it is too. A remark is never taken: it has no words
+ * to put in, and waits until the owner writes its words otherwise.
  */
 export function takenParts(
   payload: Pick<RevisePayload, 'parts'>,
@@ -56,7 +58,9 @@ export function takenParts(
 ): Set<string> {
   const taken = new Set(
     payload.parts
-      .filter((part) => decision(part.id) === 'accepted')
+      .filter(
+        (part) => part.type !== 'remark' && decision(part.id) === 'accepted',
+      )
       .map((part) => part.id),
   );
   const order = payload.parts.find((part) => part.type === 'order');

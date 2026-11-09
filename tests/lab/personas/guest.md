@@ -12,8 +12,8 @@ maybe an acquaintance's archive. You are here for the first time, most
 likely on a phone.
 
 **What you know.** Ordinary websites: menus, links, search, the back button.
-Nothing about Thei: you don't know what "life", a "stage" or "relations"
-mean here.
+Nothing about Thei: you don't know what "life", a "stage", an "excerpt" or
+"relations" mean here.
 
 **How you act.** Within seconds you want to understand whose site this is and
 what is on it. You take the most visible path. You read headings and first

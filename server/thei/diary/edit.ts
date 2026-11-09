@@ -1,4 +1,14 @@
 import { validateDiaryData } from '#layers/thei/shared/admin/diary';
+import { createEmptyContentFieldValue } from '#layers/thei/shared/content';
+import {
+  applyExcerpts,
+  deleteExcerptsOfParent,
+  detachExcerptsFromTarget,
+  excerptIdentities,
+  prepareExcerpts,
+  readExcerptsForForm,
+  type ExcerptsOnTargetDelete,
+} from '../excerpts';
 import type { DiaryEditData } from '#layers/thei/shared/diary';
 import type {
   DiaryGetResponse,
@@ -35,7 +45,7 @@ export async function readDiaryEdit(
   stored: NonNullable<Awaited<ReturnType<typeof THEI_SERVER.diary.findByUuid>>>,
 ) {
   const diaryUuid = stored.diaryUuid;
-  const [content, notes, relations] = await Promise.all([
+  const [content, notes, relations, excerpts] = await Promise.all([
     THEI_SERVER.content.buildFieldValue('diary-entry', diaryUuid, 'diary-body'),
     THEI_SERVER.content.buildFieldValue(
       'diary-entry',
@@ -43,19 +53,19 @@ export async function readDiaryEdit(
       'diary-notes',
     ),
     getRelations({ type: 'diary-entry', id: diaryUuid }),
+    readExcerptsForForm({ type: 'diary-entry', id: diaryUuid }),
   ]);
-  if (!content)
-    throw createError({
-      statusCode: 500,
-      message: 'Diary entry content is missing',
-    });
+  // A day told by its excerpts alone keeps no text of its own; one left
+  // with neither, by the deletion of what its excerpts were about, opens
+  // in its form, which asks for a text or an excerpt before it saves.
   return {
     diaryUuid,
     version: stored.updatedAt,
     date: stored.date,
     access: stored.access,
-    content,
+    content: content ?? createEmptyContentFieldValue(),
     relations,
+    excerpts,
     reminder: stored.reminder,
     notes,
   } satisfies DiaryGetResponse;
@@ -90,6 +100,20 @@ export async function saveDiaryEdit(
       message: error instanceof Error ? error.message : 'Invalid relations',
     } satisfies DiarySaveResponse;
   }
+  const parent = { type: 'diary-entry', id: diaryUuid } as const;
+  let preparedExcerpts: Awaited<ReturnType<typeof prepareExcerpts>>;
+  try {
+    preparedExcerpts = await prepareExcerpts(parent, result.excerpts);
+  } catch (error) {
+    return {
+      type: 'error',
+      message: error instanceof Error ? error.message : 'Invalid excerpts',
+    } satisfies DiarySaveResponse;
+  }
+  // The text of the day is the entry, unless the day is told by the
+  // excerpts it is saved with; one saved without its list of excerpts was
+  // held to its text already (`validateDiaryData`).
+  const hasExcerpts = Boolean(preparedExcerpts?.length);
 
   try {
     const [contentSave, notesSave] = await Promise.all([
@@ -106,7 +130,7 @@ export async function saveDiaryEdit(
         result.notes,
       ),
     ]);
-    if (contentSave.type !== 'save')
+    if (contentSave.type !== 'save' && !hasExcerpts)
       return {
         type: 'error',
         message: 'Diary entry content is required',
@@ -153,6 +177,7 @@ export async function saveDiaryEdit(
         { type: 'diary-entry', id: diaryUuid },
         preparedRelations,
       );
+      applyExcerpts(tx, schema, parent, preparedExcerpts);
       options.onWrite?.(tx, schema);
     });
     return {
@@ -160,6 +185,7 @@ export async function saveDiaryEdit(
       diaryUuid,
       version: storedVersion('diary-entry', diaryUuid),
       date: result.date,
+      excerpts: excerptIdentities(preparedExcerpts),
     } satisfies DiarySaveResponse;
   } catch (error) {
     if (error instanceof EntityEditConflict)
@@ -179,12 +205,22 @@ export async function saveDiaryEdit(
 /** Deletes it with everything that is its own. */
 export async function deleteDiaryEntry(
   stored: NonNullable<Awaited<ReturnType<typeof THEI_SERVER.diary.findByUuid>>>,
-  options: Pick<EntityEditOptions, 'onWrite' | 'beforeWrite'> = {},
+  options: Pick<EntityEditOptions, 'onWrite' | 'beforeWrite'> & {
+    /** What becomes of the excerpts about the entry. */
+    excerpts?: ExcerptsOnTargetDelete;
+  } = {},
 ) {
   const diaryUuid = stored.diaryUuid;
   const { db, schema } = THEI_SERVER.useDb();
   db.transaction((tx) => {
     options.beforeWrite?.(tx, schema);
+    deleteExcerptsOfParent(tx, schema, { type: 'diary-entry', id: diaryUuid });
+    detachExcerptsFromTarget(
+      tx,
+      schema,
+      { type: 'diary-entry', id: diaryUuid },
+      options.excerpts ?? 'keep',
+    );
     deleteRelations(tx, schema, { type: 'diary-entry', id: diaryUuid });
     deleteShareLinks(tx, schema, 'diary-entry', diaryUuid);
     deleteContentForOwner(tx, schema, 'diary-entry', diaryUuid);

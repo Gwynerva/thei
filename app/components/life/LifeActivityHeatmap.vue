@@ -4,10 +4,12 @@ import {
   LIFE_ACTIVITY_TOTAL_KINDS,
   lifeActivityDayTotal,
   lifeActivityLevel,
+  lifeFilterKinds,
   type LifeActivityKind,
   type LifeActivityResponse,
   type LifeDay,
   type LifePoint,
+  type LifeScopeRef,
 } from '#layers/thei/shared/life';
 import { toDateString } from '#layers/thei/shared/date-range';
 import { lifeEntityKindIcon } from './life-entity-icon';
@@ -20,16 +22,31 @@ import TheiLink from '../TheiLink';
  * The grid answers "what did this year look like" at a glance, which a feed
  * cannot: it shows the quiet months as plainly as the busy ones. Picking a day
  * opens what actually happened, so the summary stays a way into the timeline
- * rather than a decoration.
+ * rather than a decoration. Read for one project, it is the project's own
+ * days, and a day opens on the project's chronology.
  */
+const { scope = { kind: 'life' }, basePath = '/life/' } = defineProps<{
+  scope?: LifeScopeRef;
+  /** Where a day opens: the chronology the grid belongs to. */
+  basePath?: string;
+}>();
+const scopeQuery = computed(() =>
+  scope.kind === 'project' ? { project: scope.publicId } : {},
+);
+/** What a picked day opens, by where it opens: the Life, or the project's chronology. */
+const openDay = computed(() =>
+  scope.kind === 'project'
+    ? phrase.value.open_project_chronology
+    : phrase.value.open_life,
+);
 const selectedYear = ref<number>();
 const selectedDate = ref<string>();
 const day = ref<LifeDay>();
 const dayLoading = ref(false);
 
 const { data } = await useFetch<LifeActivityResponse>('/api/life/activity', {
-  key: 'life-activity',
-  query: computed(() => ({ year: selectedYear.value })),
+  key: `life-activity:${scope.kind === 'project' ? scope.publicId : 'life'}`,
+  query: computed(() => ({ ...scopeQuery.value, year: selectedYear.value })),
 });
 
 const weekStartsMonday = computed(() => language.value.code !== 'en');
@@ -101,6 +118,7 @@ const kindLabels: Record<LifeActivityKind, (count: number) => string> = {
   project: (count) => phrase.value.life_activity_projects(count),
   page: (count) => phrase.value.life_activity_pages(count),
   'project-section': (count) => phrase.value.life_activity_sections(count),
+  excerpt: (count) => phrase.value.life_activity_excerpts(count),
   'profile-avatar': (count) => phrase.value.life_activity_profile(count),
   'profile-status': (count) => phrase.value.life_activity_statuses(count),
   'diary-entry': (count) => phrase.value.life_activity_diary(count),
@@ -134,9 +152,14 @@ function popup(date: string) {
   }`;
 }
 
-/** The year in numbers, every kind always shown so the row never reflows. */
+/**
+ * The year in numbers, every kind the chronology can hold always shown so
+ * the row never reflows.
+ */
 const totals = computed(() =>
-  LIFE_ACTIVITY_TOTAL_KINDS.map((kind) => {
+  LIFE_ACTIVITY_TOTAL_KINDS.filter((kind) =>
+    lifeFilterKinds(scope).includes(kind),
+  ).map((kind) => {
     const count = data.value?.totals[kind] ?? 0;
     const label = kindLabels[kind](count);
     return {
@@ -179,7 +202,9 @@ async function selectDay(date: string) {
   if (!dayTotal(date)) return;
   dayLoading.value = true;
   try {
-    day.value = await $fetch<LifeDay>('/api/life/day', { query: { date } });
+    day.value = await $fetch<LifeDay>('/api/life/day', {
+      query: { ...scopeQuery.value, date },
+    });
   } catch {
     day.value = undefined;
   } finally {
@@ -208,11 +233,28 @@ const levelClasses = [
  */
 const today = ref<string>();
 const grid = useTemplateRef<HTMLElement>('grid');
+/**
+ * Whether more of the year lies past each edge of a grid that scrolls: a
+ * narrow screen shows the latest weeks, and the fades say the rest is there.
+ */
+const moreLeft = ref(false);
+const moreRight = ref(false);
+function readEdges() {
+  const element = grid.value;
+  if (!element) return;
+  moreLeft.value = element.scrollLeft > 1;
+  moreRight.value =
+    element.scrollLeft + element.clientWidth < element.scrollWidth - 1;
+}
 onMounted(() => {
   today.value = toDateString(new Date());
   // Narrow screens scroll: the recent weeks are the interesting end.
   if (grid.value) grid.value.scrollLeft = grid.value.scrollWidth;
+  readEdges();
+  window.addEventListener('resize', readEdges);
 });
+onBeforeUnmount(() => window.removeEventListener('resize', readEdges));
+watch(weeks, () => void nextTick(readEdges));
 </script>
 
 <template>
@@ -289,98 +331,133 @@ onMounted(() => {
            above the first. The scroller would clip them, so it holds that
            length as padding and gives it back as a negative margin: the
            space under the cells stays the block's own step. -->
-      <div
-        ref="grid"
-        class="heatmap-gaps -mb-(--heatmap-gap) scrollbar-hover rotate-x-180
-          overflow-x-auto"
-        :style="{ '--weeks': weeks.length }"
-      >
-        <div
-          class="relative flex w-max min-w-full rotate-x-180 gap-(--heatmap-gap)
-            pb-(--heatmap-gap)"
+      <div class="relative">
+        <!-- Fades over the edges a scrolled grid goes on past; the left one
+             starts after the weekday column, which stays put. -->
+        <Transition
+          enter-from-class="opacity-0"
+          enter-active-class="transition-opacity motion-reduce:transition-none"
+          leave-active-class="transition-opacity motion-reduce:transition-none"
+          leave-to-class="opacity-0"
         >
-          <!-- Months are drawn over the weeks rather than inside them, so a
+          <span
+            v-if="moreLeft"
+            class="pointer-events-none absolute inset-y-0 left-6 z-1 w-8
+              bg-linear-to-r from-bg-2 to-transparent"
+            aria-hidden="true"
+          />
+        </Transition>
+        <Transition
+          enter-from-class="opacity-0"
+          enter-active-class="transition-opacity motion-reduce:transition-none"
+          leave-active-class="transition-opacity motion-reduce:transition-none"
+          leave-to-class="opacity-0"
+        >
+          <span
+            v-if="moreRight"
+            class="pointer-events-none absolute inset-y-0 right-0 z-1 w-8
+              bg-linear-to-l from-bg-2 to-transparent"
+            aria-hidden="true"
+          />
+        </Transition>
+        <div
+          ref="grid"
+          class="heatmap-gaps -mb-(--heatmap-gap) scrollbar-hover rotate-x-180
+            overflow-x-auto"
+          :style="{ '--weeks': weeks.length }"
+          @scroll.passive="readEdges"
+        >
+          <div
+            class="relative flex w-max min-w-full rotate-x-180
+              gap-(--heatmap-gap) pb-(--heatmap-gap)"
+          >
+            <!-- Months are drawn over the weeks rather than inside them, so a
                label can centre over its month and a border can run through
                the gaps between the cells. -->
-          <span
-            v-for="month in months.labels"
-            :key="`label-${month.key}`"
-            class="heatmap-at absolute top-0 h-4 -translate-x-1/2
-              text-2xs leading-4 whitespace-nowrap text-text-3"
-            :style="{ '--at': month.at }"
-            aria-hidden="true"
-            >{{ month.label }}</span
-          >
-          <template v-for="divider in months.dividers" :key="divider.key">
             <span
-              v-if="divider.kind === 'vertical'"
-              class="heatmap-at heatmap-divider-vertical absolute border-l
-                border-text-3/55"
-              :style="{
-                '--at': divider.at,
-                '--from': divider.from,
-                '--to': divider.to,
-              }"
+              v-for="month in months.labels"
+              :key="`label-${month.key}`"
+              class="heatmap-at absolute top-0 h-4 -translate-x-1/2 text-2xs
+                leading-4 whitespace-nowrap text-text-3"
+              :style="{ '--at': month.at }"
               aria-hidden="true"
-            />
-            <span
-              v-else
-              class="heatmap-at heatmap-divider-horizontal absolute border-t
-                border-text-3/55"
-              :style="{ '--at': divider.at, '--row': divider.row }"
-              aria-hidden="true"
-            />
-          </template>
-          <div
-            class="sticky left-0 z-1 flex w-6 shrink-0 flex-col
-              gap-(--heatmap-gap) bg-bg-2"
-          >
-            <span class="h-4" aria-hidden="true" />
-            <span
-              v-for="(label, index) in weekdayLabels"
-              :key="label"
-              class="h-3 text-2xs leading-3 text-text-3"
-              :class="index % 2 === 0 && index !== 6 ? undefined : 'invisible'"
-              >{{ label }}</span
+              >{{ month.label }}</span
             >
-          </div>
-          <div
-            v-for="(week, weekIndex) in weeks"
-            :key="week.key"
-            class="flex shrink-0 flex-col gap-(--heatmap-gap)"
-          >
-            <span class="h-4" aria-hidden="true" />
-            <template v-for="(item, dayIndex) in week.days">
+            <template v-for="divider in months.dividers" :key="divider.key">
               <span
-                v-if="!item"
-                :key="`empty-${dayIndex}`"
-                class="size-3"
+                v-if="divider.kind === 'vertical'"
+                class="heatmap-at heatmap-divider-vertical absolute border-l
+                  border-text-3/55"
+                :style="{
+                  '--at': divider.at,
+                  '--from': divider.from,
+                  '--to': divider.to,
+                }"
                 aria-hidden="true"
               />
-              <button
+              <span
                 v-else
-                :key="item.date"
-                type="button"
-                class="size-3 cursor-pointer rounded-xs transition-transform
-                  hocus:scale-125 hocus:ring-1 hocus:ring-accent"
-                :class="[
-                  levelClasses[item.level],
-                  // The ring stands off the cell, so a gap of the block's own
-                  // colour keeps the cell's shade readable inside it. Today
-                  // always keeps one, so the eye finds its place in the year;
-                  // picking it only recolours it.
-                  selectedDate === item.date
-                    ? 'ring-1 ring-text-1 ring-offset-1 ring-offset-bg-2'
-                    : today === item.date
-                      ? 'ring-1 ring-accent ring-offset-1 ring-offset-bg-2'
-                      : undefined,
-                ]"
-                :aria-current="today === item.date ? 'date' : undefined"
-                :data-title-popup="popup(item.date)"
-                :aria-label="popup(item.date)"
-                @click="selectDay(item.date)"
+                class="heatmap-at heatmap-divider-horizontal absolute border-t
+                  border-text-3/55"
+                :style="{ '--at': divider.at, '--row': divider.row }"
+                aria-hidden="true"
               />
             </template>
+            <div
+              class="sticky left-0 z-1 flex w-6 shrink-0 flex-col
+                gap-(--heatmap-gap) bg-bg-2"
+            >
+              <span class="h-4" aria-hidden="true" />
+              <span
+                v-for="(label, index) in weekdayLabels"
+                :key="label"
+                class="h-(--heatmap-cell) text-2xs leading-(--heatmap-cell)
+                  text-text-3"
+                :class="
+                  index % 2 === 0 && index !== 6 ? undefined : 'invisible'
+                "
+                >{{ label }}</span
+              >
+            </div>
+            <div
+              v-for="(week, weekIndex) in weeks"
+              :key="week.key"
+              class="flex shrink-0 flex-col gap-(--heatmap-gap)"
+            >
+              <span class="h-4" aria-hidden="true" />
+              <template v-for="(item, dayIndex) in week.days">
+                <span
+                  v-if="!item"
+                  :key="`empty-${dayIndex}`"
+                  class="size-(--heatmap-cell)"
+                  aria-hidden="true"
+                />
+                <button
+                  v-else
+                  :key="item.date"
+                  type="button"
+                  class="size-(--heatmap-cell) cursor-pointer rounded-xs
+                    transition-transform hocus:scale-125 hocus:ring-1
+                    hocus:ring-accent"
+                  :class="[
+                    levelClasses[item.level],
+                    // The ring stands off the cell, so a gap of the block's own
+                    // colour keeps the cell's shade readable inside it. Today
+                    // always keeps one, so the eye finds its place in the year;
+                    // picking it only recolours it.
+                    selectedDate === item.date
+                      ? 'ring-1 ring-text-1 ring-offset-1 ring-offset-bg-2'
+                      : today === item.date
+                        ? 'ring-1 ring-accent ring-offset-1 ring-offset-bg-2'
+                        : undefined,
+                  ]"
+                  :aria-current="today === item.date ? 'date' : undefined"
+                  :data-title-popup="popup(item.date)"
+                  :aria-label="popup(item.date)"
+                  @click="selectDay(item.date)"
+                />
+              </template>
+            </div>
           </div>
         </div>
       </div>
@@ -395,9 +472,9 @@ onMounted(() => {
         <span class="mr-xs font-semibold">{{ formatDate(selectedDate) }}</span>
         <TheiLink
           v-if="dayTotal(selectedDate)"
-          :to="buildLifeUrl({ date: selectedDate })"
-          :aria-label="phrase.open_life"
-          :data-title-popup="phrase.open_life"
+          :to="buildLifeUrl({ date: selectedDate }, basePath)"
+          :aria-label="openDay"
+          :data-title-popup="openDay"
           class="flex size-8 shrink-0 items-center justify-center rounded-normal
             bg-bg-3 p-1 text-base text-text-2 transition-colors
             focus-visible:ring-2 focus-visible:ring-accent
@@ -491,19 +568,30 @@ onMounted(() => {
 /*
  * The gap that makes the weeks fill the grid's width, never below a hair.
  * Rows use it too, so the cells stay evenly spaced both ways, month borders
- * included: 1.5rem is the weekday column, 0.75rem a cell.
+ * included: 1.5rem is the weekday column, --heatmap-cell a cell. Under a
+ * finger the cells and the least gap grow, so a tap lands on the week it
+ * means; the grid then scrolls more, and its edges fade to say so.
  */
 .heatmap-gaps {
+  --heatmap-cell: 0.75rem;
+  --heatmap-gap-min: 0.25rem;
   --heatmap-gap: max(
-    0.25rem,
-    (100cqw - 1.5rem - var(--weeks) * 0.75rem) / var(--weeks)
+    var(--heatmap-gap-min),
+    (100cqw - 1.5rem - var(--weeks) * var(--heatmap-cell)) / var(--weeks)
   );
+}
+@media (pointer: coarse) {
+  .heatmap-gaps {
+    --heatmap-cell: 1rem;
+    --heatmap-gap-min: 0.375rem;
+  }
 }
 
 /* A point along the weeks: `--at` counts weeks, 0 the gap before the first. */
 .heatmap-at {
   left: calc(
-    1.5rem + var(--heatmap-gap) / 2 + var(--at) * (0.75rem + var(--heatmap-gap))
+    1.5rem + var(--heatmap-gap) / 2 + var(--at) *
+      (var(--heatmap-cell) + var(--heatmap-gap))
   );
 }
 
@@ -515,13 +603,16 @@ onMounted(() => {
 .heatmap-divider-vertical {
   top: calc(
     1rem + min(var(--from), 1) *
-      (var(--heatmap-gap) / 2 + var(--from) * (0.75rem + var(--heatmap-gap)))
+      (
+        var(--heatmap-gap) / 2 + var(--from) *
+          (var(--heatmap-cell) + var(--heatmap-gap))
+      )
   );
   bottom: calc(
     min(7 - var(--to), 1) *
       (
         var(--heatmap-gap) / 2 + (7 - var(--to)) *
-          (0.75rem + var(--heatmap-gap))
+          (var(--heatmap-cell) + var(--heatmap-gap))
       )
   );
 }
@@ -533,8 +624,9 @@ onMounted(() => {
  */
 .heatmap-divider-horizontal {
   top: calc(
-    1rem + var(--heatmap-gap) / 2 + var(--row) * (0.75rem + var(--heatmap-gap))
+    1rem + var(--heatmap-gap) / 2 + var(--row) *
+      (var(--heatmap-cell) + var(--heatmap-gap))
   );
-  width: calc(0.75rem + var(--heatmap-gap) + 1px);
+  width: calc(var(--heatmap-cell) + var(--heatmap-gap) + 1px);
 }
 </style>

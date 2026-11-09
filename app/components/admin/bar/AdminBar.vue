@@ -7,6 +7,7 @@ import {
 import { publicIdFromTagUrlPart } from '#layers/thei/shared/tag-url';
 import { publicIdFromEventUrlPart } from '#layers/thei/shared/event-url';
 import { dateFromDiaryUrlPart } from '#layers/thei/shared/diary-url';
+import { publicIdFromExcerptUrlPart } from '#layers/thei/shared/excerpt-url';
 import { parsePublicSearchFilters } from '#layers/thei/shared/public-search';
 import { contentHistoryTransport } from '#layers/thei/app/composables/content-history/api';
 import {
@@ -50,23 +51,27 @@ onMounted(() => {
 });
 onBeforeUnmount(() => window.removeEventListener('online', sendUnsyncedTexts));
 
-async function signOut() {
+function signOut() {
   // Nothing typed may stay behind in the browser after signing out: it is sent
   // first, and what cannot be sent is given up only when the owner agrees.
-  // What the owner searched for goes too.
-  const unsynced = await sendUnsyncedTexts().catch(
-    () => historyBuffer.list().length,
-  );
-  if (
-    unsynced &&
-    !window.confirm(phrase.value.sign_out_unsynced_confirm(unsynced))
-  )
-    return;
-  await $fetch('/api/admin/session', { method: 'DELETE' });
-  for (const entry of historyBuffer.list())
-    historyBuffer.remove(entry.field, entry.writer);
-  forgetOwnerSearchHistory(siteBase);
-  await navigateTo(sitePath('/sign-in/'), { external: true });
+  // What the owner searched for goes too. An unsaved form is asked about
+  // before anything is done, since signing out leaves it; a sign-out that
+  // stops on the way leaves the page asking again when it is closed.
+  return leavePage(async () => {
+    const unsynced = await sendUnsyncedTexts().catch(
+      () => historyBuffer.list().length,
+    );
+    if (
+      unsynced &&
+      !window.confirm(phrase.value.sign_out_unsynced_confirm(unsynced))
+    )
+      return false;
+    await $fetch('/api/admin/session', { method: 'DELETE' });
+    for (const entry of historyBuffer.list())
+      historyBuffer.remove(entry.field, entry.writer);
+    forgetOwnerSearchHistory(siteBase);
+    await navigateTo(sitePath('/sign-in/'), { external: true });
+  });
 }
 
 /**
@@ -82,6 +87,25 @@ onMounted(() => (mounted.value = true));
 const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
   if (mounted.value && registeredContextButton.value?.routePath === route.path)
     return registeredContextButton.value.props;
+
+  // An excerpt has no editor of its own either: the button opens its
+  // parent's editor with the excerpt's modal already open. A diary entry's
+  // editor is reached through the day's bridge.
+  const excerptPage =
+    /^\/(projects|events|diary)\/([^/]+)\/excerpts\/([^/]+)\/$/.exec(
+      route.path,
+    );
+  if (excerptPage) {
+    const [, kind, parentPart, excerptPart] = excerptPage;
+    const query = `?excerpt=${encodeURIComponent(publicIdFromExcerptUrlPart(excerptPart!))}`;
+    const to =
+      kind === 'projects'
+        ? `/admin/projects/${publicIdFromProjectUrlPart(parentPart!)}/edit/${query}`
+        : kind === 'events'
+          ? `/admin/events/${publicIdFromEventUrlPart(parentPart!)}/edit/${query}`
+          : `/admin/diary/by-date/${parentPart}/${query}`;
+    return { to, icon: 'edit', title: phrase.value.edit_excerpt };
+  }
 
   // A section has no editor of its own: the button opens the project's
   // editor with that section's modal already open.
@@ -111,7 +135,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
   if (/^\/admin\/projects\/[^/]+\/edit\/$/.test(route.path)) {
     const id = route.path.split('/')[3];
     return {
-      to: { href: `/projects/${id}/`, external: true },
+      to: { href: `/projects/${id}/`, external: true, target: '_blank' },
       icon: 'visibility',
       title: phrase.value.view_project,
     };
@@ -149,7 +173,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
   if (/^\/admin\/events\/[^/]+\/edit\/$/.test(route.path)) {
     const id = route.path.split('/')[3];
     return {
-      to: { href: `/events/${id}/`, external: true },
+      to: { href: `/events/${id}/`, external: true, target: '_blank' },
       icon: 'visibility',
       title: phrase.value.view_event,
     };

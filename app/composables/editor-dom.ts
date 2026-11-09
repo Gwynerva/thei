@@ -1,9 +1,11 @@
 /**
  * Editor.js's own markup, as the editor's helpers find their way in it: the
- * classes it gives a block and a selected block, and the block of one
- * editor a node is in.
+ * classes it gives a block and a selected block, the type it copies blocks
+ * to the clipboard under, and the block of one editor a node is in.
  */
 export const EDITOR_BLOCK_SELECTOR = '.ce-block';
+/** Blocks Editor.js copied or cut, whole, as the clipboard carries them. */
+export const EDITOR_JS_CLIPBOARD_MIME = 'application/x-editor-js';
 export const EDITOR_SELECTED_BLOCK_CLASS = 'ce-block--selected';
 export const EDITOR_SELECTED_BLOCK_SELECTOR = `.${EDITOR_SELECTED_BLOCK_CLASS}`;
 

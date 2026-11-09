@@ -19,9 +19,6 @@ const formatChoice = defineModel<FormatChoice>('formatChoice', {
   required: true,
 });
 const stripAudio = defineModel<boolean>('stripAudio', { required: true });
-const fastConversion = defineModel<boolean>('fastConversion', {
-  required: true,
-});
 /** The sound as a setting that is on or off, over the recipe's "strip it". */
 const keepAudio = computed<boolean>({
   get: () => !stripAudio.value,
@@ -284,15 +281,5 @@ function parsePositive(value: string): number | undefined {
       :detail="qualityDetail"
       :disabled
     />
-
-    <FieldToggle v-if="kind === 'video'" v-model="fastConversion">
-      <div
-        class="w-full cursor-pointer text-sm text-text-2"
-        :data-title-popup="phrase.upload_fast_conversion_hint"
-        @click="fastConversion = !fastConversion"
-      >
-        {{ phrase.upload_fast_conversion }}
-      </div>
-    </FieldToggle>
   </fieldset>
 </template>

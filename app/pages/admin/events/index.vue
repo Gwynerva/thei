@@ -118,6 +118,7 @@ const list = computed<EventListResponse | undefined>(() => data.value);
           <TheiLink
             :to="sitePath(buildEventUrl(item.humanReadableSlug, item.publicId))"
             external
+            target="_blank"
             :data-title-popup="phrase.view_event"
             :aria-label="phrase.view_event"
             class="cursor-pointer text-text-2/50 transition hocus:text-text-1"

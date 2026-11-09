@@ -38,32 +38,11 @@ neutral — and in square icon-only sizes.
   on a page (`done` once all of it is saved), `ModalHeaderButton`'s
   `phoneIcon` in a modal. Once everything is saved the square shows `check`:
   a pale floppy disk alone did not say whether the save had gone through.
-- "Saved" and its `check` say that something is stored, never only that
-  nothing changed. A text's editor says "Saved" only for a text that is
-  stored as it stands there; the text of an entity not created yet never
-  was, so its button says "Save", disabled while there is nothing new to
-  take into the form, its square a floppy disk. The words typed count as a
-  change the moment they are typed, not when Editor.js tells of them.
-- A form's Save that cannot save yet says why, from what the form still
-  needs (`app/composables/form-needs.ts`): a required field left empty, by
-  the label the form shows — "Still to fill in: Event title, Summary" — or
-  a filled field it cannot keep, with what is wrong — "Page address: A page
-  with this slug already exists". `AdminSaveButton`'s and
-  `ModalHeaderButton`'s `reason` makes the button look disabled but stay
-  pressable (`aria-disabled`): it is the button's hint, its label in bold and
-  a line per need under it, and what a screen reader hears with it.
-- A press of such a button — a tap on a phone, where no hint shows and no
-  Ctrl+S exists — and Ctrl+S on such a form say the same on the line under
-  the header (`app/components/HeaderErrorLine.vue`), mark the labels of the
-  fields concerned in the error colour, and bring the first of them into
-  view when it is out of it, gently. The line names three empty fields at
-  most and counts the others ("and 4 more"); the hint names them all. Line
-  and marks go as the fields are filled.
-- A button disabled because there is nothing to do — all of it saved, a
-  save under way — stays `disabled`. Both look the same: `off:` in
-  `app/styles/main.css`, with `not-off:` for what only an acting button
-  does under the pointer.
 - Under a finger, small square buttons grow: `pointer-coarse:size-11`.
+- An eye in the admin — the `visibility` icon leading to an entity's public
+  page, in the admin bar, a list's row or a modal's header — opens that page
+  in a new tab (`target="_blank"`), so the form or modal it was pressed in
+  stays where it was.
 - A row of a list the owner orders by hand — the profile's links, the files
   of a group in a text — has a grip: a square `Button` with `dragHandle` and
   the `grip` icon, named by what it moves. A drag starts from it alone
@@ -126,10 +105,10 @@ both icons stay in the page, one hidden, since pointing an icon's `<use>`
 elsewhere while the owner types in a text ends the browser's run of typing,
 and Ctrl+Z would then stop after the first letter. `AdminSaveButton` keeps
 its two squares the same way, with the same `AdminSaveIcons`. `to`, a path in data, makes it a link with the
-same look (`TheiLink` with `external`, the base path added by `sitePath()`):
-the page loads in full, as the admin's other ways to the site do, and Ctrl or
-the middle button opens it in a new tab. `disabled` and `reason` are a
-button's alone.
+same look (`TheiLink` with `external` and `target="_blank"`, the base path
+added by `sitePath()`): the page opens in full in a new tab, as the admin's
+other eyes to the site do — the admin bar's and a list row's — and the modal
+stays open. `disabled` and `reason` are a button's alone.
 
 What is stored, a Save in a modal learns from the form behind it. A text's
 editor reads the stamp a save of the entity puts on each text it stores
@@ -139,6 +118,30 @@ not having saved itself for it while something else waited there. A
 section's modal asks the project form whether its last save holds the
 section as it was handed over (`stored`,
 `app/pages/admin/projects/components/ProjectContentItems.vue`).
+
+So the Saves say «Saved», with the `check` square, once what the form holds
+is stored. A text's editor says «Saved» for a text stored as it stands
+there; for the text of an entity not created yet its button says «Save»,
+disabled while there is nothing new to take into the form, its square a
+floppy disk. Words count as a change the moment they are typed, not when
+Editor.js tells of them.
+
+A form's Save that cannot save yet carries what the form still needs
+(`app/composables/form-needs.ts`) as its `reason`: a required field left
+empty, by the label the form shows — "Still to fill in: Event title,
+Summary" — or a filled field it cannot keep, with what is wrong — "Page
+address: A page with this slug already exists". It then looks disabled and
+stays pressable (`aria-disabled`); its hint is its label in bold with a line
+per need under it, which a screen reader hears with it. A press of it — a
+tap on a phone, where no hint shows — and Ctrl+S on such a form say the same
+on the line under the header (`app/components/HeaderErrorLine.vue`), mark
+the labels of the fields concerned in the error colour, and bring the first
+of them into view when it is out of it. The line names three empty fields
+at most and counts the others ("and 4 more"); the hint names them all. Line
+and marks go as the fields are filled. A Save with nothing to do — all of
+it saved, a save under way — is `disabled`. Both look the same, through
+`off:` in `app/styles/main.css`, with `not-off:` for what only an acting
+button does under the pointer.
 
 ```vue
 <Button
@@ -161,6 +164,15 @@ section as it was handed over (`stored`,
 `app/components/admin/AdminShareLinks.vue` shows a row of text and icon
 buttons of one height; `app/components/ai/AiActionRow.vue` the square buttons
 of an AI card.
+
+Over a picture or a video in a text's editor
+(`app/components/content/ContentMediaCard.vue`) stand two buttons of `h-9`
+on the translucent `bg-bg-1/80`: the edit button, `rounded-normal`, its icon
+followed by the file's size, and after it, in the corner, a round «+» that
+adds pictures — a single one becomes a gallery, a gallery takes them after
+the picture shown. A gallery made of a single picture for new files that
+never land, each failed and let go or cancelled, turns back into the
+picture as it was laid out.
 
 ## Why
 

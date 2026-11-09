@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { wearFieldLabelName } from './field-label';
+import { wearFieldLabelName } from './field-label-name';
 
 const props = defineProps<{
   required?: boolean;
@@ -9,7 +9,7 @@ const props = defineProps<{
 const root = useTemplateRef('root');
 /**
  * Its words, without the asterisk and the ✦, name the field's control where
- * it has no name of its own (`field-label.ts`).
+ * it has no name of its own (`field-label-name.ts`).
  */
 const nameId = wearFieldLabelName();
 /** What an AI proposes for the field: the label turns accent, with a ✦. */

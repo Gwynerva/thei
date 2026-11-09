@@ -8,6 +8,7 @@ import {
 import { escapeRegExp } from './language/general-normalize';
 import { normalizeBasePath, withoutSiteBase } from './site-url';
 import { publicIdFromTagUrlPart } from './tag-url';
+import { publicIdFromExcerptUrlPart } from './excerpt-url';
 
 /**
  * The entity an address of this site opens, named the way the address names
@@ -22,7 +23,14 @@ export type InternalUrlTarget =
   | { entityType: 'event'; publicId: string }
   | { entityType: 'page'; slug: string }
   | { entityType: 'diary-entry'; date: string }
-  | { entityType: 'tag'; publicId: string };
+  | { entityType: 'tag'; publicId: string }
+  | {
+      entityType: 'excerpt';
+      parent:
+        | { type: 'project' | 'event'; publicId: string }
+        | { type: 'diary-entry'; date: string };
+      publicId: string;
+    };
 
 /**
  * Where this site lives. `origins` holds every origin the site answers on —
@@ -80,24 +88,31 @@ function targetFromSegments(segments: string[]): InternalUrlTarget | undefined {
     if (!publicIdIsValid(projectPublicId)) return undefined;
     if (!childKind) return { entityType: 'project', publicId: projectPublicId };
     if (!childPart) return undefined;
-    const publicId = publicIdFromProjectSectionUrlPart(childPart);
-    if (!publicIdIsValid(publicId)) return undefined;
-    if (childKind === 'sections')
+    if (childKind === 'sections') {
+      const publicId = publicIdFromProjectSectionUrlPart(childPart);
+      if (!publicIdIsValid(publicId)) return undefined;
       return { entityType: 'project-section', projectPublicId, publicId };
-    return undefined;
+    }
+    return excerptOf(
+      { type: 'project', publicId: projectPublicId },
+      childKind,
+      childPart,
+    );
   }
-  if (childKind) return undefined;
   if (section === 'events') {
     const publicId = publicIdFromEventUrlPart(part);
-    return publicIdIsValid(publicId)
-      ? { entityType: 'event', publicId }
-      : undefined;
+    if (!publicIdIsValid(publicId)) return undefined;
+    if (!childKind) return { entityType: 'event', publicId };
+    return excerptOf({ type: 'event', publicId }, childKind, childPart);
   }
-  if (section === 'pages') return { entityType: 'page', slug: part };
   if (section === 'diary') {
     const date = dateFromDiaryUrlPart(part);
-    return date ? { entityType: 'diary-entry', date } : undefined;
+    if (!date) return undefined;
+    if (!childKind) return { entityType: 'diary-entry', date };
+    return excerptOf({ type: 'diary-entry', date }, childKind, childPart);
   }
+  if (childKind) return undefined;
+  if (section === 'pages') return { entityType: 'page', slug: part };
   if (section === 'tags') {
     const publicId = publicIdFromTagUrlPart(part);
     return publicIdIsValid(publicId)
@@ -105,6 +120,19 @@ function targetFromSegments(segments: string[]): InternalUrlTarget | undefined {
       : undefined;
   }
   return undefined;
+}
+
+/** An excerpt under its parent: `…/excerpts/<slug>-<id>/`, and nothing else. */
+function excerptOf(
+  parent: Extract<InternalUrlTarget, { entityType: 'excerpt' }>['parent'],
+  childKind: string,
+  childPart: string | undefined,
+): InternalUrlTarget | undefined {
+  if (childKind !== 'excerpts' || !childPart) return undefined;
+  const publicId = publicIdFromExcerptUrlPart(childPart);
+  return publicIdIsValid(publicId)
+    ? { entityType: 'excerpt', parent, publicId }
+    : undefined;
 }
 
 /**

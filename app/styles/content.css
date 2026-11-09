@@ -53,7 +53,7 @@
    * with it; `anywhere` breaks it only when nothing else can be done.
    */
   .content-prose
-    :is(p, li, blockquote, h2, h3, .ce-paragraph, .ce-header, .cdx-quote) {
+    :is(p, li, blockquote, h2, h3, h4, .ce-paragraph, .ce-header, .cdx-quote) {
     overflow-wrap: anywhere;
   }
 
@@ -74,6 +74,19 @@
 
   .content-prose h3 {
     @apply text-[1.2rem] font-bold tracking-tight;
+    padding: 0 !important;
+    margin: 0 !important;
+    line-height: 1.25 !important;
+  }
+
+  /*
+   * A level-three heading of a text shown one level down — an excerpt's,
+   * under the excerpt's own title on its parent's page (`headingShift` of
+   * `ContentRenderer`): still a heading, a step under the h3 its level-two
+   * headings become there.
+   */
+  .content-prose h4 {
+    @apply text-lg font-bold tracking-tight;
     padding: 0 !important;
     margin: 0 !important;
     line-height: 1.25 !important;
@@ -523,14 +536,16 @@
 }
 
 /*
- * The place a find of the search led to (`app/composables/search-landing.ts`):
- * a light laid over it — tinted, ringed and glowing in the accent — that
- * stays two seconds as it is and fades over four, as long as `LIT_MS` keeps
- * it; the words found stay marked in it. The light lets every click through, and stands under the sticky
- * headers (`z-10`). While the reader is there, what the place cuts short is
- * read in full: a note clamped to two lines, a title cut with an ellipsis.
+ * The place a link landed on (`app/composables/landing.ts`) — a find of the
+ * search, a heading of the contents, a status of the feed: a light laid over
+ * it — tinted, ringed and glowing in the accent — that stays two seconds as
+ * it is and fades over four, as long as `LIT_MS` keeps it; the words found
+ * stay marked in it. The light lets every click through, and stands under
+ * the sticky headers (`z-10`). While the reader is there, what the place cuts
+ * short is read in full: a note clamped to two lines, a title cut with an
+ * ellipsis.
  */
-.search-landing-light {
+.landing-light {
   position: fixed;
   top: 0;
   left: 0;
@@ -540,15 +555,15 @@
   box-shadow:
     inset 0 0 0 0.2rem var(--color-accent),
     0 0 2rem 0.5rem color-mix(in oklab, var(--color-accent) 85%, transparent);
-  animation: search-landing 4s linear 2s both;
+  animation: landing-light 4s linear 2s both;
 }
 
-::highlight(search-found) {
+::highlight(landing-words) {
   background-color: color-mix(in oklab, var(--color-accent) 28%, transparent);
   color: var(--color-text-1);
 }
 
-:is([data-search-found], [data-search-found] *):is(
+:is([data-landing-found], [data-landing-found] *):is(
   .line-clamp-1,
   .line-clamp-2,
   .line-clamp-3
@@ -558,13 +573,13 @@
   overflow: visible;
 }
 
-:is([data-search-found], [data-search-found] *).truncate {
+:is([data-landing-found], [data-landing-found] *).truncate {
   overflow: visible;
   text-overflow: clip;
   white-space: normal;
 }
 
-@keyframes search-landing {
+@keyframes landing-light {
   from {
     opacity: 1;
   }
@@ -574,7 +589,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .search-landing-light {
+  .landing-light {
     animation: none;
   }
 }

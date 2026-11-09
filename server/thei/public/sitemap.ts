@@ -14,6 +14,14 @@ import {
   buildProjectUrl,
 } from '#layers/thei/shared/project-url';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
+import {
+  buildExcerptUrl,
+  type ExcerptParentAddress,
+} from '#layers/thei/shared/excerpt-url';
+import {
+  excerptSubjectLimit,
+  type ExcerptParentType,
+} from '#layers/thei/shared/excerpt';
 import { utcDayOf } from '#layers/thei/shared/date-range';
 
 export type SitemapEntry = {
@@ -40,6 +48,17 @@ export type SitemapProjectSection = {
   updatedAt: number;
 };
 
+export type SitemapExcerpt = {
+  parentType: ExcerptParentType;
+  parentId: string;
+  humanReadableSlug: string;
+  publicId: string;
+  isPrivate: boolean;
+  /** How open what it is about is; absent for an excerpt about nothing. */
+  subjectAccess?: ProjectEventAccessLevel;
+  updatedAt: number;
+};
+
 export type SitemapEvent = AccessLike & {
   eventUuid: string;
   humanReadableSlug: string;
@@ -50,6 +69,7 @@ export type SitemapEvent = AccessLike & {
 export type SitemapPage = AccessLike & { slug: string; updatedAt: number };
 
 export type SitemapDiaryEntry = AccessLike & {
+  diaryUuid: string;
   date: string;
   updatedAt: number;
 };
@@ -65,6 +85,7 @@ export type SitemapTagUsage = {
 export type SitemapInput = {
   projects: readonly SitemapProject[];
   sections: readonly SitemapProjectSection[];
+  excerpts: readonly SitemapExcerpt[];
   events: readonly SitemapEvent[];
   pages: readonly SitemapPage[];
   diaryEntries: readonly SitemapDiaryEntry[];
@@ -118,6 +139,44 @@ export function buildSitemapEntries(input: SitemapInput): SitemapEntry[] {
       ];
     });
 
+  // An excerpt is reachable only when its parent is listable and it is not
+  // private on its own, exactly as a section is — and what it is about may
+  // be listed too (`excerptListed`).
+  const eventByUuid = new Map(events.map((event) => [event.eventUuid, event]));
+  const entryByUuid = new Map(
+    diaryEntries.map((entry) => [entry.diaryUuid, entry]),
+  );
+  const parentAddress = (
+    item: SitemapExcerpt,
+  ): ExcerptParentAddress | undefined => {
+    switch (item.parentType) {
+      case 'project': {
+        const project = projectByUuid.get(item.parentId);
+        return project && { type: 'project', ...project };
+      }
+      case 'event': {
+        const event = eventByUuid.get(item.parentId);
+        return event && { type: 'event', ...event };
+      }
+      case 'diary-entry': {
+        const entry = entryByUuid.get(item.parentId);
+        return entry && { type: 'diary-entry', date: entry.date };
+      }
+    }
+  };
+  const excerpts = (items: readonly SitemapExcerpt[]): SitemapEntry[] =>
+    items.flatMap((item) => {
+      if (item.isPrivate || excerptSubjectLimit(item.subjectAccess)) return [];
+      const parent = parentAddress(item);
+      if (!parent) return [];
+      return [
+        {
+          path: buildExcerptUrl(parent, item.humanReadableSlug, item.publicId),
+          lastmod: isoDate(item.updatedAt),
+        },
+      ];
+    });
+
   // A tag is visible through its entities, so one hanging only on entities
   // nobody may list is not a page worth pointing a crawler at.
   const listableIds = new Set([
@@ -166,6 +225,7 @@ export function buildSitemapEntries(input: SitemapInput): SitemapEntry[] {
       ];
     }),
     ...sections(input.sections),
+    ...excerpts(input.excerpts),
     ...events.map((event) => ({
       path: buildEventUrl(event.humanReadableSlug, event.publicId),
       lastmod: isoDate(event.updatedAt),

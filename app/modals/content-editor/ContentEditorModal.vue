@@ -35,6 +35,11 @@ import {
 import { bindEditorFilePaste } from '#layers/thei/app/composables/editor-file-paste';
 import { bindEditorPlainFields } from '#layers/thei/app/composables/editor-plain-fields';
 import {
+  bindListBackspace,
+  keepListInText,
+  type ListTabulator,
+} from '#layers/thei/app/composables/editor-list-backspace';
+import {
   prepareContentFiles,
   skippedContentFilesMessage,
 } from '#layers/thei/app/composables/content-files';
@@ -122,6 +127,7 @@ import {
 } from '#layers/thei/app/composables/editor-inline-keep';
 import { bindEditorTextDrop } from '#layers/thei/app/composables/editor-text-drop';
 import { bindEditorTextPaste } from '#layers/thei/app/composables/editor-text-paste';
+import { bindEditorPasteTypography } from '#layers/thei/app/composables/paste-typography';
 import { bindEditorNativeUndo } from '#layers/thei/app/composables/editor-native-undo';
 import { bindEditorKeyboardBoundary } from '#layers/thei/app/composables/editor-keyboard-boundary';
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
@@ -204,6 +210,12 @@ const props = defineProps<{
      * is still open; this is how the editor shows that time without reopening.
      */
     current?: () => ContentFieldModelValue | null | undefined;
+    /**
+     * Whether the text's owner — the entity, or a part of one — is not saved
+     * yet: the form holds the text until it is, and the foot says so rather
+     * than "never saved".
+     */
+    ownerUnsaved?: () => boolean;
     /**
      * An AI's edit of this text to go through at once: the editor opens on
      * its review, from the proposal under the field.
@@ -1098,6 +1110,22 @@ async function startEditor() {
   }
 
   class TheiList extends List {
+    // The list's own parts, kept private in its types: its block, and the
+    // part that answers its keys, made anew when the style changes.
+    private get parts() {
+      return this as unknown as { block: BlockAPI; list: ListTabulator };
+    }
+
+    override render() {
+      keepListInText(this.parts.list);
+      return super.render();
+    }
+
+    // The block's holder stays while the list inside it is drawn anew.
+    rendered() {
+      bindListBackspace(this.parts.block.holder, () => this.parts.list);
+    }
+
     override renderSettings() {
       const settings = super.renderSettings();
       const styleIcons = [
@@ -1114,6 +1142,9 @@ async function startEditor() {
     }
   }
 
+  // Bound before the editor and every other paste and drop: they all read
+  // the words with their typography.
+  bound(bindEditorPasteTypography(holder.value!));
   // Bound before the editor, so its listeners stand in front of Editor.js's
   // own drop handling on the same holder.
   bound(
@@ -1697,6 +1728,7 @@ function contentToolLabels() {
   return {
     chooseMedia: phrase.value.content_choose_media,
     addMedia: phrase.value.content_add_media,
+    addMediaAfter: phrase.value.content_add_media_after,
     removeMedia: phrase.value.delete,
     chooseFile: phrase.value.content_choose_file,
     chooseAudio: phrase.value.content_choose_audio,
@@ -1930,7 +1962,7 @@ function editorJsI18nMessages() {
             variant="accent"
             phone-icon="save"
             :phone-done="isSaved"
-            :label="phrase.save"
+            :label="isSaved ? phrase.saved : phrase.save"
             :disabled="saving || !isDirty"
             :data-editor-save="isSaved ? 'saved' : isDirty ? 'dirty' : 'clean'"
             @click="save"
@@ -1997,7 +2029,11 @@ function editorJsI18nMessages() {
           <ContentStats v-bind="headerSummary" compact class="min-w-0" />
           <span class="inline-flex items-center gap-1 text-text-3">
             <TheiTime v-if="updatedAt" :datetime="updatedAt" />
-            <template v-else>{{ phrase.content_never_saved }}</template>
+            <template v-else>{{
+              props.modalData.ownerUnsaved?.()
+                ? phrase.content_in_form
+                : phrase.content_never_saved
+            }}</template>
           </span>
         </div>
       </template>

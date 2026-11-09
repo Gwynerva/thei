@@ -113,6 +113,7 @@ function openEditor(review?: string) {
     onSave: (value) => emit('update:modelValue', value),
     onSaved: () => emit('saved'),
     current: () => props.modelValue,
+    ownerUnsaved: () => Boolean(owner) && !owner!.ownerId(),
     review,
     onTaken: (taken) => ai?.noteTaken(taken),
   });
@@ -183,7 +184,13 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
         }}
       </span>
       <TheiTime v-if="modelValue?.updatedAt" :datetime="modelValue.updatedAt" />
-      <span v-else>{{ phrase.content_never_saved }}</span>
+      <!-- A text of an owner not saved yet is held by the form: it was not
+           lost, and it was never on the server either. -->
+      <span v-else>{{
+        owner && !owner.ownerId()
+          ? phrase.content_in_form
+          : phrase.content_never_saved
+      }}</span>
     </span>
   </button>
 </template>

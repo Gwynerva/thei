@@ -28,6 +28,8 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { E2E_PORT } from '../tests/e2e/fixture-url';
 import { labPort, paths as labPaths } from '../tests/lab/config';
+import { ensureFfmpeg } from '../update/ffmpeg/install';
+import { resolveFfmpegTools } from '../update/ffmpeg/tools';
 
 const targets = {
   playground: { dir: '.playground', port: 3000, fork: true },
@@ -84,6 +86,16 @@ if (await portTaken(target.port)) {
       'Not moving to another port: find the owner first.',
   );
   process.exit(1);
+}
+
+// Every server here finds ffmpeg under the repository (`update/ffmpeg/`);
+// the first one fetches it.
+if (resolveFfmpegTools({ cwd: root }).source === 'missing') {
+  await ensureFfmpeg({
+    projectPath: root,
+    log: (message) => console.log(message),
+    removeOthers: true,
+  });
 }
 
 if (process.argv.includes('--build')) {

@@ -51,15 +51,19 @@ function startOf(title: string) {
 
 function richest(
   index: SiteIndex,
-  kind: SiteEntity['kind'],
+  kind: SiteEntity['kind'] | readonly SiteEntity['kind'][],
   score: (entity: SiteEntity) => number,
   test: (entity: SiteEntity) => boolean = () => true,
 ) {
+  const kinds: readonly SiteEntity['kind'][] =
+    typeof kind === 'string' ? [kind] : kind;
   const candidates = Object.values(index.entities).filter(
-    (entity) => entity.kind === kind && test(entity),
+    (entity) => kinds.includes(entity.kind) && test(entity),
   );
   if (!candidates.length)
-    throw new Error(`The archive has no ${kind} for this screen.`);
+    throw new Error(
+      `The archive has no ${kinds.join(' or ')} for this screen.`,
+    );
   return candidates.sort(
     (a, b) => score(b) - score(a) || a.ref.localeCompare(b.ref),
   )[0]!;
@@ -72,14 +76,22 @@ const project = (index: SiteIndex) =>
   richest(
     index,
     'project',
-    (e) => n(e, 'sections') * 3 + n(e, 'words') / 100,
+    (e) =>
+      n(e, 'sections') * 3 +
+      n(e, 'excerpts') * 2 +
+      n(e, 'excerptsAbout') +
+      n(e, 'words') / 100,
     (e) => e.access === 'public',
   );
 const event = (index: SiteIndex) =>
   richest(
     index,
     'event',
-    (e) => n(e, 'pictures') + n(e, 'files') + (e.facts.hasBanner ? 5 : 0),
+    (e) =>
+      n(e, 'pictures') +
+      n(e, 'files') +
+      n(e, 'excerpts') * 2 +
+      (e.facts.hasBanner ? 5 : 0),
     (e) => e.access === 'public',
   );
 const section = (index: SiteIndex) =>
@@ -93,9 +105,40 @@ const diary = (index: SiteIndex) =>
   richest(
     index,
     'diary',
-    (e) => n(e, 'pictures') * 2 + n(e, 'words') / 100 + n(e, 'relations'),
+    (e) =>
+      n(e, 'pictures') * 2 +
+      n(e, 'words') / 100 +
+      n(e, 'relations') +
+      n(e, 'excerpts') * 2,
     // A day still to come waits: a stranger cannot open it yet.
     (e) => e.access === 'public' && !e.facts.future,
+  );
+/** An excerpt a stranger may read: of an open parent, not private. */
+const excerpt = (index: SiteIndex) =>
+  richest(
+    index,
+    'excerpt',
+    (e) => n(e, 'words') / 50 + (e.facts.hasBanner ? 5 : 0) + n(e, 'about') * 2,
+    (e) => e.access === 'public',
+  );
+/** An excerpt its parent's form opens on: not private, so its row is named by its title alone. */
+const ownExcerpt = (index: SiteIndex) =>
+  richest(
+    index,
+    'excerpt',
+    (e) => n(e, 'words') / 50 + n(e, 'about') * 2,
+    (e) => !e.facts.private,
+  );
+/**
+ * What the most excerpts are about: its form lists them on a tab of its
+ * relations, and deleting it asks what becomes of them.
+ */
+const subjectOfExcerpts = (index: SiteIndex) =>
+  richest(
+    index,
+    ['project', 'event', 'diary'],
+    (e) => n(e, 'excerptsAbout'),
+    (e) => n(e, 'excerptsAbout') > 0,
   );
 /** A general section, open in the tab a project's form shows first. */
 const generalSection = (index: SiteIndex) =>
@@ -164,6 +207,12 @@ export const SCREENS: Screen[] = [
     path: (index) => section(index).publicUrl!,
   },
   {
+    id: 'excerpt',
+    title: 'An excerpt',
+    role: 'visitor',
+    path: (index) => excerpt(index).publicUrl!,
+  },
+  {
     id: 'event',
     title: 'An event',
     role: 'visitor',
@@ -174,6 +223,28 @@ export const SCREENS: Screen[] = [
     title: 'A diary entry',
     role: 'visitor',
     path: (index) => diary(index).publicUrl!,
+  },
+  {
+    // A visitor's window of a file — here an avatar of the history, which
+    // the archive has several of — the window an address naming a file
+    // open (`#…~open`) opens too. The address itself names the file by an
+    // id the site made, which the index does not keep.
+    id: 'file-window',
+    title: "A file's window",
+    role: 'visitor',
+    path: () => '/',
+    steps: () => [
+      {
+        label: 'Open the history of avatars',
+        action: { click: { role: 'button', name: /^1 of \d+$/ } },
+        options: { answer: { role: 'button', name: 'Avatar', exact: true } },
+      },
+      {
+        label: 'Open an avatar',
+        action: { click: { role: 'button', name: 'Avatar', exact: true } },
+        options: { answer: { role: 'dialog' }, timeoutMs: 15_000 },
+      },
+    ],
   },
   {
     id: 'search',
@@ -234,6 +305,59 @@ export const SCREENS: Screen[] = [
           },
         },
         options: { answer: { role: 'dialog' }, timeoutMs: 15_000 },
+      },
+    ],
+  },
+  {
+    id: 'admin-excerpt',
+    title: "An excerpt in its parent's form",
+    role: 'owner',
+    path: (index) =>
+      index.entities[ownExcerpt(index).parent!]?.adminUrl ??
+      ownExcerpt(index).adminUrl,
+    steps: (index) => [
+      {
+        label: 'Open the excerpt',
+        action: {
+          click: {
+            role: 'button',
+            name: startOf(ownExcerpt(index).title ?? ''),
+          },
+        },
+        options: { answer: { role: 'dialog' }, timeoutMs: 15_000 },
+      },
+    ],
+  },
+  {
+    id: 'admin-excerpts-about',
+    title: 'The excerpts about an entity, in its form',
+    role: 'owner',
+    path: (index) => subjectOfExcerpts(index).adminUrl,
+    steps: () => [
+      {
+        label: 'Look at the excerpts about it',
+        action: { click: { role: 'tab', name: /^Excerpts\b/ } },
+        options: {
+          answer: { role: 'button', name: /^Edit excerpt: / },
+          timeoutMs: 15_000,
+        },
+      },
+    ],
+  },
+  {
+    // Only looked at: the pane's own Delete is never pressed.
+    id: 'admin-excerpts-on-delete',
+    title: 'Deleting what excerpts are about',
+    role: 'owner',
+    path: (index) => subjectOfExcerpts(index).adminUrl,
+    steps: () => [
+      {
+        label: 'Ask to delete it',
+        action: { click: { role: 'button', name: 'Delete', exact: true } },
+        options: {
+          answer: { role: 'button', name: 'Keep the excerpts about it' },
+          timeoutMs: 15_000,
+        },
       },
     ],
   },
@@ -309,6 +433,37 @@ export const SCREENS: Screen[] = [
     title: 'File library',
     role: 'owner',
     path: () => '/admin/assets/',
+  },
+  {
+    // The picker that reuses stored files, opened from an event's form, so
+    // what is here — the event and what it is related to — stands first.
+    id: 'admin-file-picker',
+    title: 'Picking a stored file again',
+    role: 'owner',
+    path: (index) => event(index).adminUrl,
+    steps: () => [
+      {
+        label: 'Add a file to the event',
+        action: { click: { role: 'button', name: 'Add File' } },
+        options: { answer: { role: 'button', name: 'Reuse' } },
+      },
+      {
+        label: 'Reuse a stored file',
+        action: { click: { role: 'button', name: 'Reuse' } },
+        options: {
+          answer: { role: 'searchbox', name: 'Search files' },
+          timeoutMs: 15_000,
+        },
+      },
+      {
+        label: 'Search the diary of a year',
+        action: {
+          fill: { role: 'searchbox', name: 'Search files' },
+          text: 'diary 2019',
+        },
+        options: { answer: { text: 'Diary entries' }, timeoutMs: 15_000 },
+      },
+    ],
   },
   {
     id: 'admin-video',

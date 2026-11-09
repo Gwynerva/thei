@@ -37,11 +37,13 @@ export interface VideoSizeEstimate {
 const CONTAINER_SHARE = 0.01;
 const CONTAINER_HEAD = 4096;
 /**
- * Where two-pass libvpx lands against the rate it was given: a few percent
- * under, measured on this project's own clips (0.88–0.99 of the target,
- * most of them around 0.96).
+ * Where two-pass libvpx lands against the rate it was given, with both
+ * passes at `cpu-used 4` and ffmpeg 9: 0.99–1.05 of the target on five
+ * clips of the media bench (docs/media-quality.md), a screen recording and
+ * a still camera among them. A single pass is not predictable — 0.83 to
+ * 3.2 of the target on the same clips — which is why there is none.
  */
-const ENCODER_LANDING = 0.96;
+const ENCODER_LANDING = 1.02;
 
 /**
  * What a video variant will weigh, before it is made.

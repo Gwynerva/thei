@@ -497,6 +497,55 @@ describe('Open Graph content', () => {
     expect(content.date).toBeUndefined();
   });
 
+  it('draws an excerpt as a part of its parent, only where both are open', async () => {
+    project('p', Public);
+    project('closed', Private);
+    diary('d', '2026-03-04', Public, 'The day.');
+    const excerpt = (
+      uuid: string,
+      parent: [string, string],
+      isPrivate = false,
+    ) => {
+      context.db
+        .insert(context.schema.excerpts)
+        .values({
+          excerptUuid: uuid,
+          parentType: parent[0] as never,
+          parentId: parent[1],
+          title: `${uuid} title`,
+          summary: `${uuid} summary`,
+          humanReadableSlug: uuid,
+          publicId: uuid,
+          isPrivate,
+          sortOrder: 0,
+          createdAt: Date.parse('2026-03-05T00:00:00Z'),
+          updatedAt: Date.parse('2026-03-05T00:00:00Z'),
+        })
+        .run();
+      relate(['excerpt', uuid], ['project', 'p']);
+    };
+    excerpt('x1', ['diary-entry', 'd']);
+    excerpt('x2', ['diary-entry', 'd']);
+    excerpt('x-private', ['diary-entry', 'd'], true);
+    excerpt('x-closed', ['project', 'closed']);
+    expect(await resolve({ kind: 'excerpt', id: 'x-private' })).toBeUndefined();
+    expect(await resolve({ kind: 'excerpt', id: 'x-closed' })).toBeUndefined();
+    expect(await resolve({ kind: 'excerpt', id: 'missing' })).toBeUndefined();
+
+    const content = (await resolve({ kind: 'excerpt', id: 'x2' }))!;
+    expect(content.kind).toBe('excerpt');
+    expect(content.headline).toBe('x2 title');
+    // Its place among the excerpts of its parent a stranger sees, and the
+    // parent named by its day.
+    expect(content.chips[0]!.label).toBe('Excerpt 2 of 2');
+    expect(content.parent?.title).toBe('March 4, 2026');
+    expect(content.summary).toBe('x2 summary');
+    expect(content.picture).toMatchObject({
+      type: 'generated',
+      kind: 'excerpt',
+    });
+  });
+
   it('shows the first picture of a public body a card can draw', async () => {
     project('p', Public);
     datedSection('photo', 'p', ['2020-01-01', '2020-02-01']);

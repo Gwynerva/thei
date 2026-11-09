@@ -211,6 +211,59 @@ describe('a proposal in a form', () => {
     }
   });
 
+  it('names what an excerpt is about by the refs it carries', () => {
+    const subject = { entityType: 'event', entityId: 'e-1', type: 'related' };
+    const entry = {
+      ref: 'diary-entry:2026-01-02',
+      type: 'diary-entry',
+      id: 'd-1',
+      title: '2026-01-02',
+    } as const;
+    const refs = { [other.ref]: other, [entry.ref]: entry };
+    const excerpt: Record<string, unknown> = { about: null };
+    takeInto(
+      excerpt,
+      action(
+        'update',
+        { changes: { subject: { ref: other.ref } } },
+        { refs, base: { fields: ['about'], after: { about: subject } } },
+      ),
+      'excerpt:x-1',
+    );
+    expect(excerpt.about).toEqual({ ...subject, title: 'Ice walk' });
+    // Of a parent's excerpts, each one's; a diary entry by its day.
+    const parent: Record<string, unknown> = { excerpts: [] };
+    takeInto(
+      parent,
+      action(
+        'update',
+        { changes: { excerpts: [{ id: 'x-1', subject: { ref: entry.ref } }] } },
+        {
+          refs,
+          base: {
+            fields: ['excerpts'],
+            after: {
+              excerpts: [
+                {
+                  excerptUuid: 'x-1',
+                  about: {
+                    entityType: 'diary-entry',
+                    entityId: 'd-1',
+                    type: 'related',
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ),
+      self,
+    );
+    expect(
+      (parent.excerpts as { about: { date?: string } }[])[0]!.about.date,
+    ).toBe('2026-01-02');
+  });
+
   it('is not laid in when its kind goes elsewhere', () => {
     for (const kind of [...APPLIED, ...ELSEWHERE])
       expect(
@@ -262,12 +315,23 @@ describe('the fields of a form', () => {
     };
     const key = { kind: 'project', id: 'p-1' } as never;
     const section = { sectionUuid: 's-1', title: 'One', periods: [] };
+    const excerpt = {
+      excerptUuid: 'x-1',
+      title: 'One',
+      about: { entityType: 'event', entityId: 'e-1', type: 'related' },
+    };
     const change: Record<(typeof kinds)[number], (field: string) => unknown> = {
       project: (field) => projectChanges({} as never, { [field]: 42 }, key),
       'project-section': (field) =>
         projectChanges(
           { sections: [section] } as never,
           { sections: [{ id: 's-1', [field]: 42 }] },
+          key,
+        ),
+      excerpt: (field) =>
+        projectChanges(
+          { excerpts: [excerpt] } as never,
+          { excerpts: [{ id: 'x-1', [field]: 42 }] },
           key,
         ),
       event: (field) => eventChanges({} as never, { [field]: 42 }, key),

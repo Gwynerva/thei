@@ -1607,7 +1607,6 @@ const directHref = computed(() =>
             v-model:quality-level="edit.qualityLevel.value"
             v-model:format-choice="edit.formatChoice.value"
             v-model:strip-audio="edit.stripAudio.value"
-            v-model:fast-conversion="edit.fastConversion.value"
             :kind="frameKind"
             :disabled="Boolean(busy)"
             :rotation="edit.rotation.value"

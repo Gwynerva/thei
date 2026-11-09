@@ -5,7 +5,10 @@ import {
   PERIOD_OWNER_TYPES,
   type Period,
 } from '#layers/thei/shared/period';
-import { isRelationEntityType } from '#layers/thei/shared/relation';
+import {
+  isRelationEntityType,
+  isRelationTargetType,
+} from '#layers/thei/shared/relation';
 import {
   ENTITY_ACCESS,
   findEntity,
@@ -55,8 +58,10 @@ export function checkedRelationEnd(owner: EntityKey, ref: unknown): EntityKey {
     refuse('Only projects, events and diary entries have relations.');
   const other = findEntity(ref);
   if (!other) refuse(`There is no ${String(ref)}.`);
-  if (!isRelationEntityType(other.kind))
-    refuse('A relation joins projects, events and diary entries only.');
+  if (!isRelationTargetType(other.kind))
+    refuse(
+      'A relation leads to a project, an event or a diary entry; an excerpt is related from its own side only.',
+    );
   if (other.kind === owner.kind && other.id === owner.id)
     refuse('An entity is not related to itself.');
   return other;

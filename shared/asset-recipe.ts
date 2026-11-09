@@ -20,7 +20,6 @@ type RecipePhrases = Pick<
   | 'asset_recipe_quality_level'
   | 'asset_recipe_lossless'
   | 'asset_recipe_no_audio'
-  | 'asset_recipe_fast'
   | 'asset_recipe_bitrate'
   | 'asset_recipe_mono'
   | 'asset_quality_minimal'
@@ -106,7 +105,6 @@ export function describeAssetRecipe(
     'WebM',
     describeQuality(settings.quality, phrase),
     ...(settings.stripAudio ? [phrase.asset_recipe_no_audio] : []),
-    ...(settings.fastConversion ? [phrase.asset_recipe_fast] : []),
   ].join(' · ');
 }
 

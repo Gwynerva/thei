@@ -58,6 +58,29 @@ was and says so. `apt-get update && apt-get install nodejs` brings a server
 the installer set up to the newest Node of its line; restart the site and
 update again.
 
+**ffmpeg** is not an npm package either. Video and sound are processed by a
+static build from [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds)
+that the engine pins by release tag and SHA-256 (`update/ffmpeg/tools.ts`)
+and fetches into the instance's `.thei/bin/ffmpeg/<version>/` — about 150 MB
+from github.com, which installing the engine needs anyway. The installer
+fetches it after the dependencies, and an update whose version pins a newer
+build fetches that one in a phase (`phases/0.0.8-ffmpeg.ts`) before the
+build, beside the one the old build still runs. The new build removes the
+older versions when it boots, once its own is in place; a newer one, or a
+download under way, it leaves alone. `xz-utils` is what unpacks the
+archive: the installer brings it, and the phase asks for it before it
+downloads anything. The directory outlives a reinstall of `node_modules`
+and the setup wizard, which empties the rest of `.thei/` on a fresh site;
+`rollback.sh` fetches again the version of the build it puts back, which
+the newer build has removed. The build is a GPL build run as a separate
+process, never linked. To use an ffmpeg of your own — on a platform without
+a pinned build, or a distribution's — set `THEI_FFMPEG` (and
+`THEI_FFPROBE`, which defaults to the ffprobe beside it) in the service's
+environment: the installer and the update then only check that it runs, and
+fetch nothing. A site without ffmpeg runs, says so in its journal when it
+starts, and refuses video and sound. A lost `.thei/bin/` is restored with
+`bun node_modules/thei/update/ffmpeg/cli.ts` in the instance directory.
+
 `better-sqlite3` carries its binaries in the package — Linux with glibc 2.34
 or newer (Debian 12, Ubuntu 22.04 and later) or musl, on x64 and arm64 — and
 nothing compiles at install, from GitHub or anywhere else. The installer and
@@ -115,6 +138,16 @@ a newer release tag, and updates on one click.
 page says when the last one was made. An update migrates `content/` to the new
 version, and the way back from an update gone wrong is that copy — see
 [When something goes wrong](#when-something-goes-wrong).
+
+**A server set up by the installer of 0.0.7 or earlier may lack `xz`.** The
+update to 0.0.8 fetches ffmpeg (see [Install](#install)) as a `.tar.xz`,
+which the system's `tar` unpacks with it. The update asks for it before it
+downloads anything, and without it stops with the site as it was and says
+so. Install it as root, then update again:
+
+```bash
+apt-get install xz-utils
+```
 
 What happens when you press the button:
 
@@ -536,7 +569,8 @@ them; each may only grow, never change:
 | Path             | What it is                                                         |
 | ---------------- | ------------------------------------------------------------------ |
 | `install.sh`     | The one-line installer.                                            |
-| `rollback.sh`    | Restores the previous build and manifest.                          |
+| `rollback.sh`    | Restores the previous build and manifest, and its ffmpeg.          |
+| `ffmpeg/`        | Which ffmpeg build is pinned, where it lives, how it is fetched.   |
 | `instance/`      | Templates for the files the installer writes into an instance.     |
 | `instance.ts`    | Renders the instance manifest from its template.                   |
 | `migrations/`    | Every schema and data change, plus the runner and the ledger.      |

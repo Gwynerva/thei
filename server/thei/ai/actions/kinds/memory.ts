@@ -32,6 +32,7 @@ import { clipped } from './common';
 const REMEMBERED = [
   'project',
   'project-section',
+  'excerpt',
   'event',
   'diary-entry',
   'page',

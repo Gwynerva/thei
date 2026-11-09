@@ -3,90 +3,63 @@ import { AssetType } from '#layers/thei/shared/asset';
 import {
   assetLibraryWhereFromQuery,
   assetLibraryWhereQuery,
-  isAssetLibraryDescribed,
-  type AssetLibraryAssetsResponse,
-  type AssetLibraryDescribed,
+  isAssetLibraryOrder,
+  type AssetLibraryItem,
+  type AssetLibraryOrder,
   type AssetLibraryWhere,
 } from '#layers/thei/shared/asset-library';
 import { libraryAssetDetailsModal } from '../../../modals/asset-library/details-modal';
-import {
-  assetDeletionLabel,
-  assetFileLabel,
-} from '../../../composables/asset-library-labels';
+
+/**
+ * Every stored file, as the picker shows them (`AssetLibraryFeed`): one run
+ * through time, a click opening a file's window. The address keeps the
+ * search, so a narrowed library can be shared and reloaded.
+ */
 definePageMeta({ layout: 'admin' });
 await useAdminTabTitle(computed(() => phrase.value.asset_library));
 const route = useRoute(),
   router = useRouter();
-const search = ref(typeof route.query.q === 'string' ? route.query.q : '');
+const value = route.query;
+const search = ref(typeof value.q === 'string' ? value.q : '');
+const type = ref<AssetType | ''>(
+  Object.values(AssetType).includes(value.type as AssetType)
+    ? (value.type as AssetType)
+    : '',
+);
+const where = ref<AssetLibraryWhere>(assetLibraryWhereFromQuery(value));
+const order = ref<AssetLibraryOrder>(
+  isAssetLibraryOrder(value.order) ? value.order : 'new',
+);
 const ready = ref(false);
-const focusedAssetUuid = ref<string>();
 let timer: ReturnType<typeof setTimeout> | undefined;
-/** The address holds the search, so a filtered list can be shared and reloaded. */
-const query = computed(() => {
-  const value = route.query;
-  return {
-    q: typeof value.q === 'string' ? value.q : '',
-    type: Object.values(AssetType).includes(value.type as AssetType)
-      ? (value.type as AssetType)
-      : undefined,
-    ...assetLibraryWhereQuery(assetLibraryWhereFromQuery(value)),
-    described: isAssetLibraryDescribed(value.described)
-      ? value.described
-      : undefined,
-    page: Number(value.page ?? 1),
-  };
-});
-const { data, status, error, refresh } =
-  await useFetch<AssetLibraryAssetsResponse>('/api/admin/assets', { query });
-const type = computed({
-  get: () => query.value.type ?? '',
-  set: (value: AssetType | '') => update({ type: value || undefined }),
-});
-const where = computed({
-  get: () => assetLibraryWhereFromQuery(query.value),
-  set: (value: AssetLibraryWhere) =>
-    update({
-      source: undefined,
-      usage: undefined,
-      ...assetLibraryWhereQuery(value),
-    }),
-});
-const described = computed({
-  get: () => query.value.described ?? '',
-  set: (value: AssetLibraryDescribed | '') =>
-    update({ described: value || undefined }),
-});
-function resetFilters() {
-  clearTimeout(timer);
-  search.value = '';
-  update({
-    q: undefined,
-    type: undefined,
-    source: undefined,
-    usage: undefined,
-    described: undefined,
-  });
-}
-function update(values: Record<string, string | undefined>) {
+function remember() {
   void router.replace({
     path: route.path,
-    query: { ...route.query, page: undefined, ...values },
+    query: {
+      q: search.value.trim() || undefined,
+      type: type.value || undefined,
+      ...assetLibraryWhereQuery(where.value),
+      order: order.value === 'new' ? undefined : order.value,
+    },
   });
 }
-watch(search, (value) => {
+watch(search, () => {
   clearTimeout(timer);
-  timer = setTimeout(() => update({ q: value.trim() || undefined }), 250);
+  timer = setTimeout(remember, 250);
 });
-watch(
-  () => route.query.q,
-  (value) => {
-    search.value = typeof value === 'string' ? value : '';
-  },
-);
+watch([type, where, order], remember);
 onBeforeUnmount(() => clearTimeout(timer));
 onMounted(() => {
   ready.value = true;
 });
+
+const stickyHeader = useStickyHeaderContext();
+const stickyTop = computed(
+  () => `calc(var(--height-admin-bar) + ${stickyHeader?.height.value ?? 0}px)`,
+);
+function open(item: AssetLibraryItem) {
+  void openModal(libraryAssetDetailsModal, { asset: item.asset });
+}
 </script>
 <template>
   <StickyGlassHeader width="var(--width-wide)"
@@ -98,97 +71,21 @@ onMounted(() => {
     class="m-auto w-(--width-wide) max-w-full px-window py-lg"
     :data-admin-assets-ready="ready ? 'true' : undefined"
   >
-    <AssetLibrarySearch
-      v-model:search="search"
-      v-model:type="type"
-      v-model:where="where"
-      v-model:described="described"
-      :facets="data?.facets"
-    />
-    <div v-if="error" class="mt-md text-text-error">
-      {{ phrase.failed_to_fetch_data }}
-      <button class="cursor-pointer underline" @click="refresh()">
-        {{ phrase.asset_library_retry }}
-      </button>
-    </div>
-    <div
-      v-if="data?.items.length"
-      class="mt-md grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-sm"
-    >
-      <AssetTile
-        v-for="item in data.items"
-        :key="item.asset.assetUuid"
-        :data-asset-uuid="item.asset.assetUuid"
-        :media="item.asset.media"
-        :extension="item.asset.extension || '?'"
-        :engaged="focusedAssetUuid === item.asset.assetUuid"
-        :tone="item.deleteAfter ? 'danger' : 'default'"
-        loop
-        :overlay="{
-          showVideo: true,
-          showExtension: true,
-          showSize: true,
-          size: item.asset.size,
-          pendingDeletion: Boolean(item.deleteAfter),
-          inHistory: item.inHistory,
-          heldByAi: item.heldByAi,
-        }"
-        :aria-label="assetFileLabel(item.asset)"
-        :data-title-popup="
-          item.deleteAfter
-            ? assetDeletionLabel(item.deleteAfter)
-            : item.inHistory
-              ? phrase.asset_library_in_history
-              : item.heldByAi
-                ? phrase.asset_library_held_by_ai
-                : assetFileLabel(item.asset)
-        "
-        class="aspect-square w-full cursor-pointer"
-        @focus="focusedAssetUuid = item.asset.assetUuid"
-        @blur="focusedAssetUuid = undefined"
-        @click="openModal(libraryAssetDetailsModal, { asset: item.asset })"
-      />
-    </div>
-    <template v-else-if="status !== 'pending' && !error">
-      <EmptyState
-        v-if="query.q || query.type || where !== 'all' || described"
-        icon="face-dead"
-        :title="phrase.asset_library_empty"
-        :description="phrase.admin_search_no_results_description"
-        class="mt-md"
-      >
-        <button
-          type="button"
-          class="flex cursor-pointer items-center gap-xs rounded-normal border
-            border-border-1 bg-bg-1 px-sm py-xs text-sm font-semibold
-            text-text-2 transition hocus:border-border-3 hocus:text-text-1"
-          @click="resetFilters"
-        >
-          <Icon name="close" />
-          <span>{{ phrase.reset_search }}</span>
-        </button>
-      </EmptyState>
-      <EmptyState
-        v-else
-        icon="gallery"
-        :title="phrase.admin_assets_empty"
-        :description="phrase.admin_assets_empty_description"
-        class="mt-md"
-      />
-    </template>
-    <div
-      v-if="status === 'pending' && !data?.items.length"
-      role="status"
-      class="p-md text-center"
-    >
-      <Icon name="loading" />
-    </div>
-    <Pagination
-      v-if="data"
-      :page="data.page"
-      :page-count="data.pageCount"
-      :pending="status === 'pending'"
-      class="pt-md"
-    />
+    <!-- An opaque box: the admin's grid never shows through the files. -->
+    <Box class="p-sm sm:p-md">
+      <ClientOnly>
+        <AssetLibraryFeed
+          v-model:search="search"
+          v-model:type="type"
+          v-model:where="where"
+          v-model:order="order"
+          :sticky-top="stickyTop"
+          ground="box"
+          bleed="-mx-sm px-sm sm:-mx-md sm:px-md"
+          @choose="open"
+          @preview="open"
+        />
+      </ClientOnly>
+    </Box>
   </div>
 </template>

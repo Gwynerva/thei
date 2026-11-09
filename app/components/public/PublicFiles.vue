@@ -29,6 +29,14 @@ const openable = computed(() =>
     (file): file is PublicFile => !isPublicSecret(file) && viewable(file),
   ),
 );
+/** The window's address names the file among the page's files. */
+function open(file: PublicFile) {
+  openPublicAssets(
+    openable.value,
+    file,
+    openable.value.map((each) => ({ zone: 'files' as const, file: each.key })),
+  );
+}
 </script>
 
 <template>
@@ -54,7 +62,7 @@ const openable = computed(() =>
         button
         :data-file="file.key"
         data-opens-viewer
-        @activate="openPublicAssets(openable, file)"
+        @activate="open(file)"
       />
       <PublicCompactResourceItem
         v-else-if="viewable(file)"
@@ -65,7 +73,7 @@ const openable = computed(() =>
         button
         :data-file="file.key"
         data-opens-viewer
-        @activate="openPublicAssets(openable, file)"
+        @activate="open(file)"
       />
       <PublicCompactResourceItem
         v-else

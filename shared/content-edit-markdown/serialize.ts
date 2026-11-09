@@ -15,7 +15,7 @@ import { contentIntegrationUrl } from '../content-integrations';
 import { isContentEntityType } from '../content-link';
 import { decodeHtmlEntities, inlineHtmlToPhrasing } from './inline';
 import { theiLinkUrl } from './links';
-import { directiveAttributeValue, writeEditMarkdown } from './syntax';
+import { writeEditMarkdown } from './syntax';
 
 /**
  * A stored text as editing Markdown: what an AI client reads, and what it
@@ -98,12 +98,10 @@ function attributes(
   values: Record<string, string | undefined>,
 ): Record<string, string> {
   return Object.fromEntries(
-    Object.entries(values)
-      .filter(
-        (entry): entry is [string, string] =>
-          typeof entry[1] === 'string' && entry[1] !== '',
-      )
-      .map(([key, value]) => [key, directiveAttributeValue(value)]),
+    Object.entries(values).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[1] === 'string' && entry[1] !== '',
+    ),
   );
 }
 

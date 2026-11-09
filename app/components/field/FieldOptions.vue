@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { IconName } from '#thei/icons';
-import { useFieldLabelName } from './field-label';
+import { useFieldLabelName } from './field-label-name';
 
 export interface FieldOptionValue {
   icon?: IconName;

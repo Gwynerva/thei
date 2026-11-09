@@ -402,9 +402,7 @@ test('a picture shown as a file is the same block, its caption kept with its mar
   // picture itself.
   await expect(card.locator('[data-attachment-thumbnail]')).toBeVisible();
   await expect(card.locator('[contenteditable="true"] b')).toHaveText('set');
-  await expect(
-    page.locator('dialog').getByRole('button', { name: 'Save', exact: true }),
-  ).toBeEnabled();
+  await expect(page.locator('dialog [data-editor-save]')).toBeEnabled();
 
   await setting('Show as a picture');
   await expect(pic.locator('[data-content-attachment]')).toHaveCount(0);
@@ -459,9 +457,206 @@ test('a gallery’s caption shows its placeholder only while the picture shown h
   await expect.poll(placeholder).toBe('"Caption"');
 
   // Showing another picture changes nothing in the text.
+  await expect(page.locator('dialog [data-editor-save]')).toBeDisabled();
+});
+
+/** New pictures handed to the file picker the «+» over a picture opens. */
+async function pickNewPictures(page: Page, names: string[]) {
+  await page.locator('input[type=file]').setInputFiles(
+    await Promise.all(
+      names.map(async (name) => {
+        const { type, bytes } = await picture(name);
+        return { name, mimeType: type, buffer: bytes };
+      }),
+    ),
+  );
+}
+
+/** Waits until the gallery shows this many pictures, every upload landed. */
+async function expectTiles(page: Page, id: string, count: number) {
+  const gallery = page.locator(`dialog .ce-block[data-id="${id}"]`);
+  await expect(gallery.locator('[aria-pressed]')).toHaveCount(count, {
+    timeout: 30_000,
+  });
+  await expect(gallery.locator('[data-pending-upload]')).toHaveCount(0);
+}
+
+/** The files of a gallery in the order of its tiles, read off the view. */
+async function galleryFiles(page: Page, id: string) {
+  const gallery = page.locator(`dialog .ce-block[data-id="${id}"]`);
+  const tiles = gallery.locator('[aria-pressed]');
+  const files: string[] = [];
+  for (let index = 0; index < (await tiles.count()); index++) {
+    await tiles.nth(index).click();
+    await expect(tiles.nth(index)).toHaveAttribute('aria-pressed', 'true');
+    files.push(
+      (await gallery
+        .locator('[data-gallery-view]')
+        .getAttribute('data-file')) ?? '',
+    );
+  }
+  return files;
+}
+
+test('the «+» over a picture makes it a gallery that starts with it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const { assetUuid } = await uploadFile(
+    page.request,
+    'png',
+    (await picture('any.png')).bytes,
+  );
+  const { pageUuid } = await createPage(page.request, [
+    {
+      id: 'pic',
+      type: 'contentMedia',
+      data: {
+        asset: { assetUuid },
+        layout: 'centered',
+        caption: 'Sun<b>set</b>',
+      },
+    },
+  ]);
+  await openEditor(page, pageUuid);
+  const pic = page.locator('dialog .ce-block[data-id="pic"]');
+  // The edit button carries the file's size.
   await expect(
-    page.locator('dialog').getByRole('button', { name: 'Save', exact: true }),
-  ).toBeDisabled();
+    pic.locator('[data-content-media-edit] [data-content-media-size]'),
+  ).toBeVisible();
+
+  await pic.getByRole('button', { name: 'Add image or video' }).click();
+  await pickNewPictures(page, ['a.png', 'b.png']);
+
+  // The same block, a gallery now: the picture first with its caption, the
+  // new ones after it.
+  await expect(pic.locator('[data-content-gallery]')).toHaveCount(1);
+  await expectTiles(page, 'pic', 3);
+  const files = await galleryFiles(page, 'pic');
+  expect(files).toHaveLength(3);
+  expect(files[0]).toBe(assetUuid);
+  await pic.locator('[aria-pressed]').first().click();
+  await expect(
+    pic.locator('[data-gallery-view] [contenteditable="true"] b'),
+  ).toHaveText('set');
+  await expect(page.locator('dialog [data-editor-save]')).toBeEnabled();
+});
+
+test('the «+» over a gallery’s picture adds right after it, in the order picked', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const assets = [];
+  for (let index = 0; index < 3; index++)
+    assets.push(
+      await uploadFile(page.request, 'png', (await picture('any.png')).bytes),
+    );
+  const { pageUuid } = await createPage(page.request, [
+    {
+      id: 'gallery',
+      type: 'contentGallery',
+      data: {
+        items: assets.map(({ assetUuid }, index) => ({
+          id: `g${index}`,
+          asset: { assetUuid },
+        })),
+      },
+    },
+  ]);
+  await openEditor(page, pageUuid);
+  const gallery = page.locator('dialog .ce-block[data-id="gallery"]');
+  await gallery.locator('[aria-pressed]').first().click();
+  await gallery
+    .locator('[data-gallery-view]')
+    .getByRole('button', { name: 'Add image or video after this one' })
+    .click();
+  await pickNewPictures(page, ['a.png', 'b.png']);
+  await expectTiles(page, 'gallery', 5);
+
+  const files = await galleryFiles(page, 'gallery');
+  expect(files).toHaveLength(5);
+  expect(files[0]).toBe(assets[0]!.assetUuid);
+  expect(files.slice(3)).toEqual([assets[1]!.assetUuid, assets[2]!.assetUuid]);
+  for (const added of files.slice(1, 3))
+    expect(assets.map((asset) => asset.assetUuid)).not.toContain(added);
+});
+
+test('the «+» over a picture changes nothing when nothing is picked', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const { assetUuid } = await uploadFile(
+    page.request,
+    'png',
+    (await picture('any.png')).bytes,
+  );
+  const { pageUuid } = await createPage(page.request, [
+    {
+      id: 'pic',
+      type: 'contentMedia',
+      data: { asset: { assetUuid }, layout: 'centered' },
+    },
+  ]);
+  await openEditor(page, pageUuid);
+  const pic = page.locator('dialog .ce-block[data-id="pic"]');
+  await pic.getByRole('button', { name: 'Add image or video' }).click();
+  await expect(page.locator('input[type=file]')).toBeAttached();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('input[type=file]')).not.toBeAttached();
+  await expect(pic.locator('[data-content-gallery]')).toHaveCount(0);
+  await expect(page.locator('dialog [data-editor-save]')).toBeDisabled();
+});
+
+test('the «+» over a picture turns back into it when nothing it picked lands', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const { assetUuid } = await uploadFile(
+    page.request,
+    'png',
+    (await picture('any.png')).bytes,
+  );
+  const { pageUuid } = await createPage(page.request, [
+    {
+      id: 'pic',
+      type: 'contentMedia',
+      data: { asset: { assetUuid }, layout: 'natural', caption: 'Dusk' },
+    },
+  ]);
+  // The new file is refused, as one over the limit would be.
+  await page.route('**/api/admin/assets/drafts/*/commit', (route) =>
+    route.fulfill({
+      status: 413,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        statusCode: 413,
+        message: 'File exceeds the maximum allowed size',
+      }),
+    }),
+  );
+  await openEditor(page, pageUuid);
+  const pic = page.locator('dialog .ce-block[data-id="pic"]');
+  await pic.getByRole('button', { name: 'Add image or video' }).click();
+  // Two at once, which skip the window a single file opens to ask how it
+  // is taken.
+  await pickNewPictures(page, ['a.png', 'b.png']);
+  await expect(pic.locator('[data-content-gallery]')).toHaveCount(1);
+  await expect(pic.locator('[data-pending-retry]')).toHaveCount(2, {
+    timeout: 30_000,
+  });
+  await pic.locator('[data-pending-cancel]').first().click();
+  // One still pending keeps the gallery.
+  await expect(pic.locator('[data-content-gallery]')).toHaveCount(1);
+  await pic.locator('[data-pending-cancel]').first().click();
+
+  // The picture again, laid out as it was, its caption kept: nothing to save.
+  await expect(pic.locator('[data-content-gallery]')).toHaveCount(0);
+  await expect(pic.locator('[data-content-media-layout]')).toHaveAttribute(
+    'data-content-media-layout',
+    'natural',
+  );
+  await expect(pic.locator('[contenteditable="true"]')).toHaveText('Dusk');
+  await expect(page.locator('dialog [data-editor-save]')).toBeDisabled();
 });
 
 test('the one file tile places what is picked by its kind', async ({

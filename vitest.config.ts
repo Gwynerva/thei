@@ -35,5 +35,8 @@ export default defineConfig({
     exclude: testExclude,
     typecheck: { exclude: testExclude },
     environment: 'node',
+    // The tests run the pinned ffmpeg from under the repository; the first
+    // run fetches it, and only warns when it cannot.
+    globalSetup: ['tests/setup/ffmpeg.ts'],
   },
 });

@@ -5,7 +5,7 @@ import {
 } from '#layers/thei/shared/admin/content-entity-search';
 import {
   isRelationEntityType,
-  RELATION_ENTITY_TYPES,
+  RELATION_TARGET_TYPES,
   type RelationEntityType,
 } from '#layers/thei/shared/relation';
 
@@ -43,7 +43,7 @@ export function useRelationRecommendations(keys: MaybeRefOrGetter<string[]>) {
         {
           query: {
             keys: missing.join(','),
-            entityTypes: RELATION_ENTITY_TYPES.join(','),
+            entityTypes: RELATION_TARGET_TYPES.join(','),
           },
         },
       );

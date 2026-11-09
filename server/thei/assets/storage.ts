@@ -27,7 +27,12 @@ import { randomId } from '#layers/thei/shared/utils/random-id';
 import { EntityPrefix, generateUnique, generateUniqueId } from '../entity-id';
 import { extractImageAccent } from './image-color';
 import { inspectVideoFile, videoSourceInfo } from './process';
-import { createMediaPreview, MEDIA_PREVIEW_EXTENSION } from './media-preview';
+import { unlessUnreadable } from './probe';
+import {
+  createMediaPreview,
+  MEDIA_PREVIEW_EXTENSION,
+  type MediaPreviewOrigin,
+} from './media-preview';
 import type { VideoThumbnailOptions } from './video-thumbnail';
 import { withProcessingSlot } from './queue';
 import { assetHeldSql } from './holds';
@@ -79,6 +84,7 @@ export async function createMediaPreviewAsset(
   source: AssetBytes,
   sourceType: AssetType.Image | AssetType.Video,
   options: VideoThumbnailOptions = {},
+  origin?: MediaPreviewOrigin,
 ): Promise<{
   previewAssetUuid: string;
   accent?: ImageAccent;
@@ -87,7 +93,7 @@ export async function createMediaPreviewAsset(
   /** Of a video: how well that frame shows it. */
   frameScore?: number;
 }> {
-  const preview = await createMediaPreview(source, sourceType, options);
+  const preview = await createMediaPreview(source, sourceType, options, origin);
   const previewBuffer = preview.buffer;
   const previewHash = sha256(previewBuffer);
   const previewFamilyUuid = `preview-${previewHash}`;
@@ -654,7 +660,9 @@ export async function completeVideoMeta(
     asset.contentHash,
     asset.extension,
   );
-  const inspected = await inspectVideoFile(filePath).catch(() => null);
+  // A file ffprobe cannot read keeps what it has; ffprobe that does not run
+  // fails the pass, which the next boot runs again.
+  const inspected = await inspectVideoFile(filePath).catch(unlessUnreadable);
 
   if (!inspected) return meta;
 

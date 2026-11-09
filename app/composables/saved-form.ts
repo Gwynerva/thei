@@ -1,13 +1,51 @@
+import { toRaw } from 'vue';
+
+/** What each mounted guard says would be lost by leaving the page now. */
+const pageGuards = new Set<() => boolean>();
+
+/**
+ * Set once the owner has agreed to leave from the page itself: the browser
+ * then does not ask the same question a second time.
+ */
+let leaveAgreed = false;
+
 /**
  * Asks the browser to confirm leaving the page — closing the tab, reloading,
  * following an address — while `shouldGuard` says something would be lost.
  */
 export function useBeforeUnloadGuard(shouldGuard: () => boolean) {
   const beforeUnload = (event: BeforeUnloadEvent) => {
-    if (shouldGuard()) event.preventDefault();
+    if (!leaveAgreed && shouldGuard()) event.preventDefault();
   };
-  onMounted(() => window.addEventListener('beforeunload', beforeUnload));
-  onUnmounted(() => window.removeEventListener('beforeunload', beforeUnload));
+  onMounted(() => {
+    pageGuards.add(shouldGuard);
+    window.addEventListener('beforeunload', beforeUnload);
+  });
+  onUnmounted(() => {
+    pageGuards.delete(shouldGuard);
+    window.removeEventListener('beforeunload', beforeUnload);
+  });
+}
+
+/**
+ * Leaves the page by something it does itself — signing out — asking first
+ * while any guard says something would be lost. Asked before `steps` begin,
+ * so «Cancel» leaves everything as it was; agreed, the browser does not ask
+ * again on the way out. `steps` leave the page, or answer false when the
+ * owner thought better of it on the way; then, and when a step fails — the
+ * server out of reach — the page stays, and closing it asks again.
+ */
+export async function leavePage(steps: () => Promise<boolean | void>) {
+  const wouldLose = [...pageGuards].some((guard) => guard());
+  if (wouldLose && !window.confirm(phrase.value.unsaved_changes_confirm))
+    return;
+  leaveAgreed = true;
+  try {
+    if ((await steps()) === false) leaveAgreed = false;
+  } catch (error) {
+    leaveAgreed = false;
+    throw error;
+  }
 }
 
 /**
@@ -76,6 +114,48 @@ export function changedOnlyIn(
     JSON.stringify(withoutFields(current, fields)) ===
     JSON.stringify(withoutFields(saved, fields))
   );
+}
+
+/**
+ * Whether one part of a list the form holds — a section, an excerpt, just
+ * handed over from its modal — is all that differs from the form's last
+ * save, content fields aside: saving it there is then the same decision as
+ * saving the form. The part is left out of both sides of the comparison,
+ * found in the form by the object it is and in the last save by its uuid;
+ * everything else has to match.
+ */
+export function changedOnlyInPart(
+  current: object,
+  savedSnapshot: string,
+  fields: readonly string[],
+  part: {
+    /** The form's field that holds the list: `sections`, `excerpts`. */
+    list: string;
+    /** The field of a part that holds its uuid. */
+    uuid: string;
+    item: object;
+    /** Its uuid, once a save gave it one. */
+    id: string | undefined;
+  },
+): boolean {
+  let saved: Record<string, unknown>;
+  try {
+    saved = JSON.parse(savedSnapshot) as Record<string, unknown>;
+  } catch {
+    return false;
+  }
+  const edited = toRaw(part.item);
+  const held = (current as Record<string, unknown>)[part.list];
+  const without = {
+    ...current,
+    [part.list]: ((held ?? []) as object[]).filter(
+      (entry) => toRaw(entry) !== edited,
+    ),
+  };
+  saved[part.list] = (
+    (saved[part.list] ?? []) as Record<string, unknown>[]
+  ).filter((entry) => !part.id || entry[part.uuid] !== part.id);
+  return changedOnlyIn(without, JSON.stringify(saved), fields);
 }
 
 /**

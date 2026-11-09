@@ -25,6 +25,7 @@ import {
   takenParts,
   type Correction,
   type Relink,
+  type Remark,
 } from './content-revise';
 import {
   contentLinkFrom,
@@ -111,6 +112,11 @@ export interface ReviewPart {
    * on words that had none.
    */
   link?: { words: string; from?: string; to?: string; made?: boolean };
+  /**
+   * A remark on words that read as a mistake of meaning: they are pointed
+   * at, not changed — the owner writes them otherwise, or keeps them.
+   */
+  remark?: boolean;
   /** A whole block: its mark is on the margin, not in a line. */
   whole: boolean;
   /** Words outside the running text: a caption, a title, a note. */
@@ -309,7 +315,8 @@ export function proofreadReview(
   states: ReadonlyMap<string, AiRevisePartState> = new Map(),
 ): ContentReview {
   const corrections = parts.filter(
-    (part): part is Correction => part.type === 'correction',
+    (part): part is Correction | Remark =>
+      part.type === 'correction' || part.type === 'remark',
   );
   const waiting = corrections.filter((part) => {
     const state = states.get(part.id);
@@ -339,11 +346,12 @@ export function proofreadReview(
       reason: part.reason,
       words: {
         before: part.find,
-        after: part.replacePlain,
+        after: part.type === 'remark' ? part.find : part.replacePlain,
         around: place ? [tail(place.before), head(place.after)] : ['', ''],
       },
+      ...(part.type === 'remark' ? { remark: true } : {}),
       // A link made keeps its words: what changes is where they lead.
-      ...(part.category === 'link'
+      ...(part.type === 'correction' && part.category === 'link'
         ? {
             link: {
               words: part.replacePlain,
@@ -419,6 +427,13 @@ export function proofreadReview(
       const { data } = placeTextEdits(base, placed, (id, stored, place) => {
         const part = placed.find((each) => each.id === id)!;
         const kept = decisions[id] === 'kept';
+        // A remark's words stay as they are, marked.
+        if (part.type === 'remark') {
+          if (!asideOf.has(id))
+            return `${markOpen(id)}${stored}${REVIEW_MARK.close}`;
+          aside.set(place.block, [...(aside.get(place.block) ?? []), id]);
+          return stored;
+        }
         const after = replacementFor(part, place);
         if (asideOf.has(id)) {
           aside.set(place.block, [...(aside.get(place.block) ?? []), id]);
@@ -745,7 +760,12 @@ export function orderReview(
     aligned ? base.blocks[aligned.map[from]!] : undefined;
 
   const reviewParts: ReviewPart[] = parts.flatMap((part): ReviewPart[] => {
-    if (part.type === 'correction' || part.type === 'relink') return [];
+    if (
+      part.type === 'correction' ||
+      part.type === 'relink' ||
+      part.type === 'remark'
+    )
+      return [];
     const state = states.get(part.id);
     const source = part.type === 'split' ? sourceOf(part.from) : undefined;
     return [

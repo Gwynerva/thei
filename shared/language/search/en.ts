@@ -42,5 +42,19 @@ export const englishSearch: SearchLanguagePack = {
     tag: ['tag'],
   },
   questionWords: new Set('what how when where why who which whose'.split(' ')),
+  libraryWords: {
+    image: 'photo photos picture pictures image images drawing drawings'.split(
+      ' ',
+    ),
+    video: 'video videos clip clips movie movies'.split(' '),
+    audio: 'audio song songs music recording recordings'.split(' '),
+    other: 'document documents'.split(' '),
+    'diary-entry': 'diary diaries'.split(' '),
+    event: 'event events'.split(' '),
+    project: 'project projects'.split(' '),
+    'project-section': 'section sections stage stages'.split(' '),
+    page: 'page pages'.split(' '),
+    any: 'file files'.split(' '),
+  },
   relativeDays: { today: 0, yesterday: -1 },
 };

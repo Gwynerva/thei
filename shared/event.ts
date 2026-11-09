@@ -10,6 +10,7 @@ import type {
 import type { TagEditItem } from './tag';
 import type { MediaDescriptor } from './media';
 import type { RelationEditItem } from './relation';
+import type { ExcerptItem } from './excerpt';
 
 export type EventEditData = {
   title: string;
@@ -25,6 +26,8 @@ export type EventEditData = {
   externalLinks?: ExternalLinkListItem[];
   tags?: TagEditItem[];
   relations?: RelationEditItem[];
+  /** The event's excerpts in their order; absent leaves them as they are. */
+  excerpts?: ExcerptItem[];
   action?: ProjectActionEditData;
   reminder?: string;
   /** Other names it is found by, every one; absent is none. */

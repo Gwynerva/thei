@@ -6,30 +6,27 @@ import {
   AI_ACTION_KINDS,
 } from '#layers/thei/shared/ai-actions';
 import type { AiMessagePart } from '#layers/thei/shared/ai';
-import { applyActions } from '../../ai/actions/apply';
 import { proposeActions } from '../../ai/actions/propose';
 import { AI_ACTION_DEFS, actionDef } from '../../ai/actions/registry';
 import { findAction, sessionActions, targetOf } from '../../ai/actions/rows';
 import { targetRef } from '../../ai/actions/target';
-import { undoActionHeld } from '../../ai/actions/undo';
 import type { PartStateRow } from '../../ai/actions/types';
 import { FORM_REFERENCE } from '../../ai/forms/changes';
-import {
-  latestAppSession,
-  openAppSession,
-  readableSession,
-  sessionForCall,
-} from '../../ai/sessions/app';
+import { findEntity, refOf } from '../../entity-kinds';
 import { findSession } from '../../ai/sessions/store';
-import { markContentWriteRequest } from '../../read-only-request';
-import { ADDS, CHANGES, READS, SUGGESTS } from '../annotations';
+import { CHANGES, READS, SUGGESTS } from '../annotations';
 import type { McpCallContext } from '../context';
-import { guardTool, McpToolError, REFUSED_META, toolResult } from '../result';
-import { mayEdit, requireScope, spendWrite } from '../scope';
+import { applyDirect } from '../direct';
+import { guardTool, REFUSED_META, toolResult } from '../result';
+import { mayEdit, spendWrite } from '../scope';
 
 /**
- * Sessions and the actions proposed in them: what an app proposes, applies
- * with an editor's key, reads back the owner's word on, and takes back.
+ * The actions of the archive, two ways. Thei's own model proposes them in
+ * the session it works in, and reads back the owner's word on them. An app
+ * with an editor's key applies them at once (`../direct.ts`): the owner
+ * agreed to its work in the app's own conversation, so nothing of it waits
+ * here; an app with a reader's key changes nothing. An app has no session
+ * in Thei.
  */
 
 /** Actions `session_actions` lists, the newest first. */
@@ -60,105 +57,98 @@ function actionLine(row: ReturnType<typeof findAction> & {}): string[] {
   return lines;
 }
 
+/**
+ * The refs of what a call applied, each once, as the archive's tools name
+ * them: a diary entry by its day. A deleted one keeps the ref it had.
+ */
+function appliedRefs(applied: { entity?: string }[]): string {
+  const refs = [
+    ...new Set(
+      applied.flatMap((item) => {
+        if (!item.entity) return [];
+        const key = item.entity.startsWith('asset:')
+          ? undefined
+          : findEntity(item.entity);
+        return [key ? refOf(key) : item.entity];
+      }),
+    ),
+  ];
+  return refs.length ? `: ${refs.join(', ')}` : '';
+}
+
 export function registerSessionTools(
   server: McpServer,
   context: McpCallContext,
 ) {
-  // Thei's own model works in the session it was started in.
-  if (!context.session)
+  const inSession = context.session;
+  // An app that only reads has no use for the kinds of action.
+  if (!inSession && !mayEdit(context.principal.scopes)) return;
+
+  if (inSession)
     server.registerTool(
-      'open_session',
+      'session_actions',
       {
-        title: 'Open a session',
+        title: 'Actions of the session',
         description:
-          'Starts a session of your own for a piece of work: what you ' +
-          'propose in it is shown to the owner together, under its title. ' +
-          'Without one, what you propose is gathered by your key and name, a ' +
-          'new session after half an hour of quiet.',
-        inputSchema: z.object({
-          title: z
-            .string()
-            .max(200)
-            .describe('A few words on what the work is, for the owner'),
-        }),
-        annotations: ADDS,
+          'What became of what was proposed in this session — waiting, ' +
+          'applied, declined, overtaken, undone — with the owner’s comments, ' +
+          'each a request for a new version of the action it is on (propose ' +
+          'it with supersedes).',
+        inputSchema: z.object({}),
+        annotations: READS,
       },
-      ({ title }) =>
+      () =>
         guardTool(() => {
-          spendWrite(context);
-          const sessionUuid = openAppSession(context, title);
-          return toolResult(
-            `Opened ${sessionUuid}. Name it as session in propose and session_actions.`,
-          );
+          const sessionUuid = inSession.sessionUuid;
+          const row = findSession(sessionUuid);
+          if (!row) return toolResult('The session is gone.');
+          const actions = sessionActions(sessionUuid)
+            .slice(-ACTIONS_LISTED)
+            .reverse();
+          const { db, schema } = THEI_SERVER.useDb();
+          const comments = new Map<string, string[]>();
+          for (const message of db
+            .select({
+              text: schema.aiMessages.text,
+              parts: schema.aiMessages.parts,
+            })
+            .from(schema.aiMessages)
+            .where(eq(schema.aiMessages.sessionUuid, sessionUuid))
+            .orderBy(asc(schema.aiMessages.seq))
+            .all() as { text: string; parts: AiMessagePart[] }[])
+            for (const part of message.parts)
+              if (part.type === 'comment') {
+                const list = comments.get(part.actionUuid) ?? [];
+                list.push(message.text);
+                comments.set(part.actionUuid, list);
+              }
+          const lines = [
+            `# ${sessionUuid}${row.title ? ` — ${row.title}` : ''}`,
+            '',
+            ...(actions.length
+              ? actions.flatMap((action) => [
+                  ...actionLine(action),
+                  ...(comments.get(action.actionUuid) ?? []).map(
+                    (text) => `  owner: ${text.replace(/\s+/g, ' ')}`,
+                  ),
+                ])
+              : ['_(nothing proposed yet)_']),
+          ];
+          return toolResult(lines.join('\n'));
         }),
     );
-
-  server.registerTool(
-    'session_actions',
-    {
-      title: 'Actions of a session',
-      description:
-        'What became of what was proposed in a session — waiting, applied, ' +
-        'declined, overtaken, undone — with the owner’s comments, each a ' +
-        'request for a new version of the action it is on (propose it with ' +
-        'supersedes). Without session, your latest.',
-      inputSchema: z.object({
-        session: z.string().optional(),
-      }),
-      annotations: READS,
-    },
-    ({ session }) =>
-      guardTool(() => {
-        const sessionUuid = session ?? latestAppSession(context);
-        if (!sessionUuid) return toolResult('No session yet.');
-        if (!readableSession(context, sessionUuid))
-          throw new McpToolError(
-            `There is no session ${sessionUuid} of this key.`,
-          );
-        const row = findSession(sessionUuid)!;
-        const actions = sessionActions(sessionUuid)
-          .slice(-ACTIONS_LISTED)
-          .reverse();
-        const { db, schema } = THEI_SERVER.useDb();
-        const comments = new Map<string, string[]>();
-        for (const message of db
-          .select({
-            text: schema.aiMessages.text,
-            parts: schema.aiMessages.parts,
-          })
-          .from(schema.aiMessages)
-          .where(eq(schema.aiMessages.sessionUuid, sessionUuid))
-          .orderBy(asc(schema.aiMessages.seq))
-          .all() as { text: string; parts: AiMessagePart[] }[])
-          for (const part of message.parts)
-            if (part.type === 'comment') {
-              const list = comments.get(part.actionUuid) ?? [];
-              list.push(message.text);
-              comments.set(part.actionUuid, list);
-            }
-        const lines = [
-          `# ${sessionUuid}${row.title ? ` — ${row.title}` : ''}${row.closedAt ? ' (archived by the owner)' : ''}`,
-          '',
-          ...(actions.length
-            ? actions.flatMap((action) => [
-                ...actionLine(action),
-                ...(comments.get(action.actionUuid) ?? []).map(
-                  (text) => `  owner: ${text.replace(/\s+/g, ' ')}`,
-                ),
-              ])
-            : ['_(nothing proposed yet)_']),
-        ];
-        return toolResult(lines.join('\n'));
-      }),
-  );
 
   server.registerTool(
     'describe_actions',
     {
       title: 'Describe actions',
-      description:
-        'The kinds of action you may propose, and, for the kinds named, what ' +
-        'each is for and the fields it takes. Read a kind before proposing it.',
+      description: inSession
+        ? 'The kinds of action you may propose, and, for the kinds named, ' +
+          'what each is for and the fields it takes. Read a kind before ' +
+          'proposing it.'
+        : 'The kinds of action apply_actions takes, and, for the kinds ' +
+          'named, what each is for and the fields it takes. Read a kind ' +
+          'before applying it.',
       inputSchema: z.object({
         kinds: z.array(z.string()).optional(),
       }),
@@ -188,9 +178,9 @@ export function registerSessionTools(
             '',
             def.reference,
             '',
-            // A new entity has no target, but for a section: its project.
+            // A new entity has no target, but for a part: its owner.
             def.kind === 'create'
-              ? 'Target: none, but a new section names its project.'
+              ? 'Target: none, but a new section names its project, and a new excerpt the project, event or diary entry it is a part of.'
               : def.kind === 'describe'
                 ? 'Target: the file, named by file (or as target asset:<id>).'
                 : `Targets: ${def.targets.join(', ')}.`,
@@ -202,13 +192,106 @@ export function registerSessionTools(
             lines.push(FORM_REFERENCE, '');
         }
         lines.push(
-          'Every action also takes target (a ref), reason (why, for the owner), certainty (sure: the owner can take it at a glance; unsure: theirs to judge, and the reason says what to weigh) and supersedes (an action of the session this one is a new version of).',
+          inSession
+            ? 'Every action also takes target (a ref), reason (why, for the owner), certainty (sure: the owner can take it at a glance; unsure: theirs to judge, and the reason says what to weigh) and supersedes (an action of the session this one is a new version of).'
+            : 'Every action also takes target (a ref). What the owner asked you for in your conversation is their consent, and the rules above that leave a change to the owner are met by it: a text written anew, a project made and filled, parts of an entry made excerpts, an entity deleted.',
         );
         return toolResult(lines.join('\n'));
       }),
   );
 
-  const editor = mayEdit(context.principal.scopes);
+  const actionsInput = z
+    .array(
+      z.looseObject({
+        kind: z.string(),
+        target: z.string().optional(),
+        certainty: z.enum(['sure', 'unsure']).optional(),
+        reason: z.string().optional(),
+        supersedes: z.string().optional(),
+      }),
+    )
+    .min(1)
+    .max(50);
+  const sourcesInput = z
+    .array(z.string())
+    .max(100)
+    .optional()
+    .describe('The refs you read to come to it');
+
+  if (!inSession) {
+    server.registerTool(
+      'apply_actions',
+      {
+        title: 'Apply actions',
+        description:
+          'Changes the archive at once, as the owner would in the admin: a ' +
+          'field set, tags, a relation, a text written or edited, a new ' +
+          'entity, a deletion… Applied together they are a bundle, in order; ' +
+          'an atomic one is applied whole or not at all, and a bundle that ' +
+          'fails midway is taken back. Each is checked against the archive ' +
+          'and refused with why when it does not hold — read a form changed ' +
+          'since you read it again. Every part of a text edit is made, sure ' +
+          'or not; a remark with no rewording changes nothing and is left ' +
+          'out — say it to the owner. Nothing is kept to undo: a text keeps ' +
+          'its earlier version in its history, but a deletion is final.',
+        inputSchema: z.object({
+          actions: actionsInput,
+          atomic: z.boolean().optional(),
+          sources: sourcesInput,
+        }),
+        annotations: CHANGES,
+      },
+      ({ actions, atomic, sources }) =>
+        guardTool(async () => {
+          spendWrite(context);
+          const { results, applied, unmade } = await applyDirect(context, {
+            actions: actions as never,
+            atomic,
+            sources,
+          });
+          const kindOf = (actionUuid: string) => {
+            const index = results.findIndex(
+              (result) =>
+                'actionUuid' in result && result.actionUuid === actionUuid,
+            );
+            return actions[index]?.kind ?? 'an action';
+          };
+          const refused = results.flatMap((result, index) =>
+            'refused' in result
+              ? [`- ${actions[index]!.kind}: refused — ${result.refused}`]
+              : [],
+          );
+          const lines = [
+            !applied
+              ? 'Nothing was applied.'
+              : applied.refused
+                ? `Not applied: ${applied.refused}`
+                : applied.failed
+                  ? `Not applied: ${kindOf(applied.failed.actionUuid)} failed — ${applied.failed.error}`
+                  : `Applied ${applied.applied.length}${appliedRefs(applied.applied)}.`,
+            ...refused,
+            ...results.flatMap((result, index) =>
+              'actionUuid' in result
+                ? result.dropped.map(
+                    (note) => `- ${actions[index]!.kind}: left out — ${note}`,
+                  )
+                : [],
+            ),
+            ...Object.entries(unmade ?? {}).flatMap(([actionUuid, notes]) =>
+              notes.map(
+                (note) => `- ${kindOf(actionUuid)}: not made — ${note}`,
+              ),
+            ),
+          ];
+          return {
+            ...toolResult(lines.join('\n')),
+            _meta: { [REFUSED_META]: refused.length },
+          };
+        }),
+    );
+    return;
+  }
+
   server.registerTool(
     'propose',
     {
@@ -220,51 +303,27 @@ export function registerSessionTools(
         'at all. Alternatives for one thing — two values of a field — go in ' +
         'calls of their own. Each is checked against the archive now and refused with ' +
         'why when it does not hold, or when the owner already declined it. ' +
-        (editor
-          ? 'With apply, your key applies them at once, as the owner would.'
-          : 'Nothing changes until the owner applies one.'),
+        'Nothing changes until the owner applies one.',
       inputSchema: z.object({
-        session: z.string().optional(),
-        actions: z
-          .array(
-            z.looseObject({
-              kind: z.string(),
-              target: z.string().optional(),
-              certainty: z.enum(['sure', 'unsure']).optional(),
-              reason: z.string().optional(),
-              supersedes: z.string().optional(),
-            }),
-          )
-          .min(1)
-          .max(50),
+        actions: actionsInput,
         atomic: z.boolean().optional(),
-        sources: z
-          .array(z.string())
-          .max(100)
-          .optional()
-          .describe('The refs you read to come to it'),
-        ...(editor ? { apply: z.boolean().optional() } : {}),
+        sources: sourcesInput,
       }),
-      annotations: editor ? CHANGES : SUGGESTS,
+      annotations: SUGGESTS,
     },
-    (args, ctx) =>
+    ({ actions, atomic, sources }, ctx) =>
       guardTool(async () => {
-        const { session, actions, atomic, sources } = args;
-        const apply = (args as { apply?: boolean }).apply === true;
-        if (apply) requireScope(context, 'edit', 'apply actions');
-        // Proposals fill the owner's page: a key spends its writes on them.
+        // Proposals fill the owner's page: they are spent as writes.
         spendWrite(context);
-        const sessionUuid = sessionForCall(context, session);
+        const sessionUuid = inSession.sessionUuid;
         const { results, bundleUuid } = await proposeActions({
           sessionUuid,
-          messageUuid: context.session?.messageUuid,
+          messageUuid: inSession.messageUuid,
           actions: actions as never,
           atomic,
           sources,
           // A call left for taking too long proposes nothing either.
-          live: context.session
-            ? () => context.session!.live() && !ctx.mcpReq.signal.aborted
-            : undefined,
+          live: () => inSession.live() && !ctx.mcpReq.signal.aborted,
         });
         const lines = [
           `In session ${sessionUuid}${bundleUuid ? `, as one bundle${atomic ? ' (atomic)' : ''}` : ''}:`,
@@ -277,74 +336,11 @@ export function registerSessionTools(
                 ],
           ),
         ];
-        const proposed = results.flatMap((result) =>
-          'actionUuid' in result ? [result.actionUuid] : [],
-        );
-        if (apply && proposed.length) {
-          const outcome = await applyActions({
-            actionUuids: proposed,
-            by: 'app',
-          });
-          if (outcome.applied.length) markContentWriteRequest(context.event);
-          lines.push(
-            '',
-            outcome.refused
-              ? `Not applied: ${outcome.refused}`
-              : outcome.failed
-                ? `Not applied: ${outcome.failed.actionUuid} failed — ${outcome.failed.error}`
-                : `Applied: ${outcome.applied.map((item) => `${item.actionUuid}${item.entity ? ` → ${item.entity}` : ''}`).join(', ')}.`,
-          );
-        }
+        const proposed = results.filter((result) => 'actionUuid' in result);
         return {
           ...toolResult(lines.join('\n')),
           _meta: { [REFUSED_META]: results.length - proposed.length },
         };
       }),
   );
-
-  if (editor)
-    server.registerTool(
-      'undo_action',
-      {
-        title: 'Undo an action',
-        description:
-          'Takes back an action you applied in a session of yours, while ' +
-          'nothing has changed since what it changed: fields put back, a ' +
-          'made entity taken back, a text given its earlier wording. A ' +
-          'deletion is final; what the owner applied is the owner’s to undo.',
-        inputSchema: z.object({ action: z.string() }),
-        annotations: CHANGES,
-      },
-      ({ action }) =>
-        guardTool(async () => {
-          const row = findAction(action);
-          const session = row && findSession(row.sessionUuid);
-          if (
-            !row ||
-            !session ||
-            session.tokenUuid !== context.principal.tokenUuid
-          )
-            throw new McpToolError(
-              `There is no action ${action} in a session of this key.`,
-            );
-          requireScope(context, 'edit', 'undo actions');
-          // An archived session is only read until the owner brings it back.
-          if (session.closedAt)
-            throw new McpToolError(
-              `The owner archived the session ${session.sessionUuid}: nothing in it changes until the owner brings it back.`,
-            );
-          if (row.appliedBy !== 'app')
-            throw new McpToolError(
-              row.appliedBy === 'owner'
-                ? `The owner applied ${action}: it is the owner’s to undo.`
-                : `${action} is not applied; there is nothing to undo.`,
-            );
-          spendWrite(context);
-          const entity = await undoActionHeld(action);
-          markContentWriteRequest(context.event);
-          return toolResult(
-            `Undone${entity ? `: ${targetRef(entity)} reads as before` : ''}.`,
-          );
-        }),
-    );
 }

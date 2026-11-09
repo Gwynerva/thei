@@ -4,6 +4,7 @@ import type {
   ContentSlot,
 } from '#layers/thei/shared/content';
 import type { ContentEntityType } from '#layers/thei/shared/content-link';
+import type { ExcerptParentType } from '#layers/thei/shared/excerpt';
 import { contentToEditMarkdown } from '#layers/thei/shared/content-edit-markdown/serialize';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
@@ -15,6 +16,7 @@ import {
 } from '#layers/thei/shared/project-url';
 import {
   RELATION_WORD_OF_TYPE,
+  type RelationEntityType,
   type RelationNote,
   type RelationWord,
 } from '#layers/thei/shared/relation';
@@ -117,6 +119,17 @@ export interface McpEntityView {
     hasBody: boolean;
   }[];
   project?: { ref: string; title: string };
+  /** An excerpt's parent: the entry, event or project it is a part of. */
+  parent?: { ref: string; title: string };
+  /** A parent's excerpts, in the owner's order, each with what it is about. */
+  excerpts?: {
+    ref: string;
+    title: string;
+    summary: string;
+    isPrivate: boolean;
+    /** The ref of what it is about; none once that was deleted. */
+    subject: string | null;
+  }[];
   /** A section with dates: its place among the project's stages, in time. */
   stage?: { index: number; count: number };
   /**
@@ -202,7 +215,7 @@ function tagsOf(containerType: 'project' | 'event', containerId: string) {
 }
 
 async function relationsOf(
-  type: 'project' | 'event' | 'diary-entry',
+  type: RelationEntityType,
   id: string,
 ): Promise<McpRelation[]> {
   const rows = readRelationRows({ type, id });
@@ -313,12 +326,48 @@ async function editableFields(
 ): Promise<Record<string, unknown>> {
   const loaded = await loadForm(key).catch(() => undefined);
   if (!loaded) return {};
-  if (key.kind !== 'project-section')
-    return formView(key.kind as FormKind, loaded.form);
-  const section = (loaded.form.sections ?? []).find(
-    (item: { sectionUuid?: string }) => item.sectionUuid === key.id,
+  if (key.kind === 'project-section') {
+    const section = (loaded.form.sections ?? []).find(
+      (item: { sectionUuid?: string }) => item.sectionUuid === key.id,
+    );
+    return section ? { banner: section.bannerAssetUuid ?? null } : {};
+  }
+  if (key.kind === 'excerpt') {
+    const excerpt = (loaded.form.excerpts ?? []).find(
+      (item: { excerptUuid?: string }) => item.excerptUuid === key.id,
+    );
+    return excerpt ? { banner: excerpt.bannerAssetUuid ?? null } : {};
+  }
+  return formView(key.kind as FormKind, loaded.form);
+}
+
+/** A parent's excerpts as its view lists them, each with the ref it is about. */
+async function excerptsOf(
+  parent: ExcerptParentType,
+  id: string,
+): Promise<NonNullable<McpEntityView['excerpts']>> {
+  const { db, schema } = THEI_SERVER.useDb();
+  const rows = db
+    .select()
+    .from(schema.excerpts)
+    .where(
+      and(
+        eq(schema.excerpts.parentType, parent),
+        eq(schema.excerpts.parentId, id),
+      ),
+    )
+    .orderBy(asc(schema.excerpts.sortOrder))
+    .all();
+  return Promise.all(
+    rows.map(async (row) => ({
+      ref: refOf({ kind: 'excerpt', id: row.excerptUuid }),
+      title: row.title,
+      summary: row.summary,
+      isPrivate: row.isPrivate,
+      // One at most (`normalizeExcerptAbout`).
+      subject: (await relationsOf('excerpt', row.excerptUuid))[0]?.ref ?? null,
+    })),
   );
-  return section ? { banner: section.bannerAssetUuid ?? null } : {};
 }
 
 /** A section's place among the dated sections of its project, by first date. */
@@ -419,6 +468,7 @@ async function readEntityView(
           periods: sectionPeriods.get(section.sectionUuid) ?? [],
           hasBody: bodies.has(section.sectionUuid),
         })),
+        excerpts: await excerptsOf('project', key.id),
         tags: tagsOf('project', key.id),
         relations,
         linkedInText: await linkedInText(texts, relations),
@@ -474,6 +524,38 @@ async function readEntityView(
       };
     }
 
+    case 'excerpt': {
+      const row = db
+        .select()
+        .from(schema.excerpts)
+        .where(eq(schema.excerpts.excerptUuid, key.id))
+        .get()!;
+      const parentKey: EntityKey = { kind: row.parentType, id: row.parentId };
+      const parent = entityFace(parentKey);
+      const relations = await relationsOf('excerpt', key.id);
+      return {
+        ref: refOf(key),
+        kind: key.kind,
+        title: row.title,
+        version: row.updatedAt,
+        fields: {
+          title: row.title,
+          summary: row.summary,
+          isPrivate: row.isPrivate,
+          slug: row.humanReadableSlug,
+          publicId: row.publicId,
+        },
+        texts: stripData(texts),
+        relations,
+        parent: {
+          ref: parent?.ref ?? refOf(parentKey),
+          title: parent?.title ?? '',
+        },
+        linkedInText: await linkedInText(texts, relations),
+        urls: { admin },
+      };
+    }
+
     case 'event': {
       const row = db
         .select()
@@ -498,6 +580,7 @@ async function readEntityView(
         },
         texts: stripData(texts),
         periods: readPeriods(db, schema, 'event', key.id),
+        excerpts: await excerptsOf('event', key.id),
         tags: tagsOf('event', key.id),
         relations,
         linkedInText: await linkedInText(texts, relations),
@@ -527,6 +610,7 @@ async function readEntityView(
           createdAt: row.createdAt,
         },
         texts: stripData(texts),
+        excerpts: await excerptsOf('diary-entry', key.id),
         relations,
         linkedInText: await linkedInText(texts, relations),
         urls: {

@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { chromium, type BrowserContext } from '@playwright/test';
+import { chromium, type BrowserContext, type Page } from '@playwright/test';
 import { labLoopbackOrigin, labOrigin, paths, repoRoot } from '../config';
 import { staleSeed } from '../archive/dates';
 import { SiteClient } from '../archive/site-client';
@@ -322,22 +322,27 @@ export async function play(options: PlayOptions) {
           blockedHosts.add(url.host);
           return route.abort();
         });
-      const page = await context.newPage();
       const pageErrors: string[] = [];
       const consoleErrors: string[] = [];
-      page.on(
-        'pageerror',
-        (error) =>
-          pageErrors.length < 20 &&
-          pageErrors.push(error.message.split('\n')[0]!),
-      );
-      page.on(
-        'console',
-        (message) =>
-          message.type() === 'error' &&
-          consoleErrors.length < 20 &&
-          consoleErrors.push(message.text().slice(0, 300)),
-      );
+      // Every tab of the play is heard: an eye of the admin opens the public
+      // page in a new one, where the play goes on.
+      const listen = (page: Page) => {
+        page.on(
+          'pageerror',
+          (error) =>
+            pageErrors.length < 20 &&
+            pageErrors.push(error.message.split('\n')[0]!),
+        );
+        page.on(
+          'console',
+          (message) =>
+            message.type() === 'error' &&
+            consoleErrors.length < 20 &&
+            consoleErrors.push(message.text().slice(0, 300)),
+        );
+      };
+      context.on('page', listen);
+      const page = await context.newPage();
 
       const task = taskText(item.scenario.task, picked, index);
       const before = await readTouched(

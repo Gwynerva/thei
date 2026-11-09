@@ -5,6 +5,21 @@ import {
   type SitemapInput,
 } from '../thei/public/sitemap';
 import { siteRoot } from '../thei/site-url';
+import { readExcerptSubjects } from '../thei/excerpts/subjects';
+
+/** Excerpts with how open what each is about is: the sitemap lists only those about something listed. */
+function withSubjects<Row extends { excerptUuid: string }>(rows: Row[]) {
+  const { db, schema } = THEI_SERVER.useDb();
+  const subjects = readExcerptSubjects(
+    db,
+    schema,
+    rows.map((row) => row.excerptUuid),
+  );
+  return rows.map(({ excerptUuid, ...row }) => {
+    const subject = subjects.get(excerptUuid);
+    return subject ? { ...row, subjectAccess: subject.access } : row;
+  });
+}
 
 /**
  * Chunk size for streaming the document out.
@@ -46,6 +61,20 @@ export default defineEventHandler(async (event) => {
       })
       .from(schema.projectContentSections)
       .all(),
+    excerpts: withSubjects(
+      db
+        .select({
+          excerptUuid: schema.excerpts.excerptUuid,
+          parentType: schema.excerpts.parentType,
+          parentId: schema.excerpts.parentId,
+          humanReadableSlug: schema.excerpts.humanReadableSlug,
+          publicId: schema.excerpts.publicId,
+          isPrivate: schema.excerpts.isPrivate,
+          updatedAt: schema.excerpts.updatedAt,
+        })
+        .from(schema.excerpts)
+        .all(),
+    ),
     events: db
       .select({
         eventUuid: schema.events.eventUuid,
@@ -66,6 +95,7 @@ export default defineEventHandler(async (event) => {
       .all(),
     diaryEntries: db
       .select({
+        diaryUuid: schema.diaryEntries.diaryUuid,
         date: schema.diaryEntries.date,
         access: schema.diaryEntries.access,
         updatedAt: schema.diaryEntries.updatedAt,

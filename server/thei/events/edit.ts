@@ -1,4 +1,13 @@
 import { and, eq } from 'drizzle-orm';
+import {
+  applyExcerpts,
+  deleteExcerptsOfParent,
+  detachExcerptsFromTarget,
+  excerptIdentities,
+  prepareExcerpts,
+  readExcerptsForForm,
+  type ExcerptsOnTargetDelete,
+} from '../excerpts';
 import { AssetType, type AssetRole } from '#layers/thei/shared/asset';
 import { validateEventData } from '#layers/thei/shared/admin/event';
 import type { EventEditData } from '#layers/thei/shared/event';
@@ -90,6 +99,18 @@ export async function saveEventEdit(
       message: error instanceof Error ? error.message : 'Invalid relations',
     } satisfies EventSaveResponse;
   }
+  let preparedExcerpts;
+  try {
+    preparedExcerpts = await prepareExcerpts(
+      { type: 'event', id: eventUuid },
+      result.excerpts,
+    );
+  } catch (error) {
+    return {
+      type: 'error',
+      message: error instanceof Error ? error.message : 'Invalid excerpts',
+    } satisfies EventSaveResponse;
+  }
 
   try {
     await ensureExternalLinks(
@@ -167,6 +188,12 @@ export async function saveEventEdit(
         { type: 'event', id: eventUuid },
         preparedRelations,
       );
+      applyExcerpts(
+        tx,
+        schema,
+        { type: 'event', id: eventUuid },
+        preparedExcerpts,
+      );
       syncEntityActionUsages(
         tx,
         schema,
@@ -220,6 +247,7 @@ export async function saveEventEdit(
       eventUuid,
       version: storedVersion('event', eventUuid),
       action: result.action,
+      excerpts: excerptIdentities(preparedExcerpts),
     } satisfies EventSaveResponse;
   } catch (error) {
     if (error instanceof EntityEditConflict)
@@ -238,7 +266,10 @@ export async function saveEventEdit(
 /** Deletes an event with everything that is its own. */
 export async function deleteEvent(
   eventUuid: string,
-  options: Pick<EntityEditOptions, 'onWrite' | 'beforeWrite'> = {},
+  options: Pick<EntityEditOptions, 'onWrite' | 'beforeWrite'> & {
+    /** What becomes of the excerpts about the event. */
+    excerpts?: ExcerptsOnTargetDelete;
+  } = {},
 ) {
   const usages = await THEI_SERVER.assets.usages.findByContainer(
     'event',
@@ -247,6 +278,13 @@ export async function deleteEvent(
   const { db, schema } = THEI_SERVER.useDb();
   db.transaction((tx) => {
     options.beforeWrite?.(tx, schema);
+    deleteExcerptsOfParent(tx, schema, { type: 'event', id: eventUuid });
+    detachExcerptsFromTarget(
+      tx,
+      schema,
+      { type: 'event', id: eventUuid },
+      options.excerpts ?? 'keep',
+    );
     deletePeriods(tx, schema, 'event', [eventUuid]);
     deleteRelations(tx, schema, { type: 'event', id: eventUuid });
     deleteShareLinks(tx, schema, 'event', eventUuid);
@@ -294,6 +332,7 @@ export async function readEventEdit(
     externalLinks,
     tags,
     relations,
+    excerpts,
   ] = await Promise.all([
     banner ? buildAdminAssetUrls(banner.asset) : undefined,
     actionIcon ? buildAdminAssetUrls(actionIcon.asset) : undefined,
@@ -309,6 +348,7 @@ export async function readEventEdit(
     getExternalLinkList({ type: 'event', id: eventUuid }),
     listTagsForContainer('event', eventUuid),
     getRelations({ type: 'event', id: eventUuid }),
+    readExcerptsForForm({ type: 'event', id: eventUuid }),
   ]);
   if (!content)
     throw createError({ statusCode: 500, message: 'Event content is missing' });
@@ -351,6 +391,7 @@ export async function readEventEdit(
     externalLinks,
     tags,
     relations,
+    excerpts,
     action: stored.action ?? { ...DEFAULT_PROJECT_ACTION },
     actionIconMedia: iconUrls?.media,
     actionIconAssetSize: actionIcon?.asset.size,

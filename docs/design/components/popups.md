@@ -44,9 +44,8 @@ The complex popups today:
 A new popup takes the side of the rule its content falls on. A sheet takes the
 width of the screen and up to 85% of its height; what it holds is centred when
 it has a width of its own.
-A sheet never hides what it was opened from: an anchor it would cover is
-scrolled up to just above it — the page, or the modal it is in — so the field
-asked about stays in sight.
+An anchor a sheet would cover is scrolled up to just above it — the page, or
+the modal it is in — so the field asked about stays in sight (`FloatingPopup`).
 
 ## Rules
 
@@ -67,23 +66,10 @@ asked about stays in sight.
   when the window is too short for it. With `none`, the content scrolls
   itself within `--floating-popup-available-height`, as the select's list,
   the ✦ menus (`AiSessionsMenu`) and a proposal at a label do.
-- **Placed, it keeps its side while it stays open.** What it holds may grow —
-  an answer coming into a ✦'s box — and it scrolls in the room that side has
-  rather than jump over its anchor (`usePopupPlacement`). Opened again, it
-  chooses afresh.
 - **Rows of a menu are `popup-item`:** one height, one rounding, one shade
   under the pointer; a row that deletes shades with
   `[--popup-item-hover:var(--color-bg-error)]`. The row Enter would choose is
   ringed (`ring-2 ring-accent/60 ring-inset`), as in the select.
-- **A list searched by typing always rings the row Enter takes.** It is the
-  first from the moment the list has rows, and again after each new answer,
-  so it is never a guess whether Enter picks something. The entity pickers
-  (`app/components/content/ContentEntityRow.vue`, through `useActiveRow` in
-  `app/composables/content-entity-search.ts`) draw it as an outline, which
-  stays visible over a row's picture. A choice pinned at the top of the list
-  is the row Enter takes until something is typed; after that, it is the
-  first match. The link picker rings it only while its search field has the
-  focus, since elsewhere Enter belongs to ✓.
 - **The arrow is on by default.** It points at the middle of the anchor, or,
   for an anchor as wide as the popup, near the edge the popup is aligned to,
   and goes when it would point past the anchor. Turn it off (`:arrow="false"`)
@@ -173,7 +159,19 @@ the edge, the room left, the arrow, hiding with the anchor — and
 sides that carry the border round it and its eased tip; `popupArrowStyle()`
 and `popupOrigin()` put it on the edge and grow the popup from it.
 `rangeAnchor()` turns words into an anchor: the last of their lines, wherever
-the text has moved.
+the text has moved. A popup keeps the side it was placed on while it stays
+open: what it holds may grow — an answer coming into a ✦'s box — and it
+scrolls in the room that side has rather than jump over its anchor. Opened
+again, it chooses afresh.
+
+The lists searched by typing ring the row Enter takes from the moment they
+have rows, and again after each new answer. The entity pickers
+(`app/components/content/ContentEntityRow.vue`, through `useActiveRow` in
+`app/composables/content-entity-search.ts`) draw it as an outline, which
+stays visible over a row's picture. A choice pinned at the top of the list
+is the row Enter takes until something is typed; after that, it is the
+first match. The link picker rings it only while its search field has the
+focus, since elsewhere Enter belongs to ✓.
 
 The others built on it:
 

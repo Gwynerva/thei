@@ -91,13 +91,13 @@ export async function ogPictureOfMedia(
 }
 
 /**
- * The picture of a section, an event or a diary entry: the banner of a
- * section or an event, else the first picture of its public body a card can
+ * The picture of a section, an excerpt, an event or a diary entry: the
+ * banner of a section, an excerpt or an event, else the first picture of its public body a card can
  * draw — a video by its still, passed over while it has none — else the
  * drawn icon its page shows for a thing without one.
  */
 export async function ogBodyPicture(
-  ownerType: 'event' | 'project-section' | 'diary-entry',
+  ownerType: 'event' | 'project-section' | 'excerpt' | 'diary-entry',
   ownerId: string,
   slot: ContentSlot,
 ): Promise<OgPicture | undefined> {

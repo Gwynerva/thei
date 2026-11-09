@@ -3,38 +3,53 @@ import type { MediaDescriptor } from '#layers/thei/shared/media';
 import {
   buildAdminAssetUrls,
   buildPublicEventMedia,
+  buildPublicExcerptMedia,
   buildPublicProjectSectionMedia,
 } from './assets/urls';
+import {
+  excerptParentContentEntity,
+  type ExcerptParentAddress,
+} from '#layers/thei/shared/excerpt-url';
 import type { StoredAssetRecord } from './assets/storage';
 import { buildPublicEntityPreviewMedia } from './public/content';
 import { deleteUsagesReleasing } from './assets/repository/usages/release';
 
 /**
- * Banners of events and sections.
+ * Banners of events, sections and excerpts.
  *
- * A banner is the picture an event or a section chose to be known by: its
+ * A banner is the picture an event, a section or an excerpt chose to be known by: its
  * page opens with it, and wherever the thing is shown as a card — a timeline,
  * a related block, a link — it stands for it ahead of the first picture of
  * its body. Like a project's, it is a placement of the `banner` role on the
  * thing itself; a project keeps its icon on cards.
  */
 
-type BannerOwner = 'event' | 'project-section';
+type BannerOwner = 'event' | 'project-section' | 'excerpt';
 type Addressed = { humanReadableSlug: string; publicId: string };
 
-/** An event or a section, with what its public addresses are built from. */
+/** An event, a section or an excerpt, with what its public addresses are built from. */
 export type BannerHolder =
   | { type: 'event'; event: Addressed & { eventUuid: string } }
   | {
       type: 'project-section';
       project: Addressed;
       section: Addressed & { sectionUuid: string };
+    }
+  | {
+      type: 'excerpt';
+      parent: ExcerptParentAddress;
+      excerpt: Addressed & { excerptUuid: string };
     };
 
 function holderId(holder: BannerHolder) {
-  return holder.type === 'event'
-    ? holder.event.eventUuid
-    : holder.section.sectionUuid;
+  switch (holder.type) {
+    case 'event':
+      return holder.event.eventUuid;
+    case 'project-section':
+      return holder.section.sectionUuid;
+    case 'excerpt':
+      return holder.excerpt.excerptUuid;
+  }
 }
 
 /** The banner's file, read by the one placement that holds it. */
@@ -154,38 +169,62 @@ export async function buildPublicBanner(
       ? await findEntityBannerAsset(holder.type, holderId(holder))
       : banner;
   if (!asset) return undefined;
-  return holder.type === 'event'
-    ? await buildPublicEventMedia(holder.event, asset, 'banner')
-    : await buildPublicProjectSectionMedia(
+  switch (holder.type) {
+    case 'event':
+      return buildPublicEventMedia(holder.event, asset, 'banner');
+    case 'project-section':
+      return buildPublicProjectSectionMedia(
         holder.project,
         holder.section,
         asset,
         'banner',
       );
+    case 'excerpt':
+      return buildPublicExcerptMedia(
+        holder.parent,
+        holder.excerpt,
+        asset,
+        'banner',
+      );
+  }
 }
 
-/** What stands for an event or a section in a card: its banner, else its body's picture. */
+/**
+ * What stands for an event, a section or an excerpt in a card: its banner,
+ * else its body's picture. An excerpt's pictures are served from its
+ * parent's address, as a section's are from its project's.
+ */
 export async function buildPublicCardMedia(
   holder: BannerHolder,
   includePrivate = false,
   banner?: StoredAssetRecord | null,
 ): Promise<MediaDescriptor> {
-  return (
-    (await buildPublicBanner(holder, banner)) ??
-    (holder.type === 'event'
-      ? buildPublicEntityPreviewMedia(
-          'event',
-          holder.event.eventUuid,
-          'event-body',
-          { type: 'event', ...holder.event },
-          includePrivate,
-        )
-      : buildPublicEntityPreviewMedia(
-          'project-section',
-          holder.section.sectionUuid,
-          'project-section-body',
-          { type: 'project', ...holder.project },
-          includePrivate,
-        ))
-  );
+  const own = await buildPublicBanner(holder, banner);
+  if (own) return own;
+  switch (holder.type) {
+    case 'event':
+      return buildPublicEntityPreviewMedia(
+        'event',
+        holder.event.eventUuid,
+        'event-body',
+        { type: 'event', ...holder.event },
+        includePrivate,
+      );
+    case 'project-section':
+      return buildPublicEntityPreviewMedia(
+        'project-section',
+        holder.section.sectionUuid,
+        'project-section-body',
+        { type: 'project', ...holder.project },
+        includePrivate,
+      );
+    case 'excerpt':
+      return buildPublicEntityPreviewMedia(
+        'excerpt',
+        holder.excerpt.excerptUuid,
+        'excerpt-body',
+        excerptParentContentEntity(holder.parent),
+        includePrivate,
+      );
+  }
 }

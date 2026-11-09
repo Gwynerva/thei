@@ -10,10 +10,7 @@ import {
 import { createApp, createRouter, defineEventHandler, toWebHandler } from 'h3';
 import { ProjectEventAccessLevel } from '../../shared/access-level';
 import { freshTestDb } from '../helpers/fresh-db';
-import {
-  buildPublicEntityReference,
-  buildPublicProjectSummary,
-} from '../../server/thei/public/entities';
+import { buildPublicEntityReference } from '../../server/thei/public/entities';
 
 vi.mock('../../server/thei/profile', () => ({
   getPinnedPages: vi.fn(async () => []),
@@ -34,15 +31,11 @@ vi.mock('../../server/thei/public/content', () => ({
   buildPublicContentData: vi.fn(async () => undefined),
 }));
 vi.mock('../../server/thei/public/entities', () => ({
-  buildPublicEventSummary: vi.fn(),
   buildPublicEntityReference: vi.fn(async (row) => ({
     title: row.title,
     summary: row.summary,
     href: row.projectUuid,
     iconMedia: { src: `/icon/${row.projectUuid}`, kind: 'image' },
-  })),
-  buildPublicProjectSummary: vi.fn(async (row) => ({
-    href: row.projectUuid,
   })),
   buildPublicTagListItems: vi.fn(async () => []),
   canListPublicEntity: vi.fn(
@@ -122,18 +115,8 @@ describe('public profile showcase projects', () => {
     expect(secondIds).toHaveLength(12);
     expect(secondIds).not.toEqual(firstIds);
     expect(buildPublicEntityReference).toHaveBeenCalledTimes(24);
-    // The three most recently updated projects are private: they are listed
-    // as secrets, counted, and never hydrated.
-    expect(buildPublicProjectSummary).not.toHaveBeenCalled();
-    expect(first.projects.count).toBe(23);
-    expect(first.projects.items).toHaveLength(3);
-    for (const item of first.projects.items) {
-      expect(Object.keys(item).sort()).toEqual(
-        ['iconMedia', 'key', 'secret', 'summary', 'title'].sort(),
-      );
-      expect(item.title).toMatch(/^Secret project /);
-      expect(JSON.stringify(item)).not.toContain('showcase-');
-    }
+    // The counters report the real totals, the private projects included.
+    expect(first.counts).toEqual({ projects: 23, events: 0, diaryEntries: 0 });
   });
 
   it('returns every available showcase project when fewer than twelve exist', async () => {

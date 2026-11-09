@@ -12,6 +12,8 @@ const props = withDefaults(
     caption?: string;
     editable?: boolean;
     editLabel?: string;
+    /** Named, a round «+» after the edit button picks more pictures. */
+    addLabel?: string;
     captionPlaceholder?: string;
     centeredCaption?: boolean;
     mediaRounded?: boolean;
@@ -29,6 +31,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   edit: [];
+  add: [];
   caption: [value: string];
   open: [];
 }>();
@@ -67,29 +70,49 @@ const framed = computed(
         data-opens-viewer
         @click="$emit('open')"
       ></button>
-      <!-- The file's size beside the edit button, as a tile shows it: what a
-           re-encode would gain is read off the block itself. -->
+      <!-- The edit button with the file's size in it, as a tile shows it —
+           what a re-encode would gain is read off the block itself — then,
+           in the corner, more pictures beside this one: asked for more often
+           than a change of the one in place. -->
       <div
         v-if="editable"
         data-drag-ignore
         class="absolute top-xs right-xs z-20 flex items-center gap-xs"
       >
-        <span
-          v-if="asset.size != null"
-          data-content-media-size
-          class="rounded-full bg-bg-1/80 px-2 py-1 text-xs leading-none
-            whitespace-nowrap text-text-2 shadow backdrop-blur-sm"
-          >{{ humanSize(asset.size) }}</span
-        >
         <button
           type="button"
-          class="flex size-9 cursor-pointer items-center justify-center
-            rounded-full bg-bg-1/80 text-text-2 shadow backdrop-blur-sm
-            transition hocus:bg-bg-1 hocus:text-text-1"
+          data-content-media-edit
+          class="flex h-9 min-w-9 cursor-pointer items-center justify-center
+            gap-xs rounded-normal bg-bg-1/80 text-text-2 shadow backdrop-blur-sm
+            transition outline-none focus-visible:ring-2
+            focus-visible:ring-accent hocus:bg-bg-1 hocus:text-text-1"
+          :class="asset.size != null ? 'pr-sm pl-2.5' : ''"
           :aria-label="editLabel"
+          :data-title-popup="editLabel"
           @click.stop="emit('edit')"
         >
-          <Icon name="edit" />
+          <Icon name="edit" class="shrink-0" />
+          <span
+            v-if="asset.size != null"
+            data-content-media-size
+            class="text-sm leading-none font-semibold whitespace-nowrap
+              tabular-nums"
+            >{{ humanSize(asset.size) }}</span
+          >
+        </button>
+        <button
+          v-if="addLabel"
+          type="button"
+          data-content-media-add
+          class="flex size-9 cursor-pointer items-center justify-center
+            rounded-full bg-bg-1/80 text-text-2 shadow backdrop-blur-sm
+            transition outline-none focus-visible:ring-2
+            focus-visible:ring-accent hocus:bg-bg-1 hocus:text-text-1"
+          :aria-label="addLabel"
+          :data-title-popup="addLabel"
+          @click.stop="emit('add')"
+        >
+          <Icon name="plus" />
         </button>
       </div>
       <template #below>

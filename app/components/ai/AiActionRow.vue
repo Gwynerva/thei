@@ -8,6 +8,7 @@ import {
 } from '#layers/thei/shared/ai-actions';
 import {
   actionTexts,
+  writtenTexts,
   type AiActionText,
 } from '#layers/thei/shared/ai-action-texts';
 
@@ -139,7 +140,7 @@ interface PartRow {
   state?: string;
 }
 
-const PART_LISTS = ['sections', 'tags', 'relations'] as const;
+const PART_LISTS = ['sections', 'excerpts', 'tags', 'relations'] as const;
 
 /** A new entity's parts. */
 const parts = computed<PartRow[]>(() => {
@@ -154,7 +155,7 @@ const parts = computed<PartRow[]>(() => {
         ? (fields[list] as any[]).map((item, index): PartRow => {
             const id = `${list}:${index}`;
             const label =
-              list === 'sections'
+              list === 'sections' || list === 'excerpts'
                 ? publicText(String(item?.title ?? ''))
                 : list === 'tags'
                   ? publicText(String(item))
@@ -168,9 +169,11 @@ const parts = computed<PartRow[]>(() => {
               icon:
                 list === 'sections'
                   ? 'project-section'
-                  : list === 'tags'
-                    ? 'tag'
-                    : 'relation-related',
+                  : list === 'excerpts'
+                    ? 'excerpt'
+                    : list === 'tags'
+                      ? 'tag'
+                      : 'relation-related',
               certainty: 'sure',
               state: states.get(id),
             };
@@ -183,8 +186,9 @@ const parts = computed<PartRow[]>(() => {
 
 /**
  * A text edit is gone through on its own screen, over the text: in a form,
- * the text's editor; anywhere else, the review of the edit. Only a new
- * entity's parts unfold in the row.
+ * the text's editor; anywhere else, the review of the edit. A text written
+ * whole — a new entity's texts too — is read there as it would stand, block
+ * by block, while it waits. Only a new entity's parts unfold in the row.
  */
 function openParts() {
   if (props.from) emit('open');
@@ -196,6 +200,12 @@ const revisable = computed(
   () =>
     props.action.kind === 'revise' &&
     ((payload.value.parts ?? []) as unknown[]).length > 0,
+);
+/** A text written whole, waiting to be read before it is taken. */
+const writes = computed(
+  () =>
+    pending.value &&
+    writtenTexts(props.action.kind, props.action.payload).length > 0,
 );
 
 function partOn(part: PartRow) {
@@ -305,6 +315,20 @@ async function saveEdit() {
 
 /** What a text is, when a proposal carries several. */
 function textLabel(text: AiActionText) {
+  /** The title of the part of a new entity a text is written for. */
+  const titleIn = (list: 'sections' | 'excerpts', index: number) => {
+    const items = (payload.value.fields as Record<string, unknown[]>)?.[list];
+    const title = (items?.[index] as { title?: unknown } | undefined)?.title;
+    return typeof title === 'string' ? publicText(title) : '';
+  };
+  if (text.section !== undefined)
+    return phrase.value.ai_review_written_section(
+      titleIn('sections', text.section),
+    );
+  if (text.excerpt !== undefined)
+    return phrase.value.ai_review_written_excerpt(
+      titleIn('excerpts', text.excerpt),
+    );
   if (text.field) return fieldName(text.field);
   return text.role ? phrase.value.ai_action_text_roles[text.role] : '';
 }
@@ -324,11 +348,8 @@ const modelWords = computed(() => {
 const appliedLine = computed(() => {
   const action = props.action;
   if (action.state !== 'applied') return '';
-  const by = action.appliedBy
-    ? phrase.value.ai_action_by[action.appliedBy]
-    : phrase.value.ai_action_by.owner;
+  // Only the owner applies what a session holds: an app has none.
   return phrase.value.ai_action_applied(
-    by,
     action.decidedAt ? shortWhen(action.decidedAt) : '',
   );
 });
@@ -383,7 +404,8 @@ const sessionPath = computed(() =>
  */
 const tools = computed(() => ({
   editable: editable.value,
-  opens: revisable.value && !props.from,
+  opens: (revisable.value || writes.value) && !props.from,
+  commented: writes.value,
   saving: saving.value,
   busy: props.busy,
   applyWord: applyWord.value,

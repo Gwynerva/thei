@@ -1,18 +1,34 @@
 import type { ContentEntitySearchItem } from './admin/content-entity-search';
 import type { MediaDescriptor } from './media';
+import type { ProjectEventAccessLevel } from './access-level';
 
 /**
  * The kinds of entity a relation can join.
  *
- * A relation joins any two of the three, and either end edits it: both ends
- * read the same row, each from its own side.
+ * A relation joins any two of the targets — a project, an event, a diary
+ * entry — and either end edits it: both ends read the same row, each from
+ * its own side. An excerpt is the fourth kind, on one side only: its
+ * relations say what it is about, with a target on the other end, and only
+ * the excerpt's own form writes them.
  */
-export const RELATION_ENTITY_TYPES = [
+export const RELATION_TARGET_TYPES = [
   'project',
   'event',
   'diary-entry',
 ] as const;
+export type RelationTargetType = (typeof RELATION_TARGET_TYPES)[number];
+
+export const RELATION_ENTITY_TYPES = [
+  ...RELATION_TARGET_TYPES,
+  'excerpt',
+] as const;
 export type RelationEntityType = (typeof RELATION_ENTITY_TYPES)[number];
+
+export function isRelationTargetType(
+  value: unknown,
+): value is RelationTargetType {
+  return RELATION_TARGET_TYPES.includes(value as RelationTargetType);
+}
 
 export type RelationEndpoint = {
   type: RelationEntityType;
@@ -88,6 +104,8 @@ export type RelationEditItem = {
   /** Set on diary entries, which have a day instead of a title. */
   date?: string;
   iconMedia?: MediaDescriptor;
+  /** How open the other end is now: what an excerpt's form says of its privacy. */
+  access?: ProjectEventAccessLevel;
 };
 
 /**
@@ -105,6 +123,7 @@ export function relationEndOf(
     | 'publicId'
     | 'date'
     | 'previewMedia'
+    | 'access'
   > & { entityType: RelationEntityType },
 ): Omit<RelationEditItem, 'type' | 'note'> {
   return {
@@ -116,6 +135,7 @@ export function relationEndOf(
     publicId: entity.publicId,
     date: entity.date,
     iconMedia: entity.previewMedia,
+    access: entity.access,
   };
 }
 
@@ -265,19 +285,27 @@ export function validateRelationNote(
 /**
  * Validates the relation list an entity is saved with.
  *
- * Shared by the project, the event and the diary entry forms, so the three
- * cannot drift into accepting different things.
+ * Shared by the project, the event, the diary entry and the excerpt forms,
+ * so they cannot drift into accepting different things. `allowed` narrows
+ * what the other end may be: a target's form never carries an excerpt's
+ * relations, and an excerpt is about targets only.
  */
 export function validateRelations(
   relations: RelationEditItem[] | undefined,
+  options: { allowed?: readonly RelationEntityType[] } = {},
 ): RelationEditItem[] | undefined {
   if (relations === undefined) return undefined;
   if (!Array.isArray(relations))
     throw new RelationValidationError('Invalid related entities');
+  const allowed = options.allowed ?? RELATION_ENTITY_TYPES;
   const seen = new Set<string>();
   return relations.map((relation) => {
     const entityId = relation.entityId?.trim();
-    if (!entityId || !isRelationEntityType(relation.entityType))
+    if (
+      !entityId ||
+      !isRelationEntityType(relation.entityType) ||
+      !allowed.includes(relation.entityType)
+    )
       throw new RelationValidationError('Invalid related entity');
     const key = relationEndpointKey({
       type: relation.entityType,

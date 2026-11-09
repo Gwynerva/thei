@@ -68,6 +68,15 @@ export async function validateProjectAssets(
         mediaOnly: true,
       });
 
+  for (const excerpt of data.excerpts ?? [])
+    if (excerpt.bannerAssetUuid)
+      checks.push({
+        assetUuid: excerpt.bannerAssetUuid,
+        label: 'Excerpt banner',
+        maxSize: ASSET_UPLOAD_LIMITS.media,
+        mediaOnly: true,
+      });
+
   for (const item of data.showcaseAssets ?? []) {
     checks.push({
       assetUuid: item.assetUuid,

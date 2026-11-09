@@ -38,10 +38,16 @@ useLandingReveal((target) => {
     data-landing-zone="owner-notes"
     class="flex scroll-mt-[var(--public-anchor-offset,8rem)] flex-col gap-sm"
   >
-    <h2 class="flex items-center gap-2 text-lg font-semibold text-text-2">
-      <Icon name="text" aria-hidden="true" />
-      {{ phrase.entity_notes }}
-    </h2>
+    <div>
+      <h2 class="flex items-center gap-2 text-lg font-semibold text-text-2">
+        <Icon name="text" aria-hidden="true" />
+        {{ phrase.entity_notes }}
+      </h2>
+      <!-- Worded as the other blocks' descriptions under their headings. -->
+      <p class="mt-1 text-sm text-text-3">
+        {{ phrase.entity_notes_description }}
+      </p>
+    </div>
     <ContentRenderer :data="shown" asset-viewer />
     <button
       v-if="hasMore && !expanded"

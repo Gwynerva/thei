@@ -67,7 +67,13 @@ export interface SeedManifest {
     synonyms?: string[];
   }[];
   /** Files as stored, by the hash of their bytes, and what each one is. */
-  assets: { uuid: string; contentHash: string; description?: string }[];
+  assets: {
+    uuid: string;
+    contentHash: string;
+    description?: string;
+    /** The moment of a video's poster frame, chosen by hand. */
+    previewAt?: number;
+  }[];
   slogan: string;
   /** Every public address the site had on the last release. */
   sitemap: string[];
@@ -290,13 +296,48 @@ async function uploadFiles(
     files[name] = asset.assetUuid;
     const description = descriptions[name];
     if (description) describe(server, asset.assetUuid, description, name);
+    const previewAt =
+      name === 'video'
+        ? choosePosterFrame(server, asset.assetUuid, CHOSEN_POSTER_AT)
+        : undefined;
     manifest.assets.push({
       uuid: asset.assetUuid,
       contentHash: asset.contentHash,
       description,
+      previewAt,
     });
   }
   return files;
+}
+
+/** Where in the video its poster frame is chosen by hand, in seconds. */
+const CHOSEN_POSTER_AT = 0.5;
+
+/**
+ * Chooses a video's poster frame by hand, as the owner does in its window,
+ * and returns the frame's own moment, which the file keeps.
+ */
+function choosePosterFrame(
+  server: Server,
+  assetUuid: string,
+  at: number,
+): number | undefined {
+  const response = api(
+    server,
+    'POST',
+    `/api/admin/assets/${assetUuid}/preview`,
+    { at },
+  );
+  const meta = (response.body as any)?.variants?.find(
+    (variant: { assetUuid: string }) => variant.assetUuid === assetUuid,
+  )?.meta;
+  check(
+    response.status === 200 &&
+      meta?.previewChosen === true &&
+      typeof meta.previewAt === 'number',
+    `the video's poster frame chosen by hand${response.status === 200 ? '' : `: ${response.status} ${response.text.slice(0, 300)}`}`,
+  );
+  return meta?.previewAt;
 }
 
 /** Writes a file's description, kept once for the file and its variants. */
@@ -740,6 +781,20 @@ export function checkSeedSite(server: Server, manifest: SeedManifest): void {
   check(
     forgotten.length === 0,
     `all ${described.length} file descriptions are kept${failing(forgotten.map((asset) => asset.uuid))}`,
+  );
+  // A poster frame chosen by hand stays chosen, at its moment.
+  const chosen = manifest.assets.filter(
+    (asset) => asset.previewAt !== undefined,
+  );
+  const unchosen = chosen.filter(({ uuid, previewAt }) => {
+    const meta = (
+      api(server, 'GET', `/api/admin/assets/${uuid}/usages`).body as any
+    )?.asset?.meta;
+    return meta?.previewChosen !== true || meta?.previewAt !== previewAt;
+  });
+  check(
+    unchosen.length === 0,
+    `all ${chosen.length} poster frames chosen by hand are kept${failing(unchosen.map((asset) => asset.uuid))}`,
   );
 
   const about = api(server, 'GET', '/api/admin/about').body as any;

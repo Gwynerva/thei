@@ -31,13 +31,12 @@ const emit = defineEmits<{
   everything: [];
 }>();
 
-type Filter = 'all' | 'waiting' | 'applied' | 'rejected' | 'app' | 'template';
+type Filter = 'all' | 'waiting' | 'applied' | 'rejected' | 'template';
 const FILTER_ICONS: Record<Filter, IconName> = {
   all: 'list-unordered',
   waiting: 'action-click',
   applied: 'check',
   rejected: 'close',
-  app: 'key',
   template: 'template',
 };
 
@@ -59,12 +58,7 @@ const loaded = ref(false);
 function params(before?: number) {
   return {
     q: query.value.trim() || undefined,
-    origin:
-      filter.value === 'app' || filter.value === 'template'
-        ? filter.value
-        : !props.modelReady
-          ? 'app'
-          : undefined,
+    origin: filter.value === 'template' ? filter.value : undefined,
     waiting: filter.value === 'waiting' ? 'true' : undefined,
     applied: filter.value === 'applied' ? 'true' : undefined,
     rejected: filter.value === 'rejected' ? 'true' : undefined,

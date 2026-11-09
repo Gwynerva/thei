@@ -37,13 +37,20 @@ export function el(
       ...props,
       // Satori fails on a style property that is present but undefined, and
       // layouts build their styles from optional parts.
-      ...(style && typeof style === 'object'
-        ? {
-            style: Object.fromEntries(
+      style: {
+        // Every layout here measures a box with its padding and border, and
+        // paints boxes in the order they are written — a picture placed
+        // behind the lines that follow it. Satori follows CSS instead: a
+        // box's size is its content alone, and a placed box is painted over
+        // the boxes that are not, so every box is told both.
+        boxSizing: 'border-box',
+        position: 'relative',
+        ...(style && typeof style === 'object'
+          ? Object.fromEntries(
               Object.entries(style).filter(([, value]) => value !== undefined),
-            ),
-          }
-        : {}),
+            )
+          : {}),
+      },
       ...(children.length
         ? { children: children.length === 1 ? children[0] : children }
         : {}),

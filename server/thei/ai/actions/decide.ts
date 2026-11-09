@@ -1,5 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { AiRevisePart } from '#layers/thei/shared/ai-actions';
+import { isMeaningCategory } from '#layers/thei/shared/ai-revise';
 import { touchReleasedAssets } from '../../content/history';
 import { refuse as fail } from '../../entity-patch/text';
 import { findEntity, refOf, type EntityKey } from '../../entity-kinds';
@@ -165,20 +166,26 @@ export function neverPart(
   const part = payload.parts?.find((item) => item.id === partId);
   if (
     payload.kind !== 'revise' ||
-    (part?.type !== 'correction' && part?.type !== 'relink')
+    (part?.type !== 'correction' &&
+      part?.type !== 'remark' &&
+      part?.type !== 'relink')
   )
-    fail('Only a correction of a word or a link is kept as it is for good.');
+    fail(
+      'Only a correction of a word, a remark on words or a link is kept as it is for good.',
+    );
   const { db, schema } = THEI_SERVER.useDb();
   db.transaction((tx) => {
     insertNever(
       tx,
       row,
-      part.type === 'correction'
-        ? correctionFingerprint(target, payload.text!, part)
-        : relinkFingerprint(target, payload.text!, part, part.to),
-      part.type === 'correction'
+      part.type === 'relink'
+        ? relinkFingerprint(target, payload.text!, part, part.to)
+        : correctionFingerprint(target, payload.text!, part),
+      part.type === 'correction' && !isMeaningCategory(part.category)
         ? `"${part.find}" stays as written in ${refOf(target)}, not "${part.replace}"`
-        : `The link "${part.words}" in ${refOf(target)} stays leading to ${part.from}, not ${part.to ?? 'no link'}`,
+        : part.type !== 'relink'
+          ? `"${part.find}" in ${refOf(target)} is meant as it stands: no remark on its ${part.category}`
+          : `The link "${part.words}" in ${refOf(target)} stays leading to ${part.from}, not ${part.to ?? 'no link'}`,
       now,
     );
     if (row.state === 'pending' && row.parts) {

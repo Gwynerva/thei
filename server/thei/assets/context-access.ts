@@ -18,12 +18,21 @@ import {
   PUBLIC_ASSET_CACHE_CONTROL,
   SHARED_ASSET_CACHE_CONTROL,
 } from './cache-control';
-import { opensGrantOwner, resolvePublicViewer } from '../access-links/viewer';
+import {
+  opensGrantOwner,
+  opensPrivate,
+  resolvePublicViewer,
+  STRANGER,
+  type PublicViewer,
+} from '../access-links/viewer';
+import { readExcerptSubjects } from '../excerpts/subjects';
+import { excerptIsOwn, excerptOpens } from '../excerpts/parents';
 
 interface AttachmentContext {
   ownerType:
     | 'project'
     | 'project-section'
+    | 'excerpt'
     | 'event'
     | 'page'
     | 'diary-entry'
@@ -40,6 +49,12 @@ interface AttachmentContext {
    * by no link unless the route names the entity it belongs to.
    */
   grantOwner?: ShareGrantOwner;
+  /**
+   * Whether a viewer's links open this file, where no one entity's link
+   * says it: an excerpt's banner opens to whoever may open the excerpt
+   * (`excerptOpens`). Takes the place of `grantOwner`.
+   */
+  opens?: (viewer: PublicViewer) => boolean;
   role: AssetRole;
   filename: string;
 }
@@ -58,27 +73,47 @@ function defaultGrantOwner(
 
 const NOTES_SLOTS = new Set<string>(Object.values(ENTITY_NOTES_SLOTS));
 
+/** What an excerpt's files are judged by: its own flag and what it is about. */
+type JudgedExcerpt = Parameters<typeof excerptOpens>[1];
+
+/** The entity whose address a file of its content is asked for at. */
+export type ContentAttachmentOwner = {
+  type: 'project' | 'event' | 'page' | 'profile' | 'diary-entry';
+  id: string;
+  /** How open it is; none for the profile, which is as open as the site. */
+  access?: ProjectEventAccessLevel;
+};
+
 /**
  * Where a file is used in this URL's entity, and who may therefore have it.
  *
- * - `public`: a stranger — some use sits outside every private part;
- * - `shared`: a share link's holder — some use is in the entity's own content,
- *   private parts included, but not in the owner's notes;
+ * - `public`: a stranger — some use sits outside every private part, in a
+ *   part a stranger may open;
+ * - `granted`: this viewer — some use is in a part they may open, private
+ *   parts included where the entity's private side is theirs, but never in
+ *   the owner's notes;
  * - `exists`: the owner — any use at all.
+ *
+ * An excerpt's pictures are served from its parent's address, as a
+ * section's are from its project's, but each use in an excerpt is judged as
+ * the excerpt is: for whoever may open it (`excerptOpens`) — a link to its
+ * subject may, where its parent's alone may not — and its private parts for
+ * the parent's private side, as its page shows them.
  */
 export async function contentAttachmentAccess(
-  ownerType: 'project' | 'event' | 'page' | 'profile' | 'diary-entry',
-  ownerId: string,
+  owner: ContentAttachmentOwner,
   assetUuid: string,
+  viewer: PublicViewer = STRANGER,
 ) {
   const { db, schema } = THEI_SERVER.useDb();
+  const { type: ownerType, id: ownerId } = owner;
   const owners = [
     and(
       eq(schema.content.ownerType, ownerType),
       eq(schema.content.ownerId, ownerId),
     )!,
   ];
-  const privateOwners = new Set<string>();
+  const privateSections = new Set<string>();
   if (ownerType === 'project') {
     const sections = db
       .select()
@@ -96,8 +131,53 @@ export async function contentAttachmentAccess(
         )!,
       );
     for (const section of sections)
-      if (section.isPrivate)
-        privateOwners.add(`project-section:${section.sectionUuid}`);
+      if (section.isPrivate) privateSections.add(section.sectionUuid);
+  }
+  const excerpts = new Map<string, JudgedExcerpt>();
+  const parent =
+    ownerType === 'project' ||
+    ownerType === 'event' ||
+    ownerType === 'diary-entry'
+      ? {
+          type: ownerType,
+          id: ownerId,
+          access: owner.access ?? ProjectEventAccessLevel.Public,
+        }
+      : undefined;
+  if (parent) {
+    const rows = db
+      .select({
+        excerptUuid: schema.excerpts.excerptUuid,
+        isPrivate: schema.excerpts.isPrivate,
+      })
+      .from(schema.excerpts)
+      .where(
+        and(
+          eq(schema.excerpts.parentType, parent.type),
+          eq(schema.excerpts.parentId, parent.id),
+        ),
+      )
+      .all();
+    if (rows.length)
+      owners.push(
+        and(
+          eq(schema.content.ownerType, 'excerpt'),
+          inArray(
+            schema.content.ownerId,
+            rows.map((row) => row.excerptUuid),
+          ),
+        )!,
+      );
+    const subjects = readExcerptSubjects(
+      db,
+      schema,
+      rows.map((row) => row.excerptUuid),
+    );
+    for (const row of rows)
+      excerpts.set(row.excerptUuid, {
+        isPrivate: row.isPrivate,
+        subject: subjects.get(row.excerptUuid) ?? null,
+      });
   }
   const uses = db
     .select({
@@ -121,16 +201,36 @@ export async function contentAttachmentAccess(
   // The owner's notes are theirs alone: a file placed only there reaches
   // neither a visitor nor the holder of a share link.
   const content = uses.filter((use) => !NOTES_SLOTS.has(use.slot));
+  /** Whether one use of the file is for this reader. */
+  const opensTo = (use: (typeof uses)[number], reader: PublicViewer) => {
+    const meta = use.meta as ContentAssetUsageMeta | null;
+    const outside =
+      meta?.role === 'content' && meta.refs.some((ref) => !ref.isPrivate);
+    if (use.ownerType === 'excerpt') {
+      const excerpt = excerpts.get(use.ownerId);
+      return Boolean(
+        parent &&
+        excerpt &&
+        excerptOpens(reader, excerpt, parent) &&
+        (outside || excerptIsOwn(reader, parent)),
+      );
+    }
+    // The entity's own private side: the owner's, or its share link's.
+    const own =
+      ownerType === 'profile'
+        ? reader.isAdmin
+        : opensPrivate(reader, ownerType, ownerId);
+    if (use.ownerType === 'project-section' && privateSections.has(use.ownerId))
+      return own;
+    return (
+      (own || owner.access !== ProjectEventAccessLevel.Private) &&
+      (outside || own)
+    );
+  };
   return {
     exists: uses.length > 0,
-    shared: content.length > 0,
-    public: content.some((use) => {
-      if (privateOwners.has(`${use.ownerType}:${use.ownerId}`)) return false;
-      const meta = use.meta as ContentAssetUsageMeta | null;
-      return (
-        meta?.role === 'content' && meta.refs.some((ref) => !ref.isPrivate)
-      );
-    }),
+    granted: content.some((use) => opensTo(use, viewer)),
+    public: content.some((use) => opensTo(use, STRANGER)),
   };
 }
 
@@ -143,11 +243,9 @@ export async function sendContextAsset(
   const viewer = await resolvePublicViewer(event);
   // A share link reaches the media of the entity it was made for, including
   // files inside its private sections, and nothing else.
-  const opens = opensGrantOwner(
-    viewer,
-    context.grantOwner ?? defaultGrantOwner(context),
-  );
-  const viaShare = opens && !viewer.isAdmin;
+  const opens = context.opens
+    ? viewer.isAdmin || context.opens(viewer)
+    : opensGrantOwner(viewer, context.grantOwner ?? defaultGrantOwner(context));
   const publicParent =
     THEI_SERVER.config.siteAccessLevel !== SiteAccessLevel.Private &&
     context.access !== ProjectEventAccessLevel.Private;
@@ -162,7 +260,7 @@ export async function sendContextAsset(
     asset.extension !== context.filename.slice(dot + 1).toLowerCase()
   )
     throw createError({ statusCode: 404 });
-  let access: { exists: boolean; shared: boolean; public: boolean };
+  let access: { exists: boolean; granted: boolean; public: boolean };
   if (
     context.role === 'content' &&
     (context.ownerType === 'project' ||
@@ -171,10 +269,16 @@ export async function sendContextAsset(
       context.ownerType === 'diary-entry' ||
       context.ownerType === 'profile')
   ) {
+    // Judged use by use: a part of the entity may open to other links
+    // than the entity's own — an excerpt's to its subject's.
     access = await contentAttachmentAccess(
-      context.ownerType,
-      context.ownerId,
+      {
+        type: context.ownerType,
+        id: context.ownerId,
+        access: context.access,
+      },
       asset.assetUuid,
+      viewer,
     );
   } else {
     const usage = await THEI_SERVER.assets.usages.findOne(
@@ -183,16 +287,17 @@ export async function sendContextAsset(
       context.ownerId,
       context.role,
     );
+    const visible = Boolean(usage) && !assetUsageIsPrivate(usage!.meta);
     access = {
       exists: Boolean(usage),
-      shared: Boolean(usage),
-      public: Boolean(usage) && !assetUsageIsPrivate(usage!.meta),
+      granted: Boolean(usage) && (opens || (publicParent && visible)),
+      public: visible,
     };
   }
   const publicAccess = publicParent && access.public;
-  const allowed =
-    publicAccess || (viewer.isAdmin ? access.exists : opens && access.shared);
+  const allowed = viewer.isAdmin ? access.exists : access.granted;
   if (!allowed) throw createError({ statusCode: 404 });
+  const viaShare = !viewer.isAdmin && !publicAccess;
   const selected = await resolvePublicAssetVariant(event, asset);
   return sendAssetFile(
     event,

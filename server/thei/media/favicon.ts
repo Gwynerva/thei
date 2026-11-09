@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import sharp from 'sharp';
+import sharp, { type Sharp } from 'sharp';
 import { THEI_CONTENT_DIRS } from '../content-layout';
 import { getProfile } from '../profile';
 import { assetFilePath } from '../assets/file-path';
@@ -207,7 +207,7 @@ async function renderFaviconVariant(
 async function loadSquare(
   source: FaviconSource,
   size: number,
-  encode: (square: sharp.Sharp) => Promise<Buffer>,
+  encode: (square: Sharp) => Promise<Buffer>,
 ) {
   const density = source.isSvg
     ? await svgDensityFor(source.filePath, size)

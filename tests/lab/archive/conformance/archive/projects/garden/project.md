@@ -12,3 +12,5 @@ action:
 ---
 
 A garden only a link can open.
+
+::card[The evening the lamp began]{to="ref:excerpt:diary/2021-03-04/the-moon"}

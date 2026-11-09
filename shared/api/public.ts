@@ -11,8 +11,13 @@ import type {
 } from '../project-action';
 import type { MediaDescriptor } from '../media';
 import type { ArchivedOriginalFileMeta, AssetRole } from '../asset';
-import type { RelationEntityType, RelationType } from '../relation';
+import type {
+  RelationEntityType,
+  RelationTargetType,
+  RelationType,
+} from '../relation';
 import type { StatusHistoryItem } from '../status';
+import type { ExcerptParentType } from '../excerpt';
 import type { PaginatedResponse } from '../pagination';
 
 export type PublicTagSummary = {
@@ -25,7 +30,7 @@ export type PublicTagSummary = {
 
 export type PublicEntityReference = {
   /** Which kind of thing this is, for the badge on its tile. */
-  entityType: RelationEntityType;
+  entityType: RelationTargetType;
   title: string;
   summary: string;
   href: string;
@@ -57,7 +62,7 @@ export type PublicSecretReference = {
    * Saying "a project you cannot see" rather than "something you cannot see"
    * gives the reader their bearings without giving the thing itself away.
    */
-  entityType?: RelationEntityType;
+  entityType?: RelationTargetType;
 };
 
 export type PublicEntityLink = PublicEntityReference | PublicSecretReference;
@@ -74,6 +79,88 @@ export type PublicRelatedCounts = Partial<Record<RelationEntityType, number>>;
 
 /** One page of one kind of related entity, in the order the block shows. */
 export type PublicRelatedPage = PaginatedResponse<PublicEntityLink>;
+
+/**
+ * The entity an excerpt is a part of, as the excerpt's page and cards name
+ * it: a diary entry by its day, an event or a project by its title, each
+ * with what stands for it on a card.
+ */
+export type PublicExcerptParent = {
+  type: ExcerptParentType;
+  /** Empty for a diary entry, which is called by its `date`. */
+  title: string;
+  href: string;
+  /** The day of a diary entry. */
+  date?: string;
+  access: ProjectEventAccessLevel;
+  media?: MediaDescriptor;
+};
+
+/**
+ * An excerpt as a card shows it: on the page of what it is about, in a
+ * list, in the sidebar of its parent. `about` names what it is about, as
+ * the visitor may see it; on the page of one of those, `relationType` and
+ * `note` say how it relates to that page.
+ */
+export type PublicExcerptCard = {
+  title: string;
+  summary: string;
+  href: string;
+  publicId: string;
+  /** What stands for it on a card: its banner, its first picture, or its icon. */
+  media: MediaDescriptor;
+  parent: PublicExcerptParent;
+  /**
+   * The day it is dated by, its parent's: a diary entry's day, the last day
+   * of an event that has come. Absent for an excerpt of a project, which has
+   * no day of its own.
+   */
+  date?: string;
+  about: PublicEntityLink[];
+  relationType?: RelationType;
+  /** Why it is about this page, as written for this side. */
+  note?: string;
+};
+
+/** An excerpt whole: on its parent's page, and on its own. */
+export type PublicExcerpt = PublicExcerptCard & {
+  humanReadableSlug: string;
+  /** The picture the page opens with, when the excerpt has one. */
+  bannerMedia?: MediaDescriptor;
+  content: PublicContentOutputData;
+  /** `updatedAt` only when the excerpt was edited on a later day. */
+  chronology: { createdAt: string; updatedAt?: string };
+  /** Its place among its parent's excerpts the viewer may see: "2 of 3". */
+  position: { number: number; count: number };
+};
+
+/**
+ * An excerpt of a page's entity the visitor may not read — private, or
+ * about something closed to them — kept in its place among the ones they
+ * may, under its codename. Only its parent's side shows it: the page of
+ * what it is about and the search leave it out.
+ */
+export type PublicExcerptSecret = {
+  key: string;
+  title: string;
+  iconMedia: MediaDescriptor;
+  /** How many of the excerpts the visitor may read stand before it. */
+  before: number;
+};
+
+export type PublicExcerptResponse = PublicExcerpt & {
+  /** Set by the page's own route; the Markdown representation has none. */
+  neighbours?: PublicNeighbours;
+};
+
+/** One page of the excerpts about an entity, newest first. */
+export type PublicExcerptsPage = PaginatedResponse<PublicExcerptCard>;
+
+/**
+ * How many excerpts are about an entity, as the visitor may see them. The
+ * page carries the count; the cards come a page at a time.
+ */
+export type PublicExcerptsAbout = { total: number };
 
 export function isPublicSecret(value: object): value is PublicSecretReference {
   return 'secret' in value && value.secret === true;
@@ -125,7 +212,7 @@ export type PublicFile = PublicAssetDescriptor;
 /** The pages a file's window may send a visitor on to. */
 export type PublicFilePlaceKind = Extract<
   ContentEntityType,
-  'project' | 'project-section' | 'event' | 'page' | 'diary-entry'
+  'project' | 'project-section' | 'excerpt' | 'event' | 'page' | 'diary-entry'
 >;
 
 /**
@@ -137,10 +224,11 @@ export type PublicFilePlace = {
   kind: PublicFilePlaceKind;
   /** A diary entry's day, which is its title. */
   title: string;
+  /** The page, at where it shows the file first (`shared/landing.ts`). */
   href: string;
   /** What stands for the page on a card: its icon, banner or first picture. */
   media?: MediaDescriptor;
-  /** The project a section belongs to. */
+  /** The project a section belongs to; the parent of an excerpt. */
   parent?: { title: string; href: string };
   /** How the file is shown there, each way once. */
   uses: AssetRole[];
@@ -268,6 +356,12 @@ export type PublicProjectResponse = {
   description?: PublicContentOutputData;
   /** The undated sections in the owner's order, then the dated ones, newest first. */
   sections: PublicProjectSection[];
+  /** The project's own excerpts, whole, in the owner's order. */
+  excerpts: PublicExcerpt[];
+  /** Its excerpts the visitor may not read, as codenames in their places. */
+  excerptSecrets: PublicExcerptSecret[];
+  /** The excerpts of other entities about this project. */
+  excerptsAbout: PublicExcerptsAbout;
   showcase: (PublicAssetDescriptor | PublicSecretReference)[];
   files: (PublicFile | PublicSecretReference)[];
   tags: PublicTagSummary[];
@@ -301,6 +395,12 @@ export type PublicEventResponseFull = {
   /** The picture the page opens with, when the event has one. */
   bannerMedia?: MediaDescriptor;
   content: PublicContentOutputData;
+  /** The event's own excerpts, whole, in the owner's order. */
+  excerpts: PublicExcerpt[];
+  /** Its excerpts the visitor may not read, as codenames in their places. */
+  excerptSecrets: PublicExcerptSecret[];
+  /** The excerpts of other entities about this event. */
+  excerptsAbout: PublicExcerptsAbout;
   references: PublicReferences;
   tags: PublicTagSummary[];
   related: PublicRelatedCounts;
@@ -325,6 +425,12 @@ export type PublicDiaryResponse = {
   /** What stands for the entry in a card: its first picture, or its icon. */
   media: MediaDescriptor;
   content: PublicContentOutputData;
+  /** The entry's own excerpts, whole, in the owner's order. */
+  excerpts: PublicExcerpt[];
+  /** Its excerpts the visitor may not read, as codenames in their places. */
+  excerptSecrets: PublicExcerptSecret[];
+  /** The excerpts of other entities about this entry. */
+  excerptsAbout: PublicExcerptsAbout;
   related: PublicRelatedCounts;
   /** Set by the page's own route; the Markdown representation has none. */
   neighbours?: PublicNeighbours;

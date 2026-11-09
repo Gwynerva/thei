@@ -21,6 +21,8 @@ const props = withDefaults(
     loop?: boolean;
     autoplayReducedMotion?: boolean;
     engaged?: boolean;
+    /** `false` marks a chosen tile by its ring and glow alone. */
+    check?: boolean;
     overlay?: {
       showVideo?: boolean;
       showSize?: boolean;
@@ -34,7 +36,8 @@ const props = withDefaults(
       warning?: string;
     };
   }>(),
-  { shape: 'normal', tone: 'default' },
+  // Unset unless the tile can be chosen: only then does it draw a check.
+  { shape: 'normal', tone: 'default', selected: undefined, check: true },
 );
 
 const { engaged: interactionEngaged, events: mediaEvents } =
@@ -60,15 +63,13 @@ function activateFromKeyboard(event: KeyboardEvent) {
     :class="[
       { 'flex items-center justify-center': !media },
       shape === 'circle' ? 'rounded-full' : 'rounded-normal',
-      tone === 'danger'
-        ? 'border-border-error hocus:border-text-error'
-        : hoverAccentBorder
-          ? 'border-transparent hocus:border-accent'
-          : 'border-border-1 hocus:border-border-3',
       selected
-        ? `shadow-lg ring-2 shadow-accent/30 ring-accent ring-offset-2
-          ring-offset-bg-3`
-        : '',
+        ? 'asset-tile-chosen border-accent'
+        : tone === 'danger'
+          ? 'border-border-error hocus:border-text-error'
+          : hoverAccentBorder
+            ? 'border-transparent hocus:border-accent'
+            : 'border-border-1 hocus:border-border-3',
     ]"
     v-on="mediaEvents"
     @keydown.enter="activateFromKeyboard"
@@ -97,6 +98,22 @@ function activateFromKeyboard(event: KeyboardEvent) {
       v-bind="overlay"
     />
     <slot name="overlay" />
+    <!-- A chosen tile of a choice says so in its middle: a check, white in
+         either theme, on a darkened accent that lets the picture show
+         through. A gallery's current tile has its ring alone. -->
+    <span
+      v-if="check && selected !== undefined"
+      aria-hidden="true"
+      class="pointer-events-none absolute inset-0 z-30 grid place-items-center
+        transition duration-250 motion-reduce:transition-none"
+      :class="selected ? 'scale-100 opacity-100' : 'scale-75 opacity-0'"
+    >
+      <span
+        class="asset-tile-check grid aspect-square w-2/5 max-w-12
+          place-items-center rounded-full text-white"
+        ><Icon name="check" class="text-2xl"
+      /></span>
+    </span>
   </div>
 
   <div
@@ -118,3 +135,19 @@ function activateFromKeyboard(event: KeyboardEvent) {
     <Icon name="plus" class="text-3xl text-text-2" />
   </div>
 </template>
+
+<style scoped>
+/* A chosen tile glows in the accent all round, beyond its ring. */
+.asset-tile-chosen {
+  box-shadow: 0 0 0.875rem 0.125rem
+    color-mix(in oklab, var(--color-accent) 60%, transparent);
+}
+/* Dark enough under white in both themes, and still see-through. */
+.asset-tile-check {
+  background: color-mix(
+    in oklab,
+    color-mix(in oklab, var(--color-accent) 72%, black) 78%,
+    transparent
+  );
+}
+</style>

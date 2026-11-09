@@ -1,4 +1,4 @@
-import { type Component } from 'vue';
+import { type Component, type ShallowRef } from 'vue';
 import type { IconName } from '#thei/icons';
 
 interface ModalResultEmpty {
@@ -143,6 +143,12 @@ export interface ActiveModal {
   close: (result: BaseModalResult) => void;
   /** Optional synchronous check run before user-initiated dismissal. */
   closeGuard?: () => boolean;
+  /**
+   * The address of what the modal shows, base-relative, which the browser's
+   * address shows while the modal is on top (`useModalAddress`); none keeps
+   * the page's.
+   */
+  address: ShallowRef<(() => string | undefined) | undefined>;
   /** Keep the modal, focus and scroll lock alive until its exit animation ends. */
   leaveTransition?: () => Promise<void>;
   leaving?: Promise<void>;

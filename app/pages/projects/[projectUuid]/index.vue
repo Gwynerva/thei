@@ -13,6 +13,8 @@ import {
   buildContentHeadings,
   type ContentHeading,
 } from '#layers/thei/app/components/content/content-headings';
+import { PUBLIC_EXCERPTS_ABOUT_ID } from '#layers/thei/shared/content-headings';
+import { publicExcerptParts } from '#layers/thei/app/components/public/PublicExcerptInline.vue';
 import type { IconName } from '#thei/icons';
 
 import { publicOwnerNotesHeading } from '#layers/thei/app/components/public/PublicOwnerNotes.vue';
@@ -69,15 +71,19 @@ usePublicSeo({
       ...(data.value.tags.length
         ? { keywords: data.value.tags.map((tag) => tag.title).join(', ') }
         : {}),
-      ...(data.value.sections.length
+      ...(data.value.sections.length || data.value.excerpts.length
         ? {
-            // The same nodes the sections' own pages describe, by their @id.
-            hasPart: data.value.sections.map((part) => ({
-              '@type': 'Article',
-              '@id': `${part.href}#section`,
-              headline: part.title,
-              url: part.href,
-            })),
+            // The same nodes the sections' and the excerpts' own pages
+            // describe, by their @id.
+            hasPart: [
+              ...data.value.sections.map((part) => ({
+                '@type': 'Article',
+                '@id': `${part.href}#section`,
+                headline: part.title,
+                url: part.href,
+              })),
+              ...(publicExcerptParts(data.value.excerpts).hasPart ?? []),
+            ],
           }
         : {}),
     },
@@ -87,8 +93,13 @@ const relatedUrl = computed(
   () =>
     `/api/projects/${encodeURIComponent(String(route.params.projectUuid))}/related`,
 );
+const excerptsUrl = computed(
+  () =>
+    `/api/projects/${encodeURIComponent(String(route.params.projectUuid))}/excerpts`,
+);
 // Headings of the description, then the page's own sections in page order.
-// A description without headings is one entry of its own.
+// A description without headings is one entry of its own; the project's
+// own excerpts are listed under the contents on their own.
 const contents = computed<ContentHeading[]>(() => {
   const headings = buildContentHeadings(
     data.value.description,
@@ -111,6 +122,12 @@ const contents = computed<ContentHeading[]>(() => {
       title: phrase.value.project_content_sections,
       icon: 'project-section',
       shown: data.value.sections.length > 0,
+    },
+    {
+      id: PUBLIC_EXCERPTS_ABOUT_ID,
+      title: phrase.value.excerpts,
+      icon: 'excerpt',
+      shown: data.value.excerptsAbout.total > 0,
     },
     {
       id: PUBLIC_RELATED_SECTION_ID,
@@ -137,6 +154,8 @@ const details = computed(
   () =>
     ({
       contents: contents.value,
+      excerpts: data.value.excerpts,
+      excerptSecrets: data.value.excerptSecrets,
       chronology: createdAndUpdatedTimelineItems(data.value.chronology, {
         created: phrase.value.project_chronology_page,
         updated: phrase.value.project_chronology_updated,
@@ -200,7 +219,12 @@ const ownerNotesContents = computed(() =>
             class="scroll-mt-[var(--public-anchor-offset,8rem)]"
           />
 
+          <PublicPageExcerpts
+            :excerpts="data.excerpts"
+            :secrets="data.excerptSecrets"
+          />
           <PublicProjectSections :sections="data.sections" />
+          <PublicExcerptsBlock :about="data.excerptsAbout" :url="excerptsUrl" />
           <PublicRelatedBlock :counts="data.related" :url="relatedUrl" />
           <PublicOwnerNotes :notes="data.notes" />
         </div>

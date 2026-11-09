@@ -18,16 +18,6 @@ rather than from a switch.
 - Save stays at the top, at the end of the header, on every screen: on a
   phone it is a square with a floppy disk (`app/components/admin/AdminSaveButton.vue`),
   so the title and the header's squares keep to one row.
-- Under the header, a line says why a save failed or cannot be made
-  (`app/components/HeaderErrorLine.vue`, a modal's too): it fades in, wraps
-  as long as its words need with its cross at the end, and comes back for a
-  new press once closed. What a form still needs is said there after a press
-  of its Save or Ctrl+S (see [Buttons](../components/buttons.md)), shortly
-  enough to stay a line or two on a phone.
-- Every button of a header is one size: the ✦, delete and any other icon
-  are `Button`'s `size="icon"` squares, and Save is as tall, a square too on
-  a phone. A header's delete is never a padded text-size button. Under a finger
-  they grow together, to `size-11`.
 - Status is an icon with a hint; words only for what is urgent. Counts say
   what there is, without noise.
 - One control per meaning.
@@ -35,6 +25,16 @@ rather than from a switch.
   in the content, not in a popup over it.
 - Headers follow the same rules as a modal's (see [Modals](../components/modals.md))
   and are designed for 375 px — and 320 px — first.
+
+Under the header, `app/components/HeaderErrorLine.vue` (a modal's too) says
+why a save failed or cannot be made: it fades in, wraps as long as its words
+need with its cross at the end, and once closed comes back for a new press.
+What a form still needs is said there after a press of its Save or Ctrl+S
+(see [Buttons](../components/buttons.md)), three fields at most, so it stays
+a line or two on a phone. The buttons of the forms' headers are one size: the
+✦, delete and any other icon are `Button`'s `size="icon"` squares, Save is as
+tall and a square too on a phone, and under a finger they grow together, to
+`size-11`.
 
 ## Forms
 

@@ -1,4 +1,12 @@
-import { beforeAll, beforeEach, afterEach, describe, it, expect } from 'vitest';
+import {
+  beforeAll,
+  beforeEach,
+  afterEach,
+  describe,
+  it,
+  expect,
+  vi,
+} from 'vitest';
 import Database from 'better-sqlite3';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
@@ -12,16 +20,36 @@ import { createOriginalAssetSettings } from '../../../shared/asset-upload-settin
 import {
   getAssetUsages,
   getLibraryAvailability,
-  listLibrarySections,
-  listSourceAssets,
+  listLibraryFeed,
   listLibraryAssets,
+  type LibraryFeedQuery,
 } from '../../../server/thei/assets/library';
 import { readAssetRetention } from '../../../server/thei/assets/retention';
+import { readLibrarySearch } from '../../../shared/asset-library-search';
 import {
   ASSET_ORPHAN_GRACE_MS,
   assetSelectionError,
   summarizeAssetUsages,
 } from '../../../shared/asset-library';
+
+/** The places of the library's run, each once, in the order it reaches them. */
+function placesOf(query: LibraryFeedQuery = {}) {
+  return [
+    ...new Set(
+      listLibraryFeed(query).entries.map(
+        (entry) => `${entry.place.type}:${entry.place.id}`,
+      ),
+    ),
+  ];
+}
+/** The files the run shows in one place. */
+function filesIn(type: string, id: string, query: LibraryFeedQuery = {}) {
+  return listLibraryFeed(query)
+    .entries.filter(
+      (entry) => entry.place.type === type && entry.place.id === id,
+    )
+    .map((entry) => entry.asset.assetUuid);
+}
 
 describe('asset library', () => {
   let sql: string[];
@@ -295,32 +323,36 @@ describe('asset library', () => {
       },
     ]);
     // The section took the only file nothing used, so no "unused" group is left.
-    const groups = listLibrarySections().items;
-    expect(groups.map((g) => `${g.type}:${g.id}:${g.count}`).sort()).toEqual([
-      'page:page:1',
-      'profile:me:1',
-      'project-section:launch:1',
-      'project-section:section:1',
-      'project:p:1',
-      'tag:tag:1',
+    expect(placesOf().sort()).toEqual([
+      'page:page',
+      'profile:me',
+      'project-section:launch',
+      'project-section:section',
+      'project:p',
+      'tag:tag',
     ]);
-    expect(groups.find((g) => g.id === 'launch')?.parent).toEqual({
-      title: 'Проект Луна',
-      url: '/projects/project-p/',
-    });
-    // Found by its own words, not the project's; and the project group does
-    // not repeat what its parts hold.
-    expect(listLibrarySections({ q: 'rocket' }).items.map((g) => g.id)).toEqual(
-      ['launch'],
-    );
     expect(
-      listSourceAssets('project-section', 'launch').items.map(
-        (i) => i.asset.assetUuid,
-      ),
-    ).toEqual(['b']);
+      listLibraryFeed().entries.find((e) => e.place.id === 'launch')?.place
+        .parent,
+    ).toEqual({ title: 'Проект Луна', url: '/projects/project-p/' });
+    // Found by its own words, not the project's; and the project does not
+    // repeat what its parts hold.
+    expect(placesOf({ q: 'rocket' })).toEqual(['project-section:launch']);
+    // A place named by the search comes first, marked so, before the run:
+    // here the section, though its project's own file was touched later.
+    const named = listLibraryFeed({ q: 'Launch' }).entries;
+    expect(named[0]?.place).toMatchObject({ id: 'launch', named: true });
     expect(
-      listSourceAssets('project', 'p').items.map((i) => i.asset.assetUuid),
-    ).toEqual(['a']);
+      listLibraryFeed({ q: 'Луна' }).entries.map((e) => [
+        e.place.id,
+        e.place.named,
+      ]),
+    ).toEqual([
+      ['p', true],
+      ['section', true],
+    ]);
+    expect(filesIn('project-section', 'launch')).toEqual(['b']);
+    expect(filesIn('project', 'p')).toEqual(['a']);
   });
   it('keeps a section private when it or its project is', () => {
     addLaunch(true);
@@ -364,44 +396,17 @@ describe('asset library', () => {
         listLibraryAssets({ q }).items.map((i) => i.asset.assetUuid),
       ).toEqual(['b']);
   });
-  it('narrows to the files without a description, counting either way', () => {
-    const family = db
-      .select({ familyUuid: schema.assets.familyUuid })
-      .from(schema.assets)
-      .where(eq(schema.assets.assetUuid, 'a'))
-      .get()!.familyUuid;
-    db.insert(schema.assetDescriptions)
-      .values({
-        familyUuid: family,
-        text: 'The moon over the roofs',
-        updatedAt: 1,
-      })
-      .run();
-    const ids = (described: 'none' | 'some') =>
-      listLibraryAssets({ described }).items.map((i) => i.asset.assetUuid);
-    expect(ids('some')).toEqual(['a']);
-    expect(ids('none')).toEqual(['b']);
-    // Counted with every other filter applied and without its own.
-    expect(listLibraryAssets({ described: 'none' }).facets.described).toEqual({
-      none: 1,
-      some: 1,
-    });
-    // Words alone are no description.
-    db.update(schema.assetDescriptions)
-      .set({ text: '   ' })
-      .where(eq(schema.assetDescriptions.familyUuid, family))
-      .run();
-    expect(ids('some')).toEqual([]);
-  });
 
   it('searches site-defined text without exposing internal previews', () => {
-    expect(
-      listLibrarySections({ q: 'КОСМОСА' }).items.map((g) => g.id),
-    ).toEqual(['p']);
+    expect(placesOf({ q: 'КОСМОСА' })).toEqual(['project:p']);
     // An editor caption belongs to the section that holds the content.
-    expect(
-      listLibrarySections({ q: 'фОТО луны' }).items.map((g) => g.id),
-    ).toEqual(['section']);
+    expect(placesOf({ q: 'Луны' })).toContain('project-section:section');
+    // «фото» is any picture or the word itself: the moon project's banner
+    // and the section's captioned photo both answer.
+    expect(placesOf({ q: 'фОТО луны' })).toEqual([
+      'project:p',
+      'project-section:section',
+    ]);
     expect(
       listLibraryAssets({ q: 'фОТО луны' }).items.map((i) => i.asset.assetUuid),
     ).toEqual(['a']);
@@ -425,9 +430,7 @@ describe('asset library', () => {
         (i) => i.asset.assetUuid,
       ),
     ).toEqual(['b']);
-    expect(
-      listSourceAssets('unused', 'all').items.map((i) => i.asset.assetUuid),
-    ).toEqual(['b']);
+    expect(filesIn('unused', 'all')).toEqual(['b']);
   });
   describe('diary entries, kinds of entity and their order', () => {
     beforeEach(() => {
@@ -483,38 +486,144 @@ describe('asset library', () => {
 
     it('finds the files of a diary entry by its day, written in any way', () => {
       for (const q of ['12 мая 2024', 'may 2024', '12.05.2024', '2024-05'])
-        expect(
-          listLibrarySections({ q }).items.map((group) => group.id),
-          q,
-        ).toEqual(['day']);
+        expect(placesOf({ q }), q).toEqual(['diary-entry:day']);
       expect(
         listLibraryAssets({ q: '12.05.2024' }).items.map(
           (item) => item.asset.assetUuid,
         ),
       ).toEqual(['b']);
-      expect(listLibrarySections({ q: '13 мая 2024' }).items).toEqual([]);
+      expect(placesOf({ q: '13 мая 2024' })).toEqual([]);
     });
 
     it('never finds a diary entry by the characters of its stored date', () => {
       for (const q of ['0', '-', '24-05', '-1', '4-0'])
-        expect(
-          listLibrarySections({ q, source: 'diary-entry' }).items,
-          q,
-        ).toEqual([]);
+        expect(placesOf({ q, source: 'diary-entry' }), q).toEqual([]);
     });
 
-    it('lists the entities changed last first, the profile and tags after them', () => {
-      expect(
-        listLibrarySections().items.map((group) => `${group.type}:${group.id}`),
-      ).toEqual([
-        'event:event',
+    it('runs through places by their days, the newest first, those without a day last', () => {
+      const template = db
+        .select()
+        .from(schema.assets)
+        .all()
+        .find((asset) => asset.assetUuid === 'b')!;
+      // Diary entries changed in an order of their own, not their days'.
+      for (const [id, date, updatedAt] of [
+        ['old', '2019-03-02', 99],
+        ['mid', '2022-11-30', 1],
+        ['new', '2025-01-15', 50],
+      ] as const) {
+        db.insert(schema.diaryEntries)
+          .values({
+            diaryUuid: id,
+            date,
+            access: 'public' as any,
+            createdAt: 1,
+            updatedAt,
+          })
+          .run();
+        db.insert(schema.assets)
+          .values({ ...template, assetUuid: id, slug: id, familyUuid: id })
+          .run();
+        db.insert(schema.assetUsages)
+          .values({
+            assetUuid: id,
+            containerType: 'diary-entry',
+            containerId: id,
+            role: 'banner',
+          })
+          .run();
+      }
+      // The concert ran over two stretches: it stands at its first day.
+      db.insert(schema.periods)
+        .values([
+          {
+            ownerType: 'event',
+            ownerId: 'event',
+            sortOrder: 0,
+            startDate: '2023-07-01',
+            endDate: '2023-07-02',
+          },
+          {
+            ownerType: 'event',
+            ownerId: 'event',
+            sortOrder: 1,
+            startDate: '2024-09-01',
+            endDate: '2024-09-01',
+          },
+        ])
+        .run();
+      // A section's day is its own; an undated one takes its project's.
+      db.insert(schema.periods)
+        .values({
+          ownerType: 'project-section',
+          ownerId: 'section',
+          sortOrder: 0,
+          startDate: '2021-04-10',
+          endDate: '2021-05-10',
+        })
+        .run();
+      const dated = [
+        'diary-entry:new',
         'diary-entry:day',
-        'page:page',
+        'event:event',
+        'diary-entry:mid',
+        'project-section:section',
+        'project:p',
+        'diary-entry:old',
+      ];
+      const undated = ['page:page', 'profile:me', 'tag:tag'];
+      const newest = placesOf();
+      expect(newest.slice(0, dated.length)).toEqual(
+        // The project stands at its first dated section, the same day.
+        [
+          ...dated.slice(0, 4),
+          'project:p',
+          'project-section:section',
+          dated[6],
+        ],
+      );
+      expect(newest.slice(dated.length).sort()).toEqual(undated);
+      const oldest = placesOf({ order: 'old' });
+      expect(oldest.slice(0, dated.length)).toEqual([
+        'diary-entry:old',
         'project:p',
         'project-section:section',
-        'profile:me',
-        'tag:tag',
+        'diary-entry:mid',
+        'event:event',
+        'diary-entry:day',
+        'diary-entry:new',
       ]);
+      expect(oldest.slice(dated.length).sort()).toEqual(undated);
+      // Diary entries alone come in the calendar's order, either way.
+      expect(placesOf({ source: 'diary-entry' })).toEqual([
+        'diary-entry:new',
+        'diary-entry:day',
+        'diary-entry:mid',
+        'diary-entry:old',
+      ]);
+      expect(
+        listLibraryFeed({ source: 'diary-entry' }).entries.map(
+          (entry) => entry.place.date,
+        ),
+      ).toEqual(['2025-01-15', '2024-05-12', '2022-11-30', '2019-03-02']);
+      // A jump to a year starts the run at its first place.
+      const jump = listLibraryFeed({ year: '2022' });
+      expect(jump.offset).toBe(3);
+      expect(jump.entries[0]?.place.id).toBe('mid');
+      expect(listLibraryFeed({ year: '2022', order: 'old' }).offset).toBe(3);
+      const head = listLibraryFeed({ head: true });
+      expect(head.years?.map((year) => year.year)).toEqual([
+        '2025',
+        '2024',
+        '2023',
+        '2022',
+        '2021',
+        '2019',
+        '',
+      ]);
+    });
+
+    it('stands a file nothing holds at the day it was uploaded', () => {
       const template = db
         .select()
         .from(schema.assets)
@@ -526,18 +635,162 @@ describe('asset library', () => {
           assetUuid: 'loose',
           slug: 'loose',
           familyUuid: 'loose',
+          createdAt: Date.parse('2026-11-08T12:00:00Z'),
         })
         .run();
-      // Files nothing holds stay on top, and are no entity to narrow to.
-      expect(listLibrarySections().items[0]?.type).toBe('unused');
+      expect(placesOf()[0]).toBe('unused:all');
       expect(
-        listLibrarySections({ source: 'event' }).items.map((group) => group.id),
-      ).toEqual(['event']);
+        listLibraryFeed().entries.find((e) => e.asset.assetUuid === 'loose')
+          ?.place.date,
+      ).toBe('2026-11-08');
+      // «вчера» is the day of the upload.
+      vi.useFakeTimers({
+        toFake: ['Date'],
+        now: Date.parse('2026-11-09T10:00:00Z'),
+      });
+      try {
+        expect(
+          listLibraryFeed({ q: 'вчера' }).entries.map((e) => e.asset.assetUuid),
+        ).toEqual(['loose']);
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(placesOf({ source: 'event' })).toEqual(['event:event']);
     });
 
-    it('narrows the groups to one kind of entity, counting every kind', () => {
-      const result = listLibrarySections({ source: 'diary-entry' });
-      expect(result.items.map((group) => group.id)).toEqual(['day']);
+    it('dates an upload by the reader’s own day, in its heading and in a search', () => {
+      const template = db
+        .select()
+        .from(schema.assets)
+        .all()
+        .find((asset) => asset.assetUuid === 'b')!;
+      // 00:30 on 9 November at UTC+3, still 8 November in UTC.
+      db.insert(schema.assets)
+        .values({
+          ...template,
+          assetUuid: 'late',
+          slug: 'late',
+          familyUuid: 'late',
+          createdAt: Date.parse('2026-11-08T21:30:00Z'),
+        })
+        .run();
+      const dayOf = (query: LibraryFeedQuery) =>
+        listLibraryFeed(query).entries.find((e) => e.asset.assetUuid === 'late')
+          ?.place.date;
+      const found = (query: LibraryFeedQuery) =>
+        listLibraryFeed(query).entries.map((e) => e.asset.assetUuid);
+      vi.useFakeTimers({
+        toFake: ['Date'],
+        now: Date.parse('2026-11-09T10:00:00Z'),
+      });
+      try {
+        expect(dayOf({ utcOffset: 180 })).toBe('2026-11-09');
+        expect(found({ q: 'сегодня', utcOffset: 180 })).toEqual(['late']);
+        expect(found({ q: 'вчера', utcOffset: 180 })).toEqual([]);
+        expect(found({ q: '9 ноября 2026', utcOffset: 180 })).toEqual(['late']);
+        // At UTC it was the day before; west of it, too.
+        expect(dayOf({})).toBe('2026-11-08');
+        expect(found({ q: 'вчера' })).toEqual(['late']);
+        expect(dayOf({ utcOffset: -300 })).toBe('2026-11-08');
+        // A month turns by the reader's calendar as well.
+        db.update(schema.assets)
+          .set({ createdAt: Date.parse('2026-10-31T22:00:00Z') })
+          .where(eq(schema.assets.assetUuid, 'late'))
+          .run();
+        expect(dayOf({ utcOffset: 180 })).toBe('2026-11-01');
+        expect(dayOf({})).toBe('2026-10-31');
+        // So does today: just after midnight at UTC+3, an upload of that
+        // afternoon was yesterday.
+        db.update(schema.assets)
+          .set({ createdAt: Date.parse('2026-10-31T12:00:00Z') })
+          .where(eq(schema.assets.assetUuid, 'late'))
+          .run();
+        vi.setSystemTime(Date.parse('2026-10-31T21:10:00Z'));
+        expect(found({ q: 'вчера', utcOffset: 180 })).toEqual(['late']);
+        expect(found({ q: 'сегодня', utcOffset: 180 })).toEqual([]);
+        expect(found({ q: 'сегодня' })).toEqual(['late']);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('never hides a file whose own words are the ones read as a filter', () => {
+      // A picture whose caption speaks of yesterday, of a video and of a diary.
+      db.update(schema.content)
+        .set({
+          data: {
+            blocks: [
+              {
+                id: '1',
+                type: 'contentMedia',
+                data: {
+                  asset: { assetUuid: 'a' },
+                  caption: 'Вчера смотрели видео, pdf и дневник, март 2020',
+                },
+              },
+            ],
+          } as never,
+        })
+        .where(eq(schema.content.contentUuid, 'c'))
+        .run();
+      for (const q of [
+        'вчера',
+        'видео',
+        'pdf',
+        'дневник',
+        'март 2020',
+        'видео вчера',
+        'дневник pdf март 2020',
+      ])
+        expect(filesIn('project-section', 'section', { q }), q).toEqual(['a']);
+      // The words a filter reads stay words for the rest: no caption says
+      // «аудио», and no file is a recording.
+      expect(filesIn('project-section', 'section', { q: 'аудио' })).toEqual([]);
+      // Words that only resemble a filter are plain words.
+      for (const q of ['в виде', 'фотограф', 'разделить', 'скан'])
+        expect(readLibrarySearch(q).parts, q).toEqual([]);
+    });
+
+    it('puts what is being edited, and what it is related to, above the run', () => {
+      db.insert(schema.entityRelations)
+        .values({
+          relationUuid: 'r',
+          firstType: 'event',
+          firstId: 'event',
+          secondType: 'project',
+          secondId: 'p',
+          type: 'related',
+          firstSortOrder: 0,
+          secondSortOrder: 0,
+        } as never)
+        .run();
+      const head = listLibraryFeed({
+        head: true,
+        here: { type: 'event', id: 'event' },
+      });
+      expect(head.here?.map((e) => e.asset.assetUuid)).toEqual(['b', 'a']);
+      expect(head.here?.[0]?.place).toMatchObject({ type: 'event' });
+      // Lately used files, the last first.
+      db.update(schema.assets)
+        .set({ touchedAt: 30 })
+        .where(eq(schema.assets.assetUuid, 'a'))
+        .run();
+      expect(
+        listLibraryFeed({ head: true }).recent?.map((i) => i.asset.assetUuid),
+      ).toEqual(['a', 'b']);
+      // Neither stands above a search.
+      const searched = listLibraryFeed({
+        head: true,
+        q: 'concert',
+        here: { type: 'event', id: 'event' },
+      });
+      expect(searched.here).toBeUndefined();
+      expect(searched.recent).toBeUndefined();
+    });
+
+    it('narrows the run to one kind of entity, counting every kind', () => {
+      const result = listLibraryFeed({ source: 'diary-entry', head: true });
+      expect(result.entries.map((entry) => entry.place.id)).toEqual(['day']);
       expect(result.total).toBe(1);
       expect(result.facets).toEqual({
         sources: {
@@ -549,26 +802,24 @@ describe('asset library', () => {
           tag: 1,
           profile: 1,
         },
-        // Files of the diary entry, by kind, and every group anywhere.
+        // Files of the diary entry, by kind, and every file anywhere.
         types: { image: 1 },
-        anywhere: 7,
-        described: { none: 1, some: 0 },
+        anywhere: 2,
       });
       expect(
-        listLibrarySections({ q: 'concert', source: 'event' }).facets,
+        listLibraryFeed({ q: 'concert', source: 'event', head: true }).facets,
       ).toEqual({
         sources: { event: 1 },
         types: { image: 1 },
         anywhere: 1,
-        described: { none: 1, some: 0 },
       });
-      expect(
-        listLibrarySections({ source: 'page', q: 'concert' }).items,
-      ).toEqual([]);
-      // A kind of file that is not there counts as nothing, not as absent.
-      expect(listLibrarySections({ type: 'video' }).facets!.sources).toEqual(
-        {},
+      expect(listLibraryFeed({ source: 'page', q: 'concert' }).entries).toEqual(
+        [],
       );
+      // A kind of file that is not there counts as nothing, not as absent.
+      expect(
+        listLibraryFeed({ type: 'video', head: true }).facets!.sources,
+      ).toEqual({});
     });
 
     it('narrows the flat list to a kind of entity, or to where nothing holds a file', () => {
@@ -581,17 +832,9 @@ describe('asset library', () => {
         listLibraryAssets({ source: 'profile' as never }).items,
       ).toHaveLength(1);
       const all = listLibraryAssets();
-      expect(all.facets.anywhere).toBe(2);
-      expect(all.facets.sources).toMatchObject({
-        'diary-entry': 1,
-        event: 1,
-        project: 1,
-        page: 1,
-      });
+      expect(all.total).toBe(2);
+      expect(all).not.toHaveProperty('facets');
       expect(listLibraryAssets({ usage: 'unused' }).items).toEqual([]);
-      expect(
-        listLibraryAssets({ usage: 'unused' }).facets.sources.unused,
-      ).toBeUndefined();
     });
   });
   it('tells which files cleanup will take, the same for the editor as for the library', () => {
@@ -675,6 +918,45 @@ describe('asset library', () => {
     expect(getAssetUsages('by-ai')).toMatchObject({ heldByAi: true });
     expect(getAssetUsages('by-ai').inHistory).toBeUndefined();
   });
+  it('puts a variant before the file it was made from, however they were stored and touched', () => {
+    // An upload stores the variant a moment before its original, and `a`
+    // was picked since: the variant still stands first, the family together.
+    db.update(schema.assets)
+      .set({ createdAt: 2_000, touchedAt: 50 })
+      .where(eq(schema.assets.assetUuid, 'a'))
+      .run();
+    db.insert(schema.assets)
+      .values({
+        assetUuid: 'a-small',
+        slug: 'a-small',
+        extension: 'webp',
+        familyUuid: 'a',
+        contentHash: 'c'.repeat(64),
+        settingsKey: 'small',
+        settings: {
+          type: 'image-transform',
+          format: 'avif',
+          quality: 75,
+          dimensions: { width: 320, height: 200 },
+        } as never,
+        type: AssetType.Image,
+        size: 50,
+        touchedAt: 20,
+        createdAt: 1_000,
+        meta: {},
+      })
+      .run();
+    db.insert(schema.assetUsages)
+      .values({
+        assetUuid: 'a-small',
+        containerType: 'page',
+        containerId: 'page',
+        role: 'icon',
+      })
+      .run();
+    expect(filesIn('page', 'page')).toEqual(['a-small', 'a']);
+  });
+
   it('paginates deterministically and does not touch assets while browsing', () => {
     const template = db
       .select()
@@ -696,11 +978,14 @@ describe('asset library', () => {
       total: 47,
     });
     expect(listLibraryAssets({ page: 2 }).items).toHaveLength(7);
-    expect(listSourceAssets('unused', 'all', { page: 2 })).toMatchObject({
-      page: 1,
-      pageSize: 48,
-    });
-    expect(listSourceAssets('unused', 'all').items).toHaveLength(46);
+    const unused = listLibraryFeed({ usage: 'unused' });
+    expect(unused).toMatchObject({ offset: 0, total: 46 });
+    expect(unused.entries).toHaveLength(46);
+    expect(
+      listLibraryFeed({ usage: 'unused', offset: 40 }).entries.map(
+        (entry) => entry.asset.assetUuid,
+      ),
+    ).toEqual(unused.entries.slice(40).map((entry) => entry.asset.assetUuid));
     expect(
       db
         .select()
@@ -755,9 +1040,12 @@ describe('asset library', () => {
         maxSize: 1,
       }).items.map((item) => item.asset.assetUuid),
     ).toEqual(['a', 'b']);
+    // What the selection cannot take is not listed at all.
     expect(
-      listLibrarySections({ acceptedExtensions: ['pdf'] }).items,
-    ).toMatchObject([{ type: 'unused', count: 1 }]);
+      listLibraryFeed({ acceptedExtensions: ['pdf'] }).entries.map(
+        (entry) => `${entry.place.type}:${entry.asset.assetUuid}`,
+      ),
+    ).toEqual(['unused:document']);
     expect(getLibraryAvailability({ acceptedExtensions: ['pdf'] })).toEqual({
       total: 1,
       types: { other: 1 },

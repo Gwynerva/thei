@@ -133,14 +133,21 @@ export type LanguagePhrases = {
   /** Leads the ways out of a narrowed search that found nothing. */
   asset_library_widen: string;
   asset_library_used: string;
-  asset_library_more: string;
   asset_library_insert: string;
   asset_library_usage: string;
   /** The library's filter by description: its name and its choices. */
-  asset_library_described: string;
-  asset_library_described_any: string;
-  asset_library_described_none: string;
-  asset_library_described_some: string;
+  asset_library_search_hint: string;
+  asset_library_here: string;
+  asset_library_named: string;
+  asset_library_recent: string;
+  asset_library_order_new: string;
+  asset_library_order_old: string;
+  asset_library_undated: string;
+  asset_library_years: string;
+  asset_library_clear_selection: string;
+  asset_library_unselect: string;
+  asset_library_search_part_remove: (label: string) => string;
+  asset_library_uploaded: (when: string) => string;
   asset_used_elsewhere: string;
   /** The visitor's window: the group of what the file is. */
   asset_about: string;
@@ -164,7 +171,6 @@ export type LanguagePhrases = {
   asset_recipe_quality_level: (level: string) => string;
   asset_recipe_lossless: string;
   asset_recipe_no_audio: string;
-  asset_recipe_fast: string;
   asset_recipe_bitrate: (kbps: number) => string;
   asset_recipe_mono: string;
   // Quality levels
@@ -287,6 +293,16 @@ export type LanguagePhrases = {
   profile_about_description: string;
   profile_personal_hint: string;
   profile_avatar_count: (count: number) => string;
+  /** The word under a counter of the home page's header, without its number. */
+  profile_counter: (
+    kind: 'project' | 'event' | 'diary-entry',
+    count: number,
+  ) => string;
+  /** The same counter read whole, number and all. */
+  profile_counter_label: (
+    kind: 'project' | 'event' | 'diary-entry',
+    count: number,
+  ) => string;
   profile_age: (age: number) => string;
   profile_reorder: string;
   profile_more: string;
@@ -305,8 +321,15 @@ export type LanguagePhrases = {
   life_activity_statuses: (count: number) => string;
   life_activity_secret: (count: number) => string;
   life_activity_diary: (count: number) => string;
+  life_activity_excerpts: (count: number) => string;
   projects: string;
   events: string;
+  excerpts: string;
+  excerpt: string;
+  /** "Excerpt 2 of 5": an excerpt's place among its parent's. */
+  excerpt_position: (index: number, total: number) => string;
+  /** The block of what an excerpt is about: its relations. */
+  excerpt_about: string;
   pages: string;
   tags: string;
   settings: string;
@@ -345,11 +368,13 @@ export type LanguagePhrases = {
   section_ongoing: string;
   section_was_ongoing: string;
   diary_written: string;
+  excerpt_written: string;
   secret_event: (codename: string) => string;
   secret_project: (codename: string) => string;
   secret_page: (codename: string) => string;
   secret_diary_entry: (codename: string) => string;
   secret_section: (codename: string) => string;
+  secret_excerpt: (codename: string) => string;
   secret_media: (codename: string) => string;
   secret_file: (codename: string) => string;
   secret_hint: string;
@@ -410,6 +435,7 @@ export type LanguagePhrases = {
   /** Where in a result a find stands. */
   search_where: (where: SearchFindWhere) => string;
   search_where_section: (title: string) => string;
+  search_where_excerpt: (title: string) => string;
   search_access_private: string;
   search_access_link: string;
   search_access_private_short: string;
@@ -445,8 +471,6 @@ export type LanguagePhrases = {
   search_action_diary_today_new: string;
   search_action_diary_day: (day: string) => string;
   search_action_diary_day_new: (day: string) => string;
-  search_action_edit: (title: string) => string;
-  search_action_view: (title: string) => string;
   search_action_section: string;
   search_action_new_project: (title: string) => string;
   search_action_new_event: (title: string) => string;
@@ -460,6 +484,8 @@ export type LanguagePhrases = {
   error_description: string;
   back_home: string;
   open_life: string;
+  /** A day of a project's year at a glance: shown on the project's chronology. */
+  open_project_chronology: string;
   pagination: string;
   previous: string;
   next: string;
@@ -470,8 +496,15 @@ export type LanguagePhrases = {
   public_details_overview: string;
   public_details_contents: string;
   public_project_description: string;
+  public_event_description: string;
+  public_diary_text: string;
+  public_excerpt_text: string;
+  public_excerpt_position_in: (index: number, total: number) => string;
+  public_excerpt_in: string;
+  public_excerpt_about: string;
   public_details_neighbour_sections: string;
   public_details_neighbour_entries: string;
+  public_details_neighbour_excerpts: string;
   public_neighbour_next: string;
   public_neighbour_previous: string;
   public_details_chronology: string;
@@ -482,6 +515,14 @@ export type LanguagePhrases = {
   page_chronology_updated: string;
   section_chronology_created: string;
   section_chronology_updated: string;
+  excerpt_chronology_created: string;
+  excerpt_chronology_updated: string;
+  /** The hint of the link from an excerpt on its parent's page to its own. */
+  excerpt_page_hint: string;
+  /** An excerpt without a summary, described by its parent. */
+  excerpt_of_project: (title: string) => string;
+  excerpt_of_event: (title: string) => string;
+  excerpt_of_diary_entry: (day: string) => string;
   event_chronology_created: string;
   event_chronology_updated: string;
   diary_chronology_created: string;
@@ -732,8 +773,6 @@ export type LanguagePhrases = {
     string
   >;
   oauth_restart: string;
-  api_token_history: string;
-  api_token_history_empty: string;
   ai_settings_link: string;
   ai_open_page: string;
   ai_instructions_placeholder: string;
@@ -824,8 +863,6 @@ export type LanguagePhrases = {
   no_diary_entries: string;
   admin_diary_empty_description: string;
   admin_tags_empty_description: string;
-  admin_assets_empty: string;
-  admin_assets_empty_description: string;
   public_tags_empty: string;
   public_tags_empty_description: string;
   public_pages_empty_description: string;
@@ -972,10 +1009,12 @@ export type LanguagePhrases = {
   project_action_issue_background: string;
   project_action_issue_color: string;
   project_content_sections: string;
+  project_content_sections_description: string;
   project_content_sections_hint: string;
   project_sections_dated: string;
   project_sections_undated: string;
   related_entities: string;
+  related_entities_description: string;
   related_entities_hint: string;
   related_entity_add: string;
   relation_direction: string;
@@ -1030,6 +1069,8 @@ export type LanguagePhrases = {
   public_section_dates_only_description: string;
   public_section_content_empty: string;
   public_section_content_empty_description: string;
+  public_excerpt_content_empty: string;
+  public_excerpt_content_empty_description: string;
   content_section_title: string;
   content_section_summary: string;
   content_section_banner: string;
@@ -1040,6 +1081,40 @@ export type LanguagePhrases = {
   content_section_add: string;
   content_section_sort: string;
   delete_content_section: string;
+  excerpts_hint: string;
+  excerpt_add: string;
+  excerpt_title: string;
+  excerpt_summary: string;
+  excerpt_content: string;
+  excerpt_banner: string;
+  excerpt_banner_hint: string;
+  excerpt_private: string;
+  excerpt_sort: string;
+  delete_excerpt: string;
+  excerpt_delete_entity: string;
+  edit_excerpt: string;
+  /** Under the excerpt's "About": which kinds it may be about. */
+  excerpt_about_hint: string;
+  excerpts_empty: string;
+  /** The empty tile of what an excerpt is about. */
+  excerpt_about_pick: string;
+  /** The same tile, once what it was about was deleted. */
+  excerpt_about_orphan: string;
+  excerpt_about_clear: string;
+  /** An entity the excerpt's text links to, offered as what it is about. */
+  excerpt_about_take: (title: string) => string;
+  /** Under the private switch: the excerpt is hidden while what it is about is private. */
+  excerpt_hidden_by_subject: (title: string) => string;
+  /** The same, while what it is about is open by its link only. */
+  excerpt_link_only_by_subject: (title: string) => string;
+  /** An excerpt left about nothing by a deleted target. */
+  excerpt_without_about: string;
+  excerpt_without_about_hint: string;
+  excerpts_about_description: string;
+  relation_recommendation_excerpt: string;
+  excerpts_on_delete_keep: string;
+  excerpts_on_delete_delete: string;
+  excerpts_on_delete_count: (related: number) => string;
   content_empty: string;
   content_text_empty: string;
   edit_content: (title: string) => string;
@@ -1051,6 +1126,8 @@ export type LanguagePhrases = {
   content_editor_save_error: string;
   content_editor_title: string;
   content_never_saved: string;
+  /** A text of an entity or a part not saved yet: the form holds it. */
+  content_in_form: string;
   content_history: string;
   content_history_empty: string;
   content_history_unavailable: string;
@@ -1094,6 +1171,7 @@ export type LanguagePhrases = {
   content_choose_media: string;
   content_gallery_tile: string;
   content_add_media: string;
+  content_add_media_after: string;
   content_choose_file: string;
   content_choose_audio: string;
   content_show_as_player: string;
@@ -1299,16 +1377,14 @@ export type LanguagePhrases = {
   upload_apply_settings: string;
   upload_processing: string;
   upload_queued: string;
-  upload_finishing: string;
   upload_cancel: string;
   upload_dismiss: string;
   upload_pending_leave_confirm: string;
   upload_error_job_lost: string;
+  upload_error_ffmpeg_missing: string;
   upload_quality: string;
   upload_audio: string;
   upload_audio_none: string;
-  upload_fast_conversion: string;
-  upload_fast_conversion_hint: string;
   upload_compress_to_zip: string;
   upload_compress_to_zip_hint: string;
   upload_compare_divider: string;
@@ -1396,6 +1472,7 @@ export type LanguagePhrases = {
   entity_reminder_hint: string;
   entity_reminder_placeholder: string;
   entity_notes: string;
+  entity_notes_description: string;
   entity_notes_hint: string;
   entity_notes_show_all: string;
   entity_reminder_badge: string;
@@ -1499,7 +1576,7 @@ export type LanguagePhrases = {
   ai_sessions_search: string;
   ai_sessions_filter: string;
   ai_sessions_filters: Record<
-    'all' | 'waiting' | 'applied' | 'rejected' | 'app' | 'template',
+    'all' | 'waiting' | 'applied' | 'rejected' | 'template',
     string
   >;
   ai_session_new: string;
@@ -1537,10 +1614,8 @@ export type LanguagePhrases = {
   ai_session_delete: string;
   ai_session_delete_confirm: (title: string) => string;
   ai_session_by_you: (when: string) => string;
-  ai_session_via_app: (client: string) => string;
   /** An amount as `compactAmount` says it: «21», «1.2K». */
   ai_session_tokens: (amount: string) => string;
-  ai_session_app_note: string;
   ai_session_archived_note: string;
   ai_session_model: string;
   ai_steps: {
@@ -1688,11 +1763,16 @@ export type LanguagePhrases = {
   /** Where words outside the running text stand. */
   ai_review_where: Record<'caption' | 'file' | 'link', string>;
   ai_review_unsure: string;
+  /** A remark on meaning: the words it points at, kept as meant, and how it closes. */
+  ai_review_remark: { words: string; keep: string; kept: string; hint: string };
   ai_review_private: string;
   ai_review_settled: Record<'applied' | 'stale', string>;
-  /** The words of each way through: an AI's edit, or another version. */
+  /**
+   * The words of each way through: an AI's edit, another version, or a text
+   * an AI wrote whole.
+   */
   ai_review_modes: Record<
-    'ai' | 'version',
+    'ai' | 'version' | 'written',
     {
       accept: string;
       keep: string;
@@ -1754,6 +1834,10 @@ export type LanguagePhrases = {
   ai_review_comment_placeholder: string;
   ai_review_comment_sent: string;
   ai_review_from_session: (title: string) => string;
+  /** A new project's section, at the head of the text written for it. */
+  ai_review_written_section: (title: string) => string;
+  /** A new parent's excerpt, at the head of the text written for it. */
+  ai_review_written_excerpt: (title: string) => string;
   ai_review_applied: (count: number) => string;
   ai_review_taken: (count: number) => string;
   ai_memory_search: string;
@@ -1877,8 +1961,7 @@ export type LanguagePhrases = {
   ai_action_never: string;
   ai_action_pick: string;
   ai_action_unsure: string;
-  ai_action_applied: (by: string, when: string) => string;
-  ai_action_by: Record<'owner' | 'app', string>;
+  ai_action_applied: (when: string) => string;
   ai_action_states: Record<
     | 'rejected'
     | 'never'
@@ -1933,9 +2016,11 @@ export type LanguagePhrases = {
     | 'links'
     | 'tags'
     | 'relations'
+    | 'subject'
     | 'notes'
     | 'sections'
     | 'sectionOrder'
+    | 'excerpts'
     | 'private'
     | 'periods'
     | 'body'
@@ -1958,7 +2043,10 @@ export type LanguagePhrases = {
     'project' | 'project-section' | 'event' | 'diary-entry' | 'page' | 'tag',
     string
   >;
-  ai_action_parts: Record<'sections' | 'tags' | 'relations', string>;
+  ai_action_parts: Record<
+    'sections' | 'excerpts' | 'tags' | 'relations',
+    string
+  >;
   ai_action_access: Record<'public' | 'link-only' | 'private', string>;
   ai_toast_declined: (count: number) => string;
   ai_toast_never: string;

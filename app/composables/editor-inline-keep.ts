@@ -71,9 +71,11 @@ export interface EditorInlineKeep {
    */
   offer(element: HTMLElement, offer: WordsOffer): void;
   /**
-   * Text put in at the selection as if typed — a paste of a line of words —
-   * where these rules would put it; HTML, when given, goes in its place.
-   * False when no rule took it, and it is the browser's to put in.
+   * Text put in at the selection where typing would go — a paste of a line
+   * of words — by these rules; HTML, when given, goes in its place. False
+   * when no rule took it, and it is the browser's to put in. It is not
+   * typing: it comes with its typography already (`paste-typography.ts`),
+   * and the rules of what is typed do not follow it.
    */
   write(text: string, html?: string): boolean;
   /**
@@ -633,9 +635,7 @@ export function bindEditorInlineKeep(root: HTMLElement): EditorInlineKeep {
 
   function write(text: string, html?: string) {
     const at = caretIn(root);
-    if (!at || !writeWords(at, text, html)) return false;
-    announceTyped();
-    return true;
+    return Boolean(at && writeWords(at, text, html));
   }
 
   root.addEventListener('keydown', onKeyDown, true);

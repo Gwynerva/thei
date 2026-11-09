@@ -1,4 +1,5 @@
 import type { ProjectEditData } from '#layers/thei/shared/admin/project';
+import { excerptsOnTargetDeleteOf } from '../../../thei/excerpts';
 import { formVersion } from '../../../thei/entity-edit';
 import {
   deleteProject,
@@ -26,7 +27,9 @@ export default defineEventHandler(async (event) => {
       });
     }
     case 'DELETE':
-      await deleteProject(project.projectUuid);
+      await deleteProject(project.projectUuid, {
+        excerpts: excerptsOnTargetDeleteOf(getQuery(event).excerpts),
+      });
       return;
   }
 

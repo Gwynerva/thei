@@ -33,10 +33,6 @@ Not for:
   so the action can be reached. A mouse or a pen resting on it, or the focus
   in it, holds it — never a finger; once it fades out nothing holds it any
   more.
-- A press anywhere else takes it away at once: the owner has gone on.
-- It speaks of the page it was said on: gone to another page, it goes too.
-  Said of a form's unsaved state («save it»), it goes once the form is saved
-  (`hideToast(id)`).
 - It stands just under the admin bar and the page's sticky header (the height
   `useStickyHeaderContext()` keeps), never over a form's own buttons, and
   never at the foot of the window, where it would cover the composer of a
@@ -55,6 +51,9 @@ Not for:
   (`pointer-coarse:min-h-11`).
 - It fades in and out with `transition-opacity`; fading out, it lets the
   pointer through.
+- `AppToast` takes it away at a press anywhere else, and when the page it
+  was said on is left; one said of a form's unsaved state («save it») goes
+  once the form is saved (`hideToast(id)`).
 
 ```ts
 showToast(phrase.value.ai_toast_declined(1), {

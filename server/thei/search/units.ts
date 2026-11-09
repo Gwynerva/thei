@@ -8,7 +8,7 @@ import {
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { richTextToPlainText } from '#layers/thei/shared/rich-text';
 import type { SearchFindWhere } from '#layers/thei/shared/search/api';
-import type { LandingZone } from '#layers/thei/shared/search/landing';
+import type { LandingZone } from '#layers/thei/shared/landing';
 
 /**
  * The columns of the index, each weighed by how much a word in it says about
@@ -38,6 +38,8 @@ export interface SearchPlace {
   href?: string;
   /** A section of a project: its title and address. */
   section?: { id: string; title: string; href: string };
+  /** An excerpt of the page: its title and its own address. */
+  excerpt?: { id: string; title: string; href: string };
   /** The block of a text, by the id it keeps; the page anchors it. */
   block?: string;
   /**

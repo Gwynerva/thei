@@ -108,7 +108,9 @@ bun run lab play demo --scenario diary-today --persona novice --variant pl
 
 A play records every step: the screenshot with the pointer's way drawn on
 it, what was clicked and how far the pointer travelled, scrolling, waits,
-and the probe's findings with close-ups. A reviewer reads only that — never
+and the probe's findings with close-ups. A step that opens a new tab — an
+eye of the admin does — goes on in it, as the person would, until it is
+closed. A reviewer reads only that — never
 the code — and answers in `review.json`: scores per criterion and screen,
 findings by severity, and a verdict on each of the probe's suspicions.
 

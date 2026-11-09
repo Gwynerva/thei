@@ -16,7 +16,7 @@ import { reviewChangesLine, reviewPartIcon, reviewQuoteMark } from './review';
  */
 const props = defineProps<{
   parts: ReviewPart[];
-  mode: 'ai' | 'version';
+  mode: 'ai' | 'version' | 'written';
   decisions: Readonly<Record<string, ReviewDecision>>;
   current?: string;
 }>();
@@ -170,6 +170,11 @@ const stateOf = (part: ReviewPart) => props.decisions[part.id] ?? 'pending';
                   : phrase.ai_review_link_off
             }}</ReviewMark></template
           >
+          <template v-else-if="part.words && part.remark"
+            >{{ part.words.around[0]
+            }}<ReviewMark kind="noted">{{ part.words.before }}</ReviewMark
+            >{{ part.words.around[1] }}</template
+          >
           <template v-else-if="part.words"
             >{{ part.words.around[0]
             }}<ReviewMark kind="removed">{{ part.words.before }}</ReviewMark
@@ -237,7 +242,11 @@ const stateOf = (part: ReviewPart) => props.decisions[part.id] ?? 'pending';
                   : 'text-text-2'
               "
               >{{
-                stateOf(part) === 'accepted' ? words.accepted : words.kept
+                stateOf(part) === 'accepted'
+                  ? words.accepted
+                  : part.remark
+                    ? phrase.ai_review_remark.kept
+                    : words.kept
               }}</span
             >
             <Button
@@ -255,13 +264,19 @@ const stateOf = (part: ReviewPart) => props.decisions[part.id] ?? 'pending';
               variant="secondary"
               size="icon-sm"
               class="pointer-coarse:size-11"
-              :aria-label="words.keep"
-              :data-title-popup="words.keep"
+              :aria-label="
+                part.remark ? phrase.ai_review_remark.keep : words.keep
+              "
+              :data-title-popup="
+                part.remark ? phrase.ai_review_remark.keep : words.keep
+              "
               data-review-keep
               @click="emit('decide', part.id, 'kept')"
               ><Icon name="close"
             /></Button>
+            <!-- A remark is answered by writing its words otherwise. -->
             <Button
+              v-if="!part.remark"
               size="icon-sm"
               class="pointer-coarse:size-11"
               :aria-label="words.accept"

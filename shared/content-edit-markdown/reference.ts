@@ -14,7 +14,7 @@ Text:
 - Lists: \`- item\`, \`1. item\` (a list may start at another number), \`- [ ] task\` / \`- [x] done\`; nest by indenting. A list keeps one kind at every level. A numbered list counted otherwise sits inside \`:::list{counter="lower-roman"}\` … \`:::\` — the counters are lower-roman, upper-roman, lower-alpha and upper-alpha.
 - \`> quote\`. A quote with a caption or centred: \`:::quote[Caption]{align="center"}\` … \`:::\`.
 - \`---\` between blocks: a divider.
-- Links: \`[words](https://…)\`, a site path \`[words](/path)\`, or something on this site \`[words](thei:project/<id>)\`. The kinds are project, project-section, event, diary-entry, page and tag; a diary entry may be named by its day, \`thei:diary-entry/2026-10-14\`. A place inside the target goes after \`#\`. A link may carry the owner's note on why it is there as its title: \`[words](url "note")\`.
+- Links: \`[words](https://…)\`, a site path \`[words](/path)\`, or something on this site \`[words](thei:project/<id>)\`. The kinds are project, project-section, excerpt, event, diary-entry, page and tag; a diary entry may be named by its day, \`thei:diary-entry/2026-10-14\`. A place inside the target goes after \`#\`. A link may carry the owner's note on why it is there as its title: \`[words](url "note")\`.
 - \`:hint[words]{note="…"}\`: a note shown when hovering the words.
 
 Blocks:

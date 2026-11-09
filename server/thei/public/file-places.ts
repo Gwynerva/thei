@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import type { AssetRole } from '#layers/thei/shared/asset';
+import { landingHash } from '#layers/thei/shared/landing';
 import type {
   PublicAction,
   PublicFilePlace,
@@ -9,6 +10,9 @@ import { STRANGER } from '../access-links/viewer';
 import { readPlacements } from '../assets/library';
 import { withPublicPageSlot } from '../assets/queue';
 import { findContentEntity } from '../content-entities';
+import { findExcerpt } from '../excerpts';
+import { loadExcerptParent } from '../excerpts/parents';
+import { buildPublicExcerpt } from './excerpts';
 import { listProjectSections } from '../projects/content-sections';
 import {
   buildPublicDiaryEntry,
@@ -22,6 +26,7 @@ import {
 const PLACE_KINDS = [
   'project',
   'project-section',
+  'excerpt',
   'event',
   'page',
   'diary-entry',
@@ -91,6 +96,21 @@ async function pageParts(
         ['content', page.content],
       ];
     }
+    case 'excerpt': {
+      const excerpt = findExcerpt(id);
+      const parent =
+        excerpt &&
+        (await loadExcerptParent(excerpt.parentType, excerpt.parentId));
+      if (!excerpt || !parent) return [];
+      const page = await buildPublicExcerpt(excerpt, parent, STRANGER, {
+        number: 1,
+        count: 1,
+      });
+      return [
+        ['banner', page.bannerMedia],
+        ['content', page.content],
+      ];
+    }
     case 'event': {
       const event = await THEI_SERVER.events.findByUuid(id);
       if (!event) return [];
@@ -127,6 +147,48 @@ function shows(part: unknown, slugs: string[]) {
   return slugs.some((slug) => text.includes(`/${slug}.`));
 }
 
+/** The one of the family's files a part of a page shows, by its slug. */
+function shownSlug(part: unknown, slugs: string[]) {
+  return slugs.find((slug) => shows(part, [slug]));
+}
+
+/**
+ * Where on a page a part shows the file, as the hash a link lands on
+ * (`shared/landing.ts`): its block of the text, its tile of the showcase or
+ * of the files, the page's icon or banner. None for a part a link names no
+ * place in — a block the text keeps no id for, the page's action.
+ */
+function landingOf(role: AssetRole, part: unknown, slugs: string[]) {
+  switch (role) {
+    case 'icon':
+    case 'banner':
+      return landingHash({ zone: role });
+    case 'content': {
+      const blocks = (part as { blocks?: unknown[] }).blocks ?? [];
+      for (const block of blocks) {
+        const id = (block as { id?: unknown }).id;
+        const file = shownSlug(block, slugs);
+        if (typeof id === 'string' && id && file)
+          return landingHash({ block: id, file });
+      }
+      return undefined;
+    }
+    case 'showcase-asset':
+    case 'other-asset': {
+      const items = Array.isArray(part) ? (part as { key?: unknown }[]) : [];
+      const key = items.find((item) => shownSlug(item, slugs))?.key;
+      return typeof key === 'string' && key
+        ? landingHash({
+            zone: role === 'showcase-asset' ? 'showcase' : 'files',
+            file: key,
+          })
+        : undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
 /** A place anyone may find, with the entity that says so. */
 interface ListedPlace {
   kind: PublicFilePlaceKind;
@@ -139,14 +201,19 @@ async function placeOf(
   slugs: string[],
 ): Promise<PublicFilePlace | undefined> {
   const uses = new Set<AssetRole>();
+  // The chip leads to where the page shows the file first, lit.
+  let landing: string | undefined;
   for (const [role, part] of await pageParts(kind, id))
-    if (shows(part, slugs)) uses.add(role);
+    if (shows(part, slugs)) {
+      uses.add(role);
+      landing ??= landingOf(role, part, slugs);
+    }
   if (!uses.size) return undefined;
   const media = await entity.media('public', false).catch(() => undefined);
   return {
     kind,
     title: entity.title,
-    href: entity.href,
+    href: landing ? `${entity.href}#${landing}` : entity.href,
     ...(media ? { media } : {}),
     ...(entity.parent ? { parent: entity.parent } : {}),
     uses: [...uses],

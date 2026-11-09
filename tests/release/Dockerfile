@@ -11,7 +11,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     systemd systemd-sysv dbus ca-certificates curl git sqlite3 procps cron \
-    unzip build-essential python3 \
+    unzip xz-utils build-essential python3 \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/* \
   && systemctl mask getty@tty1.service console-getty.service \

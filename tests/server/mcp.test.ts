@@ -23,15 +23,15 @@ import {
 import { findAction } from '../../server/thei/ai/actions/rows';
 import {
   applyActions,
+  decideParts,
   settleActions,
 } from '../../server/thei/ai/actions/apply';
-import {
-  createApiToken,
-  spendApiTokenBudget,
-} from '../../server/thei/api-tokens';
+import { createApiToken } from '../../server/thei/api-tokens';
 import { directTools } from '../../server/thei/mcp/registry';
 import { rejectActions } from '../../server/thei/ai/actions/decide';
-import { undoState } from '../../server/thei/ai/actions/undo';
+import { undoActionHeld, undoState } from '../../server/thei/ai/actions/undo';
+import { createSession } from '../../server/thei/ai/sessions/store';
+import { sweepAppContainers } from '../../server/thei/ai/sessions/lifecycle';
 import { saveTerm } from '../../server/thei/ai/terms';
 import { aiOnConfig, freshAiTestDb } from '../helpers/fresh-ai-db';
 
@@ -213,7 +213,7 @@ describe('the MCP endpoint', () => {
     expect(body).toContain('"src":"https://example.test/apple-touch-icon.png"');
   });
 
-  it('offers a reader the reading tools and suggestions, nothing that writes', async () => {
+  it('offers a reader the reading tools, nothing that writes or proposes', async () => {
     const { result } = await call(handlerFor(['read']), 'tools/list');
     const tools = result!.tools as {
       name: string;
@@ -233,21 +233,17 @@ describe('the MCP endpoint', () => {
       'read_digests',
       'read_memory',
       'relation_graph',
-      'session_actions',
-      'describe_actions',
       'find_files',
       'read_file',
       'look_at_file',
       'download_file',
     ];
     expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(reading));
-    // A reader proposes; it never applies or undoes.
-    expect(tools.map((t) => t.name)).not.toContain('undo_action');
     for (const listed of tools)
       if (reading.includes(listed.name))
         expect(listed.annotations?.readOnlyHint).toBe(true);
-      // Besides reading: proposals, and taking the owner's requests for them.
-      else expect(listed.name).toMatch(/^(propose|open_session|write_digest)$/);
+      // Besides reading: only the model's own few lines about entities.
+      else expect(listed.name).toBe('write_digest');
   });
 
   it('reads wide in digests, and the relations as one table', async () => {
@@ -267,7 +263,7 @@ describe('the MCP endpoint', () => {
     expect((await tool(reader, 'relation_graph')).content[0]!.text).toBe(
       'No relations.',
     );
-    await tool(handlerFor(['read', 'edit']), 'propose', {
+    await tool(handlerFor(['read', 'edit']), 'apply_actions', {
       actions: [
         {
           kind: 'relation',
@@ -279,7 +275,6 @@ describe('the MCP endpoint', () => {
           whyNotInlineLink: 'The day is a stage of the work',
         },
       ],
-      apply: true,
     });
     expect((await tool(reader, 'relation_graph')).content[0]!.text).toMatch(
       /diary-entry:2026-10-13 "2026-10-13" → depends on → project:\S+ "Parapet" · Boss day/,
@@ -290,7 +285,10 @@ describe('the MCP endpoint', () => {
     const result = await tool(handlerFor(['read']), 'site_overview');
     const text = result.content[0]!.text;
     expect(text).toContain('It holds 1 projects, 0 events, 1 diary entries');
-    expect(text).toContain('Propose actions to the owner');
+    expect(text).toContain('Change nothing: this key only reads.');
+    const editor = (await tool(handlerFor(['read', 'edit']), 'site_overview'))
+      .content[0]!.text;
+    expect(editor).toContain('Change the archive as the owner would, at once');
     expect(text).toContain('## How the archive is built');
     expect(text).toContain('I write "ваще" on purpose.');
     expect(text).toContain('# How texts are written');
@@ -308,6 +306,49 @@ describe('the MCP endpoint', () => {
     // Linked, but no relation joins them: the model is shown the difference.
     expect(text).toContain(`- project:${PROJECT} — Parapet`);
     expect(text).not.toContain('(also related)');
+  });
+
+  it('lists a parent’s excerpts, each with the one thing it is about', async () => {
+    for (const [uuid, about] of [
+      ['x-1', true],
+      ['x-2', false],
+    ] as const) {
+      context.insert('excerpts', {
+        excerptUuid: uuid,
+        parentType: 'diary-entry',
+        parentId: 'd-1',
+        title: `${uuid} title`,
+        summary: '',
+        humanReadableSlug: uuid,
+        publicId: uuid,
+        isPrivate: 0,
+        sortOrder: uuid === 'x-1' ? 0 : 1,
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      if (about)
+        context.insert('entity-relations', {
+          firstType: 'excerpt',
+          firstId: uuid,
+          secondType: 'project',
+          secondId: PROJECT,
+          type: 'related',
+          note: null,
+          firstSortOrder: 0,
+          secondSortOrder: 0,
+        });
+    }
+    const text = (
+      await tool(handlerFor(['read']), 'read_entity', {
+        ref: 'diary-entry:2026-10-13',
+      })
+    ).content[0]!.text;
+    expect(text).toContain(
+      `- excerpt:x-1 — x-1 title · about project:${PROJECT}`,
+    );
+    expect(text).toContain(
+      '- excerpt:x-2 — x-2 title · about nothing: its subject was deleted',
+    );
   });
 
   it('reads a project with its tags', async () => {
@@ -462,14 +503,53 @@ describe('the MCP endpoint', () => {
   });
 });
 
-/** Proposes actions as a key would; an editor's may apply them at once. */
+/** The session Thei's own model proposes in, one a test. */
+let modelSession: string | undefined;
+beforeEach(() => {
+  modelSession = undefined;
+});
+
+/** A tool as Thei's own model calls it, in its session. */
+async function modelTool(name: string, args: Record<string, unknown>) {
+  modelSession ??= createSession({ origin: 'owner' });
+  const found = directTools({
+    event: {
+      node: { req: { headers: { host: 'example.test' } } },
+      context: {},
+    } as never,
+    principal: {
+      tokenUuid: `thei:${modelSession}`,
+      label: 'Thei',
+      scopes: ['read'],
+    },
+    session: {
+      sessionUuid: modelSession,
+      messageUuid: 'am-1',
+      live: () => true,
+      signal: new AbortController().signal,
+    },
+  }).find((item) => item.name === name)!;
+  return (await found.call(args)) as {
+    content: { text: string }[];
+    isError?: boolean;
+  };
+}
+
+/**
+ * Actions put to the archive: with `apply`, applied at once by an editor's
+ * key over MCP; without, proposed by Thei's own model for the owner. The
+ * handler is the key's, for an apply.
+ */
 async function propose(
   handler: ReturnType<typeof handlerFor>,
   actions: Record<string, unknown>[],
   options: { apply?: boolean; atomic?: boolean } = {},
 ) {
-  return (await tool(handler, 'propose', { actions, ...options })).content[0]!
-    .text;
+  const { apply, ...rest } = options;
+  return apply
+    ? (await tool(handler, 'apply_actions', { actions, ...rest })).content[0]!
+        .text
+    : (await modelTool('propose', { actions, ...rest })).content[0]!.text;
 }
 
 /** The actions a proposal made, in order. */
@@ -537,21 +617,12 @@ describe('proposing over MCP', () => {
       read_file: 'reads',
       look_at_file: 'reads',
       download_file: 'reads',
-      session_actions: 'reads',
       describe_actions: 'reads',
-      open_session: 'adds',
       upload_file: 'adds',
       import_file: 'adds',
       reprocess_file: 'adds',
-      propose: 'changes',
-      undo_action: 'changes',
+      apply_actions: 'changes',
     });
-    const reader = (await call(handlerFor(['read']), 'tools/list')).result!
-      .tools as { name: string; annotations: Record<string, boolean> }[];
-    // A reader's proposals change nothing: the same twice adds nothing.
-    expect(
-      reader.find((item) => item.name === 'propose')!.annotations,
-    ).toMatchObject({ destructiveHint: false, idempotentHint: true });
     // Nothing is left to a default; only an import reaches past the site.
     for (const { name, annotations: hint } of tools) {
       expect(hint.openWorldHint).toBe(name === 'import_file');
@@ -887,7 +958,7 @@ describe('proposing over MCP', () => {
       ],
       { apply: true },
     );
-    expect(result).toMatch(/left out: .*rephrases rather than fixes/);
+    expect(result).toMatch(/left out — .*rephrases rather than fixes/);
     expect(result).toMatch(/Applied/);
     const after = bodyOf('2026-10-13');
     expect(after.blocks[0].data.text).toBe(
@@ -932,7 +1003,7 @@ describe('proposing over MCP', () => {
       [entry('Worked on [yesterday](thei:diary-entry/2026-10-13).')],
       { apply: true },
     );
-    expect(created).toMatch(/→ diary-entry:/);
+    expect(created).toMatch(/^Applied 1: diary-entry:/);
     expect(
       one("SELECT access FROM `diary-entries` WHERE date = '2026-10-14'")
         ?.access,
@@ -1014,6 +1085,224 @@ describe('tidying over MCP', () => {
 
 describe('an editor over MCP', () => {
   const editor = () => handlerFor(['read', 'edit']);
+  const summaryOf = (value: string) => ({
+    kind: 'field',
+    target: `project:${PROJECT}`,
+    field: 'summary',
+    value,
+  });
+  const summary = () =>
+    one('SELECT summary FROM projects WHERE projectUuid = ?', PROJECT)?.summary;
+  const left = () => ({
+    sessions: one('SELECT COUNT(*) AS n FROM `ai-sessions`')?.n,
+    actions: one('SELECT COUNT(*) AS n FROM `ai-actions`')?.n,
+    entities: one('SELECT COUNT(*) AS n FROM `ai-session-entities`')?.n,
+    usages: one(
+      "SELECT COUNT(*) AS n FROM `asset-usages` WHERE containerType = 'ai-session'",
+    )?.n,
+  });
+  const nothing = { sessions: 0, actions: 0, entities: 0, usages: 0 };
+
+  it('changes the archive at once and leaves nothing of it in Thei', async () => {
+    const text = await propose(editor(), [summaryOf('Applied directly')], {
+      apply: true,
+    });
+    expect(text).toBe(`Applied 1: project:${PROJECT}.`);
+    expect(summary()).toBe('Applied directly');
+    expect(left()).toEqual(nothing);
+    // The text's earlier wording stays in its history, held by nothing.
+    await propose(
+      editor(),
+      [
+        {
+          kind: 'write',
+          target: 'diary-entry:2026-10-13',
+          text: 'body',
+          mode: 'replace',
+          markdown: 'All new.',
+        },
+      ],
+      { apply: true },
+    );
+    expect(
+      one(
+        "SELECT COUNT(*) AS n FROM `content-history` WHERE ownerRef = 'd-1' AND heldBy IS NOT NULL",
+      )?.n,
+    ).toBe(0);
+    expect(left()).toEqual(nothing);
+  });
+
+  it('applies an atomic bundle whole or not at all', async () => {
+    const text = await propose(
+      editor(),
+      [summaryOf('Half of it'), { kind: 'field', target: 'project:p-nope' }],
+      { apply: true, atomic: true },
+    );
+    expect(text).toMatch(/^Nothing was applied\./);
+    expect(text).toMatch(/refused/);
+    expect(summary()).toBe('A browser remake');
+    expect(left()).toEqual(nothing);
+  });
+
+  it('is not stopped by what the owner declined of the model’s proposals', async () => {
+    const [proposed] = proposedIn(
+      await propose(handlerFor(['read']), [summaryOf('Declined once')]),
+    );
+    await rejectActions([proposed!], { never: true });
+    expect(
+      await propose(handlerFor(['read']), [summaryOf('Declined once')]),
+    ).toMatch(/refused/);
+    await propose(editor(), [summaryOf('Declined once')], { apply: true });
+    expect(summary()).toBe('Declined once');
+  });
+
+  const fixOf = (corrections: Record<string, unknown>[]) => ({
+    kind: 'revise',
+    target: 'diary-entry:2026-10-13',
+    text: 'body',
+    mode: 'proofread',
+    corrections,
+  });
+
+  it('makes every part of a text edit, sure or not, and leaves a remark to the owner', async () => {
+    const before = bodyOf('2026-10-13').blocks[0].data.text as string;
+    const text = await propose(
+      editor(),
+      [
+        fixOf([
+          {
+            find: 'teleports',
+            replace: 'teleport',
+            certainty: 'unsure',
+            reason: 'Maybe a typo.',
+          },
+          {
+            find: 'Finished the boss of',
+            category: 'clumsy',
+            reason: 'It reads abruptly.',
+          },
+        ]),
+      ],
+      { apply: true },
+    );
+    expect(text).toMatch(/^Applied 1: diary-entry:2026-10-13\./);
+    expect(text).toMatch(
+      /- revise: left out — "Finished the boss of": a remark changes no words: say it to the owner/,
+    );
+    expect(bodyOf('2026-10-13').blocks[0].data.text).toBe(
+      before.replace('teleports', 'teleport'),
+    );
+    // A rewording of meaning is never sure, and is made all the same.
+    const reworded = await propose(
+      editor(),
+      [
+        {
+          kind: 'revise',
+          target: `project:${PROJECT}`,
+          text: 'description',
+          mode: 'proofread',
+          corrections: [
+            {
+              find: 'Bosses that teleport around the arena',
+              replace: 'Bosses teleporting around the arena',
+              category: 'clumsy',
+              reason: 'It reads heavily.',
+            },
+          ],
+        },
+      ],
+      { apply: true },
+    );
+    expect(reworded).toBe(`Applied 1: project:${PROJECT}.`);
+    expect(
+      one("SELECT data FROM content WHERE contentUuid = 'c-1'")!.data,
+    ).toContain('Bosses teleporting around the arena');
+    // A remark alone changes nothing, and says so.
+    const remark = await propose(
+      editor(),
+      [
+        fixOf([
+          {
+            find: 'Finished the boss of',
+            category: 'repeat',
+            reason: 'Said the day before.',
+          },
+        ]),
+      ],
+      { apply: true },
+    );
+    expect(remark).toMatch(/^Nothing was applied\./);
+    expect(remark).toMatch(/say it to the owner/);
+    expect(left()).toEqual(nothing);
+  });
+
+  it('is not stopped by a correction the owner kept as written', async () => {
+    const correction = { find: 'teleports', replace: 'teleport' };
+    const [proposed] = proposedIn(
+      await modelTool('propose', { actions: [fixOf([correction])] }).then(
+        (result) => result.content[0]!.text,
+      ),
+    );
+    decideParts(proposed!, { c1: 'kept' });
+    expect(
+      (await modelTool('propose', { actions: [fixOf([correction])] }))
+        .content[0]!.text,
+    ).toMatch(/kept it as written/);
+    expect(
+      await propose(editor(), [fixOf([correction])], { apply: true }),
+    ).toMatch(/^Applied 1/);
+    expect(bodyOf('2026-10-13').blocks[0].data.text).toContain(
+      'it teleport now',
+    );
+  });
+
+  it('leaves nothing of its fixes counted as checked', async () => {
+    const coverage = () =>
+      one('SELECT COUNT(*) AS n FROM `ai-template-coverage`')?.n;
+    await propose(
+      editor(),
+      [fixOf([{ find: 'teleports', replace: 'teleport' }])],
+      { apply: true },
+    );
+    expect(bodyOf('2026-10-13').blocks[0].data.text).toContain(
+      'it teleport now',
+    );
+    expect(coverage()).toBe(0);
+    // The owner's own apply of the site's model's fix is counted.
+    const [proposed] = proposedIn(
+      (
+        await modelTool('propose', {
+          actions: [
+            {
+              kind: 'revise',
+              target: `project:${PROJECT}`,
+              text: 'description',
+              mode: 'proofread',
+              corrections: [{ find: 'arena', replace: 'arenas' }],
+            },
+          ],
+        })
+      ).content[0]!.text,
+    );
+    const outcome = await applyActions({
+      actionUuids: [proposed!],
+      by: 'owner',
+    });
+    expect(outcome.applied).toHaveLength(1);
+    expect(coverage()).toBeGreaterThan(0);
+  });
+
+  it('sweeps a container a call left behind', async () => {
+    const left = createSession({ origin: 'app' }, Date.now() - 2 * 3600_000);
+    const kept = createSession({ origin: 'owner' }, Date.now() - 2 * 3600_000);
+    sweepAppContainers(3600_000);
+    expect(
+      one('SELECT 1 AS n FROM `ai-sessions` WHERE sessionUuid = ?', left),
+    ).toBeUndefined();
+    expect(
+      one('SELECT 1 AS n FROM `ai-sessions` WHERE sessionUuid = ?', kept)?.n,
+    ).toBe(1);
+  });
 
   it('keeps what a listed item leaves out, and reads lists as it takes them', async () => {
     // Known already, so saving them asks no site for their titles.
@@ -1303,18 +1592,30 @@ describe('an editor over MCP', () => {
   });
 });
 
-describe('undoing over MCP', () => {
-  const editor = () => handlerFor(['read', 'edit']);
+/**
+ * What the owner applied of the site's model's proposals is undone as long
+ * as what it changed reads as it left it. An app's direct writes keep
+ * nothing to undo (`an editor over MCP`).
+ */
+describe('undoing what the owner applied', () => {
   // Two writes within a millisecond would share a version.
   const tick = () => new Promise((resolve) => setTimeout(resolve, 3));
   async function applied(actions: Record<string, unknown>[]) {
-    const text = await propose(editor(), actions, { apply: true });
-    expect(text).toMatch(/Applied/);
+    const ids = proposedIn(await propose(handlerFor(['read']), actions));
+    expect(ids).toHaveLength(actions.length);
+    const outcome = await applyActions({ actionUuids: ids, by: 'owner' });
+    expect(outcome.applied).toHaveLength(ids.length);
     await tick();
-    return proposedIn(text);
+    return ids;
   }
-  const undo = async (action: string) =>
-    (await tool(editor(), 'undo_action', { action })).content[0]!.text;
+  const undo = async (action: string) => {
+    try {
+      await undoActionHeld(action);
+      return 'Undone';
+    } catch (error) {
+      return (error as Error).message;
+    }
+  };
   const summaryOf = (value: string) => ({
     kind: 'field',
     target: `project:${PROJECT}`,
@@ -1450,34 +1751,5 @@ describe('undoing over MCP', () => {
       { kind: 'delete', target: 'diary-entry:2026-10-13', reason: 'Asked to' },
     ]);
     expect(await undo(deletion!)).toMatch(/final/);
-  });
-
-  it('takes back only what the key applied, in a session still open', async () => {
-    const [proposed] = proposedIn(
-      await propose(editor(), [summaryOf('By the owner')]),
-    );
-    await applyActions({ actionUuids: [proposed!], by: 'owner' });
-    await tick();
-    expect(await undo(proposed!)).toMatch(/owner’s to undo/);
-    expect(
-      one('SELECT summary FROM projects WHERE projectUuid = ?', PROJECT)
-        ?.summary,
-    ).toBe('By the owner');
-
-    const [own] = await applied([summaryOf('By the app')]);
-    context.rawDb
-      .prepare(
-        'UPDATE `ai-sessions` SET closedAt = 2, archivedAt = 2 WHERE sessionUuid = (SELECT sessionUuid FROM `ai-actions` WHERE actionUuid = ?)',
-      )
-      .run(own);
-    expect(await undo(own!)).toMatch(/archived the session/);
-    expect(findAction(own!)?.state).toBe('applied');
-  });
-
-  it('spends a write on every undo', async () => {
-    const [actionUuid] = await applied([summaryOf('Spent')]);
-    while (!spendApiTokenBudget(tokenUuid, 'write'));
-    expect(await undo(actionUuid!)).toMatch(/Too many changes/);
-    expect(findAction(actionUuid!)?.state).toBe('applied');
   });
 });

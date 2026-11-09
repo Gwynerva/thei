@@ -17,6 +17,7 @@ import {
   pathTo,
   unwrapNestedLinks,
 } from './editor-inline-dom';
+import { BLOCK_DRAG_MIME } from './editor-block-drag';
 
 /**
  * Text dragged in the editor lands where it is dropped, and Ctrl+Z takes the
@@ -47,7 +48,6 @@ import {
  * would drag its address or a copy of it.
  */
 
-const BLOCK_DRAG_MIME = 'application/x-thei-editor-block';
 /** The fields whose text keeps inline markup; any other field is plain. */
 const RICH_FIELDS =
   '.ce-paragraph, .cdx-list__item-content, .cdx-quote__text, .cdx-quote__caption';
@@ -55,7 +55,7 @@ const RICH_FIELDS =
 const DROPPED_ELEMENTS =
   'script, style, noscript, template, iframe, object, embed, svg, math, img, video, audio, picture, canvas, head, meta, link, title';
 /** Elements that begin a line of their own, read as a space between words. */
-const BLOCK_ELEMENTS =
+export const BLOCK_ELEMENTS =
   'p, div, li, ul, ol, h1, h2, h3, h4, h5, h6, blockquote, pre, section, article, header, footer, table, tr, td, th, dt, dd, figure, figcaption, hr';
 
 export function bindEditorTextDrop(

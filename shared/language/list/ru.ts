@@ -233,6 +233,7 @@ export default defineI18nModule({
   phrases: {
     asset_library: 'Хранилище файлов',
     asset_library_search: 'Поиск по файлам',
+    asset_library_search_hint: 'Слова, день, «видео», «дневник»…',
     asset_aspect_hint: (ratio, size) =>
       `Лучше всего подойдёт изображение или видео с пропорциями ${ratio}, например ${size} пикселей`,
     asset_library_pending_deletion: (date) =>
@@ -248,13 +249,19 @@ export default defineI18nModule({
     asset_library_anywhere: 'Везде',
     asset_library_widen: 'Искать шире',
     asset_library_used: 'Используются',
-    asset_library_more: 'Показать ещё',
-    asset_library_insert: 'Вставить выбранное',
+    asset_library_insert: 'Вставить',
     asset_library_usage: 'Где используется',
-    asset_library_described: 'Описание',
-    asset_library_described_any: 'С описанием и без',
-    asset_library_described_none: 'Без описания',
-    asset_library_described_some: 'С описанием',
+    asset_library_here: 'Здесь и связанное',
+    asset_library_named: 'Места с таким названием',
+    asset_library_recent: 'Недавние',
+    asset_library_order_new: 'Сначала новые',
+    asset_library_order_old: 'Сначала старые',
+    asset_library_undated: 'Без даты',
+    asset_library_years: 'Годы',
+    asset_library_clear_selection: 'Снять выбор',
+    asset_library_unselect: 'Убрать из выбора',
+    asset_library_search_part_remove: (label) => `Убрать «${label}» из поиска`,
+    asset_library_uploaded: (when) => `Загружено: ${when}`,
     asset_used_elsewhere: 'Где ещё используется',
     asset_about: 'О файле',
     asset_format: (kind, extension) => {
@@ -281,7 +288,6 @@ export default defineI18nModule({
     asset_recipe_quality_level: (level) => `${level.toLowerCase()} качество`,
     asset_recipe_lossless: 'без потерь',
     asset_recipe_no_audio: 'без звука',
-    asset_recipe_fast: 'быстрая конвертация',
     asset_recipe_bitrate: (kbps) => `${kbps} кбит/с`,
     asset_recipe_mono: 'моно',
     asset_quality_minimal: 'Минимальное',
@@ -418,6 +424,20 @@ export default defineI18nModule({
     profile_personal_hint:
       'Персональные настройки применяются сразу в этом браузере',
     profile_avatar_count: (count: number) => `1 из ${count}`,
+    profile_counter: (kind, count) =>
+      ({
+        project: () => plural(count, 'проект', 'проекта', 'проектов', false),
+        event: () => plural(count, 'событие', 'события', 'событий', false),
+        'diary-entry': () =>
+          plural(count, 'запись', 'записи', 'записей', false),
+      })[kind](),
+    profile_counter_label: (kind, count) =>
+      ({
+        project: () => plural(count, 'проект', 'проекта', 'проектов'),
+        event: () => plural(count, 'событие', 'события', 'событий'),
+        'diary-entry': () =>
+          `${plural(count, 'запись', 'записи', 'записей')} дневника`,
+      })[kind](),
     profile_age: (age: number) => plural(age, 'год', 'года', 'лет'),
     profile_reorder: 'Перетащите для сортировки',
     profile_more: 'Загрузить ещё',
@@ -448,10 +468,16 @@ export default defineI18nModule({
       plural(count, 'статус', 'статуса', 'статусов'),
     life_activity_secret: (count) =>
       plural(count, 'скрытая запись', 'скрытые записи', 'скрытых записей'),
+    life_activity_excerpts: (count) =>
+      plural(count, 'отрывок', 'отрывка', 'отрывков'),
     life_activity_diary: (count) =>
       plural(count, 'запись дневника', 'записи дневника', 'записей дневника'),
     projects: 'Проекты',
     events: 'События',
+    excerpts: 'Отрывки',
+    excerpt: 'Отрывок',
+    excerpt_position: (index, total) => `Отрывок ${index} из ${total}`,
+    excerpt_about: 'Про что',
     pages: 'Страницы',
     tags: 'Теги',
     settings: 'Настройки',
@@ -492,11 +518,13 @@ export default defineI18nModule({
     section_ongoing: 'Продолжается раздел',
     section_was_ongoing: 'Продолжался раздел',
     diary_written: 'Запись в дневнике',
+    excerpt_written: 'Написан отрывок',
     secret_event: (codename: string) => `Секретное событие ${codename}`,
     secret_project: (codename: string) => `Секретный проект ${codename}`,
     secret_page: (codename: string) => `Секретная страница ${codename}`,
     secret_diary_entry: (codename: string) => `Секретная запись ${codename}`,
     secret_section: (codename: string) => `Секретный раздел ${codename}`,
+    secret_excerpt: (codename: string) => `Секретный отрывок ${codename}`,
     secret_media: (codename: string) => `Секретное медиа ${codename}`,
     secret_file: (codename: string) => `Секретный файл ${codename}`,
     secret_hint: 'Скрыто от посетителей',
@@ -514,6 +542,7 @@ export default defineI18nModule({
         'profile-avatar': 'Аватарки',
         'profile-status': 'Статусы',
         'diary-entry': 'Записи дневника',
+        excerpt: 'Отрывки',
       })[kind] ?? kind,
     public_timeline_from: (date) => `С ${date}`,
     public_timeline_until: (date) => `По ${date}`,
@@ -535,7 +564,7 @@ export default defineI18nModule({
     llms_txt_sitemap: 'все публичные адреса этого сайта',
     llms_txt_markdown_title: 'Markdown',
     llms_txt_markdown:
-      'Любой публичный проект, раздел проекта, событие, страница или запись дневника отдаются и в Markdown: добавьте index.md к адресу, например /projects/name-id/index.md. Приватных частей там нет — ровно как и для любого другого посетителя.',
+      'Любой публичный проект, раздел проекта, событие, страница, запись дневника или отрывок отдаются и в Markdown: добавьте index.md к адресу, например /projects/name-id/index.md. Приватных частей там нет — ровно как и для любого другого посетителя.',
     public_life_period_description: (period, siteName) =>
       `События, проекты и записи дневника за ${period.toLocaleLowerCase('ru-RU')} — ${siteName}.`,
     public_pages_description:
@@ -583,6 +612,7 @@ export default defineI18nModule({
         'project-section': 'Раздел проекта',
         event: 'Событие',
         'diary-entry': 'Дневник',
+        excerpt: 'Отрывок',
         page: 'Страница',
         file: 'Файл',
         tag: 'Тег',
@@ -594,6 +624,7 @@ export default defineI18nModule({
         'project-section': 'Разделы проектов',
         event: 'События',
         'diary-entry': 'Дневник',
+        excerpt: 'Отрывки',
         page: 'Страницы',
         file: 'Файлы',
         tag: 'Теги',
@@ -606,6 +637,7 @@ export default defineI18nModule({
         summary: 'Описание',
         heading: 'Заголовок',
         section: 'Раздел проекта',
+        excerpt: 'Отрывок',
         text: 'Текст',
         caption: 'Подпись',
         file: 'Описание файла',
@@ -621,6 +653,7 @@ export default defineI18nModule({
         day: 'День',
       })[where],
     search_where_section: (title) => `Раздел «${title}»`,
+    search_where_excerpt: (title) => `Отрывок «${title}»`,
     search_access_private: 'Видно только вам',
     search_access_link: 'Видно только тем, у кого есть ссылка',
     search_access_private_short: 'Только вам',
@@ -644,7 +677,7 @@ export default defineI18nModule({
     search_busy: 'Поиск сейчас занят: ответ вот-вот придёт.',
     search_failed: 'Не удалось выполнить поиск. Попробуйте ещё раз.',
     search_quick_hint:
-      'Проекты, события, дневник, страницы, файлы и теги — по любому слову в них.',
+      'Проекты, события, дневник, отрывки, страницы, файлы и теги — по любому слову в них.',
     search_years: 'Годы',
     search_sort: 'Сортировка',
     search_sort_best: 'Сначала точные',
@@ -667,8 +700,6 @@ export default defineI18nModule({
     search_action_diary_today_new: 'Написать запись за сегодня',
     search_action_diary_day: (day) => `Запись дневника за ${day}`,
     search_action_diary_day_new: (day) => `Написать запись за ${day}`,
-    search_action_edit: (title) => `Редактировать «${title}»`,
-    search_action_view: (title) => `Открыть «${title}» на сайте`,
     search_action_section: 'Раздел админки',
     search_action_new_project: (title) => `Новый проект «${title}»`,
     search_action_new_event: (title) => `Новое событие «${title}»`,
@@ -683,6 +714,7 @@ export default defineI18nModule({
     error_description: 'Сейчас эту страницу не получается открыть.',
     back_home: 'На главную',
     open_life: 'Открыть Жизнь',
+    open_project_chronology: 'Показать в хронологии',
     pagination: 'Навигация по страницам',
     previous: 'Предыдущая страница',
     next: 'Следующая страница',
@@ -693,8 +725,16 @@ export default defineI18nModule({
     public_details_overview: 'Сводка',
     public_details_contents: 'Содержание',
     public_project_description: 'Описание проекта',
+    public_event_description: 'Описание события',
+    public_diary_text: 'Текст записи',
+    public_excerpt_text: 'Текст отрывка',
+    public_excerpt_position_in: (index, total) =>
+      `Отрывок ${index} из ${total} в`,
+    public_excerpt_in: 'Отрывок в',
+    public_excerpt_about: 'Про',
     public_details_neighbour_sections: 'Соседние разделы',
     public_details_neighbour_entries: 'Соседние записи',
+    public_details_neighbour_excerpts: 'Соседние отрывки',
     public_neighbour_next: 'Вперёд',
     public_neighbour_previous: 'Назад',
     public_details_chronology: 'Технические даты',
@@ -705,6 +745,12 @@ export default defineI18nModule({
     page_chronology_updated: 'Страница обновлена',
     section_chronology_created: 'Раздел создан',
     section_chronology_updated: 'Раздел обновлён',
+    excerpt_chronology_created: 'Отрывок написан',
+    excerpt_chronology_updated: 'Отрывок обновлён',
+    excerpt_page_hint: 'Своя страница отрывка',
+    excerpt_of_project: (title) => `Отрывок из проекта «${title}»`,
+    excerpt_of_event: (title) => `Отрывок из события «${title}»`,
+    excerpt_of_diary_entry: (day) => `Отрывок из записи дневника за ${day}`,
     event_chronology_created: 'Событие создано',
     event_chronology_updated: 'Событие обновлено',
     diary_chronology_created: 'Запись создана',
@@ -957,11 +1003,10 @@ export default defineI18nModule({
     api_token_label_required: 'Назовите ключ: для чего он.',
     api_token_access: 'Доступ',
     api_token_preset_reader: 'Читатель',
-    api_token_preset_reader_hint:
-      'Читает всё и оставляет предложения: вы принимаете их или нет. Сам ничего не меняет.',
+    api_token_preset_reader_hint: 'Читает всё. Ничего не меняет.',
     api_token_preset_editor: 'Редактор',
     api_token_preset_editor_hint:
-      'Может всё, что можете вы: создавать, править, загружать файлы, публиковать и удалять. Каждое изменение видно в его сессии, и его можно отменить; удаление не отменить.',
+      'Может всё, что можете вы: создавать, править, загружать файлы, публиковать и удалять. Меняет сразу то, о чём вы попросили в разговоре с приложением; Thei не ведёт журнала его правок, а удаление не отменить.',
     api_token_preset_custom: 'Особый',
     api_token_empty: 'Ключей доступа пока нет',
     api_token_never_used: 'Ещё не использовался',
@@ -982,10 +1027,11 @@ export default defineI18nModule({
     ai_tab_connection: 'Подключение',
     ai_switch: 'ИИ в Thei',
     ai_welcome:
-      'ИИ в Thei работает в сессиях: вы говорите с моделью или с ' +
-      'приложением об архиве, а оно читает, вычитывает тексты и предлагает ' +
-      'действия — связи, теги, заметки, правки. Без вас ничего не меняется; ' +
-      'что применил ключ Редактора, видно в его сессии и отменяется.',
+      'ИИ в Thei работает в сессиях: вы говорите с моделью об архиве, а она ' +
+      'читает, вычитывает тексты и предлагает действия — связи, теги, ' +
+      'заметки, правки. Без вас ничего не меняется. ИИ-приложение работает ' +
+      'в вашем разговоре с ним: с ключом Редактора оно делает то, о чём вы ' +
+      'попросили там.',
     ai_ways_facts: {
       what: 'Что это',
       how: 'Как',
@@ -999,7 +1045,7 @@ export default defineI18nModule({
         how: 'Thei выдаёт ключ доступа, и приложение подключается с ним.',
         pays: 'Приложение — по вашей обычной подписке. Thei ничего не тратит.',
         rights:
-          'Читатель только читает и предлагает. Редактор меняет сам; каждое изменение видно в его сессии и отменяется.',
+          'Читатель только читает. Редактор сразу делает то, о чём вы попросили в приложении, — так же, как сделали бы вы.',
       },
       model: {
         title: 'Thei сам обращается к модели',
@@ -1083,8 +1129,6 @@ export default defineI18nModule({
     },
     oauth_restart:
       'Приложению ничего не отправлено. Начните подключение в нём заново; если не выйдет — подключите его по ключу доступа.',
-    api_token_history: 'Что делал',
-    api_token_history_empty: 'Этим ключом пока ничего не делали.',
     ai_settings_link:
       'ИИ-приложения и их ключи доступа, модель по ключу API и ваши правила ' +
       'для ИИ — на странице «ИИ».',
@@ -1214,9 +1258,6 @@ export default defineI18nModule({
       'Запишите первую мысль: дата и текст — больше ничего не нужно.',
     admin_tags_empty_description:
       'Теги объединяют проекты и события по темам. Создайте первый тег, чтобы начать.',
-    admin_assets_empty: 'Библиотека файлов пуста',
-    admin_assets_empty_description:
-      'Файлы появятся здесь, когда вы загрузите их в проекты, события или страницы.',
     public_tags_empty: 'Тегов пока нет',
     public_tags_empty_description:
       'Теги появятся здесь, как только ими будут отмечены проекты или события.',
@@ -1400,11 +1441,15 @@ export default defineI18nModule({
     project_action_issue_background: 'изображение фона',
     project_action_issue_color: 'цвет фона в формате #RRGGBB',
     project_content_sections: 'Разделы проекта',
+    project_content_sections_description:
+      'Части проекта и этапы, через которые он прошёл.',
     project_content_sections_hint:
       'Детальные описания составных частей проекта и этапов, через которые он прошел.',
     project_sections_dated: 'Этапы с датами',
     project_sections_undated: 'Общие разделы',
     related_entities: 'Связи',
+    related_entities_description:
+      'Проекты, события и записи дневника, которые автор связал с этим.',
     related_entities_hint:
       'Проекты, события и записи дневника, с которыми это связано. Связь видна с обеих сторон.',
     related_entity_add: 'Добавить связь',
@@ -1473,6 +1518,9 @@ export default defineI18nModule({
     public_section_dates_only: 'У раздела нет текста',
     public_section_dates_only_description:
       'Подробности так и не были записаны…',
+    public_excerpt_content_empty: 'Здесь нечего читать',
+    public_excerpt_content_empty_description:
+      'То, что хранит этот отрывок, посетителям не показывается.',
     public_section_content_empty: 'Здесь пока нечего читать',
     public_section_content_empty_description:
       'В этом разделе нет открытого для чтения контента.',
@@ -1487,6 +1535,43 @@ export default defineI18nModule({
     content_section_add: 'Добавить раздел',
     content_section_sort: 'Изменить порядок раздела',
     delete_content_section: 'Удалить раздел',
+    excerpts_hint:
+      'Названные части этого текста про что-то ещё в архиве, у каждой своя страница.',
+    excerpt_add: 'Добавить отрывок',
+    excerpt_title: 'Название отрывка',
+    excerpt_summary: 'Суть отрывка',
+    excerpt_content: 'Текст отрывка',
+    excerpt_banner: 'Баннер',
+    excerpt_banner_hint:
+      'Широкое изображение вверху страницы отрывка и на его карточках.',
+    excerpt_private: 'Приватный отрывок',
+    excerpt_sort: 'Переставить отрывок',
+    delete_excerpt: 'Удалить отрывок',
+    excerpt_delete_entity: 'отрывок',
+    edit_excerpt: 'Изменить отрывок',
+    excerpt_about_hint:
+      'Проект, событие или запись дневника — то одно, про что этот отрывок.',
+    excerpts_empty: 'Отрывков пока нет.',
+    excerpt_about_pick: 'Выбрать, про что отрывок',
+    excerpt_about_orphan:
+      'Пока ни про что: то, про что он был, удалено. Выберите, про что он теперь.',
+    excerpt_about_clear: 'Убрать, про что отрывок',
+    excerpt_about_take: (title) => `Про «${title}»`,
+    excerpt_hidden_by_subject: (title) =>
+      `Скрыт от посетителей, пока «${title}» видите только вы.`,
+    excerpt_link_only_by_subject: (title) =>
+      `Виден только по ссылке, пока «${title}» открывается только по ссылке.`,
+    excerpt_without_about: 'Пока ни про что',
+    excerpt_without_about_hint:
+      'То, про что он был, удалено. Откройте отрывок и укажите, про что он теперь.',
+    excerpts_about_description: 'Написаны в других местах архива — про это.',
+    relation_recommendation_excerpt: 'Есть отрывок про это',
+    excerpts_on_delete_keep: 'Оставить отрывки про него',
+    excerpts_on_delete_delete: 'Удалить и отрывки',
+    excerpts_on_delete_count: (related) =>
+      related === 1
+        ? 'Про него есть один отрывок. Если оставить, он будет ни про что, пока вы не укажете, про что он.'
+        : `Про него ${plural(related, 'отрывок', 'отрывка', 'отрывков')}. Если оставить, они будут ни про что, пока вы не укажете, про что каждый.`,
     content_empty: 'Контента пока нет',
     content_text_empty: 'Текстового контента нет',
     edit_content: (title) => `Редактировать: ${title}`,
@@ -1499,6 +1584,7 @@ export default defineI18nModule({
     content_editor_save_error: 'Не удалось сохранить контент.',
     content_editor_title: 'Редактор контента',
     content_never_saved: 'Не было сохранено',
+    content_in_form: 'В форме, ещё не сохранено',
     content_history: 'История версий',
     content_history_empty: 'Версий пока нет.',
     content_history_unavailable: 'История версий сейчас недоступна.',
@@ -1598,6 +1684,7 @@ export default defineI18nModule({
     content_choose_media: 'Выбрать изображение или видео',
     content_gallery_tile: 'Показать это изображение',
     content_add_media: 'Добавить изображение или видео',
+    content_add_media_after: 'Добавить изображение или видео после этого',
     content_choose_file: 'Выбрать файл',
     content_choose_audio: 'Выбрать аудио',
     content_show_as_player: 'Показать плеером',
@@ -1826,17 +1913,15 @@ export default defineI18nModule({
     upload_apply_settings: 'Создать вариант',
     upload_processing: 'Обработка...',
     upload_queued: 'Ожидание в очереди...',
-    upload_finishing: 'Завершение…',
     upload_cancel: 'Отмена',
     upload_dismiss: 'Убрать',
     upload_error_job_lost: 'Сервер перезапустился, пока файл сохранялся.',
+    upload_error_ffmpeg_missing:
+      'Видео и звук не обрабатываются: на сервере нет ffmpeg. Чтобы скачать его, выполните в папке сайта bun node_modules/thei/update/ffmpeg/cli.ts.',
     upload_pending_leave_confirm: 'Файлы ещё сохраняются. Уйти и потерять их?',
     upload_quality: 'Качество',
     upload_audio: 'Звук',
     upload_audio_none: 'в исходнике нет',
-    upload_fast_conversion: 'Быстрая конвертация',
-    upload_fast_conversion_hint:
-      'Один быстрый проход вместо двух: гораздо быстрее, тот же размер, чуть ниже качество.',
     upload_compress_to_zip: 'Сжать в ZIP',
     upload_compress_to_zip_hint:
       'Упаковка в архив позволит уменьшить размер файла.',
@@ -1930,6 +2015,7 @@ export default defineI18nModule({
       'Что здесь ещё надо сделать. Пока оно заполнено, во всех списках здесь стоит жёлтая метка.',
     entity_reminder_placeholder: 'Найти фотографии за ту неделю',
     entity_notes: 'Заметки',
+    entity_notes_description: 'Только для вас: посетители их не видят.',
     entity_notes_hint: 'Всё, что стоит держать под рукой, но не публиковать.',
     entity_notes_show_all: 'Показать всё',
     entity_reminder_badge: 'Здесь есть напоминание',
@@ -1996,6 +2082,7 @@ export default defineI18nModule({
         'project-section': 'Весь раздел',
         event: 'Всё событие',
         'diary-entry': 'Вся запись',
+        excerpt: 'Весь отрывок',
         page: 'Вся страница',
         tag: 'Весь тег',
       })[kind],
@@ -2044,7 +2131,6 @@ export default defineI18nModule({
       waiting: 'Ждут вас',
       applied: 'С применённым',
       rejected: 'С отклонённым',
-      app: 'Из приложений',
       template: 'Из готовых просьб',
     },
     ai_session_new: 'Новая сессия',
@@ -2073,7 +2159,7 @@ export default defineI18nModule({
     ai_sessions_back: 'К сессиям',
     ai_no_model_title: 'Модель не настроена',
     ai_no_model_text:
-      'Здесь разговаривает модель из «Подключения»: модель сервиса по ключу API или своя, в Ollama и LM Studio. Сессии приложений через MCP — ниже.',
+      'Здесь разговаривает модель из «Подключения»: модель сервиса по ключу API или своя, в Ollama и LM Studio.',
     ai_no_model_action: 'Настроить',
     ai_session_menu: 'Сессия',
     ai_session_pin: 'Закрепить',
@@ -2085,14 +2171,11 @@ export default defineI18nModule({
     ai_session_delete_confirm: (title) =>
       `Удалить сессию «${title}»? Применённое останется, но отменить его отсюда будет нельзя.`,
     ai_session_by_you: (when) => `Начата вами · ${when}`,
-    ai_session_via_app: (client) => `${client} через MCP`,
     ai_session_tokens: (amount) =>
       // «1,2 тыс.» is followed by «токенов» whatever the number.
       /^\d+$/.test(amount)
         ? plural(Number(amount), 'токен', 'токена', 'токенов')
         : `${amount} токенов`,
-    ai_session_app_note:
-      'Здесь — то, что приложение предложило и применило. Сам разговор остался в приложении: писать ему — там.',
     ai_session_archived_note: 'Сессия в архиве: писать в неё нельзя',
     ai_session_model: 'Модель',
     ai_steps: {
@@ -2301,6 +2384,10 @@ export default defineI18nModule({
       case: 'Заглавная буква',
       'missing-letter': 'Пропущенная буква',
       link: 'Ссылка',
+      repeat: 'Повтор',
+      logic: 'Логика',
+      contradiction: 'Противоречие',
+      clumsy: 'Косноязычие',
       changed: 'Блок изменён',
       added: 'Новый блок',
       removed: 'Блок уходит',
@@ -2316,6 +2403,12 @@ export default defineI18nModule({
       link: 'в заметке к ссылке',
     },
     ai_review_unsure: 'на ваше решение',
+    ai_review_remark: {
+      words: 'Слова',
+      keep: 'Так задумано',
+      kept: 'Так задумано',
+      hint: 'Поправьте сами: замечание закроется, когда эти слова изменятся.',
+    },
     ai_review_private: 'приватная часть',
     ai_review_settled: {
       applied: 'Уже в тексте',
@@ -2349,6 +2442,20 @@ export default defineI18nModule({
         finish: (decided, total) => `Отмечено ${decided} из ${total}`,
         finish_hint:
           'Взятое ляжет в текст окна; остальное останется как сейчас.',
+      },
+      written: {
+        accept: 'Взять',
+        keep: 'Не брать',
+        sure: 'Взять всё',
+        take_sure: (count) => `Взять всё · ${count}`,
+        was: 'Было',
+        will: 'Будет',
+        accepted: 'Взято',
+        kept: 'Не взято',
+        apply: (count) => `Применить · ${count}`,
+        finish: (decided, total) => `Решено ${decided} из ${total}`,
+        finish_hint:
+          'Взятое ляжет в текст сейчас — прежний останется в истории версий. Невзятое уйдёт вместе с предложением.',
       },
     },
     ai_review_put: (count) => `Подставить · ${count}`,
@@ -2408,6 +2515,10 @@ export default defineI18nModule({
       'Комментарий в сессии: модель пришлёт новую версию правки.',
     ai_review_from_session: (title) =>
       title ? `Из сессии «${title}»` : 'Из сессии',
+    ai_review_written_section: (title) =>
+      title ? `Раздел «${title}»` : 'Раздел',
+    ai_review_written_excerpt: (title) =>
+      title ? `Отрывок «${title}»` : 'Отрывок',
     ai_review_applied: (count) =>
       `В тексте ${plural(count, 'правка', 'правки', 'правок')}`,
     ai_review_taken: (count) =>
@@ -2446,6 +2557,7 @@ export default defineI18nModule({
       'project-section': 'раздел проекта',
       event: 'событие',
       'diary-entry': 'запись дневника',
+      excerpt: 'отрывок',
       page: 'страница',
       tag: 'тег',
       asset: 'файл',
@@ -2527,6 +2639,7 @@ export default defineI18nModule({
       'project-section': 'Все разделы проектов',
       event: 'Все события',
       'diary-entry': 'Все записи дневника',
+      excerpt: 'Все отрывки',
       page: 'Все страницы',
       tag: 'Все теги',
       asset: 'Все файлы',
@@ -2554,8 +2667,7 @@ export default defineI18nModule({
     ai_action_never: 'Больше не предлагать',
     ai_action_pick: 'Включить в применение',
     ai_action_unsure: 'На ваше решение.',
-    ai_action_applied: (by, when) => `Применено ${by} · ${when}`,
-    ai_action_by: { owner: 'вами', app: 'приложением' },
+    ai_action_applied: (when) => `Применено вами · ${when}`,
     ai_action_states: {
       rejected: 'Отклонено',
       never: 'Больше не предложит',
@@ -2620,9 +2732,11 @@ export default defineI18nModule({
       links: 'Ссылки',
       tags: 'Теги',
       relations: 'Связи',
+      subject: 'Про что',
       notes: 'Заметки',
       sections: 'Разделы',
       sectionOrder: 'Порядок разделов',
+      excerpts: 'Отрывки',
       private: 'Приватный',
       periods: 'Даты',
       body: 'Текст',
@@ -2647,6 +2761,7 @@ export default defineI18nModule({
     },
     ai_action_parts: {
       sections: 'Разделы',
+      excerpts: 'Отрывки',
       tags: 'Теги',
       relations: 'Связи',
     },

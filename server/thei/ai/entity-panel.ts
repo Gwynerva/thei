@@ -1,10 +1,11 @@
-import { and, count, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, count, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import type {
   AiEntityOffer,
   AiEntityPanel,
   AiEntityPartMemory,
   AiOfferPlace,
 } from '#layers/thei/shared/ai-entity';
+import { isExcerptParentType } from '#layers/thei/shared/excerpt';
 import { entityText, refOf, type EntityKey } from '../entity-kinds';
 import type { FORM_FIELDS, FormKind } from './forms/changes';
 import { settleActions } from './actions/apply';
@@ -61,6 +62,7 @@ export const FIELD_PLACES: {
     notes: 'form',
     sections: 'form',
     sectionOrder: 'form',
+    excerpts: 'form',
     statuses: 'form',
     actionText: 'form',
   },
@@ -71,6 +73,16 @@ export const FIELD_PLACES: {
     periods: 'periods',
     body: 'form',
     banner: 'form',
+    slug: 'form',
+    publicId: 'form',
+  },
+  excerpt: {
+    title: 'field:title',
+    summary: 'field:summary',
+    private: 'form',
+    body: 'form',
+    banner: 'form',
+    subject: 'field:subject',
     slug: 'form',
     publicId: 'form',
   },
@@ -90,6 +102,7 @@ export const FIELD_PLACES: {
     relations: 'form',
     body: 'form',
     notes: 'form',
+    excerpts: 'form',
   },
   'diary-entry': {
     date: 'form',
@@ -98,6 +111,7 @@ export const FIELD_PLACES: {
     body: 'form',
     notes: 'form',
     relations: 'form',
+    excerpts: 'form',
   },
   page: {
     title: 'field:title',
@@ -206,7 +220,6 @@ export async function waitingOffers(
       .select({
         sessionUuid: schema.aiSessions.sessionUuid,
         title: schema.aiSessions.title,
-        client: schema.aiSessions.client,
       })
       .from(schema.aiSessions)
       .where(
@@ -215,6 +228,9 @@ export async function waitingOffers(
             ...new Set(pending.map((row) => row.sessionUuid)),
           ]),
           isNull(schema.aiSessions.archivedAt),
+          // An app's direct write waits for nobody, even for the moment
+          // between its check and its apply.
+          ne(schema.aiSessions.origin, 'app'),
         ),
       )
       .all()
@@ -234,34 +250,59 @@ export async function waitingOffers(
     .filter((offer) => !offer.action.never);
 }
 
-/** A project's sections the AI remembers things of. */
+/**
+ * The parts of an entity the AI remembers things of: a project's sections,
+ * and the excerpts of a project, an event or a diary entry.
+ */
 function partsRemembered(key: EntityKey): AiEntityPartMemory[] {
-  if (key.kind !== 'project') return [];
   const { db, schema } = THEI_SERVER.useDb();
-  const sections = db
-    .select({ id: schema.projectContentSections.sectionUuid })
-    .from(schema.projectContentSections)
-    .where(eq(schema.projectContentSections.projectUuid, key.id))
-    .all()
-    .map((row) => row.id);
-  if (!sections.length) return [];
+  const parts: { kind: 'project-section' | 'excerpt'; ids: string[] }[] = [];
+  if (key.kind === 'project')
+    parts.push({
+      kind: 'project-section',
+      ids: db
+        .select({ id: schema.projectContentSections.sectionUuid })
+        .from(schema.projectContentSections)
+        .where(eq(schema.projectContentSections.projectUuid, key.id))
+        .all()
+        .map((row) => row.id),
+    });
+  if (isExcerptParentType(key.kind))
+    parts.push({
+      kind: 'excerpt',
+      ids: db
+        .select({ id: schema.excerpts.excerptUuid })
+        .from(schema.excerpts)
+        .where(
+          and(
+            eq(schema.excerpts.parentType, key.kind),
+            eq(schema.excerpts.parentId, key.id),
+          ),
+        )
+        .all()
+        .map((row) => row.id),
+    });
   const t = schema.aiMemory;
-  return db
-    .select({ id: t.anchorId, records: count() })
-    .from(t)
-    .where(
-      and(
-        eq(t.anchor, 'entity'),
-        eq(t.anchorType, 'project-section'),
-        inArray(t.anchorId, sections),
-      ),
-    )
-    .groupBy(t.anchorId)
-    .all()
-    .map((row) => ({
-      entity: entityRef({ kind: 'project-section', id: row.id }),
-      count: row.records,
-    }));
+  return parts.flatMap(({ kind, ids }) =>
+    ids.length
+      ? db
+          .select({ id: t.anchorId, records: count() })
+          .from(t)
+          .where(
+            and(
+              eq(t.anchor, 'entity'),
+              eq(t.anchorType, kind),
+              inArray(t.anchorId, ids),
+            ),
+          )
+          .groupBy(t.anchorId)
+          .all()
+          .map((row) => ({
+            entity: entityRef({ kind, id: row.id }),
+            count: row.records,
+          }))
+      : [],
+  );
 }
 
 function sessionCount(key: EntityKey): number {

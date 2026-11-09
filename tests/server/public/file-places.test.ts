@@ -169,6 +169,38 @@ it('lists a public page that shows the file, by how it is used there', async () 
   );
 });
 
+it('leads to where the page shows the file first', async () => {
+  placed(
+    placement('project', 'trip', 'showcase-asset'),
+    placement('project', 'trip', 'content'),
+    placement('event', 'walk', 'other-asset'),
+  );
+  builders.buildPublicProject.mockResolvedValue(
+    project({
+      showcase: [{ key: 'cropSlug', media: url('cropSlug') }],
+      description: {
+        blocks: [
+          { id: 'intro', data: { text: 'Words' } },
+          { id: 'pictures', data: { items: [{ asset: url('cropSlug') }] } },
+        ],
+      },
+    }),
+  );
+  builders.buildPublicEvent.mockResolvedValue({
+    content: { blocks: [] },
+    references: {
+      links: [],
+      files: [{ key: 'photoSlug', media: url('photoSlug') }],
+    },
+  });
+  const places = await findPublicFilePlaces('photoSlug');
+  expect(places.map((place) => place.href)).toEqual([
+    // The text comes before the showcase, and names the variant it shows.
+    '/project/trip/#b-pictures~cropSlug',
+    '/event/walk/#files~photoSlug',
+  ]);
+});
+
 it('names no page a stranger cannot find', async () => {
   placed(
     placement('event', 'secret', 'content'),

@@ -1,8 +1,9 @@
 <script lang="ts" setup>
 import {
   isRelationEntityType,
+  isRelationTargetType,
   orderRelationsForEditing,
-  RELATION_ENTITY_TYPES,
+  RELATION_TARGET_TYPES,
   relationEndOf,
   relationEndpointKey,
   type RelationEditItem,
@@ -22,7 +23,10 @@ import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { contentEntityMentions } from '#layers/thei/shared/content-link-mentions';
 import { moveItemById } from '#layers/thei/app/composables/drag-sort';
 import { useRelationRecommendations } from '#layers/thei/app/composables/relation-recommendations';
+import { useExcerptsAbout } from '#layers/thei/app/composables/excerpts-about';
+import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 import { relationModal } from '#layers/thei/app/modals/relation/modal';
+import { scrollIntoSight } from '#layers/thei/app/modals/layer-motion';
 
 /**
  * The relations block of a project, an event or a diary entry.
@@ -38,7 +42,11 @@ import { relationModal } from '#layers/thei/app/modals/relation/modal';
  * stretching the form.
  *
  * Below the line at the foot, the block recommends what the entity's own
- * text links to and is not related yet.
+ * text links to and is not related yet, and the parents of the excerpts
+ * about it, first. Those excerpts have a tab of their own, read only here:
+ * an excerpt is edited in its parent's form, which each chip opens. What
+ * an excerpt is about is no block of relations but one field of its own
+ * (`AdminExcerptAbout`).
  */
 const { owner, ownerType, ownerTitle, ownerMedia, text } = defineProps<{
   /** The entity being edited, kept out of the picker; absent until created. */
@@ -87,7 +95,7 @@ function ofKind(items: RelationEditItem[], type: RelationEntityType) {
 
 function firstKind() {
   return (
-    RELATION_ENTITY_TYPES.find(
+    RELATION_TARGET_TYPES.find(
       (type) => ofKind(relations.value, type).length,
     ) ?? 'project'
   );
@@ -113,16 +121,30 @@ const shown = computed(() => ofKind(relations.value, selected.value));
 /** Diary entries keep the order of their days; the rest is dragged. */
 const sortable = computed(() => selected.value !== 'diary-entry');
 
-const tabs = computed(() =>
-  relationKindTabs(
+/** The excerpts about this entity, once it exists. */
+const aboutTarget = computed(() =>
+  owner && isRelationTargetType(ownerType) ? owner : undefined,
+);
+const about = useExcerptsAbout(aboutTarget);
+const aboutExcerpts = computed(() => about.items.value);
+watch(aboutExcerpts, (items) => {
+  if (!items.length && selected.value === 'excerpt')
+    selected.value = firstKind();
+});
+
+const tabs = computed(() => [
+  ...relationKindTabs(
     Object.fromEntries(
-      RELATION_ENTITY_TYPES.map((type) => [
+      RELATION_TARGET_TYPES.map((type) => [
         type,
         ofKind(relations.value, type).length,
       ]),
     ),
   ),
-);
+  ...(aboutExcerpts.value.length
+    ? relationKindTabs({ excerpt: aboutExcerpts.value.length }, ['excerpt'])
+    : []),
+]);
 
 /** What the text links to and is not related yet, in the text's order. */
 const mentionedKeys = computed(() => {
@@ -138,6 +160,33 @@ const mentionedKeys = computed(() => {
     .slice(0, CONTENT_ENTITY_SEARCH_MAX_LIMIT);
 });
 const recommendations = useRelationRecommendations(mentionedKeys);
+
+/**
+ * What the block recommends, each with its reason: the parents of the
+ * excerpts about this entity first — an excerpt about it is the strongest
+ * reason to relate the two — then what the text links to.
+ */
+const recommended = computed(() => {
+  const excluded = new Set(excludedKeys.value);
+  const seen = new Set<string>();
+  const list: { item: ContentEntitySearchItem; reason: string }[] = [];
+  for (const entry of aboutExcerpts.value) {
+    const key = relationKey(entry.parent);
+    if (excluded.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    list.push({
+      item: entry.parent,
+      reason: phrase.value.relation_recommendation_excerpt,
+    });
+  }
+  for (const item of recommendations.value) {
+    const key = relationKey(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    list.push({ item, reason: phrase.value.relation_recommendation_reason });
+  }
+  return list;
+});
 
 /**
  * What a chip says of its relation's reason: the note as this entity's page
@@ -166,11 +215,8 @@ function chipPopup(item: RelationEditItem) {
   );
 }
 
-function recommendationPopup(item: ContentEntitySearchItem) {
-  return titlePopup(
-    { text: relationTitle(item), bold: true },
-    phrase.value.relation_recommendation_reason,
-  );
+function recommendationPopup(item: ContentEntitySearchItem, reason: string) {
+  return titlePopup({ text: relationTitle(item), bold: true }, reason);
 }
 
 /** A new relation is a plain one with nothing said of it yet. */
@@ -188,12 +234,28 @@ function addRelation(entity: ContentEntitySearchItem) {
   revealChip(relationKey(entity));
 }
 
+/**
+ * Brings a chip into sight: within the panel where the panel scrolls on its
+ * own (a desktop's capped list), otherwise on the page, to its middle — the
+ * top edge would put it under the sticky header.
+ */
 function revealChip(key: string) {
-  void nextTick(() =>
-    panel.value
-      ?.querySelector<HTMLElement>(`[data-relation-key="${CSS.escape(key)}"]`)
-      ?.scrollIntoView({ block: 'nearest' }),
-  );
+  void nextTick(() => {
+    const scroller = panel.value;
+    const chip = scroller?.querySelector<HTMLElement>(
+      `[data-relation-key="${CSS.escape(key)}"]`,
+    );
+    if (!scroller || !chip) return;
+    if (scroller.scrollHeight > scroller.clientHeight + 1) {
+      const frame = scroller.getBoundingClientRect();
+      const box = chip.getBoundingClientRect();
+      if (box.top < frame.top) scroller.scrollTop += box.top - frame.top - 8;
+      else if (box.bottom > frame.bottom)
+        scroller.scrollTop += box.bottom - frame.bottom + 8;
+      return;
+    }
+    scrollIntoSight(chip, { block: 'center' });
+  });
 }
 
 function removeRelation(key: string) {
@@ -272,7 +334,7 @@ const { guardClick } = useDragSort(panel, {
       relationKey,
     );
     replaceRelations(
-      RELATION_ENTITY_TYPES.flatMap((kind) =>
+      RELATION_TARGET_TYPES.flatMap((kind) =>
         kind === type ? moved : ofKind(relations.value, kind),
       ),
     );
@@ -311,8 +373,9 @@ const { guardClick } = useDragSort(panel, {
         :aria-labelledby="`${panelId}-${selected}-tab`"
         ref="panel"
         role="tabpanel"
-        class="flex scrollbar-mini max-h-120 flex-wrap content-start items-start
-          gap-2 overflow-y-auto overscroll-contain p-sm sm:p-md"
+        class="flex flex-wrap content-start items-start gap-2 p-sm
+          sm:scrollbar-mini sm:max-h-120 sm:overflow-y-auto
+          sm:overscroll-contain sm:p-md"
         data-relation-panel
       >
         <AdminRelationChip
@@ -338,8 +401,34 @@ const { guardClick } = useDragSort(panel, {
             class="-mx-[0.75em] mt-0.5 truncate px-[0.75em]"
           />
         </AdminRelationChip>
+        <!-- The excerpts about this entity: each opens its parent's form on
+             it, since only that form edits it. -->
+        <template v-if="selected === 'excerpt'">
+          <AdminRelationChip
+            v-for="entry in aboutExcerpts"
+            :key="entry.excerptUuid"
+            entity-type="excerpt"
+            :title="publicText(entry.title)"
+            :media="entry.media"
+            :aria-label="`${phrase.edit_excerpt}: ${publicText(entry.title)}`"
+            :data-title-popup="phrase.edit_excerpt"
+            data-excerpt-about-chip
+            @click="navigateTo(entry.editPath)"
+          >
+            <span class="mt-0.5 flex min-w-0 items-center gap-1 text-text-3">
+              <Icon
+                :name="entityTypeIcon(entry.parent.entityType)"
+                class="shrink-0"
+                aria-hidden="true"
+              />
+              <span class="min-w-0 truncate">{{
+                entityListName(entry.parent, 'abbreviated')
+              }}</span>
+            </span>
+          </AdminRelationChip>
+        </template>
         <p
-          v-if="!shown.length"
+          v-if="!shown.length && selected !== 'excerpt'"
           class="self-center text-sm text-text-3 italic"
           data-relations-empty
         >
@@ -353,10 +442,11 @@ const { guardClick } = useDragSort(panel, {
         class="border-t border-border-1 p-sm sm:p-md"
       />
 
-      <!-- What the text links to and is not related yet: one tap relates it
-           as plainly related, with nothing said of it. -->
+      <!-- The parents of the excerpts about this entity, and what the text
+           links to, not related yet: one tap relates it as plainly related,
+           with nothing said of it. -->
       <div
-        v-if="recommendations.length"
+        v-if="recommended.length"
         class="border-t border-border-1 bg-bg-1/50 p-sm sm:p-md"
         data-relation-recommendations
       >
@@ -365,28 +455,26 @@ const { guardClick } = useDragSort(panel, {
         </p>
         <div class="flex flex-wrap gap-2">
           <AdminRelationChip
-            v-for="item in recommendations"
+            v-for="{ item, reason } in recommended"
             :key="relationKey(item)"
             suggested
-            :entity-type="item.entityType"
+            :entity-type="item.entityType as RelationEntityType"
             :title="relationTitle(item, 'abbreviated')"
             :media="item.previewMedia"
             :aria-label="
               phrase.relation_recommendation_add(relationTitle(item))
             "
-            v-bind="recommendationPopup(item)"
+            v-bind="recommendationPopup(item, reason)"
             data-relation-recommendation
             @click="addRelation(item)"
           >
             <span class="mt-0.5 flex min-w-0 items-center gap-1 text-text-3">
               <Icon
-                :name="relationEntityIcon(item.entityType)"
+                :name="entityTypeIcon(item.entityType)"
                 class="shrink-0"
                 aria-hidden="true"
               />
-              <span class="min-w-0 truncate">{{
-                entityTypeLabel(item.entityType)
-              }}</span>
+              <span class="min-w-0 truncate">{{ reason }}</span>
             </span>
           </AdminRelationChip>
         </div>

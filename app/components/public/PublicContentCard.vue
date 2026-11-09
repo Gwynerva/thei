@@ -9,7 +9,13 @@ import type { DateRange } from '#layers/thei/shared/date-range';
 import type { IconName } from '#thei/icons';
 import type { PublicPeriodMark } from '#layers/thei/shared/public-timeline';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
-import { continuationOutlinePath } from '#layers/thei/shared/continuation-outline';
+import {
+  continuationOutlinePath,
+  tornStripOutlinePath,
+} from '#layers/thei/shared/continuation-outline';
+import type { RelationType } from '#layers/thei/shared/relation';
+import type { LifeExcerptName } from '#layers/thei/shared/life';
+import { relationEntityIcon } from '#layers/thei/shared/relation-display';
 import {
   boxRadius,
   useMeasuredOutline,
@@ -77,7 +83,30 @@ const props = defineProps<{
    * began on an older one. The edge on that side says so.
    */
   continues?: 'up' | 'down';
+  /**
+   * The card is an excerpt: a strip torn off above and below, with big
+   * regular teeth, cut out of a longer text. Never with `continues` or
+   * `cloud`.
+   */
+  torn?: boolean;
+  /**
+   * How the card's subject relates to the page it is on, under its words:
+   * the relation's word when it has a direction, and the owner's reason.
+   */
+  relation?: { type: RelationType; note?: string };
+  /**
+   * The excerpts of an entry or an event, named under its words on the
+   * Life, each leading to its own page.
+   */
+  parts?: LifeExcerptName[];
 }>();
+
+/** What an excerpt of the card is about, by name, as its token's hint. */
+function aboutName(part: Extract<LifeExcerptName, { href: string }>) {
+  return part.about
+    ? publicExcerptSubjectName(part.about)
+    : phrase.value.excerpt_without_about;
+}
 
 const datePresentation = computed(
   () =>
@@ -114,17 +143,26 @@ const cloudPath = useCloudOutline(
  * it can.
  */
 const continuationPath = useMeasuredOutline(
-  computed(() => (props.continues && !props.cloud ? card.value : null)),
+  computed(() =>
+    (props.continues || props.torn) && !props.cloud ? card.value : null,
+  ),
   (width, height) =>
-    props.continues
-      ? continuationOutlinePath(width, height, props.continues, boxRadius())
-      : '',
+    props.torn
+      ? tornStripOutlinePath(width, height)
+      : props.continues
+        ? continuationOutlinePath(width, height, props.continues, boxRadius())
+        : '',
 );
 const outlinePath = computed(() =>
   props.cloud ? cloudPath.value : continuationPath.value,
 );
 /** Whether the card is drawn by an outline rather than bordered as a box. */
-const drawn = computed(() => props.cloud || Boolean(continuationPath.value));
+const drawn = computed(
+  () => props.cloud || props.torn || Boolean(continuationPath.value),
+);
+const relationText = computed(() =>
+  props.relation?.note ? publicText(props.relation.note) : '',
+);
 
 const visibleTags = computed(() => props.tags?.slice(0, 3) ?? []);
 const visibleProjects = computed(() => props.projects ?? []);
@@ -154,6 +192,7 @@ const hasFooter = computed(
     :style="cardStyle"
     :data-secret="secret || undefined"
     :data-continues="continues"
+    :data-torn="torn || undefined"
   >
     <!--
       A cloud, or the torn edge of a period's start or end, is drawn rather
@@ -161,7 +200,7 @@ const hasFooter = computed(
       hidden until the card has been measured.
     -->
     <svg
-      v-if="cloud || continuationPath"
+      v-if="cloud || torn || continuationPath"
       class="public-outline pointer-events-none absolute inset-0 -z-1 size-full
         overflow-visible transition"
       :class="outlinePath ? 'opacity-100' : 'opacity-0'"
@@ -213,6 +252,7 @@ const hasFooter = computed(
       :class="[compact ? 'p-sm sm:p-md' : 'p-md', { 'text-halo-bg-2': media }]"
     >
       <div
+        v-if="label || !hideDate || reminder || secret"
         class="flex max-w-4/5 flex-wrap items-center gap-x-2 gap-y-1 text-xs
           font-semibold text-accent sm:max-w-3/4"
       >
@@ -313,7 +353,7 @@ const hasFooter = computed(
         class="public-card-copy flex max-w-4/5 min-w-0 flex-col gap-sm
           sm:max-w-3/4"
       >
-        <PublicParentLink v-if="parent" :parent="parent" />
+        <PublicParentLink v-if="parent" :parent="parent" :relation />
         <p
           v-if="titleless"
           class="public-card-title -mx-[0.75em] line-clamp-4 px-[0.75em]
@@ -338,6 +378,72 @@ const hasFooter = computed(
             {{ publicText(summary) }}
           </p>
         </div>
+        <RelationLine
+          v-if="
+            !parent && relation && (relation.type !== 'related' || relationText)
+          "
+          :type="relation.type"
+          :text="relationText"
+          italic
+          class="-mx-[0.75em] line-clamp-2 px-[0.75em] text-sm text-text-2"
+        />
+        <!-- The excerpts in a row while they fit, each after the token of
+             what it is about — its picture, or its kind's icon, or a dead
+             face once that is deleted — whose name its hint gives. One the
+             reader may not read is its codename with a lock, as a secret
+             card is, leading nowhere. The links stay clickable above the
+             card's own full-size link. -->
+        <ul
+          v-if="parts?.length"
+          class="flex min-w-0 flex-wrap gap-x-sm gap-y-1 text-sm"
+          data-card-parts
+        >
+          <li
+            v-for="part in parts"
+            :key="part.secret ? part.key : part.href"
+            class="flex min-w-0"
+          >
+            <span
+              v-if="part.secret"
+              class="pointer-events-auto relative z-3 inline-flex min-w-0
+                items-center gap-xs text-text-3"
+              data-card-part-secret
+            >
+              <EntityTokenIcon
+                :media="part.iconMedia"
+                icon="excerpt"
+                class="size-6"
+              />
+              <span class="min-w-0 truncate italic">{{ part.title }}</span>
+              <Icon
+                name="lock-close"
+                :data-title-popup="phrase.secret_hint"
+                :aria-label="phrase.secret_hint"
+                role="img"
+                class="shrink-0 opacity-60"
+              />
+            </span>
+            <TheiLink
+              v-else
+              :to="part.href"
+              class="group/part pointer-events-auto relative z-3 inline-flex
+                min-w-0 items-center gap-xs font-semibold text-text-2 transition
+                hocus:text-accent"
+            >
+              <EntityTokenIcon
+                :media="part.about?.iconMedia"
+                :icon="
+                  part.about
+                    ? relationEntityIcon(part.about.entityType ?? 'project')
+                    : 'face-dead'
+                "
+                :data-title-popup="aboutName(part)"
+                class="size-6 transition group-hocus/part:brightness-125"
+              />
+              <span class="min-w-0 truncate">{{ publicText(part.title) }}</span>
+            </TheiLink>
+          </li>
+        </ul>
       </div>
 
       <div

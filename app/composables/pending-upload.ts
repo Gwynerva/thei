@@ -19,7 +19,7 @@ import {
   uploadOriginalFile,
   type UploadConstraints,
 } from './upload-draft';
-import type { UploadStatus } from './upload-progress';
+import { advanceUploadStatus, type UploadStatus } from './upload-progress';
 
 /**
  * The file as the browser can already show it, before it is stored: a
@@ -134,7 +134,7 @@ abstract class PendingUploadBase implements PendingUpload {
   protected release(): void {}
 
   protected report(status: UploadStatus | null) {
-    this.status.value = status;
+    this.status.value = advanceUploadStatus(this.status.value, status);
   }
 
   /** Stops the attempt under way, quietly: no error, no result. */
@@ -173,7 +173,7 @@ abstract class PendingUploadBase implements PendingUpload {
  * whole list, lets its upload go.
  */
 export function createPendingUploadList(options: {
-  onLanded(asset: AssetVariantInfo): void;
+  onLanded(asset: AssetVariantInfo, upload: PendingUpload): void;
   onChange(uploads: readonly PendingUpload[]): void;
 }) {
   let uploads: readonly PendingUpload[] = [];
@@ -210,7 +210,7 @@ export function createPendingUploadList(options: {
         void upload.result.then((asset) => {
           if (disposed || !uploads.includes(upload)) return;
           forget(upload);
-          if (asset) options.onLanded(asset);
+          if (asset) options.onLanded(asset, upload);
         });
       }
     },

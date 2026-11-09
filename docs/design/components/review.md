@@ -58,6 +58,10 @@ of a field that is not a text is a proposal at the field's label instead
   `proofreadReview`, `versionReview`, `orderReview`. `implied` says what a
   decision decides of the others. `shared/content-block-changes.ts` names
   what changed in a block besides its words, and compares its files.
+- A remark on meaning (`remark: true`) points at words and changes none:
+  they are marked in the text in every view, its card quotes them with a
+  hint, and it is left as it is («Meant so») or waits until the owner writes
+  the words otherwise, when it counts as answered. It has no «accept».
 - `ReviewDocument.vue` draws the rows with `ContentRenderer`, and
   `ReviewWords.vue` a block's words compared; `ReviewList.vue` is the list;
   `ReviewPartCard.vue` the card of a part; `ReviewFiles.vue` a block's files.

@@ -136,6 +136,44 @@ describe('an AI’s corrections', () => {
   });
 });
 
+describe('an AI’s remark on meaning', () => {
+  const remark: AiRevisePart = {
+    id: 'm1',
+    type: 'remark',
+    category: 'contradiction',
+    certainty: 'unsure',
+    reason: 'The water was warm a line before',
+    find: 'Вода оказалось холоднее.',
+  };
+  // A remark never shares its words with a correction.
+  const review = proofreadReview(text, [parts[0]!, parts[2]!, remark]);
+  const part = () => review.parts.find((each) => each.id === 'm1')!;
+
+  it('points at its words and changes none', () => {
+    expect(part()).toMatchObject({
+      kind: 'contradiction',
+      sure: false,
+      remark: true,
+      words: { before: remark.find, after: remark.find },
+    });
+    expect(part().settled).toBeUndefined();
+  });
+
+  it('is marked where it stands, in every view and decision', () => {
+    for (const view of ['read', 'diff'] as const)
+      for (const decision of ['pending', 'kept'] as const)
+        expect(words(review.rows({ m1: decision }, view)).join()).toContain(
+          `${open}m1${idMark}Вода оказалось холоднее.${close}`,
+        );
+  });
+
+  it('leaves the text as it is, even if taken', () => {
+    expect(JSON.stringify(review.result({ m1: 'accepted' }).blocks)).toContain(
+      'Вода оказалось холоднее.',
+    );
+  });
+});
+
 describe('another version', () => {
   const current: ContentOutputData = {
     blocks: [

@@ -335,7 +335,7 @@ test('a saved section opens its own page from its modal, a new one has no way th
           element.getAttribute('aria-label')?.replace(/\s/g, ' '),
         ),
       ),
-  ).toEqual(['View on Site', 'Delete section', 'Close dialog', 'Save']);
+  ).toEqual(['View on Site', 'Delete section', 'Close dialog', 'Saved']);
   const boxes = await squares.evaluate((group) =>
     [group.parentElement!.firstElementChild!, ...group.children]
       .map((element) => element.getBoundingClientRect())
@@ -350,7 +350,14 @@ test('a saved section opens its own page from its modal, a new one has no way th
     expect(box.right).toBeLessThanOrEqual(375);
   }
 
-  await eye.click();
-  await expect(page).toHaveURL(new RegExp(`${href}$`));
-  await expect(page.locator('h1')).toContainText(String(stamp));
+  // The page opens in a new tab, and the section's modal stays where it was.
+  await expect(eye).toHaveAttribute('target', '_blank');
+  const [tab] = await Promise.all([
+    page.context().waitForEvent('page'),
+    eye.click(),
+  ]);
+  await expect(tab).toHaveURL(new RegExp(`${href}$`));
+  await expect(tab.locator('h1')).toContainText(String(stamp));
+  await expect(dialog).toBeVisible();
+  await tab.close();
 });

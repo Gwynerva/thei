@@ -121,7 +121,7 @@ export const tagsAction: AiActionKindDef<'tags'> = {
 export const relationAction: AiActionKindDef<'relation'> = {
   kind: 'relation',
   reference:
-    'A relation of the owner’s map, between projects, events and diary entries: other (a ref), relation — related | depends-on (the target depends on the other) | affects — op add | change | remove, a note — one for both sides (note), or one per side (notes: { this, other }) — and whyNotInlineLink: why a link in the text would not do. A relation is a deliberate claim of a real dependency; a mere mention deserves a link (revise, category link). It needs its reason.',
+    'A relation of the owner’s map, between projects, events and diary entries: other (a ref), relation — related | depends-on (the target depends on the other) | affects — op add | change | remove, a note — one for both sides (note), or one per side (notes: { this, other }) — and whyNotInlineLink: why a link in the text would not do. A relation is a deliberate claim of a real dependency; a mere mention deserves a link (revise, category link). It needs its reason. An excerpt is no end of a relation here: what it is about is its field subject, changed by update.',
   schema: z.object({
     op: z.enum(['add', 'change', 'remove']).default('add'),
     other: z.string(),
@@ -132,6 +132,7 @@ export const relationAction: AiActionKindDef<'relation'> = {
       .optional(),
     whyNotInlineLink: z.string().optional(),
   }),
+  // An excerpt is no end of one: what it is about is its field subject.
   targets: ['project', 'event', 'diary-entry'],
   async prepare(key, input, context) {
     const entity = target(key);

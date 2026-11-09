@@ -315,16 +315,20 @@ function findsOf(
       where: unit.where,
       ...(unit.place?.section && unit.where !== 'section'
         ? { label: unit.place.section.title }
-        : unit.place?.relation
-          ? {
-              label: unit.place.relation.title,
-              ...(unit.place.relation.asIs ? { labelAsIs: true as const } : {}),
-            }
-          : unit.place?.status
-            ? { label: unit.place.status.date }
-            : unit.place?.file?.title
-              ? { label: unit.place.file.title }
-              : {}),
+        : unit.place?.excerpt && unit.where !== 'excerpt'
+          ? { label: unit.place.excerpt.title }
+          : unit.place?.relation
+            ? {
+                label: unit.place.relation.title,
+                ...(unit.place.relation.asIs
+                  ? { labelAsIs: true as const }
+                  : {}),
+              }
+            : unit.place?.status
+              ? { label: unit.place.status.date }
+              : unit.place?.file?.title
+                ? { label: unit.place.file.title }
+                : {}),
       href: plain || unit.hidden ? document.href : textFragment(at, item.words),
       segments: unit.hidden
         ? []
@@ -334,10 +338,14 @@ function findsOf(
         : {}),
       ...(withPlace &&
       unit.place &&
-      (unit.place.section || unit.place.block || unit.place.file)
+      (unit.place.section ||
+        unit.place.excerpt ||
+        unit.place.block ||
+        unit.place.file)
         ? {
             place: {
               ...(unit.place.section ? { section: unit.place.section.id } : {}),
+              ...(unit.place.excerpt ? { excerpt: unit.place.excerpt.id } : {}),
               ...(unit.place.block ? { block: unit.place.block } : {}),
               ...(unit.place.file ? { file: unit.place.file.assetUuid } : {}),
             },

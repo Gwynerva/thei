@@ -1,4 +1,5 @@
 import type { ProjectEventAccessLevel } from '../access-level';
+import type { ExcerptValue } from '../excerpt';
 import type { ArchivedOriginalFileMeta, AssetType } from '../asset';
 import type { ContentFieldValue } from '../content';
 import type { ProjectSectionValue } from '../project-content-item';
@@ -60,6 +61,7 @@ export type ProjectGetResponse = {
   bannerAssetSize?: number;
   descriptionContent?: ContentFieldValue;
   sections?: ProjectSectionValue[];
+  excerpts?: ExcerptValue[];
   showcaseAssets?: ShowcaseAssetGetItem[];
   otherAssets?: OtherAssetGetItem[];
   relations?: RelationGetItem[];
@@ -104,6 +106,7 @@ export type ProjectSaveResponse =
       projectUuid: string;
       action: ProjectActionEditData;
       sections: ProjectContentItemIdentity[];
+      excerpts: ProjectContentItemIdentity[];
       /** The version the project is at now, for the form's next save. */
       version: number;
       /** The first page of statuses as saved, like the profile save returns. */

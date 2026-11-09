@@ -34,18 +34,13 @@ import {
 } from '../assets/urls';
 import { describedText, describeFiles } from '../assets/descriptions';
 import { createExternalLinkLoader } from '../external-links/repository';
-import { canResolveContentEntityLink } from '../content-links/access';
 import {
   CONTENT_ENTITY_TYPES,
   isContentEntityType,
   type ContentEntityType,
 } from '#layers/thei/shared/content-link';
-import { findContentEntity } from '../content-entities';
-import {
-  opensGrantOwner,
-  STRANGER,
-  type PublicViewer,
-} from '../access-links/viewer';
+import { contentEntityOpens, findContentEntity } from '../content-entities';
+import { STRANGER, type PublicViewer } from '../access-links/viewer';
 import { resolveEntityIconMedia } from '../media/generated-icon';
 
 /**
@@ -183,14 +178,14 @@ export async function buildPublicContentPreviewMedia(
 }
 
 /**
- * What stands for an event, a section or a diary entry in a card, a
+ * What stands for an event, a section, an excerpt or a diary entry in a card, a
  * tile or a link: the first picture of its body, or — when the body opens with
  * none — its kind's drawn icon in its own accent, exactly as a project without
  * an icon gets one. Seeded by the uuid, so a rename keeps the colour. An
  * event's or a section's banner goes ahead of all this (`entity-banner.ts`).
  */
 export async function buildPublicEntityPreviewMedia(
-  ownerType: 'event' | 'project-section' | 'diary-entry',
+  ownerType: 'event' | 'project-section' | 'excerpt' | 'diary-entry',
   ownerId: string,
   slot: ContentSlot,
   entity: PublicContentEntity,
@@ -279,10 +274,7 @@ async function hydratePublicContentData(
     const entity = await findContentEntity({ entityType, entityId }, STRANGER);
     const access: EntityLinkAccess = !entity
       ? 'missing'
-      : canResolveContentEntityLink(
-            entity.access,
-            opensGrantOwner(viewer, entity.grantOwner),
-          )
+      : contentEntityOpens(entity, viewer)
         ? 'resolvable'
         : 'restricted';
     entityLinkCache.set(key, access);

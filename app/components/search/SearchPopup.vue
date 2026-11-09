@@ -14,10 +14,9 @@ import type { SearchQuickRowData } from './SearchQuickRow.vue';
  * The quick search: one for a visitor and the owner, opened from anywhere
  * (`app/composables/site-search.ts`). What it finds comes as it is typed, the
  * best three of each kind, one row per result with the place found best;
- * the owner also finds what is closed, with its lock, and what to do — the
- * day's diary, the other side of the page they are on, what they saved last
- * with no query; a section of the admin, a new entity named by the query and
- * ✦ with one. With nothing typed, everyone is offered what they searched for
+ * the owner also finds what is closed, with its lock, and what to do — what
+ * they saved last with no query; the diary of a day the query names, a
+ * section of the admin, a new entity named by the query and ✦ with one. With nothing typed, everyone is offered what they searched for
  * before in this browser (`useSearchHistory`), to search again.
  *
  * Enter opens where the owner is — a page on the site, an editor in the
@@ -115,8 +114,12 @@ function hitRow(hit: SearchHit): Row {
     ...(hit.parent
       ? {
           parent: {
-            title: publicText(hit.parent.title),
+            // A day's name is its date, whole: a cut date names no day.
+            title: hit.parent.date
+              ? searchEntityTitle('diary-entry', hit.parent.date)
+              : publicText(hit.parent.title),
             media: hit.parent.media,
+            whole: Boolean(hit.parent.date),
           },
         }
       : {}),
@@ -190,24 +193,6 @@ function actionRow(action: SearchAction, at: number): Row {
         href: action.href,
       };
     }
-    case 'edit':
-      return {
-        key,
-        icon: 'edit',
-        title: value.search_action_edit(
-          searchEntityTitle(action.kind, action.title),
-        ),
-        href: action.href,
-      };
-    case 'view':
-      return {
-        key,
-        icon: 'visibility',
-        title: value.search_action_view(
-          searchEntityTitle(action.kind, action.title),
-        ),
-        href: action.href,
-      };
     case 'recent':
       return {
         key,
@@ -264,14 +249,12 @@ const sections = computed<Section[]>(() => {
   const typed = Boolean(query.value);
   const list: Section[] = [];
   if (!typed) {
-    const recent = actions.filter((row) => row.key.startsWith('action:recent'));
-    const first = actions.filter((row) => !recent.includes(row));
-    if (first.length) list.push({ key: 'now', rows: first });
-    if (recent.length)
+    // Nothing typed, the owner is offered only what they saved last.
+    if (actions.length)
       list.push({
         key: 'recent',
         heading: phrase.value.search_recent,
-        rows: recent,
+        rows: actions,
       });
     if (history.entries.value.length)
       list.push({

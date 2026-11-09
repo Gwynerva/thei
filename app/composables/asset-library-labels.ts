@@ -18,6 +18,7 @@ import type { IconName } from '#thei/icons';
 export const assetSourceIcon = {
   project: entityTypeIcon('project'),
   'project-section': entityTypeIcon('project-section'),
+  excerpt: entityTypeIcon('excerpt'),
   event: entityTypeIcon('event'),
   page: entityTypeIcon('page'),
   'diary-entry': entityTypeIcon('diary-entry'),
@@ -30,6 +31,7 @@ export function assetSourceLabel(source: Pick<AssetSource, 'type'>) {
   return {
     project: phrase.value.project,
     'project-section': phrase.value.content_section,
+    excerpt: phrase.value.excerpt,
     event: phrase.value.event,
     page: phrase.value.page,
     'diary-entry': phrase.value.diary_entry,
@@ -161,6 +163,7 @@ function assetContentContext(sourceType: AssetSourceType) {
     {
       project: 'project-description',
       'project-section': 'content',
+      excerpt: 'content',
       event: 'event-description',
       page: 'page-content',
       'diary-entry': 'content',

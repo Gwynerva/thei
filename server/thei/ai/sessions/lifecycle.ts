@@ -129,6 +129,28 @@ export function purgeArchivedSessions(now = Date.now()): number {
   return due.length;
 }
 
+/**
+ * Deletes the containers of an app's direct writes (`../../mcp/direct.ts`)
+ * that a call left behind — cut off by a crash before it deleted its own —
+ * older than `age`; every one of them at boot, when no call is running.
+ */
+export function sweepAppContainers(age: number, now = Date.now()): number {
+  const { db, schema } = THEI_SERVER.useDb();
+  const table = schema.aiSessions;
+  const left = db
+    .select({ sessionUuid: table.sessionUuid })
+    .from(table)
+    .where(and(eq(table.origin, 'app'), lt(table.createdAt, now - age + 1)))
+    .all()
+    .map((row) => row.sessionUuid);
+  if (left.length)
+    db.transaction((tx) => deleteSessions(tx, schema, left, now));
+  return left.length;
+}
+
+/** A call's container lives as long as the call; one an hour old was left. */
+const APP_CONTAINER_LEFT_MS = 60 * 60 * 1000;
+
 /** Deletes a session at the owner's word, with everything of it. */
 export function deleteSession(sessionUuid: string, now = Date.now()) {
   const { db, schema } = THEI_SERVER.useDb();
@@ -144,6 +166,7 @@ export function deleteSession(sessionUuid: string, now = Date.now()) {
  */
 export function maintainAiSessions(now = Date.now()): Promise<void> {
   try {
+    sweepAppContainers(APP_CONTAINER_LEFT_MS, now);
     archiveQuietSessions(now);
     purgeArchivedSessions(now);
   } catch (error) {

@@ -25,6 +25,10 @@ import fileCaptions from './0.0.6-file-captions';
 import aiContext from './0.0.7-ai';
 import checkCoverageSession from './0.0.7-check-coverage-session';
 import sessionTokenHashes from './0.0.7-session-token-hashes';
+import excerpts from './0.0.8-excerpts';
+import directAppWrites from './0.0.8-direct-app-writes';
+import fastConversion from './0.0.8-fast-conversion';
+import assetCreatedAt from './0.0.8-asset-created-at';
 
 /**
  * Every migration Thei has ever shipped, oldest first.
@@ -63,6 +67,10 @@ export const migrationRegistry: TheiMigration[] = [
   aiContext,
   checkCoverageSession,
   sessionTokenHashes,
+  excerpts,
+  directAppWrites,
+  fastConversion,
+  assetCreatedAt,
 ];
 
 export { baselineSql } from './0.0.1-baseline';

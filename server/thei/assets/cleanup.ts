@@ -147,6 +147,7 @@ async function cleanupDanglingUsages() {
     ['asset', 'assets', 'assetUuid'],
     ['project', 'projects', 'projectUuid'],
     ['project-section', 'project-content-sections', 'sectionUuid'],
+    ['excerpt', 'excerpts', 'excerptUuid'],
     ['event', 'events', 'eventUuid'],
     ['page', 'pages', 'pageUuid'],
     ['diary-entry', 'diary-entries', 'diaryUuid'],

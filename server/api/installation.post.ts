@@ -15,6 +15,7 @@ import { setAsideOrphanDatabase } from '../thei/db/orphan';
 import { bootTheiServer } from '../thei/boot/process';
 import { bootResult } from '../thei/boot/result';
 import type { TheiConfig } from '../thei/config';
+import { wipeTheiDir } from '../thei/assets/temp';
 
 type InstallResponse = { type: 'success' } | { type: 'error'; message: string };
 
@@ -43,10 +44,7 @@ export default defineEventHandler(async (event): Promise<InstallResponse> => {
   try {
     const passwordData = generatePasswordData(installDataOrError.password);
 
-    await rm(THEI_SERVER.projectPath('.thei'), {
-      force: true,
-      recursive: true,
-    });
+    await wipeTheiDir();
     await mkdir(THEI_SERVER.contentPath(), { recursive: true });
     // Left by an attempt that failed before writing the config.
     await setAsideOrphanDatabase();

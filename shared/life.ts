@@ -10,13 +10,16 @@ import type { StatusKind, StatusOwnerType } from './status';
 
 /**
  * Every kind of point, in the order a reader is offered them: the three main
- * entities first, then the parts of a project, then everything around them.
+ * entities first, then the parts of a project and the excerpts, then
+ * everything around them. Which of them a chronology offers is
+ * `lifeFilterKinds`.
  */
 export const LIFE_ENTITY_KINDS = [
   'project',
   'event',
   'diary-entry',
   'project-section',
+  'excerpt',
   'page',
   'profile-status',
   'profile-avatar',
@@ -60,6 +63,26 @@ export function lifeArrivalCutoff(now: Date | number = Date.now()): string {
   return utcDayOf(Number(now) + EARLIEST_ZONE_MS);
 }
 
+/**
+ * The last day of some periods that has come by a chronology's last day
+ * (`lifeArrivalCutoff`): a period's end once it has come, the start of one
+ * still running, nothing while none has started. Without a last day, the
+ * last end of them all.
+ */
+export function lastArrivedDay(
+  periods: readonly { startDate: string; endDate: string }[],
+  cutoff?: string,
+): string | undefined {
+  let last: string | undefined;
+  for (const period of periods) {
+    if (cutoff && period.startDate > cutoff) continue;
+    const day =
+      cutoff && period.endDate > cutoff ? period.startDate : period.endDate;
+    if (!last || day > last) last = day;
+  }
+  return last;
+}
+
 /** How far ahead of UTC the earliest time zone is. */
 const EARLIEST_ZONE_MS = 14 * 60 * 60 * 1000;
 
@@ -92,7 +115,26 @@ export type VisibleLifePoint = LifePointBase & {
    * secret point never carries one: what a period was is its content.
    */
   periodLabel?: string;
+  /**
+   * The excerpts of a diary entry or an event the reader may see, named on
+   * its card: on the Life an excerpt is no point of its own.
+   */
+  excerpts?: LifeExcerptName[];
 };
+
+/**
+ * An excerpt named on its parent's card, with what it is about: none once
+ * that is deleted. One the visitor may not read is its codename in its
+ * place, as on the parent's page (`PublicExcerptSecret`).
+ */
+export type LifeExcerptName =
+  | {
+      secret?: undefined;
+      title: string;
+      href: string;
+      about?: PublicEntityLink;
+    }
+  | { secret: true; key: string; title: string; iconMedia: MediaDescriptor };
 
 /** A point a visitor may not see, presented under a codename. */
 export type SecretLifePoint = LifePointBase & {
@@ -160,21 +202,31 @@ export type LifeScopeRef =
  * The kinds a project's chronology can hold.
  *
  * Avatars and other projects belong to the person, not to a project, so they
- * are not offered as filters there.
+ * are not offered as filters there. The excerpts about the project are its
+ * own points.
  */
 export const PROJECT_LIFE_ENTITY_KINDS = [
   'event',
   'diary-entry',
   'project-section',
+  'excerpt',
   'profile-status',
 ] as const satisfies readonly LifeEntityKind[];
+
+/**
+ * The kinds the Life can hold. An excerpt is a point only on the chronology
+ * of what it is about; on the Life its parent's card names it.
+ */
+export const LIFE_SCOPE_ENTITY_KINDS = LIFE_ENTITY_KINDS.filter(
+  (kind) => kind !== 'excerpt',
+);
 
 export function lifeFilterKinds(
   scope: Pick<LifeScope, 'kind'>,
 ): readonly LifeEntityKind[] {
   return scope.kind === 'project'
     ? PROJECT_LIFE_ENTITY_KINDS
-    : LIFE_ENTITY_KINDS;
+    : LIFE_SCOPE_ENTITY_KINDS;
 }
 
 /**
@@ -284,6 +336,7 @@ export const LIFE_ACTIVITY_TOTAL_KINDS = [
   'event',
   'diary-entry',
   'project-section',
+  'excerpt',
 ] as const satisfies readonly LifeEntityKind[];
 export type LifeActivityTotalKind = (typeof LIFE_ACTIVITY_TOTAL_KINDS)[number];
 

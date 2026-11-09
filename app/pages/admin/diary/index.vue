@@ -69,7 +69,7 @@ function dayOf(item: DiaryListItem) {
         :key="item.diaryUuid"
         entity-type="diary-entry"
         :title="dayOf(item)"
-        :summary="item.excerpt"
+        :summary="item.lead"
         :preview-media="item.previewMedia"
         :edit-to="`/admin/diary/${item.diaryUuid}/edit/`"
       >
@@ -118,6 +118,7 @@ function dayOf(item: DiaryListItem) {
           <TheiLink
             :to="sitePath(buildDiaryUrl(item.date))"
             external
+            target="_blank"
             :data-title-popup="phrase.diary_entry"
             :aria-label="phrase.diary_entry"
             class="cursor-pointer text-text-2/50 transition hocus:text-text-1"

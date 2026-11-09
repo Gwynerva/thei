@@ -29,7 +29,10 @@ import { shortTexts, touchedKeys, type ShortText } from './short-texts';
  * captions and titles of their pictures and files, and every short text
  * beside them: titles, summaries, reminders, the names of dated stretches,
  * status lines, notes on links and relations, the titles and captions of
- * placed files, the owner's name and slogan, a project's button. About
+ * placed files, the owner's name and slogan, a project's button. In the
+ * texts it also points at what reads as a mistake of meaning — a fact said
+ * again, a step that does not follow, the text against itself, words a
+ * reader stumbles on — as a remark the owner answers, never as a sure fix. About
  * twelve thousand characters a run, short texts first, the latest changed
  * first. What is known of a paragraph is its words alone: a link it gained
  * leaves it proofread, a word changed hands it back. A fix the owner accepts
@@ -63,6 +66,7 @@ const AREAS = {
 const KINDS: EntityKind[] = [
   'project',
   'project-section',
+  'excerpt',
   'event',
   'diary-entry',
   'page',
@@ -510,6 +514,7 @@ export const proofreadSource: TemplateSource = {
       '- A text’s fixes go as one action: revise, mode proofread, the text by its name; a find must stand once in the whole text — read the text whole when an excerpt is not enough to be sure. A caption or a title of a picture or a file in a text is fixed the same way. A mention of an entity may become a link at its first mention in a part of the text, as a correction of its own, category link.',
       '- A short text is fixed on its entity: a title, a summary, a reminder, a tag’s description or the slogan with field; the owner’s name and nickname, a project’s button (actionText) and status lines (statuses [{ id, text }]) with update; dated stretches with periods, the whole list as read_entity gives it; notes on links and relations and the titles and captions of placed files with update, the list whole as read_entity gives it, every item kept.',
       '- A file’s description is fixed with describe: file and the whole text, corrected.',
+      '- In a text, also mark what reads as a mistake of meaning, inside that one text: a fact said again as though by mistake (repeat), a step that does not follow (logic), the text saying otherwise elsewhere (contradiction), words so tangled a reader stumbles (clumsy). Only what a reader would take for a slip, never style: a deliberate repeat, a fragment, slang, a long sentence that reads well, a change of mind the text owns are the author’s. Each goes in the same revise as a correction of its category: find the sentence or two at fault, reason what is wrong — quoting what it repeats or contradicts — and replace left out, or the same words said otherwise when you have a rewording in the author’s voice; it is always unsure. To weigh a repeat or a contradiction, read the text whole when an excerpt is not enough, but mark only words outside the context paragraphs.',
       '- A caption takes no full stop when it is one sentence; a title never ends with one. The names an entity is found by, addresses and slugs are not words to fix.',
       '- What needs nothing gets nothing.',
       '',

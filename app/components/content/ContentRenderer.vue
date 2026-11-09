@@ -16,6 +16,7 @@ import ContentRendererList from './ContentRendererList.vue';
 import ContentSpoiler from './ContentSpoiler.vue';
 import { openPublicAssets } from '#layers/thei/app/modals/public-asset/modal';
 import type { PublicAssetDescriptor } from '#layers/thei/shared/api/public';
+import type { LandingPlace } from '#layers/thei/shared/landing';
 import type { ContentEntityType } from '#layers/thei/shared/content-link';
 import type {
   ContentFileGroupItem,
@@ -39,8 +40,13 @@ const props = withDefaults(
     pathPrefix?: string;
     /** Spoilers drawn open: a text compared, whose change must be seen. */
     spoilersOpen?: boolean;
+    /**
+     * Headings drawn one level down: a text embedded under a heading of
+     * the page — an excerpt on its parent's — keeps its outline under it.
+     */
+    headingShift?: 0 | 1;
   }>(),
-  { pathPrefix: '' },
+  { pathPrefix: '', headingShift: 0 },
 );
 
 const root = useTemplateRef<HTMLElement>('root');
@@ -68,15 +74,15 @@ function blockKey(block: PublicContentOutputBlock, path: string) {
 }
 
 /**
- * Where a link may land in the text: the search leads to a block by its
- * `#b-<id>` (`app/composables/search-landing.ts`).
+ * Where a link may land in the text: a find of the search, a file's window
+ * lead to a block by its `#b-<id>` (`app/composables/landing.ts`).
  */
 function blockAnchor(block: PublicContentOutputBlock) {
   return 'id' in block && block.id ? { 'data-block': block.id } : {};
 }
 
 function headerTag(level: unknown) {
-  return level === 3 ? 'h3' : 'h2';
+  return `h${(level === 3 ? 3 : 2) + props.headingShift}`;
 }
 
 function asset(value: unknown) {
@@ -129,19 +135,41 @@ function assetDescriptor(
   };
 }
 
-function openAsset(value: unknown, title?: string, caption?: string) {
+/**
+ * Where a file of a block stands, for the address of its window: the block
+ * and the file (`shared/landing.ts`). A block the text keeps no id for has
+ * no place a link can name.
+ */
+function filePlace(
+  block: PublicContentOutputBlock,
+  file: string,
+): LandingPlace | undefined {
+  return 'id' in block && block.id ? { block: block.id, file } : undefined;
+}
+
+function openAsset(
+  block: PublicContentOutputBlock,
+  value: unknown,
+  title?: string,
+  caption?: string,
+) {
   if (!props.assetViewer) return;
   const descriptor = assetDescriptor(value, { title, caption });
-  if (descriptor) openPublicAssets([descriptor], descriptor);
+  if (descriptor)
+    openPublicAssets([descriptor], descriptor, [
+      filePlace(block, descriptor.key),
+    ]);
 }
 
 /** A gallery opens as itself: the viewer steps through its other tiles. */
 function openGalleryItem(
+  block: PublicContentOutputBlock,
   items: ContentGalleryItem[],
   item: ContentGalleryItem,
 ) {
   if (!props.assetViewer) return;
   openPublicAssetSet(
+    block,
     items.map((tile) => ({
       tile,
       descriptor: assetDescriptor(tile.asset, { caption: tile.caption }),
@@ -155,6 +183,7 @@ function openGalleryItem(
  * set, so the pressed one is found by its place, not by the file.
  */
 function openPublicAssetSet<T>(
+  block: PublicContentOutputBlock,
   entries: { tile: T; descriptor: PublicAssetDescriptor | undefined }[],
   pressed: T,
 ) {
@@ -165,6 +194,7 @@ function openPublicAssetSet<T>(
   openPublicAssets(
     shown.map((entry) => entry.descriptor),
     shown.find((entry) => entry.tile === pressed)?.descriptor,
+    shown.map((entry) => filePlace(block, entry.descriptor.key)),
   );
 }
 
@@ -173,11 +203,13 @@ function openPublicAssetSet<T>(
  * recordings play in place, and a file with nothing to show is downloaded.
  */
 function openFileGroupItem(
+  block: PublicContentOutputBlock,
   items: ContentFileGroupItem[],
   item: ContentFileGroupItem,
 ) {
   if (!props.assetViewer) return;
   openPublicAssetSet(
+    block,
     items
       .filter(
         (file) =>
@@ -266,6 +298,7 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
           :openable="assetViewer"
           @open="
             openAsset(
+              block,
               block.data.asset,
               undefined,
               block.data.caption as string | undefined,
@@ -281,7 +314,11 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
           :openable="assetViewer"
           @open="
             (item: ContentGalleryItem) =>
-              openGalleryItem(block.data.items as ContentGalleryItem[], item)
+              openGalleryItem(
+                block,
+                block.data.items as ContentGalleryItem[],
+                item,
+              )
           "
         />
         <ContentAudioCard
@@ -311,6 +348,7 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
           :openable="assetViewer"
           @open="
             openAsset(
+              block,
               block.data.asset,
               block.data.title as string | undefined,
               block.data.caption as string | undefined,
@@ -327,6 +365,7 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
           @open="
             (item: ContentFileGroupItem) =>
               openFileGroupItem(
+                block,
                 block.data.items as ContentFileGroupItem[],
                 item,
               )
@@ -382,6 +421,7 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
             :asset-viewer="assetViewer"
             :content-headings="allHeadings"
             :path-prefix="path"
+            :heading-shift="headingShift"
           />
           <div class="content-private-bracket" data-private-section-edge="end">
             <span class="content-private-bracket__label">

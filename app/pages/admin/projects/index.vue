@@ -137,6 +137,7 @@ const list = computed<ProjectListResponse | undefined>(() => data.value);
               )
             "
             external
+            target="_blank"
             :data-title-popup="phrase.view_project"
             :aria-label="phrase.view_project"
             class="cursor-pointer text-text-2/50 transition hocus:text-text-1"

@@ -1,6 +1,11 @@
 import type { Period } from './period';
 import type { RelationNote, RelationWord } from './relation';
-import type { ProofreadCategory, TidyComment, TidyItem } from './ai-revise';
+import type {
+  MeaningCategory,
+  ProofreadCategory,
+  TidyComment,
+  TidyItem,
+} from './ai-revise';
 import type { AiCertainty } from './ai';
 import { normalizeTagTitle } from './tag';
 
@@ -101,6 +106,7 @@ export function namesTag(
 export const AI_FIELD_ACTIONS = {
   project: ['title', 'summary', 'reminder', 'synonyms', 'showcase', 'cv'],
   'project-section': ['title', 'summary'],
+  excerpt: ['title', 'summary'],
   event: ['title', 'summary', 'reminder', 'synonyms'],
   'diary-entry': ['reminder'],
   page: ['title', 'summary', 'reminder', 'synonyms'],
@@ -110,7 +116,7 @@ export const AI_FIELD_ACTIONS = {
 
 /**
  * One part of a text edit, decided on its own: a correction inside a block,
- * a link that leads nowhere pointed where it should, or a piece of a new
+ * a remark on words that read as a mistake of meaning, a link that leads nowhere pointed where it should, or a piece of a new
  * order of the blocks — a heading, a repeat dropped, a paragraph split, the
  * blocks moved. A part of a new order depends on the
  * order itself, when it moves blocks: without the moves there is no plan.
@@ -130,6 +136,19 @@ export type AiRevisePart =
       replacePlain: string;
       /** Of a link made: how what it leads to reads, its heading too. */
       toTitle?: string;
+    }
+  | {
+      /**
+       * Words that read as a mistake of meaning, pointed at and said why,
+       * with no other words for them: the owner mends them by hand, or
+       * keeps them. Taken, it changes nothing in the text.
+       */
+      id: string;
+      type: 'remark';
+      category: MeaningCategory;
+      certainty: AiCertainty;
+      reason: string;
+      find: string;
     }
   | {
       id: string;
@@ -299,6 +318,7 @@ export type AiActionPayload =
       entity:
         | 'project'
         | 'project-section'
+        | 'excerpt'
         | 'event'
         | 'diary-entry'
         | 'page'

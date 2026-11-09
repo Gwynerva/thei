@@ -35,6 +35,7 @@ describe('asset cleanup', () => {
         CREATE TABLE "diary-entries" (diaryUuid text PRIMARY KEY);
         CREATE TABLE "ai-sessions" (sessionUuid text PRIMARY KEY);
         CREATE TABLE "project-content-sections" (sectionUuid text PRIMARY KEY);
+        CREATE TABLE excerpts (excerptUuid text PRIMARY KEY);
         CREATE TABLE assets (
           assetUuid text PRIMARY KEY,
           slug text NOT NULL UNIQUE,
@@ -46,6 +47,7 @@ describe('asset cleanup', () => {
           type text NOT NULL,
           size integer NOT NULL,
           touchedAt integer NOT NULL,
+          createdAt integer NOT NULL DEFAULT 0,
           meta text
         );
         CREATE TABLE "asset-usages" (

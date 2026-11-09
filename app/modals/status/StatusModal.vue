@@ -104,6 +104,7 @@ function save() {
 useModalCloseGuard(
   () => !dirty.value || window.confirm(phrase.value.unsaved_modal_confirm),
 );
+useBeforeUnloadGuard(() => dirty.value);
 </script>
 <template>
   <ModalContainer ref="modalContainer" class="max-w-120">

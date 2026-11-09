@@ -34,6 +34,7 @@ export const CONTENT_OWNER_TYPES = [
   'event',
   'page',
   'diary-entry',
+  'excerpt',
 ] as const;
 export type ContentOwnerType = (typeof CONTENT_OWNER_TYPES)[number];
 
@@ -43,6 +44,7 @@ export const CONTENT_SLOTS = [
   'project-section-body',
   'event-body',
   'page-body',
+  'excerpt-body',
   'project-notes',
   'event-notes',
   'page-notes',

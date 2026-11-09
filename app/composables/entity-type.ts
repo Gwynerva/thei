@@ -8,6 +8,7 @@ export function entityTypeLabel(type: ContentEntityType): string {
     'project-section': value.content_section,
     event: value.event,
     'diary-entry': value.diary_entry,
+    excerpt: value.excerpt,
     page: value.page,
     tag: value.tag,
   }[type];
