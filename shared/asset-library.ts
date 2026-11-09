@@ -7,7 +7,7 @@ import {
   ASSET_UPLOAD_DEFAULT_MAX_SIZE,
   type AssetUploadLimitPolicy,
 } from './asset-upload-limits';
-import { normalizeAssetExtension } from './assets/formats';
+import { getAssetMediaKind, normalizeAssetExtension } from './assets/formats';
 
 /**
  * What holds a file, as the library groups files: an entity of the site, a
@@ -83,11 +83,68 @@ export interface AssetLibraryItem {
   roles: AssetRole[];
   selectionError?: AssetSelectionError;
 }
-export interface AssetLibrarySection extends AssetSource {
-  count: number;
+/**
+ * Which way the library runs through time: the newest places first — what is
+ * most often wanted, a file used lately — or the oldest.
+ */
+export const ASSET_LIBRARY_ORDERS = ['new', 'old'] as const;
+export type AssetLibraryOrder = (typeof ASSET_LIBRARY_ORDERS)[number];
+export function isAssetLibraryOrder(
+  value: unknown,
+): value is AssetLibraryOrder {
+  return ASSET_LIBRARY_ORDERS.includes(value as AssetLibraryOrder);
+}
+/**
+ * A place with the day it stands at in a life: a diary entry's own day, the
+ * first day of an event, of a section, or of the first dated section of a
+ * project — an undated section takes its project's — and an excerpt its
+ * parent's. A file nothing holds stands at the day it was uploaded; a page,
+ * a tag and the profile have no day.
+ */
+export interface AssetLibraryPlace extends AssetSource {
+  /** `YYYY-MM-DD`. */
+  date?: string;
+  /** The place is named by the words of the search: it comes before the run. */
+  named?: true;
+}
+/** A file in one of its places, as the library runs through them. */
+export interface AssetLibraryEntry extends AssetLibraryItem {
+  place: AssetLibraryPlace;
+}
+/** How many places' files one answer of the library carries. */
+export const ASSET_LIBRARY_FEED_PAGE = 60;
+/**
+ * The library as one run through time: files in their places, the places in
+ * the order of their days. `offset` is where `entries` start in the whole
+ * run, so a jump to a year and the pages before and after it are positions
+ * in one list. The first answer of a search also says how its filters count,
+ * which years it covers, and — while nothing is typed — what is here and what
+ * was used lately.
+ */
+export interface AssetLibraryFeedResponse {
+  entries: AssetLibraryEntry[];
+  offset: number;
+  total: number;
+  facets?: AssetLibraryFacets;
+  /** How many files each year holds, in the order of the run; `''` for no day. */
+  years?: { year: string; count: number }[];
+  /** The files of what is being edited and of what it is related to. */
+  here?: AssetLibraryEntry[];
+  /** The files used last. */
+  recent?: AssetLibraryItem[];
+}
+/** What is being edited, as a place: its files and its relations come first. */
+export interface AssetLibraryHere {
+  type: Exclude<AssetSourceType, 'unused'>;
+  id: string;
 }
 /** The longest search the library takes. */
 export const ASSET_LIBRARY_QUERY_LIMIT = 500;
+/**
+ * The furthest a reader's clock stands from UTC, in minutes: the library
+ * dates by the reader's days (`utcOffset` of a feed request).
+ */
+export const ASSET_LIBRARY_UTC_OFFSET_MAX = 14 * 60;
 /**
  * The kinds of entity the library can be narrowed to. The profile and tags
  * hold few files and are found by name; files nothing holds are a group of
@@ -136,36 +193,15 @@ export function assetLibraryWhereFromQuery(query: {
  * a choice that finds nothing is seen before it is made. Each filter is
  * counted with the other applied and without its own: `types` by kind of
  * file, `sources` by where the files are used, `anywhere` for no place at
- * all. A listing of groups counts groups by place and files by kind; a
- * listing of files counts files.
+ * all, every one counting files.
  */
 export interface AssetLibraryFacets {
   types: Partial<Record<AssetType, number>>;
   sources: Partial<Record<AssetSourceType, number>>;
   anywhere: number;
-  /** Files without a description and with one: what describing them asks. */
-  described: Record<AssetLibraryDescribed, number>;
 }
-/** Whether a file has its description: either way, without one, with one. */
-export const ASSET_LIBRARY_DESCRIBED = ['none', 'some'] as const;
-export type AssetLibraryDescribed = (typeof ASSET_LIBRARY_DESCRIBED)[number];
-export function isAssetLibraryDescribed(
-  value: unknown,
-): value is AssetLibraryDescribed {
-  return ASSET_LIBRARY_DESCRIBED.includes(value as AssetLibraryDescribed);
-}
-export type AssetLibraryResponse = PaginatedResponse<AssetLibrarySection> & {
-  /**
-   * With the first page only: the picker loads the next ones onto it, and
-   * the counts do not change with the page.
-   */
-  facets?: AssetLibraryFacets;
-};
+/** The flat list of files, a page of it (`listLibraryAssets`). */
 export type AssetLibraryFilesResponse = PaginatedResponse<AssetLibraryItem>;
-/** The flat list of the storage page: files, and how the filters count them. */
-export type AssetLibraryAssetsResponse = AssetLibraryFilesResponse & {
-  facets: AssetLibraryFacets;
-};
 export interface AssetLibraryAvailability {
   total: number;
   types: Partial<Record<AssetType, number>>;
@@ -187,6 +223,32 @@ export interface AssetSelectionConstraints {
   imageOnly?: boolean;
 }
 export type AssetSelectionError = 'type' | 'size';
+/**
+ * The kinds of file a selection can take at all, so a filter offers no kind
+ * that could never be chosen; every kind when it takes any file.
+ */
+export function assetSelectionKinds(
+  constraints: AssetSelectionConstraints = {},
+): AssetType[] | undefined {
+  if (constraints.imageOnly) return [AssetType.Image];
+  let kinds: AssetType[] | undefined =
+    constraints.sizeLimitPolicy === 'media'
+      ? [AssetType.Image, AssetType.Video]
+      : undefined;
+  const allowed = constraints.acceptedExtensions;
+  if (allowed && allowed !== '*') {
+    const named = new Set(
+      allowed.map(
+        (extension) =>
+          getAssetMediaKind(normalizeAssetExtension(extension)) as AssetType,
+      ),
+    );
+    kinds = (kinds ?? Object.values(AssetType)).filter((kind) =>
+      named.has(kind),
+    );
+  }
+  return kinds;
+}
 export function assetMatchesSelectionType(
   asset: { type: AssetType; extension: string },
   constraints: AssetSelectionConstraints = {},

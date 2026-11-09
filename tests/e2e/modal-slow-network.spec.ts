@@ -180,19 +180,15 @@ test('the picker, the library and the editor each stand in their frame at once',
   await expect(
     dialog(page).getByRole('heading', { name: 'File storage' }),
   ).toBeVisible({ timeout: 600 });
-  // The newest come first among the unused; the first section may already
-  // be open.
-  const unused = dialog(page)
-    .locator('details')
-    .filter({
-      has: page.locator('[data-asset-library-section]', { hasText: 'Unused' }),
-    });
-  await expect(unused).toBeVisible({ timeout: 10_000 });
-  if ((await unused.getAttribute('open')) === null)
-    await unused.locator('[data-asset-library-section]').click();
+  // The newest come first: a fresh upload is at the top.
   const asset = page.locator(`[data-asset-uuid="${assetUuid}"]`).first();
   await expect(asset).toBeVisible({ timeout: 10_000 });
-  await asset.click();
+  // The button its tile shows under the pointer opens the editor.
+  await asset.hover();
+  await asset
+    .locator('..')
+    .getByRole('button', { name: 'How to take the file' })
+    .click();
 
   // The editor opens over the library at once and fetches the file itself.
   await expect(

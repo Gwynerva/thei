@@ -67,7 +67,12 @@ test('a text in the library opens as its words, in the encoding it was written i
     'data-nuxt-hydrated',
     'true',
   );
-  await page.locator(`[data-asset-uuid="${file.assetUuid}"]`).click();
+  // The run's tile: a file just uploaded also stands among those used lately.
+  await page
+    .getByRole('region')
+    .filter({ has: page.locator('[data-feed-month]') })
+    .locator(`[data-asset-uuid="${file.assetUuid}"]`)
+    .click();
   const dialog = page.locator('dialog[open]');
   await expect(dialog.locator('[data-file-preview-view="text"]')).toBeVisible();
   await expect(dialog.locator('[data-file-preview-text]')).toContainText(

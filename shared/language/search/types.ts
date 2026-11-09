@@ -34,6 +34,28 @@ export interface SearchLanguagePack {
    * «фото маяка» asks for the files of a lighthouse.
    */
   kindWords: Partial<Record<SearchKind, readonly string[]>>;
+  /**
+   * Words that narrow the file library rather than say what a file is about:
+   * «видео с похода» asks for videos, «дневник» for the files of the diary;
+   * `any` names any file at all, «файлы», and narrows nothing. Every form is
+   * listed whole and matched whole, never by its stem: a stem would read «в
+   * виде» as video and «фотограф» as a photo.
+   */
+  libraryWords: Readonly<
+    Record<
+      | 'image'
+      | 'video'
+      | 'audio'
+      | 'other'
+      | 'diary-entry'
+      | 'event'
+      | 'project'
+      | 'project-section'
+      | 'page'
+      | 'any',
+      readonly string[]
+    >
+  >;
   /** Words a question opens with: «что я делала на байкале». */
   questionWords: ReadonlySet<string>;
   /** Days named by a word, as days from today: «вчера» is −1. */

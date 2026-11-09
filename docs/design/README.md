@@ -120,6 +120,10 @@ Components:
   under small captions, facts, the file's description, a video's still chosen
   by hand, places as chips, the editor's screens, a visitor's «Где ещё
   используется».
+- [File library](components/file-library.md) — the stored files as one run
+  through time, in the picker and on the storage page: days of places, the
+  bar of the month and the years, here and used lately, words read as
+  filters, a click that takes a file as it is, chosen tiles and the footer.
 - [Review of a text](components/review.md) — an edit or a version gone
   through part by part: the views, parts left in reach, changes drawn, the
   foot, closing in one step.

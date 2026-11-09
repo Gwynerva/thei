@@ -190,6 +190,7 @@ export default defineI18nBase({
   phrases: {
     asset_library: 'File storage',
     asset_library_search: 'Search files',
+    asset_library_search_hint: 'Words, a day, “video”, “diary”…',
     asset_aspect_hint: (ratio, size) =>
       `Works best with an image or video in ${ratio}, for example ${size} pixels`,
     asset_library_pending_deletion: (date) =>
@@ -205,13 +206,20 @@ export default defineI18nBase({
     asset_library_anywhere: 'Anywhere',
     asset_library_widen: 'Look wider',
     asset_library_used: 'In use',
-    asset_library_more: 'Show more',
-    asset_library_insert: 'Insert selected',
+    asset_library_insert: 'Insert',
     asset_library_usage: 'Used in',
-    asset_library_described: 'Description',
-    asset_library_described_any: 'With a description or without',
-    asset_library_described_none: 'Without a description',
-    asset_library_described_some: 'With a description',
+    asset_library_here: 'Here and related',
+    asset_library_named: 'Places of that name',
+    asset_library_recent: 'Used lately',
+    asset_library_order_new: 'Newest first',
+    asset_library_order_old: 'Oldest first',
+    asset_library_undated: 'No date',
+    asset_library_years: 'Years',
+    asset_library_clear_selection: 'Clear selection',
+    asset_library_unselect: 'Remove from selection',
+    asset_library_search_part_remove: (label) =>
+      `Remove “${label}” from the search`,
+    asset_library_uploaded: (when) => `Uploaded: ${when}`,
     asset_used_elsewhere: 'Also used in',
     asset_about: 'About the file',
     asset_format: (kind, extension) => {
@@ -1188,9 +1196,6 @@ export default defineI18nBase({
       'Write the first one: a date and some text is all it takes.',
     admin_tags_empty_description:
       'Tags group projects and events by topic. Create your first tag to get started.',
-    admin_assets_empty: 'The file library is empty',
-    admin_assets_empty_description:
-      'Files will appear here once you upload them to projects, events or pages.',
     public_tags_empty: 'No tags yet',
     public_tags_empty_description:
       'Tags will appear here once projects or events are tagged.',

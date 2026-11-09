@@ -58,6 +58,7 @@ beforeEach(async () => {
       type text NOT NULL,
       size integer NOT NULL,
       touchedAt integer NOT NULL,
+      createdAt integer NOT NULL DEFAULT 0,
       meta text
     );
     CREATE UNIQUE INDEX assets_family_content_settings_idx

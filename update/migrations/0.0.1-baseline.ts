@@ -59,6 +59,7 @@ export const baselineSql: string[] = [
 	\`type\` text NOT NULL,
 	\`size\` integer NOT NULL,
 	\`touchedAt\` integer NOT NULL,
+	\`createdAt\` integer DEFAULT 0 NOT NULL,
 	\`meta\` text
 );
 `,

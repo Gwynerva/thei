@@ -60,14 +60,14 @@ async function pressBack(page: Page) {
 
 async function chooseFromLibrary(page: Page, assetUuid: string) {
   const asset = page.locator(`[data-asset-uuid="${assetUuid}"]`).first();
-  // A freshly stored asset has no placements yet, so it sits under "Unused",
-  // where the newest come first.
-  await page
-    .locator('[data-asset-library-section]')
-    .filter({ hasText: 'Unused' })
-    .click();
+  // A freshly stored asset is among the files used lately, at the top;
+  // the button its tile shows under the pointer opens the editor.
   await expect(asset).toBeVisible();
-  await asset.click();
+  await asset.hover();
+  await asset
+    .locator('..')
+    .getByRole('button', { name: 'How to take the file' })
+    .click();
 }
 
 const pickScreen = (page: Page) =>

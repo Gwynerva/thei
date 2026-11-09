@@ -33,6 +33,8 @@ export const assets = sqliteTable(
     size: integer().notNull(),
     /** Unix ms timestamp (Date.now()). Reset on dedup hit to push back orphan cleanup. */
     touchedAt: integer().notNull(),
+    /** Unix ms timestamp of the upload that made this row; never moves. */
+    createdAt: integer().notNull().default(0),
     /** JSON metadata computed at upload time (e.g. dominant color hue). Nullable for pre-existing assets. */
     meta: text({ mode: 'json' }).$type<AssetMeta | null>(),
   },

@@ -133,14 +133,21 @@ export type LanguagePhrases = {
   /** Leads the ways out of a narrowed search that found nothing. */
   asset_library_widen: string;
   asset_library_used: string;
-  asset_library_more: string;
   asset_library_insert: string;
   asset_library_usage: string;
   /** The library's filter by description: its name and its choices. */
-  asset_library_described: string;
-  asset_library_described_any: string;
-  asset_library_described_none: string;
-  asset_library_described_some: string;
+  asset_library_search_hint: string;
+  asset_library_here: string;
+  asset_library_named: string;
+  asset_library_recent: string;
+  asset_library_order_new: string;
+  asset_library_order_old: string;
+  asset_library_undated: string;
+  asset_library_years: string;
+  asset_library_clear_selection: string;
+  asset_library_unselect: string;
+  asset_library_search_part_remove: (label: string) => string;
+  asset_library_uploaded: (when: string) => string;
   asset_used_elsewhere: string;
   /** The visitor's window: the group of what the file is. */
   asset_about: string;
@@ -856,8 +863,6 @@ export type LanguagePhrases = {
   no_diary_entries: string;
   admin_diary_empty_description: string;
   admin_tags_empty_description: string;
-  admin_assets_empty: string;
-  admin_assets_empty_description: string;
   public_tags_empty: string;
   public_tags_empty_description: string;
   public_pages_empty_description: string;

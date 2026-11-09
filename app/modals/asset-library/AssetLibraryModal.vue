@@ -2,28 +2,26 @@
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
 import type { AssetType } from '#layers/thei/shared/asset';
 import {
-  assetLibraryWhereQuery,
-  assetSourceKey,
-  type AssetLibraryFacets,
-  type AssetLibrarySection,
-  type AssetLibraryResponse,
-  type AssetLibraryFilesResponse,
+  assetSelectionKinds,
   type AssetLibraryItem,
-  type AssetLibraryDescribed,
+  type AssetLibraryOrder,
   type AssetLibraryWhere,
   type AssetSelectionConstraints,
 } from '#layers/thei/shared/asset-library';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
 import ModalScreenBar from '../ModalScreenBar.vue';
 import { editFileModal } from '../upload-settings/modal';
-import {
-  assetDeletionLabel,
-  assetFileLabel,
-  assetRoleLabel,
-  assetSourceIcon,
-  assetSourceTitle,
-} from '../../composables/asset-library-labels';
+import { libraryAssetDetailsModal } from './details-modal';
+import { assetFileLabel } from '../../composables/asset-library-labels';
+import { libraryHereOf } from '../../composables/asset-library-here';
 
+/**
+ * Picks stored files again: the library as one run through time
+ * (`AssetLibraryFeed`), what is being edited first. A click takes a file as
+ * it is — what reusing one nearly always means; the button on its tile opens
+ * the editor for any other way. One file is taken at once; several are
+ * gathered in the footer, each removable, and inserted together.
+ */
 const props = defineProps<{
   modalData: AssetSelectionConstraints & {
     multiple?: boolean;
@@ -34,200 +32,39 @@ const props = defineProps<{
 const emit = defineEmits<{
   modalResult: [result: { type: 'assets-ready'; assets: AssetVariantInfo[] }];
 }>();
+const route = useRoute();
 const search = ref('');
-const query = ref('');
-/** The kind of file shown; empty for any. */
 const type = ref<AssetType | ''>('');
-/** Where the files shown are used. */
 const where = ref<AssetLibraryWhere>('all');
-const described = ref<AssetLibraryDescribed | ''>('');
-/** How the last answer counted each choice of the filters. */
-const facets = ref<AssetLibraryFacets>();
-const sections = ref<AssetLibrarySection[]>([]);
-const focusedAssetUuid = ref<string>();
-const files = reactive<Record<string, AssetLibraryFilesResponse>>({});
-const expanded = ref(new Set<string>());
-const loadingFiles = ref(new Set<string>());
-const fileErrors = reactive<Record<string, boolean>>({});
+const order = ref<AssetLibraryOrder>('new');
 const selected = ref<AssetVariantInfo[]>([]);
-const page = ref(1);
-const pageCount = ref(1);
-const loading = ref(false);
-const error = ref(false);
 const selecting = ref(false);
 const selectionMessage = ref('');
-const searchInput = shallowRef<HTMLInputElement>();
-let timer: ReturnType<typeof setTimeout> | undefined;
-let controller: AbortController | undefined;
-let generation = 0;
-const selectionQuery = () => ({
-  acceptedExtensions:
-    props.modalData.acceptedExtensions === '*'
-      ? '*'
-      : props.modalData.acceptedExtensions
-        ? JSON.stringify(props.modalData.acceptedExtensions)
-        : undefined,
+const feed = shallowRef<{ reset: () => Promise<void> }>();
+const here = libraryHereOf(route.path);
+const constraints = computed<AssetSelectionConstraints>(() => ({
+  acceptedExtensions: props.modalData.acceptedExtensions,
   maxSize: props.modalData.maxSize,
   sizeLimitPolicy: props.modalData.sizeLimitPolicy,
-  imageOnly: props.modalData.imageOnly || undefined,
-});
-const requestQuery = () => ({
-  ...selectionQuery(),
-  ...assetLibraryWhereQuery(where.value),
-  q: query.value,
-  type: type.value || undefined,
-  described: described.value || undefined,
-});
-function selectionErrorLabel(error: AssetLibraryItem['selectionError']) {
-  if (error === 'size') return phrase.value.asset_selection_size;
-  if (error === 'type') return phrase.value.asset_selection_type;
-}
-function tileTitle(item: AssetLibraryItem) {
-  return [
-    item.roles.map((role) => assetRoleLabel(role)).join(' · '),
-    selectionErrorLabel(item.selectionError),
-    item.deleteAfter ? assetDeletionLabel(item.deleteAfter) : undefined,
-    item.inHistory ? phrase.value.asset_library_in_history : undefined,
-    item.heldByAi ? phrase.value.asset_library_held_by_ai : undefined,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-}
-async function load(reset = false) {
-  if (reset) {
-    controller?.abort();
-    controller = new AbortController();
-    generation++;
-    page.value = 1;
-    sections.value = [];
-    expanded.value = new Set();
-    loadingFiles.value = new Set();
-    for (const key of Object.keys(files)) delete files[key];
-    for (const key of Object.keys(fileErrors)) delete fileErrors[key];
-  }
-  const current = generation;
-  const requestedPage = reset ? 1 : page.value + 1;
-  loading.value = true;
-  error.value = false;
-  try {
-    const result = await $fetch<AssetLibraryResponse>(
-      '/api/admin/assets/library',
-      {
-        query: { ...requestQuery(), page: requestedPage },
-        signal: controller?.signal,
-      },
-    );
-    if (current !== generation) return;
-    page.value = result.page;
-    sections.value = reset
-      ? result.items
-      : [
-          ...sections.value,
-          ...result.items.filter(
-            (s) =>
-              !sections.value.some(
-                (existing) => assetSourceKey(existing) === assetSourceKey(s),
-              ),
-          ),
-        ];
-    pageCount.value = result.pageCount;
-    // Counted with the first page; the next ones add to the same counts.
-    if (result.facets) facets.value = result.facets;
-    // The files nothing holds are many and rarely the ones wanted, so the
-    // first entity opens instead — unless they are all there is to show.
-    const first =
-      result.items.find((section) => section.type !== 'unused') ??
-      (result.items.length === 1 ? result.items[0] : undefined);
-    if (reset && first) await openSection(first);
-  } catch (e) {
-    if (current === generation && !controller?.signal.aborted)
-      error.value = true;
-  } finally {
-    if (current === generation) loading.value = false;
-  }
-}
-async function loadFiles(section: AssetLibrarySection, next = false) {
-  const key = assetSourceKey(section),
-    current = generation;
-  if (loadingFiles.value.has(key)) return;
-  loadingFiles.value.add(key);
-  fileErrors[key] = false;
-  try {
-    const result = await $fetch<AssetLibraryFilesResponse>(
-      `/api/admin/assets/library/${section.type}/${encodeURIComponent(section.id)}`,
-      {
-        query: {
-          ...requestQuery(),
-          page: next ? (files[key]?.page ?? 0) + 1 : 1,
-        },
-        signal: controller?.signal,
-      },
-    );
-    if (current !== generation) return;
-    files[key] = {
-      ...result,
-      items: next
-        ? [...(files[key]?.items ?? []), ...result.items]
-        : result.items,
-    };
-  } catch {
-    if (current === generation && !controller?.signal.aborted)
-      fileErrors[key] = true;
-  } finally {
-    if (current === generation) loadingFiles.value.delete(key);
-  }
-}
-async function openSection(section: AssetLibrarySection) {
-  const key = assetSourceKey(section);
-  expanded.value.add(key);
-  if (!files[key]) await loadFiles(section);
-}
-function toggleSection(section: AssetLibrarySection) {
-  const key = assetSourceKey(section);
-  if (expanded.value.has(key)) expanded.value.delete(key);
-  else void openSection(section);
-}
-async function choose(asset: AssetVariantInfo) {
-  if (selecting.value) return;
+  imageOnly: props.modalData.imageOnly,
+}));
+const kinds = computed(() => assetSelectionKinds(constraints.value));
+const selectedIds = computed(() =>
+  props.modalData.multiple
+    ? selected.value.map((asset) => asset.assetUuid)
+    : undefined,
+);
+
+/**
+ * Confirms files are still there and still fit, as the editor does when it
+ * hands one over, then hands them all over.
+ */
+async function deliver(assets: AssetVariantInfo[]) {
   selecting.value = true;
   selectionMessage.value = '';
   try {
-    const result = await openModal(editFileModal, {
-      ...props.modalData,
-      source: { kind: 'asset', assetUuid: asset.assetUuid },
-      librarySelection: true,
-    });
-    if (result.type === 'asset-missing') {
-      selectionMessage.value = phrase.value.asset_library_missing;
-      for (const key of Object.keys(files)) {
-        files[key]!.items = files[key]!.items.filter(
-          (item) => item.asset.assetUuid !== asset.assetUuid,
-        );
-      }
-      selected.value = selected.value.filter(
-        (item) => item.assetUuid !== asset.assetUuid,
-      );
-      return;
-    }
-    if (result.type !== 'asset-ready') return;
-    if (!props.modalData.multiple) {
-      emit('modalResult', { type: 'assets-ready', assets: [result.asset] });
-      return;
-    }
-    if (!selected.value.some((a) => a.assetUuid === result.asset.assetUuid))
-      selected.value.push(result.asset);
-  } finally {
-    selecting.value = false;
-  }
-}
-async function insertSelected() {
-  if (selecting.value || !selected.value.length) return;
-  selecting.value = true;
-  selectionMessage.value = '';
-  try {
-    // Recheck the whole set after the user has finished configuring variants.
     await Promise.all(
-      selected.value.map((asset) =>
+      assets.map((asset) =>
         $fetch(`/api/admin/assets/${asset.assetUuid}/touches`, {
           method: 'POST',
           body: {
@@ -238,31 +75,70 @@ async function insertSelected() {
         }),
       ),
     );
-    emit('modalResult', { type: 'assets-ready', assets: [...selected.value] });
+    emit('modalResult', { type: 'assets-ready', assets });
   } catch {
     selectionMessage.value = phrase.value.asset_library_selection_failed;
+    void feed.value?.reset();
   } finally {
     selecting.value = false;
   }
 }
-watch(search, (value) => {
-  clearTimeout(timer);
-  timer = setTimeout(() => {
-    query.value = value.trim();
-    void load(true);
-  }, 250);
-});
-watch([type, where, described], () => {
-  void load(true);
-});
-onMounted(() => {
-  searchInput.value?.focus();
-  void load(true);
-});
-onBeforeUnmount(() => {
-  clearTimeout(timer);
-  controller?.abort();
-});
+
+/**
+ * A click takes a file as it is: at once when one is picked, into the footer
+ * when several are, and a second click lets it go. A file too large to take
+ * as it is goes through the editor, where a smaller variant is made.
+ */
+async function choose(item: AssetLibraryItem) {
+  if (selecting.value) return;
+  if (item.selectionError) return edit(item);
+  if (!props.modalData.multiple) return deliver([item.asset]);
+  if (selected.value.some((a) => a.assetUuid === item.asset.assetUuid))
+    selected.value = selected.value.filter(
+      (a) => a.assetUuid !== item.asset.assetUuid,
+    );
+  else selected.value.push(item.asset);
+}
+
+/** The editor, for taking a file otherwise: a new variant, a crop. */
+async function edit(item: AssetLibraryItem) {
+  if (selecting.value) return;
+  selecting.value = true;
+  selectionMessage.value = '';
+  try {
+    const result = await openModal(editFileModal, {
+      ...props.modalData,
+      source: { kind: 'asset', assetUuid: item.asset.assetUuid },
+      librarySelection: true,
+    });
+    if (result.type === 'asset-missing') {
+      selectionMessage.value = phrase.value.asset_library_missing;
+      void feed.value?.reset();
+      return;
+    }
+    if (result.type !== 'asset-ready') return;
+    if (!props.modalData.multiple) {
+      emit('modalResult', { type: 'assets-ready', assets: [result.asset] });
+      return;
+    }
+    // The variant made stands for the file it was made from.
+    selected.value = [
+      ...selected.value.filter((a) => a.assetUuid !== item.asset.assetUuid),
+      ...(selected.value.some((a) => a.assetUuid === result.asset.assetUuid)
+        ? []
+        : [result.asset]),
+    ];
+  } finally {
+    selecting.value = false;
+  }
+}
+function preview(item: AssetLibraryItem) {
+  void openModal(libraryAssetDetailsModal, { asset: item.asset });
+}
+function insertSelected() {
+  if (selecting.value || !selected.value.length) return;
+  return deliver([...selected.value]);
+}
 </script>
 
 <template>
@@ -270,308 +146,127 @@ onBeforeUnmount(() => {
     class="absolute flex h-dvh w-dvw flex-col bg-bg-1"
     :aria-label="phrase.asset_library"
   >
-    <header class="shrink-0 border-b border-border-1 bg-bg-2 p-sm sm:p-md">
-      <div class="mx-auto flex w-full max-w-280 flex-col gap-sm">
+    <header class="shrink-0 border-b border-border-1 bg-bg-2 py-xs">
+      <!-- The same column as the run's, so their edges line up. -->
+      <div class="mx-auto w-full max-w-280 px-sm sm:px-md">
         <ModalScreenBar icon="gallery" :title="phrase.asset_library">
           <AssetAspectHint :profile="modalData.uploadProfile" />
         </ModalScreenBar>
-        <AssetLibrarySearch
-          v-model:search="search"
-          v-model:type="type"
-          v-model:where="where"
-          v-model:described="described"
-          :facets
-          @element="searchInput = $event"
-        />
       </div>
     </header>
-    <div class="min-h-0 flex-1 overflow-y-auto p-sm sm:p-md">
-      <div class="mx-auto w-full max-w-280 space-y-sm">
-        <p
-          v-if="selectionMessage"
-          role="alert"
-          class="rounded-normal bg-bg-2 p-sm text-text-error"
-        >
-          {{ selectionMessage }}
-        </p>
-        <details
-          v-for="section in sections"
-          :key="assetSourceKey(section)"
-          :open="expanded.has(assetSourceKey(section))"
-          class="group/section overflow-hidden rounded-normal border
-            border-border-1 bg-bg-2"
-        >
-          <summary
-            data-asset-library-section
-            class="flex w-full cursor-pointer list-none items-center gap-xs p-sm
-              text-left transition-colors duration-250
-              motion-reduce:transition-none hocus:bg-bg-3"
-            @click.prevent="toggleSection(section)"
+    <!-- No padding on the scroller itself: the bar of the month sticks to
+         its very top, right under the header, and spans it edge to edge. -->
+    <div class="min-h-0 flex-1 overflow-y-auto">
+      <!-- The bar's width is read from here, inside the scrollbar. -->
+      <div class="@container">
+        <div class="mx-auto w-full max-w-280 px-sm py-sm sm:px-md sm:py-md">
+          <AssetLibraryFeed
+            ref="feed"
+            v-model:search="search"
+            v-model:type="type"
+            v-model:where="where"
+            v-model:order="order"
+            :constraints
+            :kinds
+            :here
+            :selected="selectedIds"
+            :busy="selecting"
+            editable
+            autofocus
+            bleed="mx-[calc(50%-50cqw)] px-[calc(50cqw-50%)]"
+            @choose="choose"
+            @edit="edit"
+            @preview="preview"
           >
-            <span class="flex min-w-0 flex-1 flex-col gap-0.5"
-              ><!-- A section is named under its project: "Launch"
-                   alone does not say whose launch it was. --><span
-                v-if="section.parent"
-                data-asset-library-parent
-                class="flex min-w-0 items-center gap-1 text-xs font-semibold
-                  text-text-3"
-                ><Icon name="project" class="shrink-0" /><span
-                  class="min-w-0 truncate"
-                  >{{ publicText(section.parent.title) }}</span
-                ><Icon
-                  name="corner-down"
-                  class="shrink-0"
-                  aria-hidden="true" /></span
-              ><span class="flex min-w-0 items-center gap-xs"
-                ><Icon
-                  :name="assetSourceIcon[section.type]"
-                  class="shrink-0 text-text-3"
-                /><span
-                  class="min-w-0 truncate font-semibold"
-                  :class="{ italic: section.type === 'unused' }"
-                  >{{ assetSourceTitle(section) }}</span
-                ><span
-                  class="rounded-normal bg-bg-3 px-xs py-1 text-xs text-text-2
-                    tabular-nums"
-                  >{{ section.count }}</span
-                ></span
-              ></span
-            ><Icon
-              name="chevron-right"
-              class="shrink-0 rotate-90 transition-transform duration-250
-                group-open/section:-rotate-90 motion-reduce:transition-none"
-            />
-          </summary>
-          <div class="min-h-0 overflow-hidden">
-            <div class="border-t border-border-1 p-sm">
+            <template #notice>
               <p
-                v-if="section.type === 'unused'"
-                class="mb-sm text-sm text-text-3"
+                v-if="selectionMessage"
+                role="alert"
+                class="rounded-normal bg-bg-2 p-sm text-text-error"
               >
-                {{ phrase.asset_library_unused_hint }}
+                {{ selectionMessage }}
               </p>
-              <div
-                class="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))]
-                  gap-sm"
-              >
-                <button
-                  v-for="item in files[assetSourceKey(section)]?.items ?? []"
-                  :key="item.asset.assetUuid"
-                  :data-asset-uuid="item.asset.assetUuid"
-                  type="button"
-                  :disabled="selecting"
-                  :aria-label="assetFileLabel(item.asset)"
-                  :data-title-popup="tileTitle(item)"
-                  class="w-full cursor-pointer rounded-normal transition-opacity
-                    duration-250 motion-reduce:transition-none"
-                  :class="{ 'opacity-60': item.selectionError }"
-                  @focus="focusedAssetUuid = item.asset.assetUuid"
-                  @blur="focusedAssetUuid = undefined"
-                  @click="choose(item.asset)"
-                >
-                  <AssetTile
-                    :media="item.asset.media"
-                    :extension="item.asset.extension || '?'"
-                    :engaged="focusedAssetUuid === item.asset.assetUuid"
-                    :tone="item.deleteAfter ? 'danger' : 'default'"
-                    loop
-                    :selected="
-                      selected.some((a) => a.assetUuid === item.asset.assetUuid)
-                    "
-                    :overlay="{
-                      showVideo: true,
-                      showExtension: true,
-                      showSize: true,
-                      size: item.asset.size,
-                      pendingDeletion: Boolean(item.deleteAfter),
-                      inHistory: item.inHistory,
-                      heldByAi: item.heldByAi,
-                      warning: selectionErrorLabel(item.selectionError),
-                    }"
-                    class="aspect-square w-full"
-                  />
-                </button>
-              </div>
-              <div
-                v-if="loadingFiles.has(assetSourceKey(section))"
-                role="status"
-                class="p-sm text-center"
-              >
-                <Icon name="loading" />
-              </div>
-              <button
-                v-else-if="fileErrors[assetSourceKey(section)]"
-                type="button"
-                class="mt-sm cursor-pointer text-text-error"
-                @click="loadFiles(section)"
-              >
-                {{ phrase.asset_library_retry }}
-              </button>
-              <button
-                v-else-if="
-                  files[assetSourceKey(section)] &&
-                  files[assetSourceKey(section)]!.page <
-                    files[assetSourceKey(section)]!.pageCount
-                "
-                type="button"
-                class="mt-sm cursor-pointer text-sm text-accent"
-                @click="loadFiles(section, true)"
-              >
-                {{ phrase.asset_library_more }}
-              </button>
-            </div>
-          </div>
-        </details>
-        <!-- A narrowed search that found nothing says how to look wider,
-             and how much there is anywhere for what was typed. -->
-        <EmptyState
-          v-if="!loading && !error && !sections.length"
-          data-asset-library-empty
-          icon="face-dead"
-          :title="phrase.asset_library_empty"
-          :description="
-            where === 'all' && !type
-              ? phrase.admin_search_no_results_description
-              : undefined
-          "
-        >
-          <template v-if="where !== 'all' || type">
-            <span class="text-sm text-text-3"
-              >{{ phrase.asset_library_widen }}:</span
-            >
-            <button
-              v-if="where !== 'all'"
-              type="button"
-              class="inline-flex cursor-pointer items-center gap-1 rounded-full
-                border border-border-1 bg-bg-1 py-1 pl-sm text-sm text-text-2
-                transition hocus:border-border-3 hocus:text-text-1"
-              :class="facets?.anywhere ? 'pr-1.5' : 'pr-sm'"
-              @click="where = 'all'"
-            >
-              <Icon name="globe" class="shrink-0" />{{
-                phrase.asset_library_anywhere
-              }}<span
-                v-if="facets?.anywhere"
-                class="rounded-full bg-bg-3 px-2 py-0.5 text-xs leading-none
-                  tabular-nums"
-                >{{ facets.anywhere }}</span
-              >
-            </button>
-            <button
-              v-if="type"
-              type="button"
-              class="inline-flex cursor-pointer items-center gap-1 rounded-full
-                border border-border-1 bg-bg-1 px-sm py-1 text-sm text-text-2
-                transition hocus:border-border-3 hocus:text-text-1"
-              @click="type = ''"
-            >
-              <Icon name="files" class="shrink-0" />{{ phrase.any_file }}
-            </button>
-          </template>
-        </EmptyState>
-        <div v-if="loading" role="status" class="p-md text-center">
-          <Icon name="loading" />
+            </template>
+          </AssetLibraryFeed>
         </div>
-        <button
-          v-else-if="error"
-          type="button"
-          class="w-full cursor-pointer p-sm text-text-error"
-          @click="load(sections.length === 0)"
-        >
-          {{ phrase.failed_to_fetch_data }} · {{ phrase.asset_library_retry }}
-        </button>
-        <button
-          v-else-if="page < pageCount"
-          type="button"
-          class="w-full cursor-pointer rounded-normal bg-bg-2 p-sm text-accent"
-          @click="load()"
-        >
-          {{ phrase.asset_library_more }}
-        </button>
       </div>
     </div>
     <footer
       v-if="modalData.multiple"
-      class="shrink-0 border-t border-border-1 bg-bg-2 p-sm"
+      class="shrink-0 border-t border-border-1 bg-bg-2 py-xs"
+      data-library-tray
     >
-      <div
-        class="mx-auto flex max-w-280 flex-col gap-sm sm:flex-row
-          sm:items-center"
-      >
-        <div
-          class="flex max-h-24 min-w-0 flex-1 flex-wrap gap-xs overflow-y-auto"
+      <div class="mx-auto flex max-w-280 items-center gap-xs px-sm sm:px-md">
+        <!-- What is chosen, in the order chosen; a click lets one go. Under
+             a finger each says so by a small ✕ in its corner, so that it
+             is not read as the square ✕ beside them, which lets all go. -->
+        <ul
+          class="flex scrollbar-clear min-w-0 flex-1 gap-xs overflow-x-auto
+            py-1"
         >
-          <button
-            v-for="asset in selected"
-            :key="asset.assetUuid"
-            type="button"
-            :disabled="selecting"
-            :aria-label="assetFileLabel(asset)"
-            class="size-12 shrink-0 cursor-pointer"
-            @click="
-              selected = selected.filter((a) => a.assetUuid !== asset.assetUuid)
-            "
-          >
-            <AssetTile
-              :media="asset.media"
-              :extension="asset.extension || '?'"
-              class="size-full"
+          <li v-for="asset in selected" :key="asset.assetUuid" class="shrink-0">
+            <button
+              type="button"
+              :disabled="selecting"
+              :aria-label="`${phrase.asset_library_unselect}: ${assetFileLabel(asset)}`"
+              :data-title-popup="phrase.asset_library_unselect"
+              class="block size-10 cursor-pointer"
+              @click="
+                selected = selected.filter(
+                  (a) => a.assetUuid !== asset.assetUuid,
+                )
+              "
             >
-              <template #overlay>
-                <span
-                  class="absolute inset-0 z-40 flex items-center justify-center
-                    bg-bg-1/60 opacity-0 transition pointer-coarse:bg-bg-1/30
-                    pointer-coarse:opacity-100 hocus:opacity-100"
-                >
-                  <Icon name="close" />
-                </span>
-              </template>
-            </AssetTile>
-          </button>
-        </div>
+              <AssetTile
+                :media="asset.media"
+                :extension="asset.extension || '?'"
+                class="size-full"
+              >
+                <template #overlay>
+                  <span
+                    class="absolute inset-0 z-40 flex items-center
+                      justify-center bg-bg-1/60 opacity-0 transition
+                      pointer-coarse:hidden hocus:opacity-100"
+                  >
+                    <Icon name="close" />
+                  </span>
+                  <span
+                    class="absolute top-0.5 right-0.5 z-40 hidden size-5
+                      items-center justify-center rounded-full bg-bg-1/85
+                      text-2xs text-text-1 pointer-coarse:flex"
+                  >
+                    <Icon name="close" />
+                  </span>
+                </template>
+              </AssetTile>
+            </button>
+          </li>
+        </ul>
+        <Button
+          v-if="selected.length"
+          variant="secondary"
+          size="icon"
+          class="pointer-coarse:size-11"
+          :disabled="selecting"
+          :aria-label="phrase.asset_library_clear_selection"
+          :data-title-popup="phrase.asset_library_clear_selection"
+          data-library-clear
+          @click="selected = []"
+          ><Icon name="close"
+        /></Button>
         <Button
           variant="primary"
+          class="flex h-9 shrink-0 items-center gap-xs whitespace-nowrap
+            pointer-coarse:h-11"
           :disabled="!selected.length || selecting"
+          data-library-insert
           @click="insertSelected"
-          >{{ phrase.asset_library_insert }} · {{ selected.length }}</Button
+          >{{ phrase.asset_library_insert
+          }}<span v-if="selected.length" class="tabular-nums"
+            >&nbsp;· {{ selected.length }}</span
+          ></Button
         >
       </div>
     </footer>
   </section>
 </template>
-
-<style scoped>
-summary::-webkit-details-marker {
-  display: none;
-}
-
-details::details-content {
-  display: grid;
-  grid-template-rows: 0fr;
-  overflow: clip;
-  transition:
-    grid-template-rows 0.25s ease-out,
-    content-visibility 0.25s allow-discrete;
-}
-details[open]::details-content {
-  grid-template-rows: 1fr;
-}
-@supports (interpolate-size: allow-keywords) {
-  details::details-content {
-    interpolate-size: allow-keywords;
-    grid-template-rows: 1fr;
-    height: 0;
-    transition:
-      height 0.25s ease-out,
-      content-visibility 0.25s allow-discrete;
-  }
-  details[open]::details-content {
-    height: auto;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  details::details-content {
-    transition: none;
-  }
-}
-</style>

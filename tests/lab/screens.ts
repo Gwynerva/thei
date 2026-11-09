@@ -435,6 +435,37 @@ export const SCREENS: Screen[] = [
     path: () => '/admin/assets/',
   },
   {
+    // The picker that reuses stored files, opened from an event's form, so
+    // what is here — the event and what it is related to — stands first.
+    id: 'admin-file-picker',
+    title: 'Picking a stored file again',
+    role: 'owner',
+    path: (index) => event(index).adminUrl,
+    steps: () => [
+      {
+        label: 'Add a file to the event',
+        action: { click: { role: 'button', name: 'Add File' } },
+        options: { answer: { role: 'button', name: 'Reuse' } },
+      },
+      {
+        label: 'Reuse a stored file',
+        action: { click: { role: 'button', name: 'Reuse' } },
+        options: {
+          answer: { role: 'searchbox', name: 'Search files' },
+          timeoutMs: 15_000,
+        },
+      },
+      {
+        label: 'Search the diary of a year',
+        action: {
+          fill: { role: 'searchbox', name: 'Search files' },
+          text: 'diary 2019',
+        },
+        options: { answer: { text: 'Diary entries' }, timeoutMs: 15_000 },
+      },
+    ],
+  },
+  {
     id: 'admin-video',
     title: "A video's window",
     role: 'owner',

@@ -43,32 +43,30 @@ async function library(page: Page, batch = false) {
   await page.getByRole('button', { name: 'Reuse', exact: true }).click();
 }
 /**
- * Picks a freshly uploaded asset. Nothing a file was called is kept, so an
- * unused upload is found in the unused section, where the newest come first.
- * The section is opened if it is closed — never toggled shut by a click on
- * a section already open while its tiles are still on their way — and runs
- * before this one leave many unused files, so the tile may be on a page the
- * section has not drawn yet: "Show more" until it is.
+ * Picks a freshly uploaded asset. Nothing a file was called is kept; an
+ * unused upload stands at the day it came, the top of a run that starts
+ * with the newest, and among the files used lately above it.
  */
 async function choose(page: Page, assetUuid: string) {
   const assetButton = page.locator(`[data-asset-uuid="${assetUuid}"]`).first();
-  const unused = page.locator('details').filter({
-    has: page
-      .locator('[data-asset-library-section]')
-      .filter({ hasText: 'Unused' }),
-  });
-  await expect(unused).toBeVisible();
-  if (!(await unused.evaluate((element) => element.hasAttribute('open')))) {
-    await unused.locator('summary').click();
-  }
-  for (let page_ = 0; page_ < 20; page_++) {
-    if (await assetButton.isVisible()) break;
-    const more = unused.getByRole('button', { name: 'Show more' });
-    if (!(await more.isVisible())) break;
-    await more.click();
-  }
   await expect(assetButton).toBeVisible();
+  // A click takes it as it is: no editor in between.
   await assetButton.click();
+  await expect(uploadControls(page).newVariant).toHaveCount(0);
+}
+/**
+ * Picks it through the editor instead, by the button its tile shows under
+ * the pointer.
+ */
+async function chooseInEditor(page: Page, assetUuid: string) {
+  const assetButton = page.locator(`[data-asset-uuid="${assetUuid}"]`).first();
+  await expect(assetButton).toBeVisible();
+  await assetButton.hover();
+  const edit = assetButton
+    .locator('..')
+    .getByRole('button', { name: 'How to take the file' });
+  await expect(edit).toBeVisible();
+  await edit.click();
   // The editor asks how to take the stored file; as it is, it is handed over
   // at once, with no description to ask for.
   const controls = uploadControls(page);
@@ -234,8 +232,13 @@ for (const width of [1280, 390]) {
     );
     await library(page, true);
     await choose(page, first.asset.assetUuid);
-    await choose(page, second.asset.assetUuid);
-    await page.getByRole('button', { name: 'Insert selected · 2' }).click();
+    // One taken as it is by a click, the other through the editor.
+    await chooseInEditor(page, second.asset.assetUuid);
+    // Both chosen tiles say so, and the footer holds them.
+    await expect(
+      page.locator('[data-feed-tile][aria-pressed="true"]'),
+    ).not.toHaveCount(0);
+    await page.getByRole('button', { name: 'Insert · 2' }).click();
     await expect(page.locator('[data-result]')).toContainText(
       second.asset.assetUuid,
     );
@@ -414,7 +417,9 @@ test('the library narrows to one kind of entity and finds a diary entry by its d
   await kinds.getByRole('option').filter({ hasText: 'Diary entries' }).click();
   await expect(source).toHaveAccessibleName('Used in: Diary entries');
   await page.getByRole('searchbox').fill(`${monthName} ${day}, ${year}`);
-  const sections = page.locator('[data-asset-library-section]');
+  // The day is read as a day, and shown back as one.
+  await expect(page.locator('[data-library-search-part="date"]')).toBeVisible();
+  const sections = page.locator('[data-feed-place^="diary-entry:"]');
   await expect(sections).toHaveCount(1);
   // Named by its day written out, not by the stored date.
   await expect(sections).toContainText(`${monthName} ${day}, ${year}`);
@@ -476,16 +481,67 @@ test('the library narrows to one kind of entity and finds a diary entry by its d
   await expect(page).not.toHaveURL(/source=/);
 });
 
+test.describe('by touch', () => {
+  test.use({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+
+  test('a tap takes a file as it is, a long press opens the editor', async ({
+    page,
+    request,
+  }) => {
+    const tapped = await uploadPicture(request, {
+      color: '#2f5d7a',
+      width: 80,
+      height: 60,
+    });
+    const held = await uploadPicture(request, {
+      color: '#7a2f5d',
+      width: 80,
+      height: 60,
+    });
+    await library(page, true);
+    const tile = (uuid: string) =>
+      page.locator(`[data-asset-uuid="${uuid}"]`).first();
+    await expect(tile(held.asset.assetUuid)).toBeVisible();
+    // A finger held still: real touches, so the browser makes of them what
+    // it would of a finger, the click on release too.
+    const box = (await tile(held.asset.assetUuid).boundingBox())!;
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: box.x + box.width / 2, y: box.y + box.height / 2 }],
+    });
+    await page.waitForTimeout(700);
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchEnd',
+      touchPoints: [],
+    });
+    await cdp.detach();
+    const controls = uploadControls(page);
+    await expect(controls.newVariant).toBeVisible();
+    await expect(controls.next).toHaveText('Done');
+    await controls.next.click();
+    await expect(controls.newVariant).toHaveCount(0);
+    // A tap takes the other as it is, with no editor in between.
+    await tile(tapped.asset.assetUuid).tap();
+    await expect(controls.newVariant).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: 'Insert · 2' }),
+    ).toBeVisible();
+  });
+});
+
 test('library endpoints require admin access', async ({ playwright }) => {
   const api = await playwright.request.newContext({
     baseURL: E2E_ORIGIN,
     storageState: { cookies: [], origins: [] },
   });
   for (const path of [
-    '/api/admin/assets',
-    '/api/admin/assets/library',
+    '/api/admin/assets/feed',
     '/api/admin/assets/availability',
-    '/api/admin/assets/library/unused/all',
     '/api/admin/assets/missing/usages',
   ]) {
     const response = await api.get(path);
@@ -546,26 +602,14 @@ test('video previews play on hover and keyboard focus in both library views', as
     .filter({ hasText: 'Unused' })
     .click();
   await expect(page).toHaveURL(/[?&]usage=unused/);
-  const storageRow = page.locator(`[data-asset-uuid="${asset.assetUuid}"]`);
+  // Just uploaded, it is also among the files used lately: the first is it.
+  const storageRow = page
+    .locator(`[data-asset-uuid="${asset.assetUuid}"]`)
+    .first();
   await expect(storageRow).toBeVisible();
   await expectInteractionPlayback(storageRow);
 
   await library(page);
-  const sectionHeader = page
-    .locator('[data-asset-library-section]')
-    .filter({ hasText: 'Unused' });
-  const restingHeaderBackground = await sectionHeader.evaluate(
-    (element) => getComputedStyle(element).backgroundColor,
-  );
-  await sectionHeader.hover();
-  await expect
-    .poll(() =>
-      sectionHeader.evaluate(
-        (element) => getComputedStyle(element).backgroundColor,
-      ),
-    )
-    .not.toBe(restingHeaderBackground);
-  await sectionHeader.click();
   const reuseTile = page
     .locator(`[data-asset-uuid="${asset.assetUuid}"]`)
     .first();
@@ -598,7 +642,7 @@ test('a video takes the frame its player stands at as its still, and gives it ba
 }) => {
   const asset = await uploadChangingVideo(request);
   await page.goto('/admin/assets/?usage=unused');
-  const tile = page.locator(`[data-asset-uuid="${asset.assetUuid}"]`);
+  const tile = page.locator(`[data-asset-uuid="${asset.assetUuid}"]`).first();
   const tileStill = tile.locator('[data-media-preview-pair] img.media-main');
   await expect(tileStill).toHaveAttribute('src', /\/content$/);
   const automatic = await tileStill.getAttribute('src');

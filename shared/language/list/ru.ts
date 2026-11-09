@@ -233,6 +233,7 @@ export default defineI18nModule({
   phrases: {
     asset_library: 'Хранилище файлов',
     asset_library_search: 'Поиск по файлам',
+    asset_library_search_hint: 'Слова, день, «видео», «дневник»…',
     asset_aspect_hint: (ratio, size) =>
       `Лучше всего подойдёт изображение или видео с пропорциями ${ratio}, например ${size} пикселей`,
     asset_library_pending_deletion: (date) =>
@@ -248,13 +249,19 @@ export default defineI18nModule({
     asset_library_anywhere: 'Везде',
     asset_library_widen: 'Искать шире',
     asset_library_used: 'Используются',
-    asset_library_more: 'Показать ещё',
-    asset_library_insert: 'Вставить выбранное',
+    asset_library_insert: 'Вставить',
     asset_library_usage: 'Где используется',
-    asset_library_described: 'Описание',
-    asset_library_described_any: 'С описанием и без',
-    asset_library_described_none: 'Без описания',
-    asset_library_described_some: 'С описанием',
+    asset_library_here: 'Здесь и связанное',
+    asset_library_named: 'Места с таким названием',
+    asset_library_recent: 'Недавние',
+    asset_library_order_new: 'Сначала новые',
+    asset_library_order_old: 'Сначала старые',
+    asset_library_undated: 'Без даты',
+    asset_library_years: 'Годы',
+    asset_library_clear_selection: 'Снять выбор',
+    asset_library_unselect: 'Убрать из выбора',
+    asset_library_search_part_remove: (label) => `Убрать «${label}» из поиска`,
+    asset_library_uploaded: (when) => `Загружено: ${when}`,
     asset_used_elsewhere: 'Где ещё используется',
     asset_about: 'О файле',
     asset_format: (kind, extension) => {
@@ -1251,9 +1258,6 @@ export default defineI18nModule({
       'Запишите первую мысль: дата и текст — больше ничего не нужно.',
     admin_tags_empty_description:
       'Теги объединяют проекты и события по темам. Создайте первый тег, чтобы начать.',
-    admin_assets_empty: 'Библиотека файлов пуста',
-    admin_assets_empty_description:
-      'Файлы появятся здесь, когда вы загрузите их в проекты, события или страницы.',
     public_tags_empty: 'Тегов пока нет',
     public_tags_empty_description:
       'Теги появятся здесь, как только ими будут отмечены проекты или события.',

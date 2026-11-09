@@ -85,9 +85,9 @@ Behaviour that comes with it:
   cannot be picked, unless it is the choice already.
 
 The search row of the library, `app/components/AssetLibrarySearch.vue`, shows
-three filter selects beside the search field, `compact` and `collapsible`:
-the kind of file, where it is used, and whether it has its description —
-the files still waiting for one are what describing them starts from.
+two filter selects beside the search field, `compact` and `collapsible`: the
+kind of file and where it is used. The kind offers only what the selection can
+take ([File library](file-library.md)).
 
 ## Why
 

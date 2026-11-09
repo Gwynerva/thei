@@ -47,6 +47,7 @@ describe('asset cleanup', () => {
           type text NOT NULL,
           size integer NOT NULL,
           touchedAt integer NOT NULL,
+          createdAt integer NOT NULL DEFAULT 0,
           meta text
         );
         CREATE TABLE "asset-usages" (

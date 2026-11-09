@@ -64,6 +64,13 @@ export interface SearchAnalyzer {
   vague(word: string): boolean;
   /** The kind of result a word names, by its term: «фото» is a file. */
   kindOf(term: string): SearchKind | undefined;
+  /**
+   * What a normalized word narrows the file library to, matched whole:
+   * «видео» is a video, «дневника» the diary (`libraryWords`).
+   */
+  libraryWordOf(
+    word: string,
+  ): keyof SearchLanguagePack['libraryWords'] | undefined;
   /** Whether a normalized word may open a question: «что», «where». */
   asks(word: string): boolean;
   /** The day a normalized word names, as days from today: «вчера» is −1. */
@@ -95,6 +102,8 @@ export function createSearchAnalyzer(language: LanguageCode): SearchAnalyzer {
   const packs = [...new Set([own, latin, cyrillic])];
   const vagueTerms = new Map<SearchLanguagePack, Set<string>>();
   let kinds: Map<string, SearchKind> | undefined;
+  let libraryWords:
+    Map<string, keyof SearchLanguagePack['libraryWords']> | undefined;
 
   const analyzer: SearchAnalyzer = {
     id: `${PACKS_VERSION}:${language}`,
@@ -156,6 +165,18 @@ export function createSearchAnalyzer(language: LanguageCode): SearchAnalyzer {
             for (const each of words) kinds.set(analyzer.read(each).term, kind);
       }
       return kinds.get(term);
+    },
+    libraryWordOf(word) {
+      if (!libraryWords) {
+        libraryWords = new Map();
+        for (const pack of packs)
+          for (const [kind, words] of Object.entries(pack.libraryWords) as [
+            keyof SearchLanguagePack['libraryWords'],
+            string[],
+          ][])
+            for (const each of words) libraryWords.set(each, kind);
+      }
+      return libraryWords.get(word);
     },
     asks: (word) => packs.some((pack) => pack.questionWords.has(word)),
     relativeDay(word) {

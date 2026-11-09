@@ -190,13 +190,14 @@ test('the editor opened on a pasted picture makes new variants from the kept ori
   );
   await page.locator('[data-pick]').click();
   await page.getByRole('button', { name: 'Reuse', exact: true }).click();
+  // Just stored, it is among the files used lately, at the top.
   const tile = page.locator(`[data-asset-uuid="${stored.assetUuid}"]`).first();
-  const unused = page
-    .locator('[data-asset-library-section]')
-    .filter({ hasText: 'Unused' });
-  await expect(unused).toBeVisible();
-  if (!(await tile.isVisible())) await unused.click();
-  await tile.click();
+  // The button its tile shows under the pointer opens the editor.
+  await tile.hover();
+  await tile
+    .locator('..')
+    .getByRole('button', { name: 'How to take the file' })
+    .click();
 
   // The original is among the saved variants, marked as going unless
   // something uses it.
