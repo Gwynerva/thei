@@ -26,6 +26,7 @@ import { useRelationRecommendations } from '#layers/thei/app/composables/relatio
 import { useExcerptsAbout } from '#layers/thei/app/composables/excerpts-about';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 import { relationModal } from '#layers/thei/app/modals/relation/modal';
+import { scrollIntoSight } from '#layers/thei/app/modals/layer-motion';
 
 /**
  * The relations block of a project, an event or a diary entry.
@@ -249,12 +250,28 @@ function addRelation(entity: ContentEntitySearchItem) {
   revealChip(relationKey(entity));
 }
 
+/**
+ * Brings a chip into sight: within the panel where the panel scrolls on its
+ * own (a desktop's capped list), otherwise on the page, to its middle — the
+ * top edge would put it under the sticky header.
+ */
 function revealChip(key: string) {
-  void nextTick(() =>
-    panel.value
-      ?.querySelector<HTMLElement>(`[data-relation-key="${CSS.escape(key)}"]`)
-      ?.scrollIntoView({ block: 'nearest' }),
-  );
+  void nextTick(() => {
+    const scroller = panel.value;
+    const chip = scroller?.querySelector<HTMLElement>(
+      `[data-relation-key="${CSS.escape(key)}"]`,
+    );
+    if (!scroller || !chip) return;
+    if (scroller.scrollHeight > scroller.clientHeight + 1) {
+      const frame = scroller.getBoundingClientRect();
+      const box = chip.getBoundingClientRect();
+      if (box.top < frame.top) scroller.scrollTop += box.top - frame.top - 8;
+      else if (box.bottom > frame.bottom)
+        scroller.scrollTop += box.bottom - frame.bottom + 8;
+      return;
+    }
+    scrollIntoSight(chip, { block: 'center' });
+  });
 }
 
 function removeRelation(key: string) {
@@ -372,8 +389,9 @@ const { guardClick } = useDragSort(panel, {
         :aria-labelledby="`${panelId}-${selected}-tab`"
         ref="panel"
         role="tabpanel"
-        class="flex scrollbar-mini max-h-120 flex-wrap content-start items-start
-          gap-2 overflow-y-auto overscroll-contain p-sm sm:p-md"
+        class="flex flex-wrap content-start items-start gap-2 p-sm
+          sm:scrollbar-mini sm:max-h-120 sm:overflow-y-auto
+          sm:overscroll-contain sm:p-md"
         data-relation-panel
       >
         <AdminRelationChip

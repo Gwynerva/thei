@@ -335,7 +335,7 @@ test('a saved section opens its own page from its modal, a new one has no way th
           element.getAttribute('aria-label')?.replace(/\s/g, ' '),
         ),
       ),
-  ).toEqual(['View on Site', 'Delete section', 'Close dialog', 'Save']);
+  ).toEqual(['View on Site', 'Delete section', 'Close dialog', 'Saved']);
   const boxes = await squares.evaluate((group) =>
     [group.parentElement!.firstElementChild!, ...group.children]
       .map((element) => element.getBoundingClientRect())

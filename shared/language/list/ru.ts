@@ -671,7 +671,7 @@ export default defineI18nModule({
     search_busy: 'Поиск сейчас занят: ответ вот-вот придёт.',
     search_failed: 'Не удалось выполнить поиск. Попробуйте ещё раз.',
     search_quick_hint:
-      'Проекты, события, дневник, страницы, файлы и теги — по любому слову в них.',
+      'Проекты, события, дневник, отрывки, страницы, файлы и теги — по любому слову в них.',
     search_years: 'Годы',
     search_sort: 'Сортировка',
     search_sort_best: 'Сначала точные',
@@ -1540,11 +1540,20 @@ export default defineI18nModule({
       'Проекты, события и записи дневника, которым посвящён этот отрывок.',
     excerpts_empty: 'Отрывков пока нет.',
     excerpt_without_about: 'Без целевой сущности',
+    excerpt_without_about_hint:
+      'То, про что он был, удалено. Откройте отрывок и укажите, про что он теперь.',
+    excerpts_about_description: 'Написаны в других местах архива — про это.',
     relation_recommendation_excerpt: 'Есть отрывок про это',
     excerpts_on_delete_keep: 'Оставить отрывки про него',
     excerpts_on_delete_delete: 'Удалить и отрывки',
     excerpts_on_delete_count: (related, onlyTarget) =>
-      `Про него ${plural(related, 'отрывок', 'отрывка', 'отрывков')}, ${onlyTarget} из них — только про него.`,
+      related === 1
+        ? onlyTarget
+          ? 'Про него есть один отрывок, и больше он ни про что.'
+          : 'Про него есть один отрывок, среди прочего.'
+        : onlyTarget === related
+          ? `Про него ${plural(related, 'отрывок', 'отрывка', 'отрывков')}, и больше они ни про что.`
+          : `Про него ${plural(related, 'отрывок', 'отрывка', 'отрывков')}; для ${onlyTarget} из них он — единственное, про что они.`,
     content_empty: 'Контента пока нет',
     content_text_empty: 'Текстового контента нет',
     edit_content: (title) => `Редактировать: ${title}`,
@@ -1557,6 +1566,7 @@ export default defineI18nModule({
     content_editor_save_error: 'Не удалось сохранить контент.',
     content_editor_title: 'Редактор контента',
     content_never_saved: 'Не было сохранено',
+    content_in_form: 'В форме, ещё не сохранено',
     content_history: 'История версий',
     content_history_empty: 'Версий пока нет.',
     content_history_unavailable: 'История версий сейчас недоступна.',

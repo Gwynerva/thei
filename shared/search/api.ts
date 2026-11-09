@@ -71,7 +71,13 @@ export interface SearchHit {
   ref: string;
   title: string;
   /** Of a section or an excerpt: what it is a part of, with its picture. */
-  parent?: { title: string; href: string; media?: MediaDescriptor };
+  /** What a section or an excerpt is part of; a diary entry named by its `date`. */
+  parent?: {
+    title: string;
+    href: string;
+    media?: MediaDescriptor;
+    date?: string;
+  };
   /**
    * Of a file: what shows it first, by its own name alone — a section's
    * title, an entity's, a diary entry's day — which names one with no title.

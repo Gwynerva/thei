@@ -162,6 +162,8 @@ export function archiveFacts(
           hasSummary: Boolean(excerpt.summary.trim()),
           titleLength: Array.from(excerpt.title).length,
           about: excerpt.relations.length,
+          /** The refs it is about, comma-separated: a scenario picks a pair by them. */
+          aboutRefs: excerpt.relations.map((relation) => relation.to).join(','),
         };
       }
       case 'event': {

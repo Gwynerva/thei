@@ -609,7 +609,7 @@ export default defineI18nBase({
     search_busy: 'The search is busy: an answer is on its way.',
     search_failed: 'Could not search. Try again.',
     search_quick_hint:
-      'Projects, events, the diary, pages, files and tags — by any word in them.',
+      'Projects, events, the diary, excerpts, pages, files and tags — by any word in them.',
     search_years: 'Years',
     search_sort: 'Sort',
     search_sort_best: 'Best match',
@@ -1474,11 +1474,20 @@ export default defineI18nBase({
       'Projects, events and diary entries this excerpt is about.',
     excerpts_empty: 'No excerpts yet.',
     excerpt_without_about: 'About nothing yet',
+    excerpt_without_about_hint:
+      'What it was about is gone. Open the excerpt and say what it is about now.',
+    excerpts_about_description: 'Written elsewhere in the archive, about this.',
     relation_recommendation_excerpt: 'Has an excerpt about this',
     excerpts_on_delete_keep: 'Keep the excerpts about it',
     excerpts_on_delete_delete: 'Delete the excerpts too',
     excerpts_on_delete_count: (related, onlyTarget) =>
-      `${plural(related, 'excerpt is', 'excerpts are')} about it; ${onlyTarget} about nothing else.`,
+      related === 1
+        ? onlyTarget
+          ? 'One excerpt is about it, and about nothing else.'
+          : 'One excerpt is about it, among other things.'
+        : onlyTarget === related
+          ? `${related} excerpts are about it, and about nothing else.`
+          : `${related} excerpts are about it; for ${onlyTarget === 1 ? 'one of them' : `${onlyTarget} of them`} it is the only thing.`,
     content_empty: 'No content yet',
     content_text_empty: 'No text content',
     edit_content: (title) => `Edit: ${title}`,
@@ -1491,6 +1500,7 @@ export default defineI18nBase({
     content_editor_save_error: 'Failed to save content.',
     content_editor_title: 'Content editor',
     content_never_saved: 'Never saved',
+    content_in_form: 'In the form, not saved yet',
     content_history: 'Version history',
     content_history_empty: 'No versions yet.',
     content_history_unavailable: 'Version history is unavailable right now.',

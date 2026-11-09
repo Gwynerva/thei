@@ -288,7 +288,7 @@ test('deleting a target asks what becomes of the excerpts about it, and both ans
   const pane = page.locator('dialog[open]').last();
   const choice = pane.locator('[data-excerpts-on-delete]');
   await expect(choice).toContainText(
-    '2 excerpts are about it; 1 about nothing else.',
+    '2 excerpts are about it; for one of them it is the only thing.',
   );
   await expect(
     choice.getByRole('button', { name: 'Keep the excerpts about it' }),

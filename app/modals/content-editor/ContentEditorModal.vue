@@ -211,6 +211,12 @@ const props = defineProps<{
      */
     current?: () => ContentFieldModelValue | null | undefined;
     /**
+     * Whether the text's owner — the entity, or a part of one — is not saved
+     * yet: the form holds the text until it is, and the foot says so rather
+     * than "never saved".
+     */
+    ownerUnsaved?: () => boolean;
+    /**
      * An AI's edit of this text to go through at once: the editor opens on
      * its review, from the proposal under the field.
      */
@@ -1956,7 +1962,7 @@ function editorJsI18nMessages() {
             variant="accent"
             phone-icon="save"
             :phone-done="isSaved"
-            :label="phrase.save"
+            :label="isSaved ? phrase.saved : phrase.save"
             :disabled="saving || !isDirty"
             :data-editor-save="isSaved ? 'saved' : isDirty ? 'dirty' : 'clean'"
             @click="save"
@@ -2023,7 +2029,11 @@ function editorJsI18nMessages() {
           <ContentStats v-bind="headerSummary" compact class="min-w-0" />
           <span class="inline-flex items-center gap-1 text-text-3">
             <TheiTime v-if="updatedAt" :datetime="updatedAt" />
-            <template v-else>{{ phrase.content_never_saved }}</template>
+            <template v-else>{{
+              props.modalData.ownerUnsaved?.()
+                ? phrase.content_in_form
+                : phrase.content_never_saved
+            }}</template>
           </span>
         </div>
       </template>

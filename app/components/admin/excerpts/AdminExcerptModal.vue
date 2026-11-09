@@ -259,7 +259,7 @@ async function deleteItem() {
             variant="accent"
             phone-icon="save"
             :phone-done="isSaved"
-            :label="phrase.save"
+            :label="isSaved ? phrase.saved : phrase.save"
             :disabled="exists && !isDirty"
             :reason="needs.reason.value"
             data-excerpt-save

@@ -114,8 +114,12 @@ function hitRow(hit: SearchHit): Row {
     ...(hit.parent
       ? {
           parent: {
-            title: publicText(hit.parent.title),
+            // A day's name is its date, whole: a cut date names no day.
+            title: hit.parent.date
+              ? searchEntityTitle('diary-entry', hit.parent.date)
+              : publicText(hit.parent.title),
             media: hit.parent.media,
+            whole: Boolean(hit.parent.date),
           },
         }
       : {}),

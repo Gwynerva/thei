@@ -126,6 +126,7 @@ const accent = computed(() =>
             v-if="!about.length"
             class="inline-flex items-center gap-1 text-xs text-text-warning
               italic"
+            :data-title-popup="phrase.excerpt_without_about_hint"
             data-excerpt-orphan
           >
             <Icon name="warning" aria-hidden="true" />

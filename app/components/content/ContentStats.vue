@@ -5,7 +5,7 @@ const { size = 'xs', compact = false } = defineProps<{
   assetCount: number;
   assetTotalSize: number;
   size?: 'xs' | 'sm';
-  /** Files as a count only, their size on hover, and none shown when none. */
+  /** Files as a count only, their size on hover. None shown when none, either way. */
   compact?: boolean;
 }>();
 
@@ -34,8 +34,9 @@ const compactNumber = useCompactNumber();
       <Icon name="text" />
       {{ compactNumber(wordCount) }}
     </span>
+    <!-- Counts speak without noise: never "0 / 0 bytes". -->
     <span
-      v-if="!compact || assetCount"
+      v-if="assetCount"
       class="inline-flex cursor-help items-center gap-1 whitespace-nowrap
         text-text-3 transition-colors hocus:text-text-2"
       :data-title-popup="

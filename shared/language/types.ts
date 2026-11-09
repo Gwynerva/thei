@@ -1086,6 +1086,8 @@ export type LanguagePhrases = {
   excerpts_empty: string;
   /** An excerpt left about nothing by a deleted target. */
   excerpt_without_about: string;
+  excerpt_without_about_hint: string;
+  excerpts_about_description: string;
   relation_recommendation_excerpt: string;
   excerpts_on_delete_keep: string;
   excerpts_on_delete_delete: string;
@@ -1101,6 +1103,8 @@ export type LanguagePhrases = {
   content_editor_save_error: string;
   content_editor_title: string;
   content_never_saved: string;
+  /** A text of an entity or a part not saved yet: the form holds it. */
+  content_in_form: string;
   content_history: string;
   content_history_empty: string;
   content_history_unavailable: string;

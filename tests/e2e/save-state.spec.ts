@@ -235,7 +235,8 @@ test('a section handed to a project that waits on more is not called saved until
 
   const row = page.locator('[data-sections] [data-section-row]').first();
   const dialog = page.locator('dialog[open]').last();
-  const sectionSave = dialog.getByRole('button', { name: 'Save', exact: true });
+  // Named by its state, as the form's own Save is: "Save" or "Saved".
+  const sectionSave = dialog.getByRole('button', { name: /^Saved?$/ });
   const sectionTitle = dialog
     .locator('[data-need="title"]')
     .getByRole('textbox');

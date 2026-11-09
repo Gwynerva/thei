@@ -680,6 +680,8 @@ export async function excerptDocument(
       title: built.parent.title || built.parent.date || '',
       href: built.parent.href,
       ...(built.parent.media ? { media: built.parent.media } : {}),
+      // A day is named by its date, which the row formats and never cuts.
+      ...(parent.type === 'diary-entry' ? { date: built.parent.date } : {}),
     },
     href: built.href,
     ...(audience === 'owner'

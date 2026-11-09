@@ -5,6 +5,7 @@ import type {
   PublicExcerptsPage,
 } from '#layers/thei/shared/api/public';
 import type { ContentHeading } from '#layers/thei/app/components/content/content-headings';
+import { publicDatePrecisionOptions } from '#layers/thei/app/composables/public-date';
 
 /**
  * The excerpts of other entities about a page's entity, after its own
@@ -63,6 +64,20 @@ function parentOf(card: PublicExcerptCard) {
     ...(card.parent.date ? { date: card.parent.date } : {}),
   };
 }
+
+/**
+ * A card's day in words, as its parent's day is said beside it: the compact
+ * card would write it in numbers, and two cards in one list would then date
+ * themselves two ways.
+ */
+function dateOf(card: PublicExcerptCard) {
+  return card.date
+    ? getPublicDatePresentation(card.date, language.value.code, new Date(), {
+        style: 'long',
+        ...publicDatePrecisionOptions(),
+      })
+    : undefined;
+}
 </script>
 
 <script lang="ts">
@@ -91,9 +106,12 @@ export function publicExcerptsHeading(title: string): ContentHeading {
     aria-labelledby="excerpts-about-heading"
     class="flex scroll-mt-[var(--public-anchor-offset,8rem)] flex-col gap-sm"
   >
+    <!-- Named apart from the entity's own excerpts in the sidebar: these
+         were written elsewhere, about it. -->
     <PublicSectionHeader
       heading-id="excerpts-about-heading"
       :title="phrase.excerpts"
+      :description="phrase.excerpts_about_description"
       icon="excerpt"
     />
     <p v-if="loading" class="text-sm text-text-3">
@@ -111,7 +129,8 @@ export function publicExcerptsHeading(title: string): ContentHeading {
           :label="phrase.excerpt"
           icon="excerpt"
           :date="card.date ?? ''"
-          :hide-date="!card.date"
+          :date-presentation="dateOf(card)"
+          :hide-date="!card.date || card.parent.type === 'diary-entry'"
           :media="card.media"
           :parent="parentOf(card)"
           :relation="
