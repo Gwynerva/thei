@@ -1,6 +1,10 @@
 import { createError } from 'h3';
 import type { AssetUploadResponse } from '#layers/thei/shared/api/asset';
-import type { AssetUploadProgress } from '#layers/thei/shared/api/asset-upload-progress';
+import {
+  ENCODE_PROGRESS_SHARE,
+  FINISHING_PROGRESS,
+  type AssetUploadProgress,
+} from '#layers/thei/shared/api/asset-upload-progress';
 import { AssetType } from '#layers/thei/shared/asset';
 import type {
   AssetMeta,
@@ -28,9 +32,11 @@ import {
   type AssetProcessOptions,
   type AssetSourceFile,
   type ProcessedAsset,
+  type VideoColorSource,
 } from './process';
 import { isProcessingQueued, withProcessingSlot } from './queue';
 import { probeAudioSource, processAudioToOpus, readAudioMeta } from './audio';
+import { unlessUnreadable } from './probe';
 import { assetBytesHash, type AssetBytes } from './bytes';
 import {
   attachMediaPreviewUsage,
@@ -124,18 +130,27 @@ export async function createAssetVariant(
         input.sourceType,
         known,
       );
+      let measured = false;
       const processed = await renderAsset(
         input.source,
         settings,
         {
           signal: input.signal,
-          onProgress: (progress) =>
-            input.onStatus?.({ phase: 'processing', progress }),
+          onProgress: (progress) => {
+            measured = true;
+            input.onStatus?.({
+              phase: 'processing',
+              progress: progress * ENCODE_PROGRESS_SHARE,
+            });
+          },
         },
         known && !('width' in known) ? known : undefined,
       );
       await assertStillWanted(input.signal, processed, input.source);
-      input.onStatus?.({ phase: 'finishing' });
+      input.onStatus?.({
+        phase: 'processing',
+        ...(measured ? { progress: FINISHING_PROGRESS } : {}),
+      });
       return await commitProcessedAsset({
         processed,
         settings,
@@ -203,7 +218,7 @@ export async function probeTransformSource(
 ): Promise<AssetTransformSource> {
   if (sourceType === AssetType.Video) {
     const inspected = await inspectVideoFile(source.path).catch(
-      () => undefined,
+      unlessUnreadable,
     );
     if (!inspected?.width || !inspected.height) {
       throw createError({ statusCode: 400, message: 'Invalid video file' });
@@ -309,7 +324,7 @@ export async function commitProcessedAsset(input: {
       settings,
       processed.hasAudio,
       input.source,
-      processed.video,
+      { ...processed.video, color: processed.color },
       input.signal,
       previewAt,
     );
@@ -351,14 +366,36 @@ async function buildProcessedAssetMeta(
   },
   settings: AssetUploadSettings,
   hasAudio?: boolean,
-  sourceFile?: { extension: string; size: number },
-  video?: { duration?: number; fps?: number; bitrate?: number },
+  sourceFile?: { path?: string; extension: string; size: number },
+  video?: {
+    duration?: number;
+    fps?: number;
+    bitrate?: number;
+    color?: VideoColorSource;
+  },
   signal?: AbortSignal,
   /** Of a video: the moment of the frame the owner chose for its family. */
   previewAt?: number,
 ): Promise<{ meta: AssetMeta | null; previewAssetUuid?: string }> {
   if (type === AssetType.Image) {
-    const preview = await createMediaPreviewAsset(bytes, AssetType.Image);
+    // A transform's preview is drawn from its source, which decodes small;
+    // a kept original, a vector kept a vector and a file brought in without
+    // its source are drawn from the stored bytes.
+    const origin =
+      sourceFile?.path &&
+      settings.type === 'image-transform' &&
+      settings.format !== 'svg'
+        ? {
+            source: { path: sourceFile.path, extension: sourceFile.extension },
+            settings,
+          }
+        : undefined;
+    const preview = await createMediaPreviewAsset(
+      bytes,
+      AssetType.Image,
+      {},
+      origin,
+    );
     const meta: ImageAssetMeta = {
       ...dimensions,
       ...(preview.accent !== undefined ? { accent: preview.accent } : {}),
@@ -371,6 +408,9 @@ async function buildProcessedAssetMeta(
       duration: video?.duration,
       fps: video?.fps,
       at: previewAt,
+      // The file was probed when it was made: an SDR encode of this release,
+      // or an original with whatever colour it came with.
+      color: video?.color ?? {},
     });
     const meta: VideoAssetMeta = {
       ...dimensions,

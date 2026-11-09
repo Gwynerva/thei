@@ -164,7 +164,6 @@ export type LanguagePhrases = {
   asset_recipe_quality_level: (level: string) => string;
   asset_recipe_lossless: string;
   asset_recipe_no_audio: string;
-  asset_recipe_fast: string;
   asset_recipe_bitrate: (kbps: number) => string;
   asset_recipe_mono: string;
   // Quality levels
@@ -1373,16 +1372,14 @@ export type LanguagePhrases = {
   upload_apply_settings: string;
   upload_processing: string;
   upload_queued: string;
-  upload_finishing: string;
   upload_cancel: string;
   upload_dismiss: string;
   upload_pending_leave_confirm: string;
   upload_error_job_lost: string;
+  upload_error_ffmpeg_missing: string;
   upload_quality: string;
   upload_audio: string;
   upload_audio_none: string;
-  upload_fast_conversion: string;
-  upload_fast_conversion_hint: string;
   upload_compress_to_zip: string;
   upload_compress_to_zip_hint: string;
   upload_compare_divider: string;

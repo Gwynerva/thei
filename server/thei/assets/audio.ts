@@ -14,26 +14,30 @@ import { fileBytes } from './bytes';
 import { runFfmpeg } from './ffmpeg';
 import { eachWithProgress } from './each-with-progress';
 import {
-  parseFfmpegInputInfo,
-  readFfmpegInputInfo,
+  probeMedia,
+  unlessUnreadable,
+  UnreadableMediaError,
+  type VideoInspection,
+} from './probe';
+import {
   runFfmpegWithProgress,
   type AssetProcessOptions,
   type AssetSourceFile,
   type ProcessedAsset,
-  type VideoInspection,
 } from './process';
 import { withProcessingSlot } from './queue';
 import type { StoredAssetRecord } from './storage';
 import { theiTempPath } from './temp';
 
-/** What ffmpeg says about a file, which must have a sound stream. */
+/**
+ * What ffprobe says about a file, which must have a sound stream. A file it
+ * cannot read is unreadable audio; ffprobe that does not run is said as such.
+ */
 export async function inspectAudioFile(
   filePath: string,
 ): Promise<VideoInspection> {
-  const inspection = parseFfmpegInputInfo(
-    await readFfmpegInputInfo(filePath).catch(() => ''),
-  );
-  if (!inspection.hasAudio) throw unreadableAudio();
+  const inspection = await probeMedia(filePath).catch(unlessUnreadable);
+  if (!inspection?.hasAudio) throw unreadableAudio();
   return inspection;
 }
 
@@ -168,9 +172,6 @@ export interface AudioDetails {
   peaks: number[];
 }
 
-/** What ffmpeg prints about the input, before it turns to the output. */
-const PROBE_HEAD_LIMIT = 16 * 1024;
-
 /**
  * Decodes a recording once to learn what a player draws: its length, from
  * the samples themselves (an MP3's header may only guess it), and its
@@ -179,14 +180,24 @@ const PROBE_HEAD_LIMIT = 16 * 1024;
  *
  * A file cut short, or damaged towards its end, decodes as far as it goes,
  * and that much is what a browser plays of it too: it is refused only when
- * not a single sample comes out.
+ * not a single sample comes out. ffprobe that cannot read it leaves only
+ * its rate and channels unknown; ffprobe that does not run is said as such.
  */
 export async function readAudioDetails(
   filePath: string,
   options: { signal?: AbortSignal } = {},
 ): Promise<AudioDetails> {
   const waveform = new WaveformAccumulator();
-  let head = '';
+  // The probe and the decode run side by side: both are quick, and neither
+  // needs the other. Its failure is held, not left rejected while the
+  // decode runs, and thrown once the decode is done.
+  const probing = probeMedia(filePath).then(
+    (inspection) => ({ inspection }),
+    (error: unknown) =>
+      error instanceof UnreadableMediaError
+        ? { inspection: { hasAudio: false } as VideoInspection }
+        : { error },
+  );
   await runFfmpeg(
     [
       '-hide_banner',
@@ -209,14 +220,14 @@ export async function readAudioDetails(
     {
       signal: options.signal,
       onStdout: (chunk) => waveform.push(chunk),
-      onStderr: (chunk) => {
-        if (head.length < PROBE_HEAD_LIMIT) head += chunk;
-      },
     },
   );
+  const probed = await probing;
+  if ('error' in probed) throw probed.error;
+  const { inspection } = probed;
   if (!waveform.samples) throw unreadableAudio();
   return {
-    inspection: parseFfmpegInputInfo(head.split(/^Stream mapping:/m)[0]!),
+    inspection,
     duration:
       Math.round((waveform.samples / WAVEFORM_SAMPLE_RATE) * 1000) / 1000,
     peaks: waveform.finish(),

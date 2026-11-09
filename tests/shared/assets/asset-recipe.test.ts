@@ -48,7 +48,6 @@ describe('asset recipe descriptions', () => {
           quality: 85,
           dimensions: { width: 1280, height: 720 },
           stripAudio: true,
-          fastConversion: false,
         },
         {
           width: 1280,

@@ -53,7 +53,6 @@ describe('pastedMediaRequest', () => {
       quality: 75,
       dimensions: {},
       stripAudio: false,
-      fastConversion: false,
     });
   });
 

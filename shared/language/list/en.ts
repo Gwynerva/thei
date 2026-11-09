@@ -238,7 +238,6 @@ export default defineI18nBase({
     asset_recipe_quality_level: (level) => `${level.toLowerCase()} quality`,
     asset_recipe_lossless: 'lossless',
     asset_recipe_no_audio: 'no sound',
-    asset_recipe_fast: 'fast conversion',
     asset_recipe_bitrate: (kbps) => `${kbps} kbit/s`,
     asset_recipe_mono: 'mono',
     asset_quality_minimal: 'Minimal',
@@ -1842,19 +1841,17 @@ export default defineI18nBase({
     upload_apply_settings: 'Create variant',
     upload_processing: 'Processing...',
     upload_queued: 'Waiting in queue...',
-    upload_finishing: 'Finishing…',
     upload_cancel: 'Cancel',
     upload_dismiss: 'Dismiss',
     upload_pending_leave_confirm:
       'Files are still being stored. Leave and lose them?',
     upload_error_job_lost:
       'The server was restarted while the file was being stored.',
+    upload_error_ffmpeg_missing:
+      'Video and sound cannot be processed: the server has no ffmpeg. In the site’s folder, run bun node_modules/thei/update/ffmpeg/cli.ts to fetch it.',
     upload_quality: 'Quality',
     upload_audio: 'Sound',
     upload_audio_none: 'none in the source',
-    upload_fast_conversion: 'Fast conversion',
-    upload_fast_conversion_hint:
-      'One quick pass instead of two: much faster, the same size, a little less quality.',
     upload_compress_to_zip: 'Compress to ZIP',
     upload_compress_to_zip_hint:
       'Packaging the file into an archive can reduce its size.',

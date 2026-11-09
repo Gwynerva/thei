@@ -46,6 +46,20 @@ runuser -u "$THEI_USER" -- env HOME="$THEI_DIR" PATH="/usr/local/bin:/usr/bin:/b
 say "Starting $THEI_SERVICE"
 systemctl start "$THEI_SERVICE"
 
+# A newer build that booted with its own ffmpeg removed the older versions
+# (update/ffmpeg/), the one the version put back runs among them: that
+# version fetches it again, while the site already runs — it finds ffmpeg
+# whenever it is there, and only video and sound wait for it, so a failure
+# here does not undo the rollback. Releases before 0.0.8 bring ffmpeg as a
+# package and have no such script.
+FFMPEG_FETCH="$THEI_DIR/node_modules/thei/update/ffmpeg/cli.ts"
+if [ -f "$FFMPEG_FETCH" ]; then
+  say "Fetching the ffmpeg of the previous version"
+  runuser -u "$THEI_USER" -- env HOME="$THEI_DIR" PATH="/usr/local/bin:/usr/bin:/bin" \
+    "$BUN_BIN" "$FFMPEG_FETCH" --project "$THEI_DIR" \
+    || printf '\033[1;33m warning:\033[0m ffmpeg could not be fetched; video and sound are not processed until\n  %s %s --project %s\n  succeeds.\n' "$BUN_BIN" "$FFMPEG_FETCH" "$THEI_DIR" >&2
+fi
+
 cat <<EOF
 
   Rolled back. The failed build is kept at $THEI_DIR/.output.broken.

@@ -61,7 +61,7 @@ const settingsInput = z
       'stripped). A picture: { type: "image-transform", quality: 10–100, ' +
       'format?: "webp" | "avif" | "jpeg" | "png", dimensions: { width?, ' +
       'height? }, crop?: { x, y, width, height } }. A video: { type: ' +
-      '"video-transform", quality, dimensions, stripAudio, fastConversion }. ' +
+      '"video-transform", quality, dimensions, stripAudio }. ' +
       'Sound: { type: "audio-transform", quality, mono }. Any other file: ' +
       '{ type: "file-zip" } to pack it.',
   );

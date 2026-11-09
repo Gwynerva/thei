@@ -80,16 +80,22 @@ show one. The target, in bits per second, is
 capped by the source's own video bitrate rescaled to the output pixels (a
 re-encode cannot add detail), and kept between 100 kbit/s and 60 Mbit/s.
 libvpx-vp9 runs two passes at that rate (`-b:v`, `-maxrate 1.45×`,
-`-bufsize 2×`, no `-crf`); a fast conversion is one realtime pass at the same
-rate. See `videoTargetBitrate` in `shared/asset-upload-quality.ts` and
-`buildVideoEncodePasses` in `server/thei/assets/process.ts`.
+`-bufsize 2×`, no `-crf`), both at `cpu-used 4`. There is no single-pass
+road: on the media bench one pass, good or realtime, came out anywhere from
+0.83 to 3.2 of the size promised — a screen recording at three times it —
+and three to eight VMAF points under two passes, so the fast conversion of
+0.0.7 was dropped in 0.0.8 (`update/migrations/0.0.8-fast-conversion.ts`
+takes the mark off the recipes it left). See `videoTargetBitrate` in
+`shared/asset-upload-quality.ts` and `buildVideoEncodePasses` in
+`server/thei/assets/process.ts`.
 
 ## Size estimates
 
-- **Video**: `(video bitrate × 0.96 + audio bitrate) × duration / 8`, plus one
-  percent and 4 KiB for the container. The 0.96 is where two-pass libvpx
-  lands against its target on this project's clips. Shown as ≈ until the
-  variant exists.
+- **Video**: `(video bitrate × 1.02 + audio bitrate) × duration / 8`, plus one
+  percent and 4 KiB for the container. The 1.02 is where two-pass libvpx
+  lands against its target with both passes at `cpu-used 4`: 0.99–1.05 on
+  five clips of the media bench, a screen recording and a still camera among
+  them. Shown as ≈ until the variant exists.
 - **Recordings**: `(bitrate + 3 kbit/s) × duration / 8 + 1 KiB`, the 3 kbit/s
   being what WebM spends around Opus's 20 ms packets. Opus in VBR mode takes
   the rate as a target: varied sound lands near it, a "stereo" recording of
@@ -104,6 +110,39 @@ rate. See `videoTargetBitrate` in `shared/asset-upload-quality.ts` and
   per pixel. Guesses are marked ≈ and replaced as renders arrive.
 
 Both estimates are in `shared/asset-size-estimate.ts`.
+
+## Images: how a transform is made
+
+A transform (`processImage` in `server/thei/assets/process.ts`) reads the
+source with sharp, orients it by its EXIF, applies the admin's turn, cuts the
+crop and resizes it to the size asked for, then encodes: AVIF at the level's
+quality with `effort: 3`, WebP at the stored quality with `effort: 4` and
+smart subsampling, or lossless WebP with `effort: 4`. Encoding drops every
+embedded tag, so the orientation is baked into the pixels first; an
+embedded colour profile — Display P3 from a phone, say — is converted to
+sRGB by sharp on the way.
+
+Decoding is the expensive part of a large photo, and libvips can decode a
+JPEG already shrunk by two, four or eight — but only when nothing has to
+happen to the full-size picture first. So whenever the output is no larger
+than its crop, the whole frame is resized by the crop's scale and the crop is
+cut out of the result, in the turned frame (`planResizeBeforeCrop`): sharp
+applies the orientation and the turn after the resize and before a later
+extract, and sizes the resize in the turned frame, so the pixels come out
+the same, truer even at the crop's edge, where the resampler sees the real
+neighbours. An enlargement — allowed for a vector only — and an SVG, drawn
+at a density of its own, keep the plain order: crop, then resize.
+
+The decoder's warnings — a mangled EXIF block, an odd colour profile, a few
+stray bytes before a marker — do not refuse a photo (`failOn: 'truncated'`);
+a file cut short still does.
+
+A transform's 720 px preview is not decoded from the finished AVIF, which
+would mean the whole picture at full size again: it is the transform once
+more at the preview's size, from the source, with the same crop and turn
+(`renderImagePreview`, `MediaPreviewOrigin` in `media-preview.ts`). A kept
+original, a vector kept a vector and a file brought in without its source
+are drawn from the stored bytes.
 
 ## Looking at the result exactly
 
@@ -121,6 +160,44 @@ device pixel shows one pixel of the file as it is. Below 100 % a side is
 smoothed, since dropping pixels would mislead as much. In seamless
 comparison the larger side is shown at the smaller one's size and is the
 one below 100 %; the real mode shows both at their own pixels.
+
+## The media bench
+
+Every number above is weighed on `tests/bench/media.test.ts`, which runs
+only when asked: `bun run bench:media` writes
+`tests/.artifacts/media-bench/report.md` — decode times with and without
+shrink-on-load, each encoder setting at each level with its time, size,
+SSIM and PSNR against the source, each video preset with its time, speed
+against real time, size against the estimate and VMAF, and sound — on
+pictures, clips and a recording the bench makes itself
+(`tests/helpers/media.ts`), or on the owner's own files from
+`THEI_MEDIA_BENCH_SOURCES=<dir>`. `bun run bench:media:docker --cpus 1`
+runs the same in the release bench's Debian image with the CPU and memory
+of a small VPS, where the waits the owner feels are. A change to an
+encoder's settings comes with the bench's rows before and after in its
+commit.
+
+What it found on 2026-11-08 (Ryzen 5 5600X, twelve threads; a synthetic
+24-megapixel photo for the decode and the WebP, lossless, preview and video
+rows, four 7.5-megapixel phone photographs for the AVIF rows):
+
+| Step                        | Before                                | After                                  |
+| --------------------------- | ------------------------------------- | -------------------------------------- |
+| Decode for a 1600 px crop   | 251 ms, whole picture                 | 123 ms, shrunk on load                 |
+| AVIF medium, phone photo    | effort 4: 3.0 s, 679 KB, SSIM 0.9670  | effort 3: 0.75 s, 683 KB, SSIM 0.9664  |
+| AVIF maximum, phone photo   | effort 4: 4.2 s, 1279 KB, SSIM 0.9855 | effort 3: 0.95 s, 1275 KB, SSIM 0.9845 |
+| WebP medium, 24 MP          | effort 6: 3.3 s, 765 KB               | effort 4: 2.8 s, 780 KB                |
+| Lossless WebP, 24 MP        | effort 6: 14.0 s                      | effort 4: 12.1 s, same bytes           |
+| 720 px preview              | effort 4: 215 ms                      | effort 3: 114 ms, same bytes           |
+| VP9 two passes, 1080p, 20 s | cpu-used 4 → 2: 65 s, VMAF 73.4       | cpu-used 4 → 4: 35 s, VMAF 72.8        |
+
+AVIF's quality table is as it was: at effort 3 and the same quality a real
+photograph comes out within three percent of its old size and 0.0005–0.003
+lower in SSIM, a fraction of the step between two levels. A synthetic
+picture had the file a quarter larger at effort 3 and suggested lower
+qualities; on photographs those cost a full level, so they were not kept.
+4:2:0 chroma, which would have been faster still, lost a decibel of PSNR
+and was not taken.
 
 ## Dry runs, the queue and cancellation
 
@@ -144,9 +221,13 @@ gone stores nothing; an image it had already encoded becomes a render of the
 draft the same way.
 
 A commit reports where it is under the `uploadId` the client gave it, polled
-at `GET /api/admin/uploads/<id>`: `queued` while it waits for a slot,
-`processing` (with a share for video and zip; sharp reports none), then
-`finishing` while the preview is made and the file moved into the library.
+at `GET /api/admin/uploads/<id>`: `queued` while it waits for a slot, then
+`processing` with one share that only grows — the encode takes it to 90 %
+where the encoder measures it (ffmpeg and the zip writer do, sharp does not),
+and it stands at 95 % while the preview is made and the file moved into the
+library (`shared/api/asset-upload-progress.ts`). The client never shows a
+share lower than the one it showed (`advanceUploadStatus`), whichever of its
+two polls answers first.
 
 A quick commit — a picture, usually a render the editor already judged — is
 stored within its request, and "Cancel" closes that request. A video or audio
@@ -198,6 +279,33 @@ file; rows stored before that are filled in the first time they are read. A
 recording's `meta` (`AudioAssetMeta`) records `duration`, `peaks`, `channels`
 and `bitrate`, as described above.
 
+## Video colour
+
+A source is read through ffprobe's JSON (`server/thei/assets/probe.ts`):
+its size, rate, codecs, the rotation in its side data, and its pixel format
+and colour — transfer, primaries, matrix. Phones record ten-bit HDR now, as
+PQ (`smpte2084`) or HLG (`arib-std-b67`) in BT.2020, and a browser shows a
+VP9 file in SDR; written as if it were SDR already, such a video comes out
+grey and flat, every colour washed out. So an HDR source is mapped down
+(`videoColorFilters` in `process.ts`), after the scale so the work is done
+on the small frame: to linear light, into BT.709 primaries, the highlights
+rolled off with Hable's curve and the hues kept (`tonemap=hable:desat=0`),
+back into video levels and `yuv420p`, and the file is tagged BT.709. The
+mapping is told the source's transfer, primaries and matrix as the probe
+read them rather than left to find them in the frames, and takes BT.2020
+for primaries or a matrix left untagged: a file tagged by its transfer
+alone would otherwise yield not a single frame, no encode and no still. A
+ten-bit SDR source is only brought to eight bits by the output's pixel
+format, and an SDR file keeps the colour tags it came with. The poster frame
+and the chosen frame go through the same mapping (`video-thumbnail.ts`), or
+the still of an HDR video would be washed out where the video is not. What
+is not mapped: an SDR recording in BT.2020 primaries, wide gamut without an
+HDR transfer, keeps its tags and is shown as the browser reads them; such
+files are rare, and the mapping is for PQ and HLG.
+
+ffmpeg itself is a static build the engine pins and fetches, not a package
+(`update/README.md`, "ffmpeg").
+
 ## Video previews
 
 A video's preview is the frame that best shows it, not its first frame. The
@@ -206,8 +314,10 @@ opening and end (`VIDEO_PREVIEW_FRAME_POSITIONS` in
 `shared/media-frame-score.ts`); at each, ffmpeg's `thumbnail` filter picks the
 most typical frame of the second that follows, and `frameScore` weighs it: the
 most colourful, well exposed frame wins, so a dark or washed-out one loses
-even with a tint. The admin's browser weighs the same points with the same
-function to show a poster before a picked video is uploaded.
+even with a tint. ffmpeg writes the frame it picked no larger than the
+preview (`maxSide`), so a frame of a large video is never read back whole.
+The admin's browser weighs the same points with the same function to show a
+poster before a picked video is uploaded.
 
 The video's `meta.previewAt` records the seconds the frame was taken from, and
 `meta.previewScore` its score. A video without a score has a preview chosen

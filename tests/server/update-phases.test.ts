@@ -330,3 +330,32 @@ describe('the 0.0.6 check of the Node version', () => {
     ).resolves.toBeUndefined();
   });
 });
+
+describe('the installer and the rollback', () => {
+  const read = (name: string) =>
+    readFile(join(import.meta.dirname, '..', '..', 'update', name), 'utf8');
+
+  // Going back installs an older release with the installer of `main`, and a
+  // rollback runs the engine it puts back: a script of the engine is run only
+  // when the release at hand has it.
+  it('run a script of the engine only when the release installed has one', async () => {
+    for (const name of ['install.sh', 'rollback.sh']) {
+      const script = await read(name);
+      const scripts = [
+        ...script.matchAll(
+          /^(\w+)="\$THEI_DIR\/node_modules\/thei\/update\/[^"]+\.(?:ts|mjs)"$/gm,
+        ),
+      ].map((match) => match[1]!);
+      expect(scripts, name).toContain('FFMPEG_FETCH');
+      for (const variable of scripts) {
+        expect(script, `${name}: ${variable}`).toContain(
+          `[ -f "$${variable}" ]`,
+        );
+      }
+      // Nothing runs one by its path, past the guard.
+      expect(script, name).not.toMatch(
+        /^\s*[^#\s][^\n]*"\$THEI_DIR\/node_modules\/thei\/update\/[^"\n]+\.(?:ts|mjs)"[^\n]/m,
+      );
+    }
+  });
+});

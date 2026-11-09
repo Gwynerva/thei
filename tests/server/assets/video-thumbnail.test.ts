@@ -3,12 +3,13 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import { resolveFfmpegTools } from '../../../update/ffmpeg/tools';
 import sharp from 'sharp';
 import { AssetType } from '../../../shared/asset';
 import { createMediaPreview } from '../../../server/thei/assets/media-preview';
 import {
   extractVideoThumbnail,
+  frameFilters,
   scoreFrame,
 } from '../../../server/thei/assets/video-thumbnail';
 
@@ -24,7 +25,7 @@ afterAll(async () => {
 
 function run(args: string[]) {
   return new Promise<void>((resolve, reject) => {
-    const child = spawn(ffmpegInstaller.path, args, { stdio: 'ignore' });
+    const child = spawn(resolveFfmpegTools().ffmpeg, args, { stdio: 'ignore' });
     child.on('error', reject);
     child.on('close', (code) =>
       code === 0 ? resolve() : reject(new Error(`ffmpeg exited ${code}`)),
@@ -33,7 +34,11 @@ function run(args: string[]) {
 }
 
 /** A clip made of solid-colour stretches, one after the other. */
-async function makeClip(name: string, stretches: [string, number][]) {
+async function makeClip(
+  name: string,
+  stretches: [string, number][],
+  size = '64x64',
+) {
   const path = join(directory, name);
   await run([
     '-y',
@@ -41,7 +46,7 @@ async function makeClip(name: string, stretches: [string, number][]) {
       '-f',
       'lavfi',
       '-i',
-      `color=c=${color}:s=64x64:r=25:d=${seconds}`,
+      `color=c=${color}:s=${size}:r=25:d=${seconds}`,
     ]),
     '-filter_complex',
     `${stretches.map((_, index) => `[${index}:v]`).join('')}concat=n=${stretches.length}:v=1:a=0`,
@@ -127,6 +132,52 @@ describe('video thumbnails', () => {
     expect(red).toBeLessThan(80);
     expect(score).toBeGreaterThan(0);
   }, 60_000);
+
+  it('writes the frame no larger than the preview, and picks the same one', async () => {
+    const clip = await makeClip(
+      'large.mp4',
+      [
+        ['0x806040', 3],
+        ['0x20a0ff', 3],
+      ],
+      '1280x720',
+    );
+    const size = async (frame: Buffer) => {
+      const { width, height } = await sharp(frame).metadata();
+      return { width, height };
+    };
+    const whole = await extractVideoThumbnail(clip);
+    const small = await extractVideoThumbnail(clip, { maxSide: 720 });
+    expect(await size(whole.frame)).toEqual({ width: 1280, height: 720 });
+    expect(await size(small.frame)).toEqual({ width: 720, height: 405 });
+    expect(small.at).toBe(whole.at);
+    const shown = await extractVideoThumbnail(clip, {
+      at: small.at,
+      fps: 25,
+      maxSide: 720,
+    });
+    expect(await size(shown.frame)).toEqual({ width: 720, height: 405 });
+    // Smaller than asked, a frame keeps its size.
+    expect(
+      await size((await extractVideoThumbnail(clip, { maxSide: 4000 })).frame),
+    ).toEqual({ width: 1280, height: 720 });
+    const preview = await createMediaPreview(clip, AssetType.Video);
+    expect(preview).toMatchObject({ width: 720, height: 405 });
+    expect(preview.frameAt).toBe(whole.at);
+  }, 60_000);
+
+  it('makes the frame small before an HDR mapping, at even sides', () => {
+    expect(frameFilters(undefined, ['zscale=t=linear'])).toEqual([
+      'zscale=t=linear',
+    ]);
+    expect(frameFilters(720, [])).toEqual([
+      "scale=w='min(iw,720)':h='min(ih,720)':force_original_aspect_ratio=decrease:flags=lanczos",
+    ]);
+    expect(frameFilters(720, ['zscale=t=linear'])).toEqual([
+      "scale=w='min(iw,720)':h='min(ih,720)':force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos",
+      'zscale=t=linear',
+    ]);
+  });
 
   it('ranks a black, a washed-out and a tinted-dark frame below a colourful one', async () => {
     const solid = (background: string) =>

@@ -65,7 +65,6 @@ export function parseAssetUploadSettings(value: string): AssetUploadRequest {
       quality: settings.quality,
       ...pickGeometry(settings),
       stripAudio: settings.stripAudio,
-      fastConversion: settings.fastConversion,
     };
   }
 
@@ -300,8 +299,7 @@ function isVideoTransformRequest(
     settings.type === 'video-transform' &&
     isQuality(settings.quality) &&
     hasGeometry(settings) &&
-    typeof settings.stripAudio === 'boolean' &&
-    typeof settings.fastConversion === 'boolean'
+    typeof settings.stripAudio === 'boolean'
   );
 }
 

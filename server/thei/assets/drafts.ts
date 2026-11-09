@@ -17,7 +17,11 @@ import {
   type AssetDraftSource,
 } from '#layers/thei/shared/api/asset-draft';
 import type { AssetUploadResponse } from '#layers/thei/shared/api/asset';
-import type { AssetUploadProgress } from '#layers/thei/shared/api/asset-upload-progress';
+import {
+  ENCODE_PROGRESS_SHARE,
+  FINISHING_PROGRESS,
+  type AssetUploadProgress,
+} from '#layers/thei/shared/api/asset-upload-progress';
 import { AssetType } from '#layers/thei/shared/asset';
 import {
   buildAssetSettingsKey,
@@ -448,6 +452,7 @@ export async function commitDraft(
       session.type,
       async () => {
         options.onStatus?.({ phase: 'processing' });
+        let measured = false;
         let processed = await takeRender(session, settings);
         if (!processed) {
           processed = await renderAsset(
@@ -455,8 +460,13 @@ export async function commitDraft(
             settings,
             {
               signal: options.signal,
-              onProgress: (progress) =>
-                options.onStatus?.({ phase: 'processing', progress }),
+              onProgress: (progress) => {
+                measured = true;
+                options.onStatus?.({
+                  phase: 'processing',
+                  progress: progress * ENCODE_PROGRESS_SHARE,
+                });
+              },
             },
             session.audio,
           );
@@ -472,7 +482,10 @@ export async function commitDraft(
             options.signal.throwIfAborted();
           }
         }
-        options.onStatus?.({ phase: 'finishing' });
+        options.onStatus?.({
+          phase: 'processing',
+          ...(measured ? { progress: FINISHING_PROGRESS } : {}),
+        });
         // Another commit of the draft may be moving the source right now;
         // this one then finds it in the library and keeps nothing more.
         await sourceAtRest(session);

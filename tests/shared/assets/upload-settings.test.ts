@@ -93,7 +93,6 @@ describe('asset upload settings', () => {
         type: 'video-transform',
         quality: 80,
         stripAudio: false,
-        fastConversion: false,
         dimensions: { width: 301, height: 301 },
         stretch: true,
       },
@@ -236,7 +235,6 @@ describe('asset upload settings', () => {
         crop: { left: 11, top: 5, width: 1201, height: 675 },
         dimensions: { width: 1201, height: 675 },
         stripAudio: true,
-        fastConversion: false,
       },
       { width: 1920, height: 1080, hasAudio: true },
     );
@@ -247,7 +245,7 @@ describe('asset upload settings', () => {
       stripAudio: true,
     });
     expect(buildAssetSettingsKey(settings)).toBe(
-      'video-transform:q70:w1200:h674:crop:10,4,1200,674:strip:1:fast:0',
+      'video-transform:q70:w1200:h674:crop:10,4,1200,674:strip:1',
     );
   });
 
@@ -258,7 +256,6 @@ describe('asset upload settings', () => {
         quality: 70,
         dimensions: {},
         stripAudio: true,
-        fastConversion: false,
       },
       { width: 640, height: 360, hasAudio: false },
     );

@@ -105,7 +105,6 @@ export function useEditSettings(options: {
   /** Both sides, taken as they are, while unlinked. */
   const exact = ref<FileDimensions | undefined>();
   const stripAudio = ref(false);
-  const fastConversion = ref(false);
   /** A recording folded into one channel. */
   const mono = ref(false);
   const touched = ref(false);
@@ -195,7 +194,6 @@ export function useEditSettings(options: {
           type: 'video-transform',
           ...common,
           stripAudio: stripAudio.value,
-          fastConversion: fastConversion.value,
         };
   });
 
@@ -328,7 +326,6 @@ export function useEditSettings(options: {
       linked,
       exact,
       stripAudio,
-      fastConversion,
       mono,
     ],
     () => {
@@ -391,7 +388,6 @@ export function useEditSettings(options: {
       formatChoice.value = 'auto';
       aspectChoice.value = target.aspectChoice;
       stripAudio.value = target.stripAudio;
-      fastConversion.value = false;
       mono.value = false;
     });
   }
@@ -533,7 +529,6 @@ export function useEditSettings(options: {
     crop,
     outputBox,
     stripAudio,
-    fastConversion,
     mono,
     touched,
     placeAspect,

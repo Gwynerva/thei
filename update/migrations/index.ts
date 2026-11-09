@@ -27,6 +27,7 @@ import checkCoverageSession from './0.0.7-check-coverage-session';
 import sessionTokenHashes from './0.0.7-session-token-hashes';
 import excerpts from './0.0.8-excerpts';
 import directAppWrites from './0.0.8-direct-app-writes';
+import fastConversion from './0.0.8-fast-conversion';
 
 /**
  * Every migration Thei has ever shipped, oldest first.
@@ -67,6 +68,7 @@ export const migrationRegistry: TheiMigration[] = [
   sessionTokenHashes,
   excerpts,
   directAppWrites,
+  fastConversion,
 ];
 
 export { baselineSql } from './0.0.1-baseline';

@@ -1,9 +1,11 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 import { randomBytes, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { screenshot } from './screenshots';
-import { skipDescription, uploadControls } from './helpers/upload';
+import { freshClip } from './helpers/media';
+import { skipDescription, uploadControls, uploadFile } from './helpers/upload';
 
 test.use({
   storageState: fileURLToPath(
@@ -436,19 +438,19 @@ test('a video variant is made as a job the editor follows', async ({
     'true',
   );
   await page.locator('[data-pick]').click();
-  await page
-    .locator('input[type=file]')
-    .setInputFiles(
-      fileURLToPath(
-        new URL('./fixture/media/regression-video.mp4', import.meta.url),
-      ),
-    );
+  // A video of this run alone: the still of a family a run before chose by
+  // hand would come back chosen, and this test watches it being chosen. It
+  // is stored first, so the editor finds the file and offers a new variant.
+  const clip = await freshClip();
+  await uploadFile(request, 'mp4', await readFile(clip.path));
+  // The browser reads the picked file as it uploads it: the clip stays on
+  // disk until the end.
+  await page.locator('input[type=file]').setInputFiles(clip.path);
 
   // The editor asks how to take the video; a new variant opens its
   // settings, and the foot's button makes it.
   const { newVariant, next } = uploadControls(page);
   await newVariant.click();
-  await page.getByText('Fast conversion', { exact: true }).click();
   const polls: string[] = [];
   page.on('request', (req) => {
     if (req.method() === 'GET' && /\/api\/admin\/uploads\//.test(req.url()))
@@ -523,6 +525,7 @@ test('a video variant is made as a job the editor follows', async ({
   expect(asset.extension).toBe('webm');
   expect(asset.settings.type).toBe('video-transform');
   expect(asset.meta.previewChosen).toBe(true);
+  await clip.remove();
 });
 
 test('the quality bar walks its stops from the keyboard and by a tap', async ({

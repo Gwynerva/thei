@@ -8,13 +8,10 @@ import {
 import { E2E_ORIGIN } from './fixture-url';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { screenshot } from './screenshots';
+import { freshClip } from './helpers/media';
 import { uploadControls, uploadFile, uploadPicture } from './helpers/upload';
 
 test.use({
@@ -48,13 +45,28 @@ async function library(page: Page, batch = false) {
 /**
  * Picks a freshly uploaded asset. Nothing a file was called is kept, so an
  * unused upload is found in the unused section, where the newest come first.
+ * The section is opened if it is closed — never toggled shut by a click on
+ * a section already open while its tiles are still on their way — and runs
+ * before this one leave many unused files, so the tile may be on a page the
+ * section has not drawn yet: "Show more" until it is.
  */
 async function choose(page: Page, assetUuid: string) {
   const assetButton = page.locator(`[data-asset-uuid="${assetUuid}"]`).first();
-  const unused = page
-    .locator('[data-asset-library-section]')
-    .filter({ hasText: 'Unused' });
-  if (!(await assetButton.isVisible())) await unused.click();
+  const unused = page.locator('details').filter({
+    has: page
+      .locator('[data-asset-library-section]')
+      .filter({ hasText: 'Unused' }),
+  });
+  await expect(unused).toBeVisible();
+  if (!(await unused.evaluate((element) => element.hasAttribute('open')))) {
+    await unused.locator('summary').click();
+  }
+  for (let page_ = 0; page_ < 20; page_++) {
+    if (await assetButton.isVisible()) break;
+    const more = unused.getByRole('button', { name: 'Show more' });
+    if (!(await more.isVisible())) break;
+    await more.click();
+  }
   await expect(assetButton).toBeVisible();
   await assetButton.click();
   // The editor asks how to take the stored file; as it is, it is handed over
@@ -380,16 +392,25 @@ test('the library narrows to one kind of entity and finds a diary entry by its d
   await expect(source).toHaveAccessibleName('Used in: Anywhere');
   await source.click();
   const kinds = page.getByRole('listbox', { name: 'Used in' });
-  await expect(kinds.getByRole('option')).toHaveText([
-    /Anywhere/,
-    /Projects/,
-    /Project sections/,
-    /Events/,
-    /Diary entries/,
-    /Pages/,
-    /In\suse/,
-    /Unused/,
-  ]);
+  // Every kind of place a file of this library is used in, in the order of
+  // the ladder; a run before may have left an excerpt holding a file, which
+  // adds its kind.
+  await expect
+    .poll(async () =>
+      (await kinds.getByRole('option').allInnerTexts())
+        .map((text) => text.replace(/\s*\d+$/, '').replace(/\s+/g, ' '))
+        .filter((text) => text !== 'Excerpts'),
+    )
+    .toEqual([
+      'Anywhere',
+      'Projects',
+      'Project sections',
+      'Events',
+      'Diary entries',
+      'Pages',
+      'In use',
+      'Unused',
+    ]);
   await kinds.getByRole('option').filter({ hasText: 'Diary entries' }).click();
   await expect(source).toHaveAccessibleName('Used in: Diary entries');
   await page.getByRole('searchbox').fill(`${monthName} ${day}, ${year}`);
@@ -561,57 +582,13 @@ test('video previews play on hover and keyboard focus in both library views', as
     .not.toBe(restingBorder);
 });
 
-/**
- * A video whose frames differ: a grey second, which the automatic pick
- * passes over, then a colour of this run alone, so its bytes are new.
- */
+/** A video whose frames differ, new to the library on every run. */
 async function uploadChangingVideo(api: APIRequestContext) {
-  const directory = await mkdtemp(join(tmpdir(), 'thei-e2e-frames-'));
-  const path = join(directory, 'frames.mp4');
-  // A full colour of a hue of its own, livelier than grey whatever it is.
-  const hue = Math.random() * 6;
-  const rising = Math.round(255 * (1 - Math.abs((hue % 2) - 1)));
-  const [red, green, blue] = [
-    [255, rising, 0],
-    [rising, 255, 0],
-    [0, 255, rising],
-    [0, rising, 255],
-    [rising, 0, 255],
-    [255, 0, rising],
-  ][Math.floor(hue)]!;
-  const colour = `0x${[red, green, blue]
-    .map((channel) => channel!.toString(16).padStart(2, '0'))
-    .join('')}`;
+  const clip = await freshClip();
   try {
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn(
-        ffmpegInstaller.path,
-        [
-          '-y',
-          '-f',
-          'lavfi',
-          '-i',
-          'color=c=gray:s=320x180:r=25:d=1',
-          '-f',
-          'lavfi',
-          '-i',
-          `color=c=${colour}:s=320x180:r=25:d=2`,
-          '-filter_complex',
-          '[0:v][1:v]concat=n=2:v=1:a=0,format=yuv420p',
-          '-c:v',
-          'libx264',
-          path,
-        ],
-        { stdio: 'ignore' },
-      );
-      child.on('error', reject);
-      child.on('close', (code) =>
-        code === 0 ? resolve() : reject(new Error(`ffmpeg exited ${code}`)),
-      );
-    });
-    return await uploadFile(api, 'mp4', await readFile(path));
+    return await uploadFile(api, 'mp4', await readFile(clip.path));
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await clip.remove();
   }
 }
 

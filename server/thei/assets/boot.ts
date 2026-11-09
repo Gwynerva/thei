@@ -5,6 +5,9 @@ import { runContentHistoryMaintenance } from '../content/history';
 import { sweepUsage } from '../ai/model/usage';
 import { maintainAiSessions } from '../ai/sessions/lifecycle';
 import { recoverAiSessions } from '../ai/runner/queue';
+import { removeOtherFfmpegVersions } from '#layers/thei/update/ffmpeg/install';
+import { missingFfmpegMessage } from '#layers/thei/update/ffmpeg/tools';
+import { ffmpegTools } from './ffmpeg';
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * ONE_HOUR_MS;
@@ -28,6 +31,20 @@ export function bootTheiAssets() {
       .tag('Assets')
       .error('Failed to clear editor drafts left by the last run'),
   );
+  // An update fetched this build's ffmpeg beside the one the previous build
+  // was still using; now that this build runs, the older one may go — once
+  // this build's own is in place, which the sweep checks first.
+  removeOtherFfmpegVersions(THEI_SERVER.projectPath()).catch(() =>
+    THEI_SERVER.console
+      .tag('Assets')
+      .error('Failed to remove the ffmpeg of the previous version'),
+  );
+  // The site runs without ffmpeg, but no video or sound can be taken in: the
+  // journal says so once, rather than each upload in its own words.
+  const tools = ffmpegTools();
+  if (tools.source === 'missing') {
+    THEI_SERVER.console.tag('Assets').warn(missingFfmpegMessage(tools));
+  }
 
   // The full sweep walks `content/assets` and is the expensive half, so it
   // runs weekly while the cheap SQL phases keep their daily cadence.

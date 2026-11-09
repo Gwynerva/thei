@@ -13,7 +13,6 @@ describe('isLongCommit', () => {
         quality: 75,
         dimensions: {},
         stripAudio: false,
-        fastConversion: true,
       }),
     ).toBe(true);
     expect(isLongCommit(createFileZipSettings())).toBe(true);

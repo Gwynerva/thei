@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import { resolveFfmpegTools } from '../../../../update/ffmpeg/tools';
 import { detectVideoAudio } from '../../../../app/modals/asset-modal/video-audio';
 
 let directory = '';
@@ -18,7 +18,7 @@ afterAll(async () => {
 
 function run(args: string[]) {
   return new Promise<void>((resolve, reject) => {
-    const child = spawn(ffmpegInstaller.path, args, { stdio: 'ignore' });
+    const child = spawn(resolveFfmpegTools().ffmpeg, args, { stdio: 'ignore' });
     child.on('error', reject);
     child.on('close', (code) =>
       code === 0 ? resolve() : reject(new Error(`ffmpeg exited ${code}`)),

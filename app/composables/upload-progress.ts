@@ -69,6 +69,23 @@ export function usePendingUploadView(
   return { previewSrc, status, error, statusLabel };
 }
 
+/**
+ * The status to show next, given the one shown: the share done never goes
+ * back. The server's own share only grows, but two things may report one
+ * upload — the request and the job it became, each polled on its own — and
+ * an answer that left the server a moment earlier must not undo a later one.
+ * A step without a share keeps the last share seen in the same phase.
+ */
+export function advanceUploadStatus<Status extends UploadStatus>(
+  shown: Status | null | undefined,
+  next: Status | null,
+): Status | null {
+  if (!next || !shown || shown.phase !== next.phase) return next;
+  if (!('progress' in shown) || shown.progress === undefined) return next;
+  if (next.progress === undefined) return { ...next, progress: shown.progress };
+  return next.progress < shown.progress ? shown : next;
+}
+
 /** The status in words, with the share done where one is known. */
 export function uploadStatusLabel(
   status: UploadStatus | null | undefined,
@@ -78,7 +95,6 @@ export function uploadStatusLabel(
     return phrase.value.upload_staging(Math.round(status.progress * 100));
   }
   if (status.phase === 'queued') return phrase.value.upload_queued;
-  if (status.phase === 'finishing') return phrase.value.upload_finishing;
   return status.progress === undefined
     ? phrase.value.upload_processing
     : `${phrase.value.upload_processing} ${Math.round(status.progress * 100)}%`;

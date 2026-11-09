@@ -75,7 +75,7 @@ apt-get update -qq
 # to compile itself: better-sqlite3 of a release before 0.0.3, which downloads
 # its binary from GitHub, when there is none for this machine or GitHub cannot
 # be reached. From 0.0.3 on it carries its binaries and compiles nothing.
-apt-get install -y -qq git curl unzip ca-certificates build-essential python3 >/dev/null
+apt-get install -y -qq git curl unzip xz-utils ca-certificates build-essential python3 >/dev/null
 
 # ------------------------------------------------------------------- memory
 memory_mb() { awk -v key="$1" '$1 == key":" { print int($2 / 1024) }' /proc/meminfo; }
@@ -207,6 +207,16 @@ sed "s|__THEI_SOURCE__|$SOURCE|" "$TEMPLATES/package.tmpl.json" > "$THEI_DIR/pac
 cp "$TEMPLATES/nuxt.config.tmpl.ts" "$THEI_DIR/nuxt.config.ts"
 chown "$THEI_USER:$THEI_USER" "$THEI_DIR/package.json" "$THEI_DIR/nuxt.config.ts"
 run_as_thei "$BUN_BIN" install --cwd "$THEI_DIR"
+
+# Video and sound are processed by a static ffmpeg the engine pins by checksum
+# and fetches from GitHub into .thei/bin (update/ffmpeg/); an update brings a
+# newer one the same way. xz-utils above is what unpacks it. Releases before
+# 0.0.8 bring ffmpeg as a package and have no such script.
+FFMPEG_FETCH="$THEI_DIR/node_modules/thei/update/ffmpeg/cli.ts"
+if [ -f "$FFMPEG_FETCH" ]; then
+  say "Fetching ffmpeg"
+  run_as_thei "$BUN_BIN" "$FFMPEG_FETCH" --project "$THEI_DIR"
+fi
 
 # The SQLite driver carries its own binaries and nothing compiles in their
 # place, so a server they do not run on hears it now rather than from a site

@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { crc32 } from 'node:zlib';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import { resolveFfmpegTools } from '../../../update/ffmpeg/tools';
 import sharp from 'sharp';
 import { AssetType } from '../../../shared/asset';
 import { stripAssetMetadata } from '../../../server/thei/assets/strip-metadata';
@@ -185,7 +185,7 @@ function pngChunk(type: string, data: Buffer) {
 async function ffmpeg(args: string[]) {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
-      ffmpegInstaller.path,
+      resolveFfmpegTools().ffmpeg,
       ['-y', '-loglevel', 'error', ...args],
       { windowsHide: true, stdio: 'ignore' },
     );

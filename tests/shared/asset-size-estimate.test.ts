@@ -69,7 +69,6 @@ describe('video size estimate', () => {
     quality: 75,
     dimensions: fullHd,
     stripAudio: false,
-    fastConversion: false,
   };
 
   it('multiplies the target bitrate by the duration', () => {
@@ -80,10 +79,10 @@ describe('video size estimate', () => {
     });
     expect(estimate?.videoBitrate).toBe(3_500_000);
     expect(estimate?.audioBitrate).toBe(0);
-    // 60 s × 3.5 Mbit/s = 26.25 MB, less what the encoder leaves on the
-    // table, plus the container's percent.
-    expect(estimate?.bytes).toBeGreaterThan(26_250_000 * 0.95);
-    expect(estimate?.bytes).toBeLessThan(26_250_000 * 0.98);
+    // 60 s × 3.5 Mbit/s = 26.25 MB, plus the encoder's two percent over the
+    // target and the container's percent.
+    expect(estimate?.bytes).toBeGreaterThan(26_250_000 * 1.02);
+    expect(estimate?.bytes).toBeLessThan(26_250_000 * 1.04);
   });
 
   it('adds the sound unless it is missing or removed', () => {

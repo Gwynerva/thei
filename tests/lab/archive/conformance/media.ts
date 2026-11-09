@@ -14,7 +14,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import ffmpeg from '@ffmpeg-installer/ffmpeg';
+import { resolveFfmpegTools } from '../../../../update/ffmpeg/tools';
 import { zipSync, strToU8 } from 'fflate';
 import sharp from 'sharp';
 
@@ -99,7 +99,7 @@ function pdf(text: string): Buffer {
 
 function transcode(input: string, output: string, args: string[]) {
   execFileSync(
-    ffmpeg.path,
+    resolveFfmpegTools().ffmpeg,
     [
       '-y',
       '-loglevel',

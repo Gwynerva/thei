@@ -54,7 +54,6 @@ describe('asset upload request parsing', () => {
         type: 'video-transform',
         quality: 80,
         stripAudio: false,
-        fastConversion: false,
         rotation,
         dimensions: {},
       });
@@ -128,7 +127,6 @@ describe('asset upload request parsing', () => {
           quality: 70,
           dimensions: { width: ASSET_UPLOAD_MAX_DIMENSION + 1 },
           stripAudio: false,
-          fastConversion: false,
         }),
       ),
     ).toThrow('Invalid upload settings');

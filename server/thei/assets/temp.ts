@@ -52,9 +52,33 @@ export async function sweepTheiTempDir(): Promise<number> {
   return removed;
 }
 
+/**
+ * What a fresh installation of the site keeps of `.thei/`.
+ *
+ * Everything else there is scratch or derived — temp files, the search
+ * index, backup state — and goes with the content it described. `bin/` holds
+ * the ffmpeg the installer or an update fetched (`update/ffmpeg/`), which has
+ * nothing to do with the content and costs a 150 MB download to put back.
+ */
+const THEI_DIR_KEPT_ON_INSTALL = new Set(['bin']);
+
+/** Empties `.thei/` for a fresh installation, all but what outlives one. */
+export async function wipeTheiDir(): Promise<void> {
+  const directory = join(theiProjectPath(), '.thei');
+  for (const name of await readdir(directory).catch(() => [])) {
+    if (THEI_DIR_KEPT_ON_INSTALL.has(name)) continue;
+    await rm(join(directory, name), { recursive: true, force: true });
+  }
+}
+
 function theiProjectPath(): string {
+  return theiProjectPathIfAny() ?? tmpdir();
+}
+
+/** The instance directory, where there is a server; nothing in a bare test. */
+export function theiProjectPathIfAny(): string | undefined {
   const server = (
     globalThis as { THEI_SERVER?: { projectPath?: () => string } }
   ).THEI_SERVER;
-  return server?.projectPath?.() ?? tmpdir();
+  return server?.projectPath?.();
 }

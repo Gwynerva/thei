@@ -7,6 +7,7 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import sharp from 'sharp';
 import { createAssetVariant } from '../../../server/thei/assets/create-variant';
+import { renderImagePreview } from '../../../server/thei/assets/process';
 import { createAsset } from '../../../server/thei/assets/repository/create';
 import { findAssetByIdentity } from '../../../server/thei/assets/repository/find-by-identity';
 import { findAssetBySlug } from '../../../server/thei/assets/repository/find-by-slug';
@@ -138,7 +139,7 @@ describe('upload pipeline', () => {
 
     expect(result.created).toBe(true);
     // A picture reports no share, but it does say when the encode is over.
-    expect(statuses).toEqual(['processing', 'finishing']);
+    expect(statuses).toEqual(['processing', 'processing']);
     expect(result.extension).toBe('avif');
     expect(result.settingsKey).toBe('image-transform:q90:w1200:h675:fmt:avif');
 
@@ -247,6 +248,144 @@ describe('upload pipeline', () => {
 
     expect(result.extension).toBe('webp');
     expect(result.settingsKey).toContain(':fmt:webp');
+  });
+
+  it('draws the preview of a transform from its source, with the same crop and turn', async () => {
+    // Left half blue, right half red; the crop, in the turned frame, takes
+    // a band across the seam, so a crop or a turn gone wrong shows.
+    const bytes = await sharp({
+      create: {
+        width: 1600,
+        height: 900,
+        channels: 3,
+        background: { r: 30, g: 60, b: 220 },
+      },
+    })
+      .composite([
+        {
+          input: await sharp({
+            create: {
+              width: 800,
+              height: 900,
+              channels: 3,
+              background: { r: 220, g: 40, b: 30 },
+            },
+          })
+            .png()
+            .toBuffer(),
+          left: 800,
+          top: 0,
+        },
+      ])
+      .png()
+      .toBuffer();
+    const path = join(root, 'halves.png');
+    await writeFile(path, bytes);
+    const source = { path, extension: 'png' };
+    const settings = {
+      type: 'image-transform' as const,
+      quality: 90,
+      rotation: 90 as const,
+      crop: { left: 0, top: 600, width: 900, height: 400 },
+      dimensions: { width: 1800, height: 800 },
+    };
+    const large = await renderImagePreview(source, settings, 720, (pipeline) =>
+      pipeline.png(),
+    );
+    // The preview is the transform at the preview's size.
+    expect([large.info.width, large.info.height]).toEqual([720, 320]);
+
+    const stored = await createAssetVariant({
+      source: {
+        ...source,
+        size: bytes.length,
+        hash: createHash('sha256').update(bytes).digest('hex'),
+        owned: false,
+      },
+      familyUuid: 'af-halves',
+      sourceType: AssetType.Image,
+      settings: { ...settings, dimensions: { width: 450, height: 200 } },
+    });
+    const preview = db
+      .select()
+      .from(schema.assets)
+      .all()
+      .find((asset) => asset.settingsKey === 'internal:media-preview');
+    expect(stored.meta).toMatchObject({ width: 450, height: 200 });
+    // Never enlarged: a small transform's preview is its own size.
+    expect(preview?.meta).toMatchObject({ width: 450, height: 200 });
+
+    // Cell by cell, the preview shows what the variant shows.
+    const grid = (input: string | Buffer) =>
+      sharp(input).resize(6, 2, { fit: 'fill' }).raw().toBuffer();
+    const variantPixels = await grid(
+      (globalThis as any).THEI_SERVER.assets.filePath(
+        stored.contentHash,
+        stored.extension,
+      ),
+    );
+    const previewPixels = await grid(
+      (globalThis as any).THEI_SERVER.assets.filePath(
+        preview!.contentHash,
+        preview!.extension,
+      ),
+    );
+    expect(previewPixels.length).toBe(variantPixels.length);
+    for (let offset = 0; offset < variantPixels.length; offset++) {
+      expect(
+        Math.abs(previewPixels[offset]! - variantPixels[offset]!),
+      ).toBeLessThan(40);
+    }
+    // And the band really crosses the seam: both colours are in it.
+    const reds = Array.from({ length: 12 }, (_, i) => variantPixels[i * 3]!);
+    expect(Math.max(...reds)).toBeGreaterThan(150);
+    expect(Math.min(...reds)).toBeLessThan(100);
+  });
+
+  it('accepts a photo whose damaged EXIF the decoder only warns about', async () => {
+    const clean = await sharp({
+      create: {
+        width: 640,
+        height: 480,
+        channels: 3,
+        background: { r: 200, g: 90, b: 40 },
+      },
+    })
+      .jpeg()
+      .toBuffer();
+    // An APP1 segment whose payload is nonsense: libjpeg warns about the
+    // bytes it skips and decodes the picture all the same.
+    const app1 = Buffer.concat([
+      Buffer.from([0xff, 0xe1, 0x00, 0x20]),
+      Buffer.from('Exif\0\0'),
+      Buffer.from('this is not a tiff header....'),
+    ]);
+    const bytes = Buffer.concat([
+      clean.subarray(0, 2),
+      app1,
+      clean.subarray(2),
+    ]);
+    // sharp's own default would refuse it.
+    await expect(sharp(bytes).toBuffer()).rejects.toThrow(/Corrupt JPEG/);
+    const path = join(root, 'damaged.jpg');
+    await writeFile(path, bytes);
+    const result = await createAssetVariant({
+      source: {
+        path,
+        size: bytes.length,
+        hash: createHash('sha256').update(bytes).digest('hex'),
+        extension: 'jpg',
+        owned: false,
+      },
+      familyUuid: 'af-damaged',
+      sourceType: AssetType.Image,
+      settings: {
+        type: 'image-transform',
+        quality: 75,
+        dimensions: { width: 320, height: 240 },
+      },
+    });
+    expect(result.meta).toMatchObject({ width: 320, height: 240 });
   });
 
   it('writes the cropped region at the exact requested size', async () => {

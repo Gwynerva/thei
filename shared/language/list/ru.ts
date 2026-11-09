@@ -281,7 +281,6 @@ export default defineI18nModule({
     asset_recipe_quality_level: (level) => `${level.toLowerCase()} качество`,
     asset_recipe_lossless: 'без потерь',
     asset_recipe_no_audio: 'без звука',
-    asset_recipe_fast: 'быстрая конвертация',
     asset_recipe_bitrate: (kbps) => `${kbps} кбит/с`,
     asset_recipe_mono: 'моно',
     asset_quality_minimal: 'Минимальное',
@@ -1910,17 +1909,15 @@ export default defineI18nModule({
     upload_apply_settings: 'Создать вариант',
     upload_processing: 'Обработка...',
     upload_queued: 'Ожидание в очереди...',
-    upload_finishing: 'Завершение…',
     upload_cancel: 'Отмена',
     upload_dismiss: 'Убрать',
     upload_error_job_lost: 'Сервер перезапустился, пока файл сохранялся.',
+    upload_error_ffmpeg_missing:
+      'Видео и звук не обрабатываются: на сервере нет ffmpeg. Чтобы скачать его, выполните в папке сайта bun node_modules/thei/update/ffmpeg/cli.ts.',
     upload_pending_leave_confirm: 'Файлы ещё сохраняются. Уйти и потерять их?',
     upload_quality: 'Качество',
     upload_audio: 'Звук',
     upload_audio_none: 'в исходнике нет',
-    upload_fast_conversion: 'Быстрая конвертация',
-    upload_fast_conversion_hint:
-      'Один быстрый проход вместо двух: гораздо быстрее, тот же размер, чуть ниже качество.',
     upload_compress_to_zip: 'Сжать в ZIP',
     upload_compress_to_zip_hint:
       'Упаковка в архив позволит уменьшить размер файла.',

@@ -14,7 +14,10 @@ import { UploadJobError } from '../../../app/composables/upload-draft';
 interface SendCall {
   signal: AbortSignal;
   progress: (share: number) => void;
-  status: (status: { phase: 'queued' | 'processing' | 'finishing' }) => void;
+  status: (status: {
+    phase: 'queued' | 'processing';
+    progress?: number;
+  }) => void;
   resolve: (asset: AssetVariantInfo) => void;
   reject: (reason: unknown) => void;
 }

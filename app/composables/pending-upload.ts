@@ -19,7 +19,7 @@ import {
   uploadOriginalFile,
   type UploadConstraints,
 } from './upload-draft';
-import type { UploadStatus } from './upload-progress';
+import { advanceUploadStatus, type UploadStatus } from './upload-progress';
 
 /**
  * The file as the browser can already show it, before it is stored: a
@@ -134,7 +134,7 @@ abstract class PendingUploadBase implements PendingUpload {
   protected release(): void {}
 
   protected report(status: UploadStatus | null) {
-    this.status.value = status;
+    this.status.value = advanceUploadStatus(this.status.value, status);
   }
 
   /** Stops the attempt under way, quietly: no error, no result. */

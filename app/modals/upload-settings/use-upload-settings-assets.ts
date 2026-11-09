@@ -6,6 +6,7 @@ import type {
 } from '#layers/thei/shared/api/asset';
 import type { AssetDraftSource } from '#layers/thei/shared/api/asset-draft';
 import type { AssetUploadProgress } from '#layers/thei/shared/api/asset-upload-progress';
+import { advanceUploadStatus } from '#layers/thei/app/composables/upload-progress';
 import type { AssetUploadRequest } from '#layers/thei/shared/asset-upload-settings';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
 import type { AssetUploadLimitPolicy } from '#layers/thei/shared/asset-upload-limits';
@@ -93,7 +94,9 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
         {
           signal: controller.signal,
           onStatus: (progress) => {
-            if (commitController === controller) status.value = progress;
+            if (commitController === controller) {
+              status.value = advanceUploadStatus(status.value, progress);
+            }
           },
         },
       );

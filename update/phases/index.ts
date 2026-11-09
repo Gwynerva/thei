@@ -1,6 +1,7 @@
 import type { TheiUpdatePhase } from './types';
 import sqliteDriver from './0.0.3-sqlite-driver';
 import nodeVersion from './0.0.6-node-version';
+import ffmpeg from './0.0.8-ffmpeg';
 
 /**
  * Every scripted update phase Thei ships, oldest first.
@@ -13,4 +14,5 @@ import nodeVersion from './0.0.6-node-version';
 export const updatePhaseRegistry: TheiUpdatePhase[] = [
   sqliteDriver,
   nodeVersion,
+  ffmpeg,
 ];

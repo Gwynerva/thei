@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import { resolveFfmpegTools } from '../../../update/ffmpeg/tools';
 import { AssetType } from '../../../shared/asset';
 import {
   buildAssetSettingsKey,
@@ -23,11 +23,8 @@ import {
   WAVEFORM_SAMPLE_RATE,
   WaveformAccumulator,
 } from '../../../server/thei/assets/audio-waveform';
-import {
-  channelCount,
-  parseFfmpegInputInfo,
-  type AssetSourceFile,
-} from '../../../server/thei/assets/process';
+import { inspectionFromProbe } from '../../../server/thei/assets/probe';
+import type { AssetSourceFile } from '../../../server/thei/assets/process';
 import { stripAssetMetadata } from '../../../server/thei/assets/strip-metadata';
 
 let directory = '';
@@ -45,7 +42,7 @@ afterEach(async () => {
 async function ffmpeg(args: string[]) {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
-      ffmpegInstaller.path,
+      resolveFfmpegTools().ffmpeg,
       ['-y', '-loglevel', 'error', ...args],
       { windowsHide: true, stdio: 'ignore' },
     );
@@ -82,32 +79,41 @@ async function source(path: string): Promise<AssetSourceFile> {
 
 describe('audio probe', () => {
   it('reads a recording without a picture', () => {
-    const info = parseFfmpegInputInfo(
-      [
-        "Input #0, wav, from 'voice.wav':",
-        '  Duration: 00:01:00.00, bitrate: 1411 kb/s',
-        '  Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 44100 Hz, stereo, s16, 1411 kb/s',
-      ].join('\n'),
-    );
+    const info = inspectionFromProbe({
+      streams: [
+        {
+          codec_type: 'audio',
+          codec_name: 'pcm_s16le',
+          sample_rate: '44100',
+          channels: 2,
+          bit_rate: '1411200',
+        },
+      ],
+      format: { duration: '60.000000', bit_rate: '1411200' },
+    });
     expect(info).toMatchObject({
       duration: 60,
       hasAudio: true,
       audioCodec: 'pcm_s16le',
       channels: 2,
       sampleRate: 44_100,
-      audioBitrate: 1_411_000,
+      audioBitrate: 1_411_200,
     });
     expect(info.width).toBeUndefined();
   });
 
   it('reads a WebM recording, which names no rate per stream', () => {
-    const info = parseFfmpegInputInfo(
-      [
-        "Input #0, matroska,webm, from 'song.weba':",
-        '  Duration: 00:00:10.01, start: -0.007000, bitrate: 97 kb/s',
-        '  Stream #0:0: Audio: opus, 48000 Hz, mono, fltp (default)',
-      ].join('\n'),
-    );
+    const info = inspectionFromProbe({
+      streams: [
+        {
+          codec_type: 'audio',
+          codec_name: 'opus',
+          sample_rate: '48000',
+          channels: 1,
+        },
+      ],
+      format: { duration: '10.010000', bit_rate: '97000' },
+    });
     expect(audioSourceInfo(info)).toEqual({
       duration: 10.01,
       bitrate: 97_000,
@@ -116,30 +122,28 @@ describe('audio probe', () => {
     });
   });
 
-  it('takes the sound line, not the cover picture', () => {
-    const info = parseFfmpegInputInfo(
-      [
-        "Input #0, mp3, from 'track.mp3':",
-        '  Duration: 00:03:00.00, start: 0.025057, bitrate: 128 kb/s',
-        '  Stream #0:0: Audio: mp3, 44100 Hz, stereo, fltp, 128 kb/s',
-        '  Stream #0:1: Video: mjpeg (Baseline), yuvj420p(pc), 500x500, 90k tbr, 90k tbn (attached pic)',
-      ].join('\n'),
-    );
+  it('takes the sound, not the cover picture', () => {
+    const info = inspectionFromProbe({
+      streams: [
+        {
+          codec_type: 'audio',
+          codec_name: 'mp3',
+          sample_rate: '44100',
+          channels: 2,
+          bit_rate: '128000',
+        },
+        {
+          codec_type: 'video',
+          codec_name: 'mjpeg',
+          width: 500,
+          height: 500,
+          disposition: { attached_pic: 1 },
+        },
+      ],
+      format: { duration: '180.000000', bit_rate: '128000' },
+    });
     expect(info).toMatchObject({ audioCodec: 'mp3', audioBitrate: 128_000 });
     expect(audioSourceInfo(info).bitrate).toBe(128_000);
-  });
-
-  it.each([
-    ['mono', 1],
-    ['stereo', 2],
-    ['5.1', 6],
-    ['5.1(side)', 6],
-    ['7.1', 8],
-    ['quad', 4],
-    ['3 channels', 3],
-    ['something', undefined],
-  ])('counts the channels of %s', (layout, count) => {
-    expect(channelCount(layout)).toBe(count);
   });
 });
 

@@ -115,6 +115,11 @@ export function interpolateByQualityLevel(
  *
  * AVIF and WebP do not share a scale: AVIF 90 is near-lossless and larger
  * than WebP 90 at a large encoding cost, while AVIF 55 looks like WebP 75.
+ * Encoded at `effort: 3` since 0.0.8: on real photographs the files weigh
+ * what they did at effort 4 (97–108 %) and the SSIM against the source is
+ * lower by 0.0005–0.003, a fraction of the step between two levels, for a
+ * quarter of the time (the media bench, docs/media-quality.md). A synthetic
+ * picture had suggested lower qualities; real ones did not bear that out.
  */
 export const AVIF_QUALITY_BY_LEVEL: Record<AssetQualityLevel, number> = {
   minimal: 30,

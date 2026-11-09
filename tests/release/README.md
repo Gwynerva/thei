@@ -10,9 +10,10 @@ bun run test:release backup --keep       # one scenario, containers left running
 bun run test:release --full              # as a fresh VPS: before tagging a release
 ```
 
-Needs Docker, and network access from the containers to bun.sh, NodeSource and
-the npm registry. Everything else comes from this repository: the bench needs
-no data from outside it.
+Needs Docker, and network access from the containers to bun.sh, NodeSource,
+the npm registry and github.com, where the installer fetches the pinned
+ffmpeg. Everything else comes from this repository: the bench needs no data
+from outside it.
 
 Two modes:
 

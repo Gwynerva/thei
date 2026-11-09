@@ -11,7 +11,9 @@ import type { AssetUploadResponse } from '../../../shared/api/asset';
 import type { AssetJobStatus } from '../../../shared/api/asset-upload-progress';
 import {
   commitDraftRequest,
+  errorMessage,
   isDraftExpired,
+  isFfmpegMissing,
   UploadJobError,
 } from '../../../app/composables/upload-draft';
 
@@ -61,6 +63,7 @@ beforeAll(() => {
     value: {
       upload_error_cancelled: 'cancelled',
       upload_error_job_lost: 'the server was restarted',
+      upload_error_ffmpeg_missing: 'the server has no ffmpeg',
     },
   };
   globals.sitePath = (path: string) => path;
@@ -103,7 +106,7 @@ describe('committing a draft', () => {
       commit: { status: 202, body: { uploadId: 'x' } },
       polls: [
         { phase: 'processing', progress: 0.5 },
-        { phase: 'finishing' },
+        { phase: 'processing', progress: 0.95 },
         { phase: 'done', asset },
       ],
       requests: [],
@@ -115,7 +118,7 @@ describe('committing a draft', () => {
     expect(await pending).toBe(asset);
     expect(seen).toEqual([
       { phase: 'processing', progress: 0.5 },
-      { phase: 'finishing' },
+      { phase: 'processing', progress: 0.95 },
     ]);
   });
 
@@ -132,6 +135,42 @@ describe('committing a draft', () => {
     expect(failure).toBeInstanceOf(UploadJobError);
     expect(failure).toMatchObject({ message: 'too large', statusCode: 400 });
     expect(isDraftExpired(failure)).toBe(false);
+  });
+
+  it('says in the admin’s words that the server has no ffmpeg', async () => {
+    const server: FakeServer = {
+      commit: { status: 202, body: { uploadId: 'x' } },
+      polls: [
+        {
+          phase: 'failed',
+          message: 'ffmpeg is not installed: expected /srv/thei/.thei/bin',
+          statusCode: 503,
+          data: { ffmpegMissing: true },
+        },
+      ],
+      requests: [],
+    };
+    serve(server);
+    const settled = commit().catch((reason: unknown) => reason);
+    await vi.runAllTimersAsync();
+    const failure = await settled;
+    expect(isFfmpegMissing(failure)).toBe(true);
+    expect(errorMessage(failure, 'failed')).toBe('the server has no ffmpeg');
+    // A request answered at once comes as a fetch error, its body in `data`.
+    const refused = Object.assign(new Error('503'), {
+      data: {
+        statusCode: 503,
+        message: 'ffmpeg…',
+        data: { ffmpegMissing: true },
+      },
+    });
+    expect(errorMessage(refused, 'failed')).toBe('the server has no ffmpeg');
+    expect(
+      errorMessage(
+        Object.assign(new Error('x'), { data: { message: 'too large' } }),
+        'failed',
+      ),
+    ).toBe('too large');
   });
 
   it('reads a job the server no longer knows as a draft that is gone', async () => {
