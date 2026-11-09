@@ -375,6 +375,18 @@ export default defineI18nBase({
     profile_personal_hint:
       'Personal preferences apply immediately in this browser',
     profile_avatar_count: (count: number) => `1 of ${count}`,
+    profile_counter: (kind, count) =>
+      ({
+        project: () => plural(count, 'project', 'projects', false),
+        event: () => plural(count, 'event', 'events', false),
+        'diary-entry': () => plural(count, 'entry', 'entries', false),
+      })[kind](),
+    profile_counter_label: (kind, count) =>
+      ({
+        project: () => plural(count, 'project', 'projects'),
+        event: () => plural(count, 'event', 'events'),
+        'diary-entry': () => plural(count, 'diary entry', 'diary entries'),
+      })[kind](),
     profile_age: (age: number) => `${age} years old`,
     profile_reorder: 'Drag to reorder',
     profile_more: 'Load more',

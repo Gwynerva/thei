@@ -418,6 +418,20 @@ export default defineI18nModule({
     profile_personal_hint:
       'Персональные настройки применяются сразу в этом браузере',
     profile_avatar_count: (count: number) => `1 из ${count}`,
+    profile_counter: (kind, count) =>
+      ({
+        project: () => plural(count, 'проект', 'проекта', 'проектов', false),
+        event: () => plural(count, 'событие', 'события', 'событий', false),
+        'diary-entry': () =>
+          plural(count, 'запись', 'записи', 'записей', false),
+      })[kind](),
+    profile_counter_label: (kind, count) =>
+      ({
+        project: () => plural(count, 'проект', 'проекта', 'проектов'),
+        event: () => plural(count, 'событие', 'события', 'событий'),
+        'diary-entry': () =>
+          `${plural(count, 'запись', 'записи', 'записей')} дневника`,
+      })[kind](),
     profile_age: (age: number) => plural(age, 'год', 'года', 'лет'),
     profile_reorder: 'Перетащите для сортировки',
     profile_more: 'Загрузить ещё',

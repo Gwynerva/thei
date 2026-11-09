@@ -26,12 +26,19 @@ const panelData = computed<PublicDetailPanelData>(() => ({
 // that lands there opens it.
 const sheet = useTemplateRef<{ open: () => Promise<void> }>('sheet');
 useLandingSheet(() => void sheet.value?.open());
+
+// The entry of the contents the reader is in, lit in the sidebar and the sheet.
+const main = useTemplateRef<HTMLElement>('main');
+const activeContent = useActiveContentHeading(
+  main,
+  () => panelData.value.contents ?? [],
+);
 </script>
 
 <template>
   <PublicSheet ref="sheet" :title="phrase.public_details_overview">
     <template #summary><PublicDetailMetrics :data="panelData" /></template>
-    <PublicDetailPanel :data="panelData" />
+    <PublicDetailPanel :data="panelData" :active-content="activeContent" />
   </PublicSheet>
   <div
     class="grid min-w-0 items-start gap-md
@@ -39,11 +46,11 @@ useLandingSheet(() => void sheet.value?.open());
       sm:grid-cols-[minmax(0,50rem)_minmax(16rem,17rem)] sm:justify-between
       sm:gap-lg sm:pb-0"
   >
-    <div class="max-w-200 min-w-0">
+    <div ref="main" class="max-w-200 min-w-0">
       <slot></slot>
     </div>
     <PublicStickyAside>
-      <PublicDetailPanel :data="panelData" />
+      <PublicDetailPanel :data="panelData" :active-content="activeContent" />
     </PublicStickyAside>
   </div>
 </template>

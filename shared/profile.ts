@@ -8,12 +8,7 @@ import type {
   NamedExternalLinkListItem,
 } from './external-link';
 import type { MediaDescriptor } from './media';
-import type {
-  PublicEntitySummary,
-  PublicEntityReference,
-  PublicSecretReference,
-  PublicTagListItem,
-} from './api/public';
+import type { PublicEntityReference, PublicTagListItem } from './api/public';
 import type { SiteAccessLevel } from './access-level';
 import type { LanguageCode } from './language';
 import type { StatusEditData, StatusHistoryItem } from './status';
@@ -88,13 +83,11 @@ export interface PublicProfileResponse {
   pinnedPages: ProfilePageLink[];
   externalLinks: NamedExternalLink[];
   showcaseProjects: PublicEntityReference[];
-  projects: {
-    count: number;
-    items: (PublicEntitySummary | PublicSecretReference)[];
-  };
-  events: {
-    count: number;
-    items: (PublicEntitySummary | PublicSecretReference)[];
+  /** Every project, event and diary entry, private ones included. */
+  counts: {
+    projects: number;
+    events: number;
+    diaryEntries: number;
   };
   tags: PublicTagListItem[];
 }

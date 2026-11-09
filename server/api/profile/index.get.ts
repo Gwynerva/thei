@@ -5,7 +5,7 @@ import {
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { publicContentPlainText } from '#layers/thei/shared/content';
 import { buildSeoDescription } from '#layers/thei/shared/seo-description';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, count, eq, sql } from 'drizzle-orm';
 import {
   getPinnedPages,
   getProfileHistory,
@@ -14,14 +14,10 @@ import {
 } from '../../thei/profile';
 import { buildPublicContentData } from '../../thei/public/content';
 import {
-  buildPublicEventSummary,
   buildPublicEntityReference,
-  buildPublicProjectSummary,
   buildPublicTagListItems,
-  canListPublicEntity,
 } from '../../thei/public/entities';
 import { siteViewer } from '../../thei/access-links/viewer';
-import { buildSecretReference } from '../../thei/public/secret';
 import { listPublicTagCountsByUse } from '../../thei/public/tags';
 
 export default defineEventHandler(
@@ -30,13 +26,13 @@ export default defineEventHandler(
     const { db, schema } = THEI_SERVER.useDb();
     const identity = await getProfileIdentity();
     const p = identity.profile;
-    // Recent items include those a visitor may not see: they are presented as
-    // secrets, and the counters report the real totals.
-    const allProjects = db
-      .select()
-      .from(schema.projects)
-      .all()
-      .sort((a, b) => b.updatedAt - a.updatedAt);
+    // The counters report the real totals, private entries included.
+    const total = (
+      table:
+        | typeof schema.projects
+        | typeof schema.events
+        | typeof schema.diaryEntries,
+    ) => db.select({ value: count() }).from(table).get()?.value ?? 0;
     const showcaseProjects = db
       .select()
       .from(schema.projects)
@@ -51,11 +47,6 @@ export default defineEventHandler(
       .orderBy(sql`random()`)
       .limit(12)
       .all();
-    const allEvents = db
-      .select()
-      .from(schema.events)
-      .all()
-      .sort((a, b) => b.updatedAt - a.updatedAt);
     const tags = listPublicTagCountsByUse(isAdmin).slice(0, 5);
     const [
       aboutContent,
@@ -63,9 +54,7 @@ export default defineEventHandler(
       externalLinks,
       avatars,
       statuses,
-      projectItems,
       showcaseItems,
-      eventItems,
       tagItems,
       aboutRow,
     ] = await Promise.all([
@@ -81,25 +70,7 @@ export default defineEventHandler(
       getProfileLinks(isAdmin),
       getProfileHistory('avatars', undefined, false, 1),
       getProfileHistory('statuses', undefined, false, 1),
-      Promise.all(
-        allProjects
-          .slice(0, 3)
-          .map((project) =>
-            canListPublicEntity(project.access, isAdmin)
-              ? buildPublicProjectSummary(project, isAdmin)
-              : buildSecretReference('project', project.projectUuid),
-          ),
-      ),
       Promise.all(showcaseProjects.map(buildPublicEntityReference)),
-      Promise.all(
-        allEvents
-          .slice(0, 3)
-          .map((event) =>
-            canListPublicEntity(event.access, isAdmin)
-              ? buildPublicEventSummary(event, siteViewer(isAdmin))
-              : buildSecretReference('event', event.eventUuid),
-          ),
-      ),
       buildPublicTagListItems(tags),
       THEI_SERVER.content.findByOwner('profile', PROFILE_ID, 'profile-about'),
     ]);
@@ -124,8 +95,11 @@ export default defineEventHandler(
       pinnedPages,
       externalLinks,
       showcaseProjects: showcaseItems,
-      projects: { count: allProjects.length, items: projectItems },
-      events: { count: allEvents.length, items: eventItems },
+      counts: {
+        projects: total(schema.projects),
+        events: total(schema.events),
+        diaryEntries: total(schema.diaryEntries),
+      },
       tags: tagItems,
     };
   },

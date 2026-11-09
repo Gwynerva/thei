@@ -34,8 +34,8 @@ useHashDisclosure('#avatars', open, history.load);
 </script>
 <template>
   <section
-    class="overflow-hidden rounded-normal border border-border-1 bg-bg-2
-      shadow-lg shadow-shadow-1"
+    class="@container overflow-hidden rounded-normal border border-border-1
+      bg-bg-2 shadow-lg shadow-shadow-1"
   >
     <div
       class="relative aspect-3/1 max-h-80 w-full overflow-hidden bg-bg-accent"
@@ -52,9 +52,11 @@ useHashDisclosure('#avatars', open, history.load);
         class="size-full min-w-full"
       /><GridPattern v-else class="absolute inset-0 opacity-35" />
     </div>
+    <!-- The counters stand beside the name on a wide card and on a line of
+         their own under it on a narrower one. -->
     <div
       class="relative flex flex-col items-center gap-md px-md pb-md sm:flex-row
-        sm:items-start sm:px-md"
+        sm:flex-wrap sm:items-start sm:px-md @3xl:flex-nowrap"
     >
       <button
         type="button"
@@ -83,29 +85,21 @@ useHashDisclosure('#avatars', open, history.load);
           >{{ phrase.profile_avatar_count(profile.avatarCount) }}</span
         >
       </button>
-      <div class="min-w-0 flex-1 text-center sm:pt-md sm:text-left">
-        <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">
+      <div class="w-full min-w-0 flex-1 text-center sm:pt-md sm:text-left">
+        <h1 class="text-3xl font-bold tracking-tight wrap-anywhere sm:text-4xl">
           {{ publicText(profile.displayName) }}
         </h1>
-        <p v-if="profile.slogan" class="mt-xs font-bold text-text-2">
+        <p
+          v-if="profile.slogan"
+          class="mt-xs font-bold wrap-anywhere text-text-2"
+        >
           {{ publicText(profile.slogan) }}
         </p>
       </div>
-      <div
-        class="flex shrink-0 flex-wrap justify-center gap-sm sm:grid
-          sm:grid-cols-[max-content_max-content] sm:justify-end sm:gap-x-sm
-          sm:gap-y-sm sm:pt-md"
-      >
-        <ProfileSiteStats
-          kind="project"
-          :count="profile.projects.count"
-          :items="profile.projects.items"
-        /><ProfileSiteStats
-          kind="event"
-          :count="profile.events.count"
-          :items="profile.events.items"
-        />
-      </div>
+      <ProfileSiteStats
+        :counts="profile.counts"
+        class="w-full shrink-0 @3xl:w-auto @3xl:pt-md"
+      />
     </div>
     <div
       v-if="open"

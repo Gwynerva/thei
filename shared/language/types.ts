@@ -287,6 +287,16 @@ export type LanguagePhrases = {
   profile_about_description: string;
   profile_personal_hint: string;
   profile_avatar_count: (count: number) => string;
+  /** The word under a counter of the home page's header, without its number. */
+  profile_counter: (
+    kind: 'project' | 'event' | 'diary-entry',
+    count: number,
+  ) => string;
+  /** The same counter read whole, number and all. */
+  profile_counter_label: (
+    kind: 'project' | 'event' | 'diary-entry',
+    count: number,
+  ) => string;
   profile_age: (age: number) => string;
   profile_reorder: string;
   profile_more: string;
