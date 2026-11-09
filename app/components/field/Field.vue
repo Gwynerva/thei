@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { AiOfferPlace } from '#layers/thei/shared/ai-entity';
-import { provideFieldLabelName } from './field-label';
+import { provideFieldLabelName } from './field-label-name';
 
 /**
  * A field of a form. In an entity's form it names the place `ai` its

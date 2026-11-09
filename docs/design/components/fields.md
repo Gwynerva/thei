@@ -108,7 +108,7 @@ The other controls in `app/components/field/`: `FieldInput`, `FieldTextarea`,
 `FieldOptions` is a row of buttons, the chosen one pressed (`aria-pressed`),
 each named by its words; in a `Field` with a label, the row is a group named
 by the label's words (`aria-labelledby`): the field's first `FieldLabel`
-wears the id `Field` gives it (`app/components/field/field-label.ts`). The
+wears the id `Field` gives it (`app/components/field/field-label-name.ts`). The
 access of an entity is chosen from `app/components/field/access-options.ts`. A button holds only what a button may — `span`s, never a `div` —
 so its name reads the same to anything that reads the page.
 

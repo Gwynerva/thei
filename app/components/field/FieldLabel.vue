@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { wearFieldLabelName } from './field-label';
+import { wearFieldLabelName } from './field-label-name';
 
 const props = defineProps<{
   required?: boolean;

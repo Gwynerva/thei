@@ -13,12 +13,7 @@ import {
   escapeHtmlAttribute,
   escapeHtmlText,
 } from './html';
-import {
-  directiveAttributeValue,
-  parseEditMarkdown,
-  writeEditMarkdown,
-  type MarkTag,
-} from './syntax';
+import { parseEditMarkdown, writeEditMarkdown, type MarkTag } from './syntax';
 
 export { decodeHtmlEntities, escapeHtmlAttribute, escapeHtmlText };
 
@@ -95,9 +90,7 @@ function openNode(tag: string, source: string): Container | null {
         type: 'textDirective',
         name: 'hint',
         attributes: {
-          note: directiveAttributeValue(
-            parseHtmlAttributes(source)['data-content-hint'] ?? '',
-          ),
+          note: parseHtmlAttributes(source)['data-content-hint'] ?? '',
         },
         children: [],
       } as unknown as Container;

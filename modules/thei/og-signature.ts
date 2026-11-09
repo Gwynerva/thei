@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import chokidar from 'chokidar';
 import { addTemplate, updateTemplates, useLogger } from 'nuxt/kit';
 import type { Nuxt } from 'nuxt/schema';
@@ -77,12 +77,29 @@ export async function computeOgTemplateSignature(
       hash.update('\0');
     }
   }
-  const require = createRequire(join(theiPath, 'package.json'));
-  for (const name of PACKAGES) {
-    const { version } = require(`${name}/package.json`) as { version: string };
-    hash.update(`${name}@${version}\0`);
-  }
+  for (const name of PACKAGES)
+    hash.update(`${name}@${await packageVersion(theiPath, name)}\0`);
   return hash.digest('hex').slice(0, 32);
+}
+
+/**
+ * The installed version of a package. Its `package.json` is found from the
+ * file the package resolves to, since a package's exports may not list it.
+ */
+async function packageVersion(theiPath: string, name: string) {
+  const require = createRequire(join(theiPath, 'package.json'));
+  let dir = dirname(require.resolve(name));
+  while (dir !== dirname(dir)) {
+    const manifest = await readFile(join(dir, 'package.json'), 'utf8').catch(
+      () => undefined,
+    );
+    const parsed = manifest
+      ? (JSON.parse(manifest) as { name?: string; version?: string })
+      : undefined;
+    if (parsed?.name === name && parsed.version) return parsed.version;
+    dir = dirname(dir);
+  }
+  throw new Error(`No package.json found for ${name}`);
 }
 
 /**

@@ -185,7 +185,7 @@ describe('editing markdown: serialize', () => {
 
 ::card[См. событие]{to="thei:event/e-1#top"}
 
-::embed{url="https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s"}
+::embed{url="https://www.youtube.com/watch?v=dQw4w9WgXcQ&#x26;t=42s"}
 
 ::::private{#ps1}
 :::spoiler
@@ -481,21 +481,18 @@ describe('editing markdown: marks side by side', () => {
     }
   });
 
-  it('writes marks as tags where their stars would run together', () => {
-    for (const text of [
-      '<b>Note:</b><i>text</i>',
-      '<b><i>a</i></b><i>b</i>',
-      'é<s>:x</s>',
-      '<b>Ура!</b>🎉 и 😀<i>.x</i>',
-      'a<br><b>Note:</b><i>text</i>',
-    ]) {
+  it('writes underscores or a reference where stars would run together', () => {
+    for (const [text, markdown] of [
+      ['<b>Note:</b><i>text</i>', '**Note:**_text_'],
+      ['a<br><b>Note:</b><i>text</i>', '**Note:**_text_'],
+      ['<b><i>a</i></b><i>b</i>', '__*a*__*b*'],
+      ['é<s>:x</s>', '&#xE9;~~\\:x~~'],
+      ['<b>Ура!</b>🎉 и 😀<i>.x</i>', '**Ура!**&#x1F389; и &#x1F600;*.x*'],
+    ] as const) {
       const result = roundTrip(text);
-      expect(result.markdown).toContain('<');
+      expect(result.markdown).toContain(markdown);
       expect(result.text).toBe(text);
     }
-    expect(roundTrip('<b>Note:</b><i>text</i>').markdown).toBe(
-      '<b>Note:</b><i>text</i>',
-    );
   });
 
   it('keeps stars where they read back as they are', () => {

@@ -42,18 +42,6 @@ export function parseEditMarkdown(markdown: string): Root {
 }
 
 /**
- * A directive's attribute value, made safe to write as it is. The writer
- * quotes it but leaves an ampersand alone, and keeps a text directive's line
- * breaks raw — where an empty line would end the paragraph mid-directive. Both
- * are written as character references, which the reader decodes back.
- */
-export function directiveAttributeValue(value: string): string {
-  return value
-    .replace(/&(?=#?[a-z0-9]+;)/gi, '&#38;')
-    .replace(/\r\n|\r|\n/g, '&#10;');
-}
-
-/**
  * The constructs the label of a block's directive is written in: a caption,
  * a link's note.
  */
@@ -95,11 +83,14 @@ const writeDirective = directives.handlers!.textDirective as Handle & {
 };
 
 /**
- * A text directive — a hint — as the library writes it, but for one thing.
- * Inside the label of a directive — a hint in a caption, or in another hint —
- * a square bracket in its attributes would close that label early and spill
- * the rest of it, so there it is written as a character reference, which the
- * reader decodes back. The node itself is left as it was.
+ * A text directive — a hint — as the library writes it, but for its
+ * attributes. The library escapes an ampersand and the quote there, yet keeps
+ * a text directive's line breaks raw — where an empty line would end the
+ * paragraph mid-directive — so they are written as character references,
+ * which the reader decodes back. Inside the label of a directive — a hint in a
+ * caption, or in another hint — a square bracket in its attributes would
+ * close that label early and spill the rest of it, so there it is written as
+ * a character reference too. The node itself is left as it was.
  */
 function writeTextDirective(
   node: TextDirective,
@@ -107,18 +98,22 @@ function writeTextDirective(
   state: State,
   info: Info,
 ): string {
-  const inLabel = ANY_LABEL.some((name) => state.stack.includes(name));
-  if (!inLabel || !node.attributes)
-    return writeDirective(node, parent, state, info);
-  const attributes = Object.fromEntries(
-    Object.entries(node.attributes).map(([key, value]) => [
-      key,
-      typeof value === 'string'
-        ? value.replaceAll('[', '&#91;').replaceAll(']', '&#93;')
-        : value,
-    ]),
-  );
-  return writeDirective({ ...node, attributes }, parent, state, info);
+  const written = writeDirective(node, parent, state, info);
+  if (!node.attributes) return written;
+  // The attributes come last: written alone, after the bare name, they are
+  // the very end of what was written whole.
+  const name = `:${node.name}`;
+  const raw = writeDirective(
+    { ...node, children: [] },
+    parent,
+    state,
+    info,
+  ).slice(name.length);
+  if (!written.endsWith(raw)) return written;
+  const inLabel = ANY_LABEL.some((label) => state.stack.includes(label));
+  let safe = raw.replace(/\r\n|\r|\n/g, '&#10;');
+  if (inLabel) safe = safe.replaceAll('[', '&#91;').replaceAll(']', '&#93;');
+  return written.slice(0, written.length - raw.length) + safe;
 }
 writeTextDirective.peek = writeDirective.peek;
 
