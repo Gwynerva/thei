@@ -38,8 +38,14 @@ import { eventDeleteModal } from './event-delete-modal';
 import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
 import { externalLinkListItems } from '#layers/thei/shared/external-link';
 import { useExternalLinks } from '#layers/thei/app/composables/external-links';
+import {
+  applySavedExcerptIds,
+  changedOnlyInExcerpt,
+  excerptsFormKey,
+} from '#layers/thei/app/components/admin/excerpts/excerpts-form';
 
 const { eventUuid } = defineProps<{ eventUuid?: string }>();
+const route = useRoute();
 const initialPublicId = useState(`new-event-public-id-${useId()}`, () =>
   randomId(14),
 );
@@ -86,6 +92,50 @@ const externalLinks = useExternalLinks();
 
 const isEdit = computed(() => Boolean(eventUuid));
 provideContentOwner('event', () => eventUuid);
+// The event's excerpts: named parts of it about something in the archive,
+// each in a modal of its own, as a project's sections are.
+provide(excerptsFormKey, {
+  parentType: 'event',
+  parentId: () => resolvedEventUuid.value,
+  parentTitle: () => eventData.value.title.trim() || phrase.value.new_event,
+  address: () => ({
+    type: 'event',
+    humanReadableSlug: eventData.value.humanReadableSlug,
+    publicId: eventData.value.publicId,
+  }),
+  savedAddress: () => {
+    const saved = JSON.parse(savedSnapshot.value) as EventEditData;
+    return isEdit.value && saved.publicId
+      ? {
+          type: 'event',
+          humanReadableSlug: saved.humanReadableSlug,
+          publicId: saved.publicId,
+        }
+      : undefined;
+  },
+  excerpts: () => eventData.value.excerpts ?? [],
+  setExcerpts: (items) => {
+    eventData.value.excerpts = items;
+  },
+  savedExcerpts: () =>
+    (JSON.parse(savedSnapshot.value) as EventEditData).excerpts ?? [],
+  saveAfterItemEdit: (item, excerptUuid) => {
+    if (saving.value || needs.blocked.value || !isEdit.value || !isDirty.value)
+      return;
+    if (
+      !changedOnlyInExcerpt(
+        eventPayload() as unknown as Record<string, unknown>,
+        savedSnapshot.value,
+        CONTENT_FIELDS,
+        item,
+        excerptUuid,
+      )
+    )
+      return;
+    void save();
+  },
+  saved: () => entityAi.panel.value,
+});
 const saving = ref(false);
 const savedSnapshot = ref(JSON.stringify(eventPayload()));
 // Begun from the quick search: the query is the title, as if typed.
@@ -98,7 +148,7 @@ if (!isEdit.value && titleFromQuery()) eventData.value.title = titleFromQuery();
 const formVersion = ref<number>();
 /** The event's uuid, once read: it may have been opened by its public id. */
 const resolvedEventUuid = ref(eventUuid);
-provideEntityAi({
+const entityAi = provideEntityAi({
   ref: () =>
     resolvedEventUuid.value ? `event:${resolvedEventUuid.value}` : undefined,
   form: () => eventData.value,
@@ -169,6 +219,7 @@ if (isEdit.value) {
     externalLinks: externalLinkListItems(data.externalLinks),
     tags: data.tags,
     relations: data.relations ?? [],
+    excerpts: data.excerpts ?? [],
     action: data.action,
     reminder: data.reminder,
     synonyms: data.synonyms,
@@ -182,10 +233,13 @@ if (isEdit.value) {
   markSaved();
   formVersion.value = data.version;
   resolvedEventUuid.value = data.eventUuid;
+  // The query may ask for an excerpt to be opened; it has to survive the
+  // move to the UUID address.
   if (eventUuid !== data.eventUuid)
-    await navigateTo(`/admin/events/${data.eventUuid}/edit/`, {
-      replace: true,
-    });
+    await navigateTo(
+      { path: `/admin/events/${data.eventUuid}/edit/`, query: route.query },
+      { replace: true },
+    );
 }
 
 watch(
@@ -227,6 +281,7 @@ async function save() {
       return;
     }
     formVersion.value = result.version;
+    applySavedExcerptIds(eventData.value.excerpts, result.excerpts);
     const previousAction = eventData.value.action;
     eventData.value.action = result.action;
     actionMedia.applySaved(previousAction, result.action);
@@ -276,6 +331,7 @@ function emptyData(): EventFormData {
     externalLinks: [],
     tags: [],
     relations: [],
+    excerpts: [],
     action: { ...DEFAULT_PROJECT_ACTION },
     reminder: '',
     synonyms: [],
@@ -302,6 +358,7 @@ function eventPayload(): EventEditData {
     externalLinks: value.externalLinks,
     tags: value.tags,
     relations: value.relations,
+    excerpts: value.excerpts,
     action: value.action,
     reminder: value.reminder,
     synonyms: value.synonyms,
@@ -443,6 +500,7 @@ function clone<T>(value: T): T {
       />
     </Box>
 
+    <AdminExcerpts />
     <ProjectActionSettings
       :section-title="phrase.event_action"
       :section-description="phrase.event_action_hint"

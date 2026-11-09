@@ -12,6 +12,12 @@ import { diaryDeleteModal } from '../composables';
 import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
 import type { FormNeed } from '#layers/thei/app/composables/form-needs';
 import { accessOptions } from '#layers/thei/app/components/field/access-options';
+import { diaryEntrySaysSomething } from '#layers/thei/shared/admin/diary';
+import {
+  applySavedExcerptIds,
+  changedOnlyInExcerpt,
+  excerptsFormKey,
+} from '#layers/thei/app/components/admin/excerpts/excerpts-form';
 
 const { diaryUuid } = defineProps<{ diaryUuid?: string }>();
 
@@ -60,7 +66,7 @@ const savedSnapshot = ref(JSON.stringify(diaryPayload()));
  * refused rather than written over it.
  */
 const formVersion = ref<number>();
-provideEntityAi({
+const entityAi = provideEntityAi({
   ref: () => (diaryUuid ? `diary-entry:${diaryUuid}` : undefined),
   form: () => diaryData.value,
   version: () => formVersion.value,
@@ -72,6 +78,43 @@ const isDirty = computed(
 // Where the entry's texts keep their drafts and versions. A new entry keeps
 // them too, and its first save hands them over.
 provideContentOwner('diary-entry', () => diaryUuid);
+// The entry's excerpts: named parts of the day about something in the
+// archive, each in a modal of its own, as a project's sections are.
+provide(excerptsFormKey, {
+  parentType: 'diary-entry',
+  parentId: () => diaryUuid,
+  parentTitle: () => ownerTitle.value,
+  address: () =>
+    diaryData.value.date
+      ? { type: 'diary-entry', date: diaryData.value.date }
+      : undefined,
+  savedAddress: () => {
+    const { date } = JSON.parse(savedSnapshot.value) as DiaryEditData;
+    return isEdit.value && date ? { type: 'diary-entry', date } : undefined;
+  },
+  excerpts: () => diaryData.value.excerpts ?? [],
+  setExcerpts: (items) => {
+    diaryData.value.excerpts = items;
+  },
+  savedExcerpts: () =>
+    (JSON.parse(savedSnapshot.value) as DiaryEditData).excerpts ?? [],
+  saveAfterItemEdit: (item, excerptUuid) => {
+    if (saving.value || needs.blocked.value || !isEdit.value || !isDirty.value)
+      return;
+    if (
+      !changedOnlyInExcerpt(
+        diaryPayload() as unknown as Record<string, unknown>,
+        savedSnapshot.value,
+        CONTENT_FIELDS,
+        item,
+        excerptUuid,
+      )
+    )
+      return;
+    void save();
+  },
+  saved: () => entityAi.panel.value,
+});
 useLeaveGuard({ dirty: () => isDirty.value });
 /**
  * The days that already hold an entry.
@@ -104,8 +147,20 @@ const needs = useFormNeeds(
       });
     if (!diaryData.value.access)
       list.push({ key: 'access', label: phrase.value.diary_access });
-    if (isContentEmpty(diaryData.value.content?.data))
-      list.push({ key: 'content', label: phrase.value.diary_content });
+    // A day is told by its text or by its excerpts; one of them it needs.
+    if (
+      !diaryEntrySaysSomething(
+        diaryData.value.content,
+        diaryData.value.excerpts,
+      )
+    )
+      list.push({
+        key: 'content',
+        label: phrase.value.form_either(
+          phrase.value.diary_content,
+          phrase.value.excerpts,
+        ),
+      });
     return list;
   },
   {
@@ -124,6 +179,7 @@ if (isEdit.value) {
     access: data.access,
     content: data.content,
     relations: data.relations ?? [],
+    excerpts: data.excerpts ?? [],
     reminder: data.reminder,
     notes: data.notes ?? null,
   };
@@ -149,6 +205,7 @@ async function save() {
       return;
     }
     formVersion.value = result.version;
+    applySavedExcerptIds(diaryData.value.excerpts, result.excerpts);
     stampSavedContent(diaryData.value, savedSnapshot.value, CONTENT_FIELDS);
     markSaved();
     // A new entry leaves for its own edit page, which loads the days afresh.
@@ -205,6 +262,7 @@ function emptyData(): DiaryEditData {
     access: ProjectEventAccessLevel.Public,
     content: null,
     relations: [],
+    excerpts: [],
     reminder: '',
     notes: null,
   };
@@ -217,6 +275,7 @@ function diaryPayload(): DiaryEditData {
     access: value.access,
     content: value.content,
     relations: value.relations,
+    excerpts: value.excerpts,
     reminder: value.reminder,
     notes: value.notes,
   };
@@ -291,7 +350,9 @@ useRegisterAdminBarContextButton(
         </Field>
       </div>
       <Field need="content">
-        <FieldLabel required>{{ phrase.diary_content }}</FieldLabel>
+        <FieldLabel :required="!diaryData.excerpts?.length">{{
+          phrase.diary_content
+        }}</FieldLabel>
         <FieldContentEditor
           v-model="diaryData.content"
           content-slot="diary-body"
@@ -302,6 +363,7 @@ useRegisterAdminBarContextButton(
       </Field>
     </Box>
 
+    <AdminExcerpts />
     <AdminRelations
       v-model="relationsModel"
       :owner="diaryUuid ? { type: 'diary-entry', id: diaryUuid } : undefined"

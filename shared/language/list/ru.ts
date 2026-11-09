@@ -462,6 +462,8 @@ export default defineI18nModule({
       plural(count, 'статус', 'статуса', 'статусов'),
     life_activity_secret: (count) =>
       plural(count, 'скрытая запись', 'скрытые записи', 'скрытых записей'),
+    life_activity_excerpts: (count) =>
+      plural(count, 'отрывок', 'отрывка', 'отрывков'),
     life_activity_diary: (count) =>
       plural(count, 'запись дневника', 'записи дневника', 'записей дневника'),
     projects: 'Проекты',
@@ -510,11 +512,13 @@ export default defineI18nModule({
     section_ongoing: 'Продолжается раздел',
     section_was_ongoing: 'Продолжался раздел',
     diary_written: 'Запись в дневнике',
+    excerpt_written: 'Написан отрывок',
     secret_event: (codename: string) => `Секретное событие ${codename}`,
     secret_project: (codename: string) => `Секретный проект ${codename}`,
     secret_page: (codename: string) => `Секретная страница ${codename}`,
     secret_diary_entry: (codename: string) => `Секретная запись ${codename}`,
     secret_section: (codename: string) => `Секретный раздел ${codename}`,
+    secret_excerpt: (codename: string) => `Секретный отрывок ${codename}`,
     secret_media: (codename: string) => `Секретное медиа ${codename}`,
     secret_file: (codename: string) => `Секретный файл ${codename}`,
     secret_hint: 'Скрыто от посетителей',
@@ -532,6 +536,7 @@ export default defineI18nModule({
         'profile-avatar': 'Аватарки',
         'profile-status': 'Статусы',
         'diary-entry': 'Записи дневника',
+        excerpt: 'Отрывки',
       })[kind] ?? kind,
     public_timeline_from: (date) => `С ${date}`,
     public_timeline_until: (date) => `По ${date}`,
@@ -1517,6 +1522,29 @@ export default defineI18nModule({
     content_section_add: 'Добавить раздел',
     content_section_sort: 'Изменить порядок раздела',
     delete_content_section: 'Удалить раздел',
+    excerpts_hint:
+      'Названные части этого текста про что-то ещё в архиве, у каждой своя страница.',
+    excerpt_add: 'Добавить отрывок',
+    excerpt_title: 'Название отрывка',
+    excerpt_summary: 'Суть отрывка',
+    excerpt_content: 'Текст отрывка',
+    excerpt_banner: 'Баннер',
+    excerpt_banner_hint:
+      'Широкое изображение вверху страницы отрывка и на его карточках.',
+    excerpt_private: 'Приватный отрывок',
+    excerpt_sort: 'Переставить отрывок',
+    delete_excerpt: 'Удалить отрывок',
+    excerpt_delete_entity: 'отрывок',
+    edit_excerpt: 'Изменить отрывок',
+    excerpt_about_hint:
+      'Проекты, события и записи дневника, которым посвящён этот отрывок.',
+    excerpts_empty: 'Отрывков пока нет.',
+    excerpt_without_about: 'Без целевой сущности',
+    relation_recommendation_excerpt: 'Есть отрывок про это',
+    excerpts_on_delete_keep: 'Оставить отрывки про него',
+    excerpts_on_delete_delete: 'Удалить и отрывки',
+    excerpts_on_delete_count: (related, onlyTarget) =>
+      `Про него ${plural(related, 'отрывок', 'отрывка', 'отрывков')}, ${onlyTarget} из них — только про него.`,
     content_empty: 'Контента пока нет',
     content_text_empty: 'Текстового контента нет',
     edit_content: (title) => `Редактировать: ${title}`,
@@ -2808,5 +2836,6 @@ export default defineI18nModule({
     ai_error: 'Не получилось. Попробуйте ещё раз.',
     ai_off_notice: 'ИИ в Thei выключен.',
     x_sections: (count) => plural(count, 'раздел', 'раздела', 'разделов'),
+    x_excerpts: (count) => plural(count, 'отрывок', 'отрывка', 'отрывков'),
   },
 });

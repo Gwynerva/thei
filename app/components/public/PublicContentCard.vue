@@ -92,6 +92,11 @@ const props = defineProps<{
    * the relation's word when it has a direction, and the owner's reason.
    */
   relation?: { type: RelationType; note?: string };
+  /**
+   * The excerpts of an entry or an event, named under its words on the
+   * Life, each leading to its own page.
+   */
+  parts?: { title: string; href: string }[];
 }>();
 
 const datePresentation = computed(
@@ -370,6 +375,26 @@ const hasFooter = computed(
           italic
           class="-mx-[0.75em] line-clamp-2 px-[0.75em] text-sm text-text-2"
         />
+        <!-- The links stay clickable above the card's own full-size link. -->
+        <span
+          v-if="parts?.length"
+          class="flex min-w-0 flex-wrap items-center gap-x-xs gap-y-0.5 text-xs"
+          data-card-parts
+        >
+          <Icon
+            name="excerpt"
+            class="shrink-0 text-text-3"
+            aria-hidden="true"
+          />
+          <template v-for="(part, index) in parts" :key="part.href">
+            <TheiLink
+              :to="part.href"
+              class="pointer-events-auto relative z-3 font-semibold text-text-2
+                transition hocus:text-accent"
+              >{{ publicText(part.title) }}</TheiLink
+            ><span v-if="index < parts.length - 1" aria-hidden="true">·</span>
+          </template>
+        </span>
       </div>
 
       <div

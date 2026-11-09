@@ -8,6 +8,7 @@ export type SecretEntityKind =
   | 'page'
   | 'diary-entry'
   | 'project-section'
+  | 'excerpt'
   | 'media'
   | 'file';
 
@@ -37,6 +38,7 @@ export function buildSecretReference(
     page: phrase.secret_page,
     'diary-entry': phrase.secret_diary_entry,
     'project-section': phrase.secret_section,
+    excerpt: phrase.secret_excerpt,
     media: phrase.secret_media,
     file: phrase.secret_file,
   }[kind](codename);

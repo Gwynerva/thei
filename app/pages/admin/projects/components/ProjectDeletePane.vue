@@ -13,6 +13,8 @@ const props = defineProps<{
 }>();
 
 const deleting = ref(false);
+/** What becomes of the excerpts about the project. */
+const excerpts = ref<'keep' | 'delete'>('keep');
 
 const projectTitle = computed(() => props.modalData.projectTitle.trim());
 
@@ -22,9 +24,10 @@ async function handleDelete() {
   if (deleting.value) return;
   deleting.value = true;
   try {
-    await requestFetch(`/api/admin/projects/${props.modalData.projectUuid}`, {
-      method: 'DELETE',
-    });
+    await requestFetch(
+      `/api/admin/projects/${props.modalData.projectUuid}?excerpts=${excerpts.value}`,
+      { method: 'DELETE' },
+    );
     emit('modalResult', { type: 'deleted' });
   } finally {
     deleting.value = false;
@@ -40,5 +43,10 @@ async function handleDelete() {
     :confirmation-name="projectTitle"
     :deleting="deleting"
     @confirm="handleDelete"
-  />
+  >
+    <AdminExcerptsOnDelete
+      v-model="excerpts"
+      :target="{ type: 'project', id: modalData.projectUuid }"
+    />
+  </DeleteConfirmationPane>
 </template>

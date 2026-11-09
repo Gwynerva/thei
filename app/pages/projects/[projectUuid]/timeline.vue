@@ -134,6 +134,10 @@ watch(filter, (value) => {
       </template>
     </PublicHero>
 
+    <!-- The year at a glance before the feed: the project's own days. -->
+    <div class="m-auto w-(--width-wide) px-window pt-lg">
+      <LifeActivityHeatmap :scope="scope" :base-path="base" />
+    </div>
     <LifeFeed
       v-if="resource.data.value"
       class="pt-lg"

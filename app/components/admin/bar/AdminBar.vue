@@ -7,6 +7,7 @@ import {
 import { publicIdFromTagUrlPart } from '#layers/thei/shared/tag-url';
 import { publicIdFromEventUrlPart } from '#layers/thei/shared/event-url';
 import { dateFromDiaryUrlPart } from '#layers/thei/shared/diary-url';
+import { publicIdFromExcerptUrlPart } from '#layers/thei/shared/excerpt-url';
 import { parsePublicSearchFilters } from '#layers/thei/shared/public-search';
 import { contentHistoryTransport } from '#layers/thei/app/composables/content-history/api';
 import {
@@ -86,6 +87,25 @@ onMounted(() => (mounted.value = true));
 const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
   if (mounted.value && registeredContextButton.value?.routePath === route.path)
     return registeredContextButton.value.props;
+
+  // An excerpt has no editor of its own either: the button opens its
+  // parent's editor with the excerpt's modal already open. A diary entry's
+  // editor is reached through the day's bridge.
+  const excerptPage =
+    /^\/(projects|events|diary)\/([^/]+)\/excerpts\/([^/]+)\/$/.exec(
+      route.path,
+    );
+  if (excerptPage) {
+    const [, kind, parentPart, excerptPart] = excerptPage;
+    const query = `?excerpt=${encodeURIComponent(publicIdFromExcerptUrlPart(excerptPart!))}`;
+    const to =
+      kind === 'projects'
+        ? `/admin/projects/${publicIdFromProjectUrlPart(parentPart!)}/edit/${query}`
+        : kind === 'events'
+          ? `/admin/events/${publicIdFromEventUrlPart(parentPart!)}/edit/${query}`
+          : `/admin/diary/by-date/${parentPart}/${query}`;
+    return { to, icon: 'edit', title: phrase.value.edit_excerpt };
+  }
 
   // A section has no editor of its own: the button opens the project's
   // editor with that section's modal already open.

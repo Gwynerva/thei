@@ -315,6 +315,7 @@ export type LanguagePhrases = {
   life_activity_statuses: (count: number) => string;
   life_activity_secret: (count: number) => string;
   life_activity_diary: (count: number) => string;
+  life_activity_excerpts: (count: number) => string;
   projects: string;
   events: string;
   excerpts: string;
@@ -361,11 +362,13 @@ export type LanguagePhrases = {
   section_ongoing: string;
   section_was_ongoing: string;
   diary_written: string;
+  excerpt_written: string;
   secret_event: (codename: string) => string;
   secret_project: (codename: string) => string;
   secret_page: (codename: string) => string;
   secret_diary_entry: (codename: string) => string;
   secret_section: (codename: string) => string;
+  secret_excerpt: (codename: string) => string;
   secret_media: (codename: string) => string;
   secret_file: (codename: string) => string;
   secret_hint: string;
@@ -1066,6 +1069,27 @@ export type LanguagePhrases = {
   content_section_add: string;
   content_section_sort: string;
   delete_content_section: string;
+  excerpts_hint: string;
+  excerpt_add: string;
+  excerpt_title: string;
+  excerpt_summary: string;
+  excerpt_content: string;
+  excerpt_banner: string;
+  excerpt_banner_hint: string;
+  excerpt_private: string;
+  excerpt_sort: string;
+  delete_excerpt: string;
+  excerpt_delete_entity: string;
+  edit_excerpt: string;
+  /** Under the excerpt's "About": which kinds it may be about. */
+  excerpt_about_hint: string;
+  excerpts_empty: string;
+  /** An excerpt left about nothing by a deleted target. */
+  excerpt_without_about: string;
+  relation_recommendation_excerpt: string;
+  excerpts_on_delete_keep: string;
+  excerpts_on_delete_delete: string;
+  excerpts_on_delete_count: (related: number, onlyTarget: number) => string;
   content_empty: string;
   content_text_empty: string;
   edit_content: (title: string) => string;
@@ -2073,4 +2097,5 @@ export type LanguagePhrases = {
   ai_error: string;
   ai_off_notice: string;
   x_sections: (count: number) => string;
+  x_excerpts: (count: number) => string;
 };

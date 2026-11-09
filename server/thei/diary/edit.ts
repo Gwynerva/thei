@@ -56,12 +56,9 @@ export async function readDiaryEdit(
     getRelations({ type: 'diary-entry', id: diaryUuid }),
     readExcerptsForForm({ type: 'diary-entry', id: diaryUuid }),
   ]);
-  // A day told by its excerpts alone keeps no text of its own.
-  if (!content && !excerpts.length)
-    throw createError({
-      statusCode: 500,
-      message: 'Diary entry content is missing',
-    });
+  // A day told by its excerpts alone keeps no text of its own; one left
+  // with neither, by the deletion of what its excerpts were about, opens
+  // in its form, which asks for a text or an excerpt before it saves.
   return {
     diaryUuid,
     version: stored.updatedAt,

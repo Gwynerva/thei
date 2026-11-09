@@ -69,10 +69,12 @@ describe('Life periods', () => {
     expect(parseLifeFilter('event,profile-avatar', scope)).toEqual(['event']);
     expect(
       parseLifeFilter(
-        'event,project-section,profile-status,diary-entry',
+        'event,project-section,excerpt,profile-status,diary-entry',
         scope,
       ),
     ).toBeUndefined();
+    // On the Life an excerpt is no kind of its own.
+    expect(parseLifeFilter('event,excerpt')).toEqual(['event']);
   });
 
   it('normalizes and compares last-viewed day markers', () => {

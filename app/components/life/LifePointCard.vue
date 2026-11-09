@@ -57,6 +57,7 @@ const description = computed(() => {
     'project-section:occurred': phrase.value.section_occurred,
     'project-section:created': phrase.value.section_created,
     'diary-entry:created': phrase.value.diary_written,
+    'excerpt:created': phrase.value.excerpt_written,
   };
   return labels[key] ?? phrase.value.life;
 });
@@ -210,8 +211,10 @@ const projects = computed(() =>
     :continuous-media="point.entityKind === 'project'"
     :titleless="point.entityKind === 'diary-entry'"
     :cloud="point.entityKind === 'diary-entry'"
+    :torn="point.entityKind === 'excerpt'"
     :projects="projects"
     :parent="parent"
+    :parts="point.excerpts"
     :tags="point.tags"
     :compact="compact"
     :hide-date="hideDate"
@@ -220,6 +223,7 @@ const projects = computed(() =>
     v-else
     secret
     :cloud="point.entityKind === 'diary-entry'"
+    :torn="point.entityKind === 'excerpt'"
     :title="point.title"
     :summary="point.summary"
     :label="markLabel ?? description"

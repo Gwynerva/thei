@@ -1,4 +1,5 @@
 import {
+  collectContentAssetUuids,
   createEmptyContentFieldValue,
   isContentEmpty,
   normalizeContentData,
@@ -70,6 +71,41 @@ export type ExcerptValue = Omit<ExcerptItem, 'relations'> & {
 };
 
 export class ExcerptError extends Error {}
+
+/**
+ * How many more times each file is placed in a list of excerpts than in the
+ * list as last saved — a banner, the files of a text — so the picker counts
+ * a file's uses with an excerpt still unsaved.
+ */
+export function excerptsAssetUsageDelta(
+  current: readonly ExcerptItem[],
+  saved: readonly ExcerptItem[],
+): Record<string, number> {
+  const count = (items: readonly ExcerptItem[]) => {
+    const counts: Record<string, number> = {};
+    const add = (assetUuid: string | undefined) => {
+      if (!assetUuid) return;
+      counts[assetUuid] = (counts[assetUuid] ?? 0) + 1;
+    };
+    for (const item of items) {
+      add(item.bannerAssetUuid);
+      collectContentAssetUuids(item.content?.data).forEach(add);
+    }
+    return counts;
+  };
+  const currentCounts = count(current);
+  const savedCounts = count(saved);
+  const assetUuids = new Set([
+    ...Object.keys(currentCounts),
+    ...Object.keys(savedCounts),
+  ]);
+  return Object.fromEntries(
+    Array.from(assetUuids, (assetUuid) => [
+      assetUuid,
+      (currentCounts[assetUuid] ?? 0) - (savedCounts[assetUuid] ?? 0),
+    ]).filter(([, delta]) => delta !== 0),
+  );
+}
 
 export function normalizeExcerpts(value: unknown): ExcerptItem[] | undefined {
   if (value === undefined) return undefined;

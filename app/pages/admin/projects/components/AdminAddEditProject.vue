@@ -46,6 +46,11 @@ import ProjectActionSettings from './ProjectActionSettings.vue';
 import { externalLinkListItems } from '#layers/thei/shared/external-link';
 import { useExternalLinks } from '#layers/thei/app/composables/external-links';
 import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
+import {
+  applySavedExcerptIds,
+  changedOnlyInExcerpt,
+  excerptsFormKey,
+} from '#layers/thei/app/components/admin/excerpts/excerpts-form';
 
 const { projectUuid } = defineProps<{ projectUuid?: string }>();
 const route = useRoute();
@@ -66,6 +71,7 @@ const projectData = ref<ProjectEditData>({
   cv: false,
   descriptionContent: null,
   sections: [],
+  excerpts: [],
   relations: [],
   externalLinks: [],
   tags: [],
@@ -107,6 +113,46 @@ const actionMedia = provideProjectActionMedia();
 const resolvedProjectUuid = ref<string | undefined>(projectUuid);
 provide(currentProjectUuidKey, resolvedProjectUuid);
 provideContentOwner('project', () => resolvedProjectUuid.value);
+// The project's excerpts: named parts of it about other entities, each in
+// a modal of its own, as its sections are.
+provide(excerptsFormKey, {
+  parentType: 'project',
+  parentId: () => resolvedProjectUuid.value,
+  parentTitle: () => projectData.value.title.trim() || phrase.value.new_project,
+  address: () => ({
+    type: 'project',
+    humanReadableSlug: projectData.value.humanReadableSlug,
+    publicId: projectData.value.publicId,
+  }),
+  savedAddress: () =>
+    isEdit.value && savedProjectData.value.publicId
+      ? {
+          type: 'project',
+          humanReadableSlug: savedProjectData.value.humanReadableSlug,
+          publicId: savedProjectData.value.publicId,
+        }
+      : undefined,
+  excerpts: () => projectData.value.excerpts ?? [],
+  setExcerpts: (items) => {
+    projectData.value.excerpts = items;
+  },
+  savedExcerpts: () => savedProjectData.value.excerpts ?? [],
+  saveAfterItemEdit: (item, excerptUuid) => {
+    if (saving.value || !canSave.value || !isEdit.value) return;
+    if (
+      !changedOnlyInExcerpt(
+        projectData.value as unknown as Record<string, unknown>,
+        savedSnapshot.value,
+        CONTENT_FIELDS,
+        item,
+        excerptUuid,
+      )
+    )
+      return;
+    void handleSave();
+  },
+  saved: () => entityAi.panel.value,
+});
 
 const showcaseItems = ref<ShowcaseAssetGetItem[]>([]);
 provide(showcaseItemsKey, showcaseItems);
@@ -144,7 +190,7 @@ if (!isEdit.value && titleFromQuery())
  */
 const formVersion = ref<number>();
 const headerError = ref<string | undefined>();
-provideEntityAi({
+const entityAi = provideEntityAi({
   ref: () =>
     resolvedProjectUuid.value
       ? `project:${resolvedProjectUuid.value}`
@@ -210,6 +256,7 @@ if (isEdit.value) {
     cv: data.cv,
     descriptionContent: data.descriptionContent ?? null,
     sections: data.sections ?? [],
+    excerpts: data.excerpts ?? [],
     iconAssetUuid: data.iconAssetUuid,
     bannerAssetUuid: data.bannerAssetUuid,
     showcaseAssets: (data.showcaseAssets ?? []).map((item) => ({
@@ -429,6 +476,7 @@ function applySavedStatuses(page: ProfileHistoryPage<StatusHistoryItem>) {
  */
 function applySavedContentItemIds(result: {
   sections: ProjectContentItemIdentity[];
+  excerpts: ProjectContentItemIdentity[];
 }) {
   const sectionUuids = new Map(
     result.sections.map(({ publicId, itemUuid }) => [publicId, itemUuid]),
@@ -436,6 +484,7 @@ function applySavedContentItemIds(result: {
   for (const section of projectData.value.sections ?? [])
     section.sectionUuid =
       sectionUuids.get(section.publicId) ?? section.sectionUuid;
+  applySavedExcerptIds(projectData.value.excerpts, result.excerpts);
 }
 
 function applySavedAction(action: ProjectEditData['action']) {
@@ -500,6 +549,7 @@ async function openDeleteProjectModal() {
       :add-label="phrase.project_new_status"
       :empty-label="phrase.project_status_empty"
     />
+    <AdminExcerpts />
     <ProjectContentItems />
     <AdminRelations
       v-model="relationsModel"

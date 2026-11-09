@@ -4,10 +4,12 @@ import {
   LIFE_ACTIVITY_TOTAL_KINDS,
   lifeActivityDayTotal,
   lifeActivityLevel,
+  lifeFilterKinds,
   type LifeActivityKind,
   type LifeActivityResponse,
   type LifeDay,
   type LifePoint,
+  type LifeScopeRef,
 } from '#layers/thei/shared/life';
 import { toDateString } from '#layers/thei/shared/date-range';
 import { lifeEntityKindIcon } from './life-entity-icon';
@@ -20,16 +22,25 @@ import TheiLink from '../TheiLink';
  * The grid answers "what did this year look like" at a glance, which a feed
  * cannot: it shows the quiet months as plainly as the busy ones. Picking a day
  * opens what actually happened, so the summary stays a way into the timeline
- * rather than a decoration.
+ * rather than a decoration. Read for one project, it is the project's own
+ * days, and a day opens on the project's chronology.
  */
+const { scope = { kind: 'life' }, basePath = '/life/' } = defineProps<{
+  scope?: LifeScopeRef;
+  /** Where a day opens: the chronology the grid belongs to. */
+  basePath?: string;
+}>();
+const scopeQuery = computed(() =>
+  scope.kind === 'project' ? { project: scope.publicId } : {},
+);
 const selectedYear = ref<number>();
 const selectedDate = ref<string>();
 const day = ref<LifeDay>();
 const dayLoading = ref(false);
 
 const { data } = await useFetch<LifeActivityResponse>('/api/life/activity', {
-  key: 'life-activity',
-  query: computed(() => ({ year: selectedYear.value })),
+  key: `life-activity:${scope.kind === 'project' ? scope.publicId : 'life'}`,
+  query: computed(() => ({ ...scopeQuery.value, year: selectedYear.value })),
 });
 
 const weekStartsMonday = computed(() => language.value.code !== 'en');
@@ -101,6 +112,7 @@ const kindLabels: Record<LifeActivityKind, (count: number) => string> = {
   project: (count) => phrase.value.life_activity_projects(count),
   page: (count) => phrase.value.life_activity_pages(count),
   'project-section': (count) => phrase.value.life_activity_sections(count),
+  excerpt: (count) => phrase.value.life_activity_excerpts(count),
   'profile-avatar': (count) => phrase.value.life_activity_profile(count),
   'profile-status': (count) => phrase.value.life_activity_statuses(count),
   'diary-entry': (count) => phrase.value.life_activity_diary(count),
@@ -134,9 +146,14 @@ function popup(date: string) {
   }`;
 }
 
-/** The year in numbers, every kind always shown so the row never reflows. */
+/**
+ * The year in numbers, every kind the chronology can hold always shown so
+ * the row never reflows.
+ */
 const totals = computed(() =>
-  LIFE_ACTIVITY_TOTAL_KINDS.map((kind) => {
+  LIFE_ACTIVITY_TOTAL_KINDS.filter((kind) =>
+    lifeFilterKinds(scope).includes(kind),
+  ).map((kind) => {
     const count = data.value?.totals[kind] ?? 0;
     const label = kindLabels[kind](count);
     return {
@@ -179,7 +196,9 @@ async function selectDay(date: string) {
   if (!dayTotal(date)) return;
   dayLoading.value = true;
   try {
-    day.value = await $fetch<LifeDay>('/api/life/day', { query: { date } });
+    day.value = await $fetch<LifeDay>('/api/life/day', {
+      query: { ...scopeQuery.value, date },
+    });
   } catch {
     day.value = undefined;
   } finally {
@@ -305,8 +324,8 @@ onMounted(() => {
           <span
             v-for="month in months.labels"
             :key="`label-${month.key}`"
-            class="heatmap-at absolute top-0 h-4 -translate-x-1/2
-              text-2xs leading-4 whitespace-nowrap text-text-3"
+            class="heatmap-at absolute top-0 h-4 -translate-x-1/2 text-2xs
+              leading-4 whitespace-nowrap text-text-3"
             :style="{ '--at': month.at }"
             aria-hidden="true"
             >{{ month.label }}</span
@@ -395,7 +414,7 @@ onMounted(() => {
         <span class="mr-xs font-semibold">{{ formatDate(selectedDate) }}</span>
         <TheiLink
           v-if="dayTotal(selectedDate)"
-          :to="buildLifeUrl({ date: selectedDate })"
+          :to="buildLifeUrl({ date: selectedDate }, basePath)"
           :aria-label="phrase.open_life"
           :data-title-popup="phrase.open_life"
           class="flex size-8 shrink-0 items-center justify-center rounded-normal

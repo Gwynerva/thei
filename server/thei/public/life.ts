@@ -50,7 +50,16 @@ import {
   sortLifePoints,
 } from '#layers/thei/shared/life-timeline';
 import { buildPublicEntityPreviewMedia } from './content';
-import { buildPublicCardMedia } from '../entity-banner';
+import { buildPublicCardMedia, readEntityBannerUuids } from '../entity-banner';
+import type { ExcerptParentType } from '#layers/thei/shared/excerpt';
+import { buildExcerptUrl } from '#layers/thei/shared/excerpt-url';
+import {
+  diaryExcerptParent,
+  eventExcerptParent,
+  loadExcerptParent,
+  type ExcerptParentInfo,
+} from '../excerpts/parents';
+import { buildPublicExcerptCard, visibleParentExcerpts } from './excerpts';
 import {
   buildPublicEventSummary,
   buildPublicPageIcon,
@@ -97,6 +106,15 @@ type RawPoint = {
   projectUuids?: string[];
   section?: any;
   diaryEntry?: any;
+  /** An excerpt's row, with its banner. */
+  excerpt?: any;
+  /** The parent an excerpt goes by: its access, and its share link. */
+  excerptParent?: { type: ExcerptParentType; id: string };
+  /**
+   * The projects the excerpts of an entry or an event are about. On the
+   * chronology of such a project the excerpt stands for its parent.
+   */
+  excerptTargets?: string[];
   profileRecord?: {
     id: string;
     assetUuid: string | null;
@@ -294,7 +312,11 @@ export async function getLifeRewind(options: {
   now?: Date;
 }): Promise<LifeRewindResponse> {
   const referenceDate = utcDayOf(options.now ?? new Date());
-  const selected = selectLifeRewindPoints(cachedRawLifePoints(), referenceDate);
+  // The Rewind reads the Life, where an excerpt is no point of its own.
+  const selected = selectLifeRewindPoints(
+    cachedRawLifePoints().filter((point) => point.entityKind !== 'excerpt'),
+    referenceDate,
+  );
   const paged = paginate(
     selected,
     options.page,
@@ -353,13 +375,16 @@ function cachedRawLifePoints(cutoff?: string): RawPoint[] {
  */
 function buildRawLifePoints(cutoff?: string): RawPoint[] {
   const { db, schema } = THEI_SERVER.useDb();
-  const [events, projects, pages, sections, periods] = [
+  const [events, projects, pages, sections, periods, entries, excerpts] = [
     db.select().from(schema.events).all(),
     db.select().from(schema.projects).all(),
     db.select().from(schema.pages).all(),
     db.select().from(schema.projectContentSections).all(),
     db.select().from(schema.periods).all(),
+    db.select().from(schema.diaryEntries).all(),
+    db.select().from(schema.excerpts).all(),
   ];
+  const entryById = new Map(entries.map((entry) => [entry.diaryUuid, entry]));
   const projectById = new Map(
     projects.map((project) => [project.projectUuid, project]),
   );
@@ -381,6 +406,10 @@ function buildRawLifePoints(cutoff?: string): RawPoint[] {
   // A diary entry reaches a project's chronology the same way an event does:
   // through the relation the author drew between them.
   const projectsByDiaryEntry = new Map<string, string[]>();
+  // An excerpt's relations say what the excerpt is about: they put the
+  // excerpt on a project's chronology, not the entry or the event it is
+  // part of — which they take off it, where it would stand twice.
+  const projectsByExcerpt = new Map<string, string[]>();
   for (const row of db.select().from(schema.entityRelations).all()) {
     // Either end may be the project: a relation is drawn from whichever side
     // the author was on.
@@ -388,10 +417,16 @@ function buildRawLifePoints(cutoff?: string): RawPoint[] {
       { type: row.firstType, id: row.firstId },
       { type: row.secondType, id: row.secondId },
     ];
-    // An excerpt's relations say what the excerpt is about; they put the
-    // excerpt on a chronology, not the entry or the event it is part of.
-    if (ends.some((end) => end.type === 'excerpt')) continue;
     const project = ends.find((end) => end.type === 'project');
+    const excerpt = ends.find((end) => end.type === 'excerpt');
+    if (excerpt) {
+      if (project) {
+        const list = projectsByExcerpt.get(excerpt.id) ?? [];
+        list.push(project.id);
+        projectsByExcerpt.set(excerpt.id, list);
+      }
+      continue;
+    }
     const other = ends.find((end) => end.type !== 'project');
     if (!project || !other) continue;
     const byEntity =
@@ -400,6 +435,20 @@ function buildRawLifePoints(cutoff?: string): RawPoint[] {
     list.push(project.id);
     byEntity.set(other.id, list);
   }
+  const excerptTargetsByParent = new Map<string, string[]>();
+  for (const excerpt of excerpts) {
+    const targets = projectsByExcerpt.get(excerpt.excerptUuid);
+    if (!targets?.length) continue;
+    const key = `${excerpt.parentType}:${excerpt.parentId}`;
+    excerptTargetsByParent.set(key, [
+      ...(excerptTargetsByParent.get(key) ?? []),
+      ...targets,
+    ]);
+  }
+  const excerptTargetsOf = (type: ExcerptParentType, id: string) => {
+    const targets = excerptTargetsByParent.get(`${type}:${id}`);
+    return targets ? { excerptTargets: targets } : {};
+  };
   const raw: RawPoint[] = [];
 
   for (const period of periods) {
@@ -419,6 +468,7 @@ function buildRawLifePoints(cutoff?: string): RawPoint[] {
           {
             event,
             projectUuids: projectsByEvent.get(event.eventUuid) ?? [],
+            ...excerptTargetsOf('event', event.eventUuid),
             ...periodPrecision(period),
             ...periodLabel(period),
             ...periodSpan(period),
@@ -438,6 +488,7 @@ function buildRawLifePoints(cutoff?: string): RawPoint[] {
             {
               event,
               projectUuids: projectsByEvent.get(event.eventUuid) ?? [],
+              ...excerptTargetsOf('event', event.eventUuid),
               ...periodPrecision(period),
               ...periodLabel(period),
               ...periodSpan(period),
@@ -536,7 +587,7 @@ function buildRawLifePoints(cutoff?: string): RawPoint[] {
     });
   }
 
-  for (const entry of db.select().from(schema.diaryEntries).all()) {
+  for (const entry of entries) {
     raw.push({
       identity: `diary-entry:${entry.diaryUuid}`,
       date: entry.date,
@@ -548,6 +599,61 @@ function buildRawLifePoints(cutoff?: string): RawPoint[] {
       access: entry.access,
       diaryEntry: entry,
       projectUuids: projectsByDiaryEntry.get(entry.diaryUuid) ?? [],
+      ...excerptTargetsOf('diary-entry', entry.diaryUuid),
+    });
+  }
+
+  // An excerpt is a point of the chronology of what it is about, dated by
+  // its parent's day — an entry's day, an event's last day, the day an
+  // excerpt of a project was written — and as open as its parent. On the
+  // Life it is no point: there its parent's card names it (`buildLifeIndex`).
+  const excerptBanners = readEntityBannerUuids(
+    db,
+    schema,
+    'excerpt',
+    excerpts.map((excerpt) => excerpt.excerptUuid),
+  );
+  const lastDayOfEvent = new Map<string, string>();
+  for (const period of periods) {
+    if (period.ownerType !== 'event') continue;
+    const last = lastDayOfEvent.get(period.ownerId);
+    if (!last || period.endDate > last)
+      lastDayOfEvent.set(period.ownerId, period.endDate);
+  }
+  for (const excerpt of excerpts) {
+    let date: string;
+    let access: ProjectEventAccessLevel;
+    if (excerpt.parentType === 'diary-entry') {
+      const entry = entryById.get(excerpt.parentId);
+      if (!entry) continue;
+      date = entry.date;
+      access = entry.access;
+    } else if (excerpt.parentType === 'event') {
+      const event = eventById.get(excerpt.parentId);
+      if (!event) continue;
+      date =
+        lastDayOfEvent.get(event.eventUuid) ??
+        projectCreatedUtcDate(event.createdAt);
+      access = event.access;
+    } else {
+      const parent = projectById.get(excerpt.parentId);
+      if (!parent) continue;
+      date = projectCreatedUtcDate(excerpt.createdAt);
+      access = parent.access;
+    }
+    const bannerAssetUuid = excerptBanners.get(excerpt.excerptUuid);
+    raw.push({
+      identity: `excerpt:${excerpt.excerptUuid}`,
+      date,
+      entityKind: 'excerpt',
+      transition: 'created',
+      // After its parent's own point of the day, in the owner's order.
+      sortTime: Date.parse(`${date}T12:30:00.000Z`) + excerpt.sortOrder,
+      access,
+      isPrivate: excerpt.isPrivate,
+      excerpt: { ...excerpt, ...(bannerAssetUuid ? { bannerAssetUuid } : {}) },
+      excerptParent: { type: excerpt.parentType, id: excerpt.parentId },
+      projectUuids: projectsByExcerpt.get(excerpt.excerptUuid) ?? [],
     });
   }
 
@@ -605,11 +711,15 @@ function buildLifeIndex(
   now: Date | number = Date.now(),
 ): LifeIndex {
   const cutoff = lifeArrivalCutoff(now);
-  const scoped = cachedRawLifePoints(cutoff).filter(
-    (point) =>
-      scope.kind !== 'project' ||
-      (point.projectUuids?.includes(scope.projectUuid) ?? false),
-  );
+  const scoped = cachedRawLifePoints(cutoff).filter((point) => {
+    // On the Life an excerpt is named on its parent's card, not a point.
+    if (scope.kind !== 'project') return point.entityKind !== 'excerpt';
+    if (!(point.projectUuids?.includes(scope.projectUuid) ?? false))
+      return false;
+    // An entry or an event with an excerpt about the project: the excerpt
+    // stands for it here, so its own point would stand twice.
+    return !point.excerptTargets?.includes(scope.projectUuid);
+  });
   const points = sortLifePoints(
     mergeLifeBoundaryPoints(scoped).filter((point) =>
       lifeFilterIncludes(filter, point.entityKind),
@@ -792,6 +902,11 @@ function pointGrantOwner(point: RawPoint): ShareGrantOwner | undefined {
       };
     case 'page':
       return { entityType: 'page', entityId: point.page!.pageUuid };
+    case 'excerpt':
+      return {
+        entityType: point.excerptParent!.type,
+        entityId: point.excerptParent!.id,
+      };
     case 'profile-avatar':
       return undefined;
     default:
@@ -907,6 +1022,37 @@ async function hydrateLifePoint(
       ...(owner ? { project: await buildPublicEntityReference(owner) } : {}),
     };
   }
+  if (point.entityKind === 'excerpt') {
+    const parent = await loadExcerptParent(
+      point.excerptParent!.type,
+      point.excerptParent!.id,
+    );
+    if (!parent)
+      throw createError({ statusCode: 500, message: 'Excerpt without parent' });
+    const card = await buildPublicExcerptCard(point.excerpt, parent, viewer);
+    return {
+      key,
+      date: point.date,
+      entityKind: point.entityKind,
+      transition: point.transition,
+      visibility: 'visible',
+      title: card.title,
+      summary: card.summary,
+      href: card.href,
+      media: card.media,
+      // Its parent, named as a section names its project; what it is about
+      // under its words, the scope's own project left out of it.
+      project: {
+        entityType: parent.type,
+        title: card.parent.title,
+        summary: '',
+        href: card.parent.href,
+        ...(card.parent.media ? { iconMedia: card.parent.media } : {}),
+        ...(card.parent.date ? { date: card.parent.date } : {}),
+      },
+      relatedEntities: card.about,
+    };
+  }
   if (point.entityKind === 'event') {
     const event = point.event!;
     const summary = await buildPublicEventSummary(event, viewer);
@@ -926,6 +1072,7 @@ async function hydrateLifePoint(
       media: summary.media,
       tags: summary.tags,
       relatedEntities: summary.relatedEntities,
+      ...excerptNames(eventExcerptParent(event), viewer),
     };
   }
   if (point.entityKind === 'diary-entry') {
@@ -960,6 +1107,7 @@ async function hydrateLifePoint(
       ),
       href: buildDiaryUrl(entry.date),
       ...(media ? { media } : {}),
+      ...excerptNames(diaryExcerptParent(entry), viewer),
     };
   }
   if (point.entityKind === 'page') {
@@ -1022,8 +1170,25 @@ async function hydrateLifePoint(
   };
 }
 
+/** The excerpts of a parent the viewer may see, named on its card. */
+function excerptNames(
+  parent: ExcerptParentInfo,
+  viewer: PublicViewer,
+): { excerpts?: { title: string; href: string }[] } {
+  const names = visibleParentExcerpts(parent, viewer).map((excerpt) => ({
+    title: excerpt.title,
+    href: buildExcerptUrl(
+      parent.address,
+      excerpt.humanReadableSlug,
+      excerpt.publicId,
+    ),
+  }));
+  return names.length ? { excerpts: names } : {};
+}
+
 function secretPointUuid(point: RawPoint): string {
   if (point.entityKind === 'event') return point.event!.eventUuid;
+  if (point.entityKind === 'excerpt') return point.excerpt!.excerptUuid;
   if (point.entityKind === 'diary-entry') return point.diaryEntry!.diaryUuid;
   if (point.entityKind === 'page') return point.page!.pageUuid;
   if (point.entityKind === 'project-section') return point.section!.sectionUuid;

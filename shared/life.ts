@@ -10,13 +10,16 @@ import type { StatusKind, StatusOwnerType } from './status';
 
 /**
  * Every kind of point, in the order a reader is offered them: the three main
- * entities first, then the parts of a project, then everything around them.
+ * entities first, then the parts of a project and the excerpts, then
+ * everything around them. Which of them a chronology offers is
+ * `lifeFilterKinds`.
  */
 export const LIFE_ENTITY_KINDS = [
   'project',
   'event',
   'diary-entry',
   'project-section',
+  'excerpt',
   'page',
   'profile-status',
   'profile-avatar',
@@ -92,6 +95,11 @@ export type VisibleLifePoint = LifePointBase & {
    * secret point never carries one: what a period was is its content.
    */
   periodLabel?: string;
+  /**
+   * The excerpts of a diary entry or an event the reader may see, named on
+   * its card: on the Life an excerpt is no point of its own.
+   */
+  excerpts?: { title: string; href: string }[];
 };
 
 /** A point a visitor may not see, presented under a codename. */
@@ -160,21 +168,31 @@ export type LifeScopeRef =
  * The kinds a project's chronology can hold.
  *
  * Avatars and other projects belong to the person, not to a project, so they
- * are not offered as filters there.
+ * are not offered as filters there. The excerpts about the project are its
+ * own points.
  */
 export const PROJECT_LIFE_ENTITY_KINDS = [
   'event',
   'diary-entry',
   'project-section',
+  'excerpt',
   'profile-status',
 ] as const satisfies readonly LifeEntityKind[];
+
+/**
+ * The kinds the Life can hold. An excerpt is a point only on the chronology
+ * of what it is about; on the Life its parent's card names it.
+ */
+export const LIFE_SCOPE_ENTITY_KINDS = LIFE_ENTITY_KINDS.filter(
+  (kind) => kind !== 'excerpt',
+);
 
 export function lifeFilterKinds(
   scope: Pick<LifeScope, 'kind'>,
 ): readonly LifeEntityKind[] {
   return scope.kind === 'project'
     ? PROJECT_LIFE_ENTITY_KINDS
-    : LIFE_ENTITY_KINDS;
+    : LIFE_SCOPE_ENTITY_KINDS;
 }
 
 /**
@@ -284,6 +302,7 @@ export const LIFE_ACTIVITY_TOTAL_KINDS = [
   'event',
   'diary-entry',
   'project-section',
+  'excerpt',
 ] as const satisfies readonly LifeEntityKind[];
 export type LifeActivityTotalKind = (typeof LIFE_ACTIVITY_TOTAL_KINDS)[number];
 
