@@ -35,8 +35,11 @@ export type DiaryListItem = {
   diaryUuid: string;
   date: string;
   access: ProjectEventAccessLevel;
-  /** The opening of the entry, which stands in for a title it does not have. */
-  excerpt: string;
+  /**
+   * The lead of the entry, which stands in for a title it does not have: its
+   * headings and the names of its excerpts, then its opening words.
+   */
+  lead: string;
   previewMedia?: MediaDescriptor;
   createdAt: number;
   updatedAt: number;

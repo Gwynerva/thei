@@ -3,7 +3,7 @@ import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
-import { diaryContentExcerpt } from '#layers/thei/shared/diary-text';
+import { diaryLead } from '#layers/thei/shared/diary-text';
 import { landingHash } from '#layers/thei/shared/landing';
 import {
   buildLifeUrl,
@@ -60,6 +60,7 @@ import {
   type ExcerptParentInfo,
 } from '../excerpts/parents';
 import { buildPublicExcerptCard, visibleParentExcerpts } from './excerpts';
+import type { ExcerptRecord } from '../excerpts';
 import {
   buildPublicEventSummary,
   buildPublicPageIcon,
@@ -1072,11 +1073,16 @@ async function hydrateLifePoint(
       media: summary.media,
       tags: summary.tags,
       relatedEntities: summary.relatedEntities,
-      ...excerptNames(eventExcerptParent(event), viewer),
+      ...excerptNames(
+        eventExcerptParent(event),
+        visibleParentExcerpts(eventExcerptParent(event), viewer),
+      ),
     };
   }
   if (point.entityKind === 'diary-entry') {
     const entry = point.diaryEntry!;
+    const parent = diaryExcerptParent(entry);
+    const excerpts = visibleParentExcerpts(parent, viewer);
     const [media, content] = await Promise.all([
       buildPublicEntityPreviewMedia(
         'diary-entry',
@@ -1098,16 +1104,17 @@ async function hydrateLifePoint(
       transition: point.transition,
       visibility: 'visible',
       // An entry has no title of its own, and the card knows to print its
-      // opening in place of one rather than a heading and a summary.
+      // lead in place of one rather than a heading and a summary.
       title: '',
-      summary: diaryContentExcerpt(
-        content?.data,
-        opens,
-        THEI_SERVER.phrase.content_private_section,
-      ),
+      summary: diaryLead({
+        data: content?.data,
+        excerptTitles: excerpts.map((excerpt) => excerpt.title),
+        includePrivate: opens,
+        privateLabel: THEI_SERVER.phrase.content_private_section,
+      }),
       href: buildDiaryUrl(entry.date),
       ...(media ? { media } : {}),
-      ...excerptNames(diaryExcerptParent(entry), viewer),
+      ...excerptNames(parent, excerpts),
     };
   }
   if (point.entityKind === 'page') {
@@ -1173,9 +1180,9 @@ async function hydrateLifePoint(
 /** The excerpts of a parent the viewer may see, named on its card. */
 function excerptNames(
   parent: ExcerptParentInfo,
-  viewer: PublicViewer,
+  excerpts: ExcerptRecord[],
 ): { excerpts?: { title: string; href: string }[] } {
-  const names = visibleParentExcerpts(parent, viewer).map((excerpt) => ({
+  const names = excerpts.map((excerpt) => ({
     title: excerpt.title,
     href: buildExcerptUrl(
       parent.address,

@@ -5,7 +5,7 @@ import {
   isApproximateDate,
   type DatedPeriod,
 } from '#layers/thei/shared/date-precision';
-import { diaryContentExcerpt } from '#layers/thei/shared/diary-text';
+import { diaryLead } from '#layers/thei/shared/diary-text';
 import {
   formatAbsolutePublicDate,
   formatCompactPublicPeriod,
@@ -407,11 +407,15 @@ export async function diaryContent(
       STRANGER,
     ),
   ]);
-  const quote = diaryContentExcerpt(
-    body?.data,
-    false,
-    phrase().content_private_section,
-  );
+  // The card quotes how the day begins, not what it is about: a quotation
+  // reads as one, where a row of headings would not.
+  const quote = diaryLead({
+    data: body?.data,
+    excerptTitles: [],
+    includePrivate: false,
+    privateLabel: phrase().content_private_section,
+    headings: false,
+  });
   return {
     ...emptyOgContent(
       'diary',

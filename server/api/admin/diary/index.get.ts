@@ -7,7 +7,7 @@ import {
   resolveAdminPagination,
   type AdminEntityListOrder,
 } from '#layers/thei/shared/admin/entity-list';
-import { diaryExcerpt } from '#layers/thei/shared/diary-text';
+import { diaryLead } from '#layers/thei/shared/diary-text';
 import { dayQueryRank, parseDayQuery } from '#layers/thei/shared/day-query';
 
 export default defineEventHandler(async (event): Promise<DiaryListResponse> => {
@@ -126,6 +126,27 @@ export default defineEventHandler(async (event): Promise<DiaryListResponse> => {
     sizes.set(row.diaryUuid, current);
   }
 
+  // The names of each entry's excerpts, in the owner's order, for its lead.
+  const excerptTitles = new Map<string, string[]>();
+  for (const row of db
+    .select({
+      diaryUuid: schema.excerpts.parentId,
+      title: schema.excerpts.title,
+    })
+    .from(schema.excerpts)
+    .where(
+      and(
+        eq(schema.excerpts.parentType, 'diary-entry'),
+        inArray(schema.excerpts.parentId, uuids),
+      ),
+    )
+    .orderBy(schema.excerpts.sortOrder)
+    .all())
+    excerptTitles.set(row.diaryUuid, [
+      ...(excerptTitles.get(row.diaryUuid) ?? []),
+      row.title,
+    ]);
+
   return {
     ...result,
     items: await Promise.all(
@@ -139,7 +160,12 @@ export default defineEventHandler(async (event): Promise<DiaryListResponse> => {
           diaryUuid: item.diaryUuid,
           date: item.date,
           access: item.access,
-          excerpt: diaryExcerpt(item.contentText),
+          lead: diaryLead({
+            data: bodyByUuid.get(item.diaryUuid),
+            excerptTitles: excerptTitles.get(item.diaryUuid) ?? [],
+            includePrivate: true,
+            privateLabel: THEI_SERVER.phrase.content_private_section,
+          }),
           previewMedia: resolveEntityIconMedia(
             'diary-entry',
             item.diaryUuid,

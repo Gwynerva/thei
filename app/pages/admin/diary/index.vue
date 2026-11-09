@@ -69,7 +69,7 @@ function dayOf(item: DiaryListItem) {
         :key="item.diaryUuid"
         entity-type="diary-entry"
         :title="dayOf(item)"
-        :summary="item.excerpt"
+        :summary="item.lead"
         :preview-media="item.previewMedia"
         :edit-to="`/admin/diary/${item.diaryUuid}/edit/`"
       >

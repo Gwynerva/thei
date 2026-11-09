@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { PublicDiaryResponse } from '#layers/thei/shared/api/public';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
+import { DIARY_SEO_LENGTH, diaryLead } from '#layers/thei/shared/diary-text';
 import { buildLifeUrl } from '#layers/thei/shared/life';
 import {
   createdAndUpdatedTimelineItems,
@@ -42,6 +43,26 @@ const heading = computed(() =>
   formatAbsolutePublicDate(data.value.date, language.value.code),
 );
 
+/**
+ * What a search engine shows under the day: the entry's lead — its headings
+ * and its excerpts, then its first words — or, for a day with no text this
+ * reader may see, only that it is a diary entry. The text arrived cut to
+ * this reader already, its private parts opened or stood in for, so the lead
+ * takes it whole.
+ */
+const description = computed(
+  () =>
+    diaryLead(
+      {
+        data: data.value.content,
+        excerptTitles: data.value.excerpts.map((excerpt) => excerpt.title),
+        includePrivate: true,
+        privateLabel: phrase.value.content_private_section,
+      },
+      DIARY_SEO_LENGTH,
+    ) || phrase.value.diary_entry_seo_description(heading.value),
+);
+
 const ogImage = useOgImage(() => ({ kind: 'diary', id: data.value.date }));
 const seoImage = computed(() =>
   publicSeoImage(data.value.media, ogImage.value?.url),
@@ -60,7 +81,7 @@ usePublicSeo({
   markdown: true,
   ogType: 'article',
   title: () => heading.value,
-  description: () => phrase.value.diary_entry_seo_description(heading.value),
+  description,
   canonical,
   noIndex: () => data.value.access === 'link-only',
   breadcrumbs: () => [

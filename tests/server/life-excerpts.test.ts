@@ -126,8 +126,23 @@ function seed() {
       createdAt: 1,
       updatedAt: 1,
     });
+  context.insert('content', {
+    contentUuid: 'C-D',
+    ownerType: 'diary-entry',
+    ownerId: 'D',
+    slot: 'diary-body',
+    data: {
+      blocks: [
+        { id: 'h1', type: 'header', data: { text: 'Morning', level: 2 } },
+        { id: 'p1', type: 'paragraph', data: { text: 'Out in the open.' } },
+      ],
+    },
+    createdAt: 1,
+    updatedAt: 1,
+  });
   relate(['diary-entry', 'D'], ['project', 'P']);
   excerpt('XD', ['diary-entry', 'D']);
+  excerpt('XD2', ['diary-entry', 'D'], true, 1);
   relate(['excerpt', 'XD'], ['project', 'P']);
   excerpt('XE', ['event', 'E']);
   relate(['excerpt', 'XE'], ['project', 'P']);
@@ -210,7 +225,19 @@ describe('excerpts on the Life', () => {
     if (entry?.visibility !== 'visible') return;
     expect(entry.excerpts).toEqual([
       { title: 'XD title', href: '/diary/2026-04-01/excerpts/XD-XD/' },
+      { title: 'XD2 title', href: '/diary/2026-04-01/excerpts/XD2-XD2/' },
     ]);
+    // The entry's lead names its headings and its excerpts, then quotes it.
+    expect(entry.summary).toBe(
+      'Morning · XD title · XD2 title — Morning Out in the open.',
+    );
+    const seen = (await getLatestLifePoints(20, { viewer: STRANGER })).find(
+      (point) =>
+        point.entityKind === 'diary-entry' && point.date === '2026-04-01',
+    );
+    expect(seen?.visibility).toBe('visible');
+    if (seen?.visibility !== 'visible') return;
+    expect(seen.summary).toBe('Morning · XD title — Morning Out in the open.');
     // An event's point names its excerpts the visitor may see.
     const event = (await getLatestLifePoints(20, { viewer: STRANGER })).find(
       (point) => point.entityKind === 'event',

@@ -3,12 +3,13 @@ import type {
   PublicNeighbours,
 } from '#layers/thei/shared/api/public';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
-import { diaryContentExcerpt } from '#layers/thei/shared/diary-text';
+import { diaryLead } from '#layers/thei/shared/diary-text';
 import {
   isDatedSection,
   sortStagesNewestFirst,
 } from '#layers/thei/shared/project-content-item';
 import type { ProjectSectionRecord } from '../projects/content-sections';
+import { listExcerpts } from '../excerpts';
 import { buildPublicEntityPreviewMedia } from './content';
 import { buildPublicProjectSectionSummary } from './entities';
 
@@ -81,10 +82,10 @@ export async function buildProjectSectionNeighbours(
 }
 
 /**
- * The entries written before and after a day, each with how it begins. Only
- * the owner steps onto entries a visitor cannot find: a link shared for one
- * entry opens that entry, not the ones beside it. A private section of an
- * entry stays out of what a visitor reads of its beginning.
+ * The entries written before and after a day, each with its lead. Only the
+ * owner steps onto entries a visitor cannot find: a link shared for one entry
+ * opens that entry, not the ones beside it. A private section of an entry,
+ * and a private excerpt, stay out of what a visitor reads of its lead.
  */
 export async function buildDiaryEntryNeighbours(
   date: string,
@@ -108,11 +109,17 @@ export async function buildDiaryEntryNeighbours(
           'diary-body',
         ),
       ]);
-      const summary = diaryContentExcerpt(
-        content?.data,
-        isAdmin,
-        THEI_SERVER.phrase.content_private_section,
-      );
+      const summary = diaryLead({
+        data: content?.data,
+        excerptTitles: listExcerpts({
+          type: 'diary-entry',
+          id: entry.diaryUuid,
+        })
+          .filter((excerpt) => isAdmin || !excerpt.isPrivate)
+          .map((excerpt) => excerpt.title),
+        includePrivate: isAdmin,
+        privateLabel: THEI_SERVER.phrase.content_private_section,
+      });
       return {
         title: '',
         date: entry.date,

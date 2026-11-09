@@ -1,7 +1,13 @@
 import {
+  contentBlockIsInPrivateSection,
+  contentBlockTextParts,
   contentPlainText,
+  normalizeContentData,
+  normalizedContentPrivateSectionRanges,
   publicContentPlainText,
+  type ContentOutputBlock,
   type ContentOutputData,
+  type PublicContentOutputData,
 } from './content';
 
 /**
@@ -12,47 +18,139 @@ import {
  * width is not known here, and it is generous enough that the clamp in CSS,
  * not this number, is usually what ends the text.
  */
-export const DIARY_EXCERPT_LENGTH = 240;
+export const DIARY_LEAD_LENGTH = 240;
+
+/** How much of an entry a search engine shows under its page's title. */
+export const DIARY_SEO_LENGTH = 160;
+
+/** What a lead is built from: the day's text and the names of its excerpts. */
+export type DiaryLeadParts = {
+  /** The entry's body, as stored or as its public page received it. */
+  data: ContentOutputData | PublicContentOutputData | null | undefined;
+  /** The titles of the entry's excerpts the reader may see, in their order. */
+  excerptTitles: readonly string[];
+  /** Whether the reader is on the private side of the entry. */
+  includePrivate: boolean;
+  /** What stands where a private part of the text is kept from the reader. */
+  privateLabel: string;
+  /** `false` gives the first words alone, without the day's headings. */
+  headings?: boolean;
+};
 
 /**
- * The opening of an entry, cut at a word and marked as cut.
+ * The lead of an entry: what stands in for the title it does not have.
  *
- * Cutting mid-word reads as damage rather than as an excerpt, so the cut
+ * An entry with headings, or with excerpts, is about several things, and its
+ * first words say only the first of them: the lead names them all first —
+ * the level-two headings of its text in order, then its excerpts, which its
+ * page shows as headings after the text — and then quotes how it begins:
+ * `Morning · Evening — The alarm did not go off…`. An entry with neither is
+ * its first words alone.
+ *
+ * Only what the reader may see is there. A heading inside a private part is
+ * not named to a visitor, and the words quoted are the public ones with
+ * `[privateLabel]` where a private part stood, so the text around it does not
+ * read as one run-on thought; a reader on the private side gets the whole.
+ * The lead is cut at a word, so a name is never cut through without the
+ * ellipsis saying so.
+ */
+export function diaryLead(
+  parts: DiaryLeadParts,
+  limit = DIARY_LEAD_LENGTH,
+): string {
+  const normalized = normalizeContentData(storedBlocksOf(parts));
+  const words = parts.includePrivate
+    ? contentPlainText(normalized)
+    : publicContentPlainText(normalized, 'all', {
+        privatePlaceholder: parts.privateLabel,
+      });
+  const names =
+    parts.headings === false
+      ? []
+      : [
+          ...headingsOf(normalized, parts.includePrivate),
+          ...parts.excerptTitles,
+        ]
+          .map((name) => name.replace(/\s+/g, ' ').trim())
+          .filter(Boolean);
+  const named = names.join(' · ');
+  return cutAtWord(
+    named && words ? `${named} — ${words}` : named || words,
+    limit,
+  );
+}
+
+/** The level-two headings of a text, as plain words, in text order. */
+function headingsOf(
+  normalized: ContentOutputData,
+  includePrivate: boolean,
+): string[] {
+  const ranges = normalizedContentPrivateSectionRanges(normalized);
+  return normalized.blocks.flatMap((block, index) =>
+    block.type === 'header' &&
+    (block.data as { level?: number }).level === 2 &&
+    (includePrivate || !contentBlockIsInPrivateSection(ranges, index))
+      ? contentBlockTextParts(block)
+      : [],
+  );
+}
+
+/**
+ * The body as stored. A public page receives its private parts already
+ * decided — opened whole for the reader on the private side, or stood in for
+ * by a placeholder that holds nothing to quote — so each goes back into a
+ * private section of its own: an opened part with its blocks, a placeholder
+ * with the label it would show, which `includePrivate` then quotes or marks.
+ */
+function storedBlocksOf({
+  data,
+  privateLabel,
+}: Pick<DiaryLeadParts, 'data' | 'privateLabel'>): ContentOutputData {
+  const boundary = (sectionId: string, edge: 'start' | 'end') =>
+    ({
+      type: 'privateSectionBoundary',
+      data: { sectionId, edge },
+    }) as unknown as ContentOutputBlock;
+  return {
+    ...data,
+    blocks: (data?.blocks ?? []).flatMap(
+      (block, index): ContentOutputBlock[] => {
+        const sectionId = `lead-private-${index}`;
+        if (block.type === 'privateSectionPlaceholder')
+          return [
+            boundary(sectionId, 'start'),
+            {
+              type: 'paragraph',
+              data: { text: `[${privateLabel}]` },
+            } as unknown as ContentOutputBlock,
+            boundary(sectionId, 'end'),
+          ];
+        if (block.type === 'privateSectionExpanded')
+          return [
+            boundary(sectionId, 'start'),
+            ...block.data.blocks,
+            boundary(sectionId, 'end'),
+          ];
+        return [block];
+      },
+    ),
+  };
+}
+
+/**
+ * The opening of a text, cut at a word and marked as cut.
+ *
+ * Cutting mid-word reads as damage rather than as a quotation, so the cut
  * retreats to the last space before the limit when there is one close enough.
  * An ellipsis ends whatever was cut: without it, an opening shorter than the
  * clamp of its card reads as if the entry itself stopped there. It takes the
  * place of a comma, a dash or a full stop the cut would leave hanging.
  */
-export function diaryExcerpt(
-  text: string,
-  limit = DIARY_EXCERPT_LENGTH,
-): string {
+function cutAtWord(text: string, limit: number): string {
   const clean = text.replace(/\s+/g, ' ').trim();
   if (clean.length <= limit) return clean;
   const cut = clean.slice(0, limit);
   const lastSpace = cut.lastIndexOf(' ');
   const kept = lastSpace > limit * 0.6 ? cut.slice(0, lastSpace) : cut;
-  return `${kept.replace(/[\s,;:.–—-]+$/, '')}…`;
-}
-
-/**
- * The excerpt of an entry's body as a given reader may see it.
- *
- * Headings read as ordinary text: a card has no room for structure, only for
- * the words. A private section inside a public entry stays private in its
- * excerpt too — a stranger's card shows `[privateLabel]` where it stood, so
- * the text around it does not read as one run-on thought.
- */
-export function diaryContentExcerpt(
-  data: ContentOutputData | null | undefined,
-  includePrivate: boolean,
-  privateLabel: string,
-): string {
-  return diaryExcerpt(
-    includePrivate
-      ? contentPlainText(data)
-      : publicContentPlainText(data, 'all', {
-          privatePlaceholder: privateLabel,
-        }),
-  );
+  return `${kept.replace(/[\s,;:.·–—-]+$/, '')}…`;
 }

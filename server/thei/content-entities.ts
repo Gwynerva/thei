@@ -12,7 +12,7 @@ import {
 } from '#layers/thei/shared/content';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import type { InternalUrlTarget } from '#layers/thei/shared/internal-url';
-import { diaryContentExcerpt } from '#layers/thei/shared/diary-text';
+import { diaryLead } from '#layers/thei/shared/diary-text';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
@@ -404,23 +404,26 @@ function tagRecordOf(tag: TagRow | undefined) {
 }
 
 /**
- * A diary entry is called by its day, and its opening lines stand in for a
- * summary — cut, for a visitor, from the public part of its text only.
+ * A diary entry is called by its day, and its lead — what it is about, then
+ * how it begins — stands in for a summary, built for a visitor from the
+ * public part of its text and its public excerpts only.
  */
 function diaryRecord(
   entry: DiaryRow,
   body: ContentOutputData | null | undefined,
+  excerptTitles: string[],
   includePrivate: boolean,
 ): ContentEntityRecord {
   return {
     entityType: 'diary-entry',
     entityId: entry.diaryUuid,
     title: entry.date,
-    summary: diaryContentExcerpt(
-      body,
+    summary: diaryLead({
+      data: body,
+      excerptTitles,
       includePrivate,
-      THEI_SERVER.phrase.content_private_section,
-    ),
+      privateLabel: THEI_SERVER.phrase.content_private_section,
+    }),
     href: buildDiaryUrl(entry.date),
     access: entry.access,
     updatedAt: entry.updatedAt,
@@ -442,6 +445,54 @@ async function diaryBody(diaryUuid: string) {
       'diary-body',
     )
   )?.data;
+}
+
+/**
+ * The titles of the excerpts of each of several entries, in the owner's
+ * order, in one query; a visitor's leave the private ones out.
+ */
+function diaryExcerptTitles(
+  diaryUuids: string[],
+  includePrivate: boolean,
+): Map<string, string[]> {
+  const titles = new Map<string, string[]>();
+  if (!diaryUuids.length) return titles;
+  const { db, schema } = THEI_SERVER.useDb();
+  const rows = db
+    .select({
+      parentId: schema.excerpts.parentId,
+      title: schema.excerpts.title,
+      isPrivate: schema.excerpts.isPrivate,
+    })
+    .from(schema.excerpts)
+    .where(
+      and(
+        eq(schema.excerpts.parentType, 'diary-entry'),
+        inArray(schema.excerpts.parentId, diaryUuids),
+      ),
+    )
+    .orderBy(schema.excerpts.sortOrder)
+    .all();
+  for (const row of rows) {
+    if (row.isPrivate && !includePrivate) continue;
+    titles.set(row.parentId, [...(titles.get(row.parentId) ?? []), row.title]);
+  }
+  return titles;
+}
+
+async function diaryRecordOf(
+  entry: DiaryRow,
+  viewer: PublicViewer,
+): Promise<ContentEntityRecord> {
+  const includePrivate = opensPrivate(viewer, 'diary-entry', entry.diaryUuid);
+  return diaryRecord(
+    entry,
+    await diaryBody(entry.diaryUuid),
+    diaryExcerptTitles([entry.diaryUuid], includePrivate).get(
+      entry.diaryUuid,
+    ) ?? [],
+    includePrivate,
+  );
 }
 
 /**
@@ -490,14 +541,7 @@ export async function findContentEntity(
     }
     case 'diary-entry': {
       const entry = await THEI_SERVER.diary.findByUuid(entityId);
-      return (
-        entry &&
-        diaryRecord(
-          entry,
-          await diaryBody(entry.diaryUuid),
-          opensPrivate(viewer, 'diary-entry', entry.diaryUuid),
-        )
-      );
+      return entry && (await diaryRecordOf(entry, viewer));
     }
     case 'tag': {
       const { db, schema } = THEI_SERVER.useDb();
@@ -565,14 +609,7 @@ export async function findContentEntityByTarget(
     }
     case 'diary-entry': {
       const entry = await THEI_SERVER.diary.findByDate(target.date);
-      return (
-        entry &&
-        diaryRecord(
-          entry,
-          await diaryBody(entry.diaryUuid),
-          opensPrivate(viewer, 'diary-entry', entry.diaryUuid),
-        )
-      );
+      return entry && (await diaryRecordOf(entry, viewer));
     }
     case 'tag': {
       const { db, schema } = THEI_SERVER.useDb();
@@ -645,9 +682,18 @@ export async function listContentEntities(
             .map((row) => [row.ownerId, row.data]),
         )
       : new Map();
+    const titles = diaryExcerptTitles(
+      entries.map((entry) => entry.diaryUuid),
+      true,
+    );
     records.push(
       ...entries.map((entry) =>
-        diaryRecord(entry, bodies.get(entry.diaryUuid), true),
+        diaryRecord(
+          entry,
+          bodies.get(entry.diaryUuid),
+          titles.get(entry.diaryUuid) ?? [],
+          true,
+        ),
       ),
     );
   }
