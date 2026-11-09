@@ -14,13 +14,13 @@ import { searchAnalyzer } from './analyzer';
  * What the owner may do from the quick search, besides finding.
  *
  * Each follows from how the archive is kept. With nothing typed, what the
- * owner saved last; the admin bar already holds the day's diary and the
- * other side of the page they are on, so the search repeats neither. A
- * diary entry costs least, so the day a query names comes first. A query
- * also offers to make a project, an event or a page with its words for a
- * title, to go to a part of the admin by its name, and, with AI on, to ask
- * the site's model. Nothing that cannot be undone, and nothing rare: those
- * stay in their forms.
+ * owner saved last, and nothing more: the admin bar already leads to the
+ * diary and to the other side of the page they are on. A diary entry costs
+ * least, so the day a query names comes first. A query also offers to make
+ * a project, an event or a page with its words for a title, to go to a part
+ * of the admin by its name, and, with AI on, to ask the site's model.
+ * Nothing that cannot be undone, and nothing rare: those stay in their
+ * forms.
  */
 interface SearchActionContext {
   q: string;

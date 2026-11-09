@@ -68,11 +68,11 @@ and behaves.
   answer («Все слова вместе…»), a line away from what was found.
 - Enter opens where the owner is: the page on the site, the editor in the
   admin; Shift+Enter the other one.
-- The owner, with nothing typed, is offered what they saved last — the day's
-  diary and the other side of the page are the admin bar's; with a query, the
-  diary of a day the query names and a section of the admin by its name come
-  first, and a new event, project or page named by the query — the smaller
-  first — and ✦ with AI on, come last. A question puts ✦ first and makes
+- The owner, with nothing typed, is offered what they saved last and nothing
+  more — the admin bar leads to the diary and to the other side of the page;
+  with a query, the diary of a day the query names and a section of the admin
+  by its name come first, and a new event, project or page named by the
+  query — the smaller first — and ✦ with AI on, come last. A question puts ✦ first and makes
   nothing; a day makes nothing either. Nothing that cannot be undone, nothing
   rare: those stay in their forms.
 - Nothing typed, everyone is offered what they searched for before, under

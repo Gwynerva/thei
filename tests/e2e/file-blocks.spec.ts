@@ -607,6 +607,58 @@ test('the «+» over a picture changes nothing when nothing is picked', async ({
   await expect(page.locator('dialog [data-editor-save]')).toBeDisabled();
 });
 
+test('the «+» over a picture turns back into it when nothing it picked lands', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const { assetUuid } = await uploadFile(
+    page.request,
+    'png',
+    (await picture('any.png')).bytes,
+  );
+  const { pageUuid } = await createPage(page.request, [
+    {
+      id: 'pic',
+      type: 'contentMedia',
+      data: { asset: { assetUuid }, layout: 'natural', caption: 'Dusk' },
+    },
+  ]);
+  // The new file is refused, as one over the limit would be.
+  await page.route('**/api/admin/assets/drafts/*/commit', (route) =>
+    route.fulfill({
+      status: 413,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        statusCode: 413,
+        message: 'File exceeds the maximum allowed size',
+      }),
+    }),
+  );
+  await openEditor(page, pageUuid);
+  const pic = page.locator('dialog .ce-block[data-id="pic"]');
+  await pic.getByRole('button', { name: 'Add image or video' }).click();
+  // Two at once, which skip the window a single file opens to ask how it
+  // is taken.
+  await pickNewPictures(page, ['a.png', 'b.png']);
+  await expect(pic.locator('[data-content-gallery]')).toHaveCount(1);
+  await expect(pic.locator('[data-pending-retry]')).toHaveCount(2, {
+    timeout: 30_000,
+  });
+  await pic.locator('[data-pending-cancel]').first().click();
+  // One still pending keeps the gallery.
+  await expect(pic.locator('[data-content-gallery]')).toHaveCount(1);
+  await pic.locator('[data-pending-cancel]').first().click();
+
+  // The picture again, laid out as it was, its caption kept: nothing to save.
+  await expect(pic.locator('[data-content-gallery]')).toHaveCount(0);
+  await expect(pic.locator('[data-content-media-layout]')).toHaveAttribute(
+    'data-content-media-layout',
+    'natural',
+  );
+  await expect(pic.locator('[contenteditable="true"]')).toHaveText('Dusk');
+  await expect(page.locator('dialog [data-editor-save]')).toBeDisabled();
+});
+
 test('the one file tile places what is picked by its kind', async ({
   page,
 }) => {

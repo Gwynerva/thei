@@ -141,6 +141,7 @@ const dragSort = useDragSort(
         :data-drag-id="editable ? item.id : undefined"
         :media="item.asset.media"
         :selected="item.id === activeItem?.id"
+        :check="false"
         :overlay="{
           showVideo: !editable,
           showSize: editable,

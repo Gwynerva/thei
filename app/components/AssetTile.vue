@@ -21,6 +21,8 @@ const props = withDefaults(
     loop?: boolean;
     autoplayReducedMotion?: boolean;
     engaged?: boolean;
+    /** `false` marks a chosen tile by its ring and glow alone. */
+    check?: boolean;
     overlay?: {
       showVideo?: boolean;
       showSize?: boolean;
@@ -35,7 +37,7 @@ const props = withDefaults(
     };
   }>(),
   // Unset unless the tile can be chosen: only then does it draw a check.
-  { shape: 'normal', tone: 'default', selected: undefined },
+  { shape: 'normal', tone: 'default', selected: undefined, check: true },
 );
 
 const { engaged: interactionEngaged, events: mediaEvents } =
@@ -96,10 +98,11 @@ function activateFromKeyboard(event: KeyboardEvent) {
       v-bind="overlay"
     />
     <slot name="overlay" />
-    <!-- A chosen tile says so in its middle: a check, white in either
-         theme, on a darkened accent that lets the picture show through. -->
+    <!-- A chosen tile of a choice says so in its middle: a check, white in
+         either theme, on a darkened accent that lets the picture show
+         through. A gallery's current tile has its ring alone. -->
     <span
-      v-if="selected !== undefined"
+      v-if="check && selected !== undefined"
       aria-hidden="true"
       class="pointer-events-none absolute inset-0 z-30 grid place-items-center
         transition duration-250 motion-reduce:transition-none"

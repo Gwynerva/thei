@@ -12,7 +12,7 @@ const props = withDefaults(
     caption?: string;
     editable?: boolean;
     editLabel?: string;
-    /** Named, a round «+» before the edit button picks more pictures. */
+    /** Named, a round «+» after the edit button picks more pictures. */
     addLabel?: string;
     captionPlaceholder?: string;
     centeredCaption?: boolean;
@@ -70,28 +70,15 @@ const framed = computed(
         data-opens-viewer
         @click="$emit('open')"
       ></button>
-      <!-- More pictures beside this one, then the edit button with the file's
-           size in it, as a tile shows it: what a re-encode would gain is read
-           off the block itself. -->
+      <!-- The edit button with the file's size in it, as a tile shows it —
+           what a re-encode would gain is read off the block itself — then,
+           in the corner, more pictures beside this one: asked for more often
+           than a change of the one in place. -->
       <div
         v-if="editable"
         data-drag-ignore
         class="absolute top-xs right-xs z-20 flex items-center gap-xs"
       >
-        <button
-          v-if="addLabel"
-          type="button"
-          data-content-media-add
-          class="flex size-9 cursor-pointer items-center justify-center
-            rounded-full bg-bg-1/80 text-text-2 shadow backdrop-blur-sm
-            transition outline-none focus-visible:ring-2
-            focus-visible:ring-accent hocus:bg-bg-1 hocus:text-text-1"
-          :aria-label="addLabel"
-          :data-title-popup="addLabel"
-          @click.stop="emit('add')"
-        >
-          <Icon name="plus" />
-        </button>
         <button
           type="button"
           data-content-media-edit
@@ -112,6 +99,20 @@ const framed = computed(
               tabular-nums"
             >{{ humanSize(asset.size) }}</span
           >
+        </button>
+        <button
+          v-if="addLabel"
+          type="button"
+          data-content-media-add
+          class="flex size-9 cursor-pointer items-center justify-center
+            rounded-full bg-bg-1/80 text-text-2 shadow backdrop-blur-sm
+            transition outline-none focus-visible:ring-2
+            focus-visible:ring-accent hocus:bg-bg-1 hocus:text-text-1"
+          :aria-label="addLabel"
+          :data-title-popup="addLabel"
+          @click.stop="emit('add')"
+        >
+          <Icon name="plus" />
         </button>
       </div>
       <template #below>

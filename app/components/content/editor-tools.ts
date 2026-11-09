@@ -1051,7 +1051,8 @@ export class ContentMediaTool
    * More pictures and videos beside this one: the block becomes a gallery
    * that starts with it, as «Turn into a gallery» makes it, and the picked
    * ones follow — new files once each has landed. Nothing picked, nothing
-   * changes.
+   * changes; only new files picked, none of which lands, and the gallery
+   * turns back into this picture, laid out as it was.
    */
   private async addMore() {
     if (this.options.readOnly || !this.asset) return;
@@ -1061,7 +1062,8 @@ export class ContentMediaTool
     const gallery = fileShownAs('contentGallery', this.asset, {
       caption: this.caption,
     }) as { items: ContentGalleryItem[] };
-    await replaceBlock(
+    const layout = this.layout;
+    const made = await replaceBlock(
       this.options.api,
       this.options.block,
       'contentGallery',
@@ -1073,10 +1075,12 @@ export class ContentMediaTool
             asset,
           })),
         ],
-        files: picked.files,
       },
       true,
     );
+    if (!picked.files.length) return;
+    if (picked.assets.length) made?.call('adoptFiles', picked.files);
+    else made?.call('adoptFilesBesidePicture', { files: picked.files, layout });
   }
 
   private setLayout(layout: ContentMediaLayout) {
@@ -1108,9 +1112,17 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
       else if (!uploads.length && this.tracking) track?.(-1);
       this.tracking = uploads.length > 0;
       if (!this.destroyed) this.renderContent();
+      // A file that landed is put in right after the list lets it go.
+      if (!uploads.length && this.picture)
+        queueMicrotask(() => void this.turnBackIntoPicture());
     },
   });
   private tracking = false;
+  /**
+   * The picture this gallery was made from by its «+», while none of the
+   * new files picked there has landed: how it was laid out.
+   */
+  private picture?: { layout: ContentMediaLayout };
   /**
    * Where a file added after a tile goes once it lands: after that tile, and
    * after the files picked before it in the same go that have landed, so the
@@ -1161,6 +1173,43 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
     }
     this.uploads.follow(uploads);
     for (const upload of uploads) void withPasteUploadSlot(() => upload.run());
+  }
+
+  /**
+   * New files picked by a picture's «+», which made this gallery of the
+   * picture alone for them. Should none of them land — each failed and let
+   * go, or cancelled — the gallery turns back into the picture.
+   */
+  adoptFilesBesidePicture({
+    files,
+    layout,
+  }: {
+    files: File[];
+    layout: ContentMediaLayout;
+  }) {
+    if (!files.length || this.options.readOnly || this.destroyed) return;
+    this.picture = { layout };
+    this.adoptFiles(files);
+  }
+
+  /**
+   * The gallery made for files that never landed, still the picture alone
+   * it was made of — its caption perhaps written meanwhile, nothing else —
+   * becomes that picture again, as it was laid out: the «+» added nothing.
+   */
+  private async turnBackIntoPicture() {
+    const picture = this.picture;
+    const [only] = this.items;
+    if (!picture || this.destroyed || this.uploads.uploads.length) return;
+    this.picture = undefined;
+    if (!only || this.items.length !== 1 || this.title.trim()) return;
+    await replaceBlock(
+      this.options.api,
+      this.options.block,
+      'contentMedia',
+      { asset: only.asset, layout: picture.layout, caption: only.caption },
+      false,
+    );
   }
 
   save(): Record<string, unknown> {
@@ -1285,6 +1334,8 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
    * added after — while that place is still there; else at the end.
    */
   private land(asset: ContentAssetData, upload: PendingUpload) {
+    // Something the «+» picked is in: the gallery is the owner's now.
+    this.picture = undefined;
     const place = this.placeOf.get(upload);
     if (!place) {
       this.append([asset]);
