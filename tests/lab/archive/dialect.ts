@@ -29,6 +29,7 @@ import type { FileKind } from './model';
 export const REF_ENTITY_TYPES: Record<string, ContentEntityType> = {
   project: 'project',
   section: 'project-section',
+  excerpt: 'excerpt',
   event: 'event',
   diary: 'diary-entry',
   page: 'page',

@@ -34,6 +34,7 @@ function formRoute(index: SiteIndex, ref: Ref): FormRoute | undefined {
   if (!entity) return undefined;
   if (entity.kind === 'profile') return { path: '/api/admin/about', ref };
   if (entity.kind === 'section') return formRoute(index, entity.project!);
+  if (entity.kind === 'excerpt') return formRoute(index, entity.parent!);
   if (entity.kind === 'tag')
     return { path: `/api/admin/tags/${entity.uuid}`, ref };
   const kind = KINDS[entity.kind as keyof typeof KINDS];

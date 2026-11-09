@@ -3,8 +3,14 @@
 // properties come from `plants.yaml` as traits.
 import { resolveDay } from './dates';
 import type { TextScan } from './dialect';
-import type { Archive, ArchivePeriod } from './model';
-import { archiveEntities, type ArchiveEntity } from './texts';
+import type { Archive, ArchiveExcerpt, ArchivePeriod } from './model';
+import {
+  archiveEntities,
+  archiveExcerpts,
+  parentRefOf,
+  refOf,
+  type ArchiveEntity,
+} from './texts';
 
 export type Facts = Record<string, number | boolean | string>;
 
@@ -71,6 +77,18 @@ export function archiveFacts(
     for (const r of event.relations) relate(`event:${event.id}`, r.to);
   for (const entry of archive.diary)
     for (const r of entry.relations) relate(`diary:${entry.date}`, r.to);
+  // An excerpt's relations are its own; on its targets they count as
+  // excerpts about them, not as relations.
+  const excerptsAbout = new Map<string, number>();
+  for (const excerpt of archiveExcerpts(archive)) {
+    relationCount.set(refOf.excerpt(excerpt), excerpt.relations.length);
+    for (const r of excerpt.relations)
+      excerptsAbout.set(r.to, (excerptsAbout.get(r.to) ?? 0) + 1);
+  }
+  const excerptFacts = (excerpts: ArchiveExcerpt[]): Facts => ({
+    excerpts: excerpts.length,
+    privateExcerpts: excerpts.filter((excerpt) => excerpt.private).length,
+  });
 
   const mentions = new Map<string, number>();
   for (const scan of scans.values())
@@ -91,6 +109,8 @@ export function archiveFacts(
         const project = entity.item;
         return {
           ...common,
+          ...excerptFacts(project.excerpts),
+          excerptsAbout: excerptsAbout.get(entity.ref) ?? 0,
           access: project.access,
           titleLength: Array.from(project.title).length,
           summaryLength: Array.from(project.summary).length,
@@ -130,11 +150,27 @@ export function archiveFacts(
           titleLength: Array.from(section.title).length,
         };
       }
+      case 'excerpt': {
+        const excerpt = entity.item;
+        const parent = facts.get(parentRefOf(excerpt));
+        return {
+          ...common,
+          private: excerpt.private,
+          parentKind: excerpt.parent.kind,
+          parentAccess: String(parent?.access ?? 'public'),
+          hasBanner: Boolean(excerpt.banner),
+          hasSummary: Boolean(excerpt.summary.trim()),
+          titleLength: Array.from(excerpt.title).length,
+          about: excerpt.relations.length,
+        };
+      }
       case 'event': {
         const event = entity.item;
         return {
           ...common,
           ...periodFacts(event.periods, seedDay),
+          ...excerptFacts(event.excerpts),
+          excerptsAbout: excerptsAbout.get(entity.ref) ?? 0,
           access: event.access,
           titleLength: Array.from(event.title).length,
           summaryLength: Array.from(event.summary).length,
@@ -149,10 +185,13 @@ export function archiveFacts(
         const day = resolveDay(entity.item.date, seedDay);
         return {
           ...common,
+          ...excerptFacts(entity.item.excerpts),
+          excerptsAbout: excerptsAbout.get(entity.ref) ?? 0,
           access: entity.item.access,
           day,
           relative: entity.item.date.startsWith('today'),
           future: day > seedDay,
+          textless: !entity.item.body.trim(),
         };
       }
       case 'page':

@@ -15,6 +15,10 @@ import {
 } from '../../../shared/relation';
 import { buildDiaryUrl } from '../../../shared/diary-url';
 import { buildEventUrl } from '../../../shared/event-url';
+import {
+  buildExcerptUrl,
+  type ExcerptParentAddress,
+} from '../../../shared/excerpt-url';
 import { buildPageUrl } from '../../../shared/page-url';
 import {
   buildProjectSectionUrl,
@@ -39,6 +43,7 @@ import { archiveFacts, archiveTraits } from './facts';
 import { FORM_KEYS, isDerivedFormKey } from './fields';
 import type {
   ArchiveAction,
+  ArchiveExcerpt,
   ArchiveFilePlacement,
   ArchivePeriod,
   ArchiveRelation,
@@ -47,7 +52,8 @@ import type {
 } from './model';
 import { conformanceMediaDir, type ArchiveSource } from './source';
 import { inPool, SiteClient, SiteError } from './site-client';
-import { archiveEntities, refOf } from './texts';
+import { archiveEntities, archiveExcerpts, refOf } from './texts';
+import type { Access } from '../types';
 
 const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 
@@ -89,7 +95,9 @@ function layOver(
 function fingerprintOf(desired: unknown) {
   return sha256(
     JSON.stringify(desired, (key, value) =>
-      key === 'contentUuid' || key === 'sectionUuid' ? undefined : value,
+      key === 'contentUuid' || key === 'sectionUuid' || key === 'excerptUuid'
+        ? undefined
+        : value,
     ),
   );
 }
@@ -141,7 +149,8 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
   const { archive, scans } = checked;
   log(
     `${source.label}: ${archive.projects.length} projects, ${archive.events.length} events, ` +
-      `${archive.diary.length} diary entries, ${archive.pages.length} pages, ${archive.files.length} files`,
+      `${archive.diary.length} diary entries, ${archiveExcerpts(archive).length} excerpts, ` +
+      `${archive.pages.length} pages, ${archive.files.length} files`,
   );
   const slugOf =
     archive.meta.language === 'ru'
@@ -468,9 +477,9 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
     string,
     { other: string; word: string; note?: unknown }[]
   >();
-  const declare = (from: string, relation: ArchiveRelation) => {
-    const word = relation.kind;
-    const note = relation.notes
+  /** A relation's note as each end's form holds it. */
+  const noteOf = (relation: ArchiveRelation) =>
+    relation.notes
       ? {
           here: {
             type: 'split',
@@ -489,6 +498,9 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
             there: { type: 'shared', text: relation.note },
           }
         : undefined;
+  const declare = (from: string, relation: ArchiveRelation) => {
+    const word = relation.kind;
+    const note = noteOf(relation);
     const add = (ref: string, other: string, kind: string, itsNote: unknown) =>
       relationsByRef.set(ref, [
         ...(relationsByRef.get(ref) ?? []),
@@ -521,6 +533,74 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
         },
       ];
     });
+
+  // ------------------------------------------------------------- excerpts
+  /**
+   * An excerpt's relations are declared on it alone and saved with its
+   * parent's form: the target's form never holds them (AGENTS.md, "What
+   * Thei Is About").
+   */
+  const excerptRelationsOf = (excerpt: ArchiveExcerpt) =>
+    excerpt.relations.flatMap((relation) => {
+      const target = known.get(relation.to);
+      if (!target) return [];
+      const note = noteOf(relation);
+      return [
+        {
+          entityType: RELATION_ENDS[relation.to.split(':')[0]!]!,
+          entityId: target.uuid,
+          type: RELATION_TYPE_OF_WORD[relation.kind],
+          ...(note ? { note: note.here } : {}),
+        },
+      ];
+    });
+  /**
+   * A parent's excerpts as its form holds them. An excerpt is its text and
+   * what it is about, and the site refuses one about nothing, so an excerpt
+   * whose targets are not on the site yet waits for the pass after
+   * everything is made.
+   */
+  const excerptsOf = (excerpts: ArchiveExcerpt[], form?: any) => {
+    const stored = new Map<string, any>(
+      (form?.excerpts ?? []).map((item: any) => [item.publicId, item]),
+    );
+    return [...excerpts]
+      .sort((a, b) => a.order - b.order)
+      .flatMap((excerpt) => {
+        const ref = refOf.excerpt(excerpt);
+        const relations = excerptRelationsOf(excerpt);
+        if (!relations.length) return [];
+        const publicId = publicIdOf(ref);
+        const before = stored.get(publicId);
+        return [
+          {
+            ...(before?.excerptUuid ? { excerptUuid: before.excerptUuid } : {}),
+            title: excerpt.title,
+            summary: excerpt.summary,
+            humanReadableSlug: excerpt.slug ?? slugOf(excerpt.title),
+            publicId,
+            isPrivate: excerpt.private,
+            content: text(ref, 'body', excerpt.body, before?.content) ?? {
+              data: { blocks: [] },
+            },
+            relations,
+            ...(excerpt.banner
+              ? { bannerAssetUuid: assetOf(excerpt.banner) }
+              : {}),
+          },
+        ];
+      });
+  };
+  /** The uuids a parent's form gives its excerpts, once it holds them. */
+  const knowExcerpts = (excerpts: ArchiveExcerpt[], form: any) => {
+    for (const excerpt of excerpts) {
+      const ref = refOf.excerpt(excerpt);
+      const stored = (form.excerpts ?? []).find(
+        (item: any) => item.publicId === publicIdOf(ref),
+      );
+      if (stored?.excerptUuid) known.set(ref, { uuid: stored.excerptUuid });
+    }
+  };
 
   // ------------------------------------------------------------- statuses
   const desiredStatuses = (owner: string, list: ArchiveStatus[]) => {
@@ -696,6 +776,7 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
                 : {}),
             };
           }),
+        excerpts: excerptsOf(project.excerpts, form),
         showcaseAssets: showcaseOf(project.showcase),
         otherAssets: otherFilesOf(project.files),
         externalLinks: linksOf(project.links),
@@ -715,6 +796,7 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
         if (stored?.sectionUuid)
           known.set(refOf.section(section), { uuid: stored.sectionUuid });
       }
+      knowExcerpts(project.excerpts, form);
     },
   };
 
@@ -740,7 +822,9 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
       reminder: event.reminder,
       synonyms: event.synonyms,
       notes: text(ref, 'notes', event.notes, form?.notes),
+      excerpts: excerptsOf(event.excerpts, form),
     }),
+    afterRead: (event, form) => knowExcerpts(event.excerpts, form),
   };
 
   const diaryKind: Kind = {
@@ -755,7 +839,9 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
       content: text(ref, 'body', entry.body, form?.content),
       notes: text(ref, 'notes', entry.notes, form?.notes),
       reminder: entry.reminder,
+      excerpts: excerptsOf(entry.excerpts, form),
     }),
+    afterRead: (entry, form) => knowExcerpts(entry.excerpts, form),
   };
 
   const kinds = [pageKind, projectKind, eventKind, diaryKind];
@@ -831,83 +917,105 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
     );
   }
 
+  /** Saves an entity as the archive wants it; true when a save was needed. */
+  const saveItem = async (kind: Kind, ref: string, item: any) => {
+    const uuid = known.get(ref)!.uuid;
+    for (let attempt = 0; ; attempt++) {
+      if (attempt > 5)
+        throw new SiteError(
+          `${ref} could not be saved (last: ${site.lastFailure}).`,
+        );
+      const read = site.ok(
+        `Reading ${ref}`,
+        await site.request('GET', `${kind.route}/${uuid}`),
+      );
+      const form = read.body;
+      noteUnknownKeys(
+        kind === diaryKind
+          ? 'diary'
+          : kind === pageKind
+            ? 'page'
+            : kind === projectKind
+              ? 'project'
+              : 'event',
+        form,
+      );
+      const desired = {
+        ...kind.desired(item, ref, form),
+        relations: relationsOf(ref),
+        ...(kind.statuses ? { statuses: kind.statuses(item, ref) } : {}),
+      };
+      const fingerprint = fingerprintOf(desired);
+      if (
+        recorded(ref)?.fingerprint === fingerprint &&
+        recorded(ref)?.version === form.version
+      ) {
+        fingerprints.set(ref, fingerprint);
+        versions.set(ref, form.version);
+        forms.set(ref, form);
+        kind.afterRead?.(item, form);
+        return false;
+      }
+      const { statuses: wantedStatuses, ...fields } = desired as Record<
+        string,
+        any
+      >;
+      const { statuses: _history, ...rest } = form;
+      const payload: Record<string, unknown> = {
+        ...layOver(rest, fields),
+        version: form.version,
+      };
+      if (kind.statuses)
+        Object.assign(
+          payload,
+          await statusEdits(kind.statusPath!(uuid), wantedStatuses),
+        );
+      const answer = await site.attempt('PUT', `${kind.route}/${uuid}`, {
+        json: payload,
+      });
+      if (!answer || answer.status === 409 || answer.body?.code === 'changed')
+        continue;
+      site.ok(
+        `Saving ${ref}`,
+        answer,
+        (a) => a.status === 200 && a.body?.type === 'success',
+      );
+      const after = site.ok(
+        `Reading ${ref}`,
+        await site.request('GET', `${kind.route}/${uuid}`),
+      ).body;
+      fingerprints.set(ref, fingerprint);
+      versions.set(ref, after.version);
+      forms.set(ref, after);
+      kind.afterRead?.(item, after);
+      return true;
+    }
+  };
+
+  // Excerpts whose targets were not on the site when their parent was made
+  // are made now, with everything known, so that the last pass can link to
+  // them from any text.
+  for (const kind of [projectKind, eventKind, diaryKind]) {
+    const waiting = kind.items.filter(({ item }) =>
+      item.excerpts.some(
+        (excerpt: ArchiveExcerpt) => !known.has(refOf.excerpt(excerpt)),
+      ),
+    );
+    if (!waiting.length) continue;
+    let kindSaved = 0;
+    await inPool(waiting, 4, async ({ ref, item }) => {
+      if (await saveItem(kind, ref, item)) kindSaved++;
+    });
+    saved += kindSaved;
+    log(`  ${kind.name}: ${kindSaved} saved with their excerpts`);
+  }
+
   log('Writing links, relations and statuses');
   finalPass = true;
   for (const kind of kinds) {
     let kindSaved = 0;
     await inPool(kind.items, 4, async ({ ref, item }) => {
-      const uuid = known.get(ref)!.uuid;
-      for (let attempt = 0; ; attempt++) {
-        if (attempt > 5)
-          throw new SiteError(
-            `${ref} could not be saved (last: ${site.lastFailure}).`,
-          );
-        const read = site.ok(
-          `Reading ${ref}`,
-          await site.request('GET', `${kind.route}/${uuid}`),
-        );
-        const form = read.body;
-        noteUnknownKeys(
-          kind === diaryKind
-            ? 'diary'
-            : kind === pageKind
-              ? 'page'
-              : kind === projectKind
-                ? 'project'
-                : 'event',
-          form,
-        );
-        const desired = {
-          ...kind.desired(item, ref, form),
-          relations: relationsOf(ref),
-          ...(kind.statuses ? { statuses: kind.statuses(item, ref) } : {}),
-        };
-        const fingerprint = fingerprintOf(desired);
-        if (
-          recorded(ref)?.fingerprint === fingerprint &&
-          recorded(ref)?.version === form.version
-        ) {
-          fingerprints.set(ref, fingerprint);
-          versions.set(ref, form.version);
-          forms.set(ref, form);
-          kind.afterRead?.(item, form);
-          return;
-        }
-        const { statuses: wantedStatuses, ...fields } = desired as Record<
-          string,
-          any
-        >;
-        const { statuses: _history, ...rest } = form;
-        const payload: Record<string, unknown> = {
-          ...layOver(rest, fields),
-          version: form.version,
-        };
-        if (kind.statuses)
-          Object.assign(
-            payload,
-            await statusEdits(kind.statusPath!(uuid), wantedStatuses),
-          );
-        const answer = await site.attempt('PUT', `${kind.route}/${uuid}`, {
-          json: payload,
-        });
-        if (!answer || answer.status === 409 || answer.body?.code === 'changed')
-          continue;
-        site.ok(
-          `Saving ${ref}`,
-          answer,
-          (a) => a.status === 200 && a.body?.type === 'success',
-        );
-        kindSaved++;
-        const after = site.ok(
-          `Reading ${ref}`,
-          await site.request('GET', `${kind.route}/${uuid}`),
-        ).body;
-        fingerprints.set(ref, fingerprint);
-        versions.set(ref, after.version);
-        forms.set(ref, after);
-        kind.afterRead?.(item, after);
-        return;
-      }
+      if (await saveItem(kind, ref, item)) kindSaved++;
     });
     saved += kindSaved;
     log(
@@ -1057,6 +1165,54 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
     return { ref: entity.ref, expectOpen };
   };
   const checks: { ref: string; expectOpen: boolean }[] = [];
+  /**
+   * A parent's excerpts, each as open as its parent unless private; an
+   * excerpt is edited in its parent's form, opened on it.
+   */
+  const addExcerpts = (
+    parentRef: string,
+    form: any,
+    excerpts: ArchiveExcerpt[],
+    parent: { address: ExcerptParentAddress; access: Access; adminUrl: string },
+  ) => {
+    for (const excerpt of excerpts) {
+      const ref = refOf.excerpt(excerpt);
+      const stored = (form.excerpts ?? []).find(
+        (item: any) => item.publicId === publicIdOf(ref),
+      );
+      if (!stored) {
+        warn(`${ref} is missing from its ${excerpt.parent.kind} after saving`);
+        continue;
+      }
+      const url = buildExcerptUrl(
+        parent.address,
+        stored.humanReadableSlug,
+        stored.publicId,
+      );
+      const access: Access =
+        stored.isPrivate || parent.access === 'private'
+          ? 'private'
+          : parent.access;
+      checks.push(
+        add(
+          {
+            ref: ref as SiteEntity['ref'],
+            kind: 'excerpt',
+            uuid: stored.excerptUuid,
+            title: stored.title,
+            slug: stored.humanReadableSlug,
+            publicId: stored.publicId,
+            access,
+            parent: parentRef as SiteEntity['ref'],
+            adminUrl: `${parent.adminUrl}?excerpt=${encodeURIComponent(stored.publicId)}`,
+            publicUrl: url,
+            markdownUrl: `${url}index.md`,
+          },
+          access !== 'private',
+        ),
+      );
+    }
+  };
   for (const tag of archive.tags) {
     const ref = refOf.tag(tag);
     const item = tagItems.get(tag.id)!;
@@ -1157,6 +1313,15 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
         ),
       );
     }
+    addExcerpts(ref, form, project.excerpts, {
+      address: {
+        type: 'project',
+        humanReadableSlug: form.humanReadableSlug,
+        publicId: form.publicId,
+      },
+      access: form.access,
+      adminUrl: `/admin/projects/${form.projectUuid}/edit/`,
+    });
   }
   for (const event of archive.events) {
     const ref = refOf.event(event);
@@ -1179,6 +1344,15 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
         form.access !== 'private',
       ),
     );
+    addExcerpts(ref, form, event.excerpts, {
+      address: {
+        type: 'event',
+        humanReadableSlug: form.humanReadableSlug,
+        publicId: form.publicId,
+      },
+      access: form.access,
+      adminUrl: `/admin/events/${form.eventUuid}/edit/`,
+    });
   }
   for (const entry of archive.diary) {
     const ref = refOf.diary(entry);
@@ -1199,6 +1373,11 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
         form.access !== 'private',
       ),
     );
+    addExcerpts(ref, form, entry.excerpts, {
+      address: { type: 'diary-entry', date: form.date },
+      access: form.access,
+      adminUrl: `/admin/diary/${form.diaryUuid}/edit/`,
+    });
   }
   index.entities.profile = {
     ref: 'profile',
@@ -1254,6 +1433,8 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
     [event.banner, ...event.files.map((f) => f.file)].forEach((id) =>
       place(id, refOf.event(event)),
     );
+  for (const excerpt of archiveExcerpts(archive))
+    place(excerpt.banner, refOf.excerpt(excerpt));
   for (const tag of archive.tags) place(tag.icon, refOf.tag(tag));
   for (const file of archive.files) {
     const site = uploaded.get(file.id)!;

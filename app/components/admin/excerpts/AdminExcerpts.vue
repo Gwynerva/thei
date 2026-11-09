@@ -9,7 +9,7 @@ import {
   moveItemById,
   useDragSort,
 } from '#layers/thei/app/composables/drag-sort';
-import { adminExcerptModal } from './admin-excerpt-modal';
+import { adminExcerptModal } from './excerpt-modals';
 import { excerptsFormKey } from './excerpts-form';
 import AdminExcerptRow from './AdminExcerptRow.vue';
 

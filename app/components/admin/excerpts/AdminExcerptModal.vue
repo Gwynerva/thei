@@ -17,7 +17,7 @@ import ModalHeaderButton from '#layers/thei/app/modals/ModalHeaderButton.vue';
 import LinkField from '#layers/thei/app/pages/admin/components/LinkField.vue';
 import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
 import type { FormNeed } from '#layers/thei/app/composables/form-needs';
-import { adminExcerptDeleteModal } from './admin-excerpt-modal';
+import { adminExcerptDeleteModal } from './excerpt-modals';
 import type { ExcerptsForm } from './excerpts-form';
 
 /**

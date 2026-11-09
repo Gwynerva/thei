@@ -9,9 +9,12 @@ import {
   CONTENT_MEDIA_LAYOUTS,
   type ContentOutputBlock,
 } from '#layers/thei/shared/content';
-import { CONTENT_INLINE_MARKUP_SELECTOR } from '#layers/thei/shared/content-link';
+import {
+  CONTENT_ENTITY_TYPES,
+  CONTENT_INLINE_MARKUP_SELECTOR,
+} from '#layers/thei/shared/content-link';
 import { FORM_FIELDS } from '#layers/thei/server/thei/ai/forms/changes';
-import { convertText } from './dialect';
+import { convertText, REF_ENTITY_TYPES } from './dialect';
 import { FIELD_MAP, NOT_IN_FORMAT } from './fields';
 import { readArchive } from './read';
 import { archiveTexts } from './texts';
@@ -71,6 +74,14 @@ describe('the conformance archive covers what Thei stores', () => {
     expect(html).toContain('data-content-note');
     expect(html).toContain('<a href=\\"/');
     expect(html).toContain('<br>');
+  });
+
+  it('links to every kind of entity a text may name', () => {
+    const kinds = Object.values(REF_ENTITY_TYPES);
+    for (const type of CONTENT_ENTITY_TYPES) {
+      expect(kinds, type).toContain(type);
+      expect(html, type).toContain(`data-entity-type=\\"${type}\\"`);
+    }
   });
 
   it('holds every list style, another counter, a centred quote and a spoiler', () => {

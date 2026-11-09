@@ -30,6 +30,8 @@ const options = computed<FieldOptions>(() => ({
   <Field v-if="count" data-excerpts-on-delete>
     <FieldLabel>{{ phrase.excerpts }}</FieldLabel>
     <FieldOptions v-model="choice" direction="column" :options />
-    <FieldHint>{{ phrase.excerpts_on_delete_count(count, onlyTarget) }}</FieldHint>
+    <FieldHint>{{
+      phrase.excerpts_on_delete_count(count, onlyTarget)
+    }}</FieldHint>
   </Field>
 </template>

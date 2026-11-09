@@ -153,6 +153,66 @@ describe('what breaks the format is named', () => {
       /kind image does not agree with \.mp3/,
     ],
     [
+      'an excerpt with periods',
+      {
+        'projects/lamp/excerpts/09-x.md':
+          '---\ntitle: X\nperiods: [2021-01-01]\nrelations:\n  - to: event:fair\n---\n\nWords.\n',
+      },
+      /an excerpt has no periods/,
+    ],
+    [
+      'an excerpt about nothing',
+      { 'projects/lamp/excerpts/09-x.md': '---\ntitle: X\n---\n\nWords.\n' },
+      /an excerpt needs at least one relation/,
+    ],
+    [
+      'an excerpt without a title',
+      {
+        'events/2021/fair/excerpts/09-x.md':
+          '---\nrelations:\n  - to: project:lamp\n---\n\nWords.\n',
+      },
+      /title is required/,
+    ],
+    [
+      'an excerpt without a body',
+      {
+        'diary/2021/2021-03-04/excerpts/09-x.md':
+          '---\ntitle: X\nrelations:\n  - to: project:lamp\n---\n',
+      },
+      /an excerpt needs a body/,
+    ],
+    [
+      'an excerpt about its own parent',
+      {
+        'diary/2021/2021-03-04/excerpts/09-x.md':
+          '---\ntitle: X\nrelations:\n  - to: diary:2021-03-04\n---\n\nWords.\n',
+      },
+      /not about its own parent diary:2021-03-04/,
+    ],
+    [
+      'a relation to an excerpt',
+      {
+        'diary/2022/2022-02-03.md':
+          '---\nrelations:\n  - to: excerpt:project/lamp/first-light\n---\n\nWords.\n',
+      },
+      /only projects, events and diary entries are related/,
+    ],
+    [
+      'an excerpts folder without its entry',
+      { 'diary/2022/2022-02-11/excerpts/01-x.md': '---\ntitle: X\n---\n' },
+      /diary\/2022\/2022-02-11: a folder without its entry/,
+    ],
+    [
+      'an excerpts folder without its event',
+      { 'events/2021/nowhere/excerpts/01-x.md': '---\ntitle: X\n---\n' },
+      /events\/2021\/nowhere: a folder without its event/,
+    ],
+    [
+      "something else in an entry's folder",
+      { 'diary/2021/2021-03-04/notes.md': 'Words.\n' },
+      /holds only excerpts\//,
+    ],
+    [
       'an action without a target',
       {
         'projects/garden/project.md':
@@ -166,6 +226,19 @@ describe('what breaks the format is named', () => {
       const issues = archiveWith(files);
       expect(issues.join('\n')).toMatch(pattern);
     });
+
+  it('a diary entry told by its excerpt alone is whole', () => {
+    expect(
+      archiveWith({
+        'diary/2022/2022-02-12.md': '',
+        'diary/2022/2022-02-12/excerpts/01-x.md':
+          '---\ntitle: X\nrelations:\n  - to: project:lamp\n---\n\nWords.\n',
+      }),
+    ).toEqual([]);
+    expect(archiveWith({ 'diary/2022/2022-02-12.md': '' }).join('\n')).toMatch(
+      /a diary entry needs a body, or an excerpt/,
+    );
+  });
 
   it('a relative day on an absolute one', () => {
     const day = addDays(SEED_DAY, 3);

@@ -12,6 +12,7 @@ import { checkArchive } from './check';
 import { localDay } from './dates';
 import { seedSite } from './seed';
 import { adapterFingerprint, archiveSource, readLock } from './source';
+import { archiveExcerpts } from './texts';
 
 export const commands: Commands = {
   fetch: {
@@ -76,8 +77,8 @@ export const commands: Commands = {
         () => [
           `${source.label}: ${archive.meta.title || '(no title)'} ${archive.meta.version}`,
           `  ${archive.projects.length} projects (${archive.projects.reduce((n, p) => n + p.sections.length, 0)} sections), ` +
-            `${archive.events.length} events, ${archive.diary.length} diary entries, ${archive.pages.length} pages, ` +
-            `${archive.tags.length} tags, ${archive.files.length} files, ${archive.plants.length} plants`,
+            `${archive.events.length} events, ${archive.diary.length} diary entries, ${archiveExcerpts(archive).length} excerpts, ` +
+            `${archive.pages.length} pages, ${archive.tags.length} tags, ${archive.files.length} files, ${archive.plants.length} plants`,
           ...checked.issues.map(
             (issue) =>
               `  ${issue.level === 'error' ? '✗' : '!'} ${issue.file}: ${issue.message}`,

@@ -39,7 +39,9 @@ export interface ExcerptsForm {
   saved: () => unknown;
 }
 
-export const excerptsFormKey = Symbol('excerptsForm') as InjectionKey<ExcerptsForm>;
+export const excerptsFormKey = Symbol(
+  'excerptsForm',
+) as InjectionKey<ExcerptsForm>;
 
 /**
  * Whether an excerpt is all that differs from the form's last save, content

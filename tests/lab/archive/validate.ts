@@ -11,7 +11,13 @@ import { PROJECT_ACTION_TEXT_MAX_LENGTH } from '../../../shared/project-action';
 import { isCalendarDay, isRelativeDay, resolveDay } from './dates';
 import { scanText, type TextScan } from './dialect';
 import type { Archive, ArchiveIssue, ArchiveRelation, FileKind } from './model';
-import { archiveEntities, archiveTexts } from './texts';
+import {
+  archiveEntities,
+  archiveExcerpts,
+  archiveTexts,
+  parentRefOf,
+  refOf,
+} from './texts';
 
 const IMAGES = new Set<string>(IMAGE_EXTENSIONS);
 const VIDEOS = new Set<string>(VIDEO_EXTENSIONS);
@@ -257,6 +263,26 @@ export function validateArchive(
         event.file,
         `its first period starts in ${first.slice(0, 4)}, not ${event.year}`,
       );
+  }
+
+  // -------------------------------------------------------------- excerpts
+  // An excerpt's relations are its own, declared on it alone: what it is
+  // about, never the parent it is part of.
+  for (const excerpt of archiveExcerpts(archive)) {
+    placed(excerpt.file, excerpt.banner, 'visual');
+    const parent = parentRefOf(excerpt);
+    relations(
+      excerpt.file,
+      refOf.excerpt(excerpt),
+      excerpt.relations.filter((relation) => {
+        if (relation.to !== parent) return true;
+        error(
+          excerpt.file,
+          `an excerpt is not about its own parent ${parent}: it is part of it`,
+        );
+        return false;
+      }),
+    );
   }
 
   // ----------------------------------------------------------------- diary

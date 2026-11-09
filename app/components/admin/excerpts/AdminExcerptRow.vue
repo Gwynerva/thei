@@ -110,8 +110,8 @@ const accent = computed(() =>
           <span
             v-for="item in about"
             :key="`${item.entityType}:${item.entityId}`"
-            class="inline-flex max-w-full min-w-0 items-center gap-1
-              rounded-sm bg-bg-2 py-0.5 pr-1.5 pl-0.5 text-xs text-text-2"
+            class="inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm
+              bg-bg-2 py-0.5 pr-1.5 pl-0.5 text-xs text-text-2"
           >
             <EntityTokenIcon
               :media="item.iconMedia"

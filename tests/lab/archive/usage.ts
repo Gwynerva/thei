@@ -7,7 +7,7 @@
 import { resolveDay } from './dates';
 import type { TextScan } from './dialect';
 import type { Archive } from './model';
-import { archiveEntities } from './texts';
+import { archiveEntities, archiveExcerpts, refOf } from './texts';
 
 /** Constructs of Lab Markdown a release must use, by the names `scanText` counts. */
 export const TEXT_CONSTRUCTS = [
@@ -98,13 +98,46 @@ export function archiveUsage(
 
   // Access of every kind that has one.
   for (const entity of archiveEntities(archive))
-    if (entity.kind !== 'tag' && entity.kind !== 'section')
+    if (
+      entity.kind !== 'tag' &&
+      entity.kind !== 'section' &&
+      entity.kind !== 'excerpt'
+    )
       add(`access: ${entity.kind} ${entity.item.access}`);
   for (const project of archive.projects)
     for (const section of project.sections) {
       add(section.private ? 'section: private' : 'section: public');
       add(section.periods.length ? 'section: dated' : 'section: general');
     }
+  // Excerpts: of each kind of parent, private and public, of a private
+  // parent, with a summary, about each kind of target.
+  const access = new Map(
+    archiveEntities(archive).map((entity) => [
+      entity.ref,
+      'access' in entity.item ? entity.item.access : 'public',
+    ]),
+  );
+  const excerpts = archiveExcerpts(archive);
+  const named = {
+    project: 'a project',
+    event: 'an event',
+    diary: 'a diary entry',
+  };
+  for (const excerpt of excerpts) {
+    add(`excerpt: of ${named[excerpt.parent.kind]}`);
+    add(excerpt.private ? 'excerpt: private' : 'excerpt: public');
+    if (access.get(`${excerpt.parent.kind}:${excerpt.parent.id}`) === 'private')
+      add('excerpt: of a private parent');
+    if (excerpt.summary.trim()) add('excerpt: with a summary');
+    if (excerpt.banner) add('banner: an excerpt');
+    for (const relation of excerpt.relations)
+      add(
+        `excerpt: about ${named[relation.to.split(':')[0] as keyof typeof named]}`,
+      );
+  }
+  for (const entry of archive.diary)
+    if (!entry.body.trim() && entry.excerpts.length)
+      add('excerpt: the whole of a diary entry');
 
   // Tags: a tag may carry an icon, and most do not.
   for (const tag of archive.tags)
@@ -149,11 +182,14 @@ export function archiveUsage(
     );
   }
 
-  // Relations.
+  // Relations, an excerpt's among them.
+  for (const relation of excerpts.flatMap((excerpt) => excerpt.relations))
+    add('relation: from an excerpt');
   for (const relation of [
     ...archive.projects.flatMap((project) => project.relations),
     ...archive.events.flatMap((event) => event.relations),
     ...archive.diary.flatMap((entry) => entry.relations),
+    ...excerpts.flatMap((excerpt) => excerpt.relations),
   ]) {
     add(`relation: ${relation.kind}`);
     add(
@@ -191,6 +227,7 @@ export function archiveUsage(
   }
   for (const event of archive.events)
     [event.banner, ...event.files.map((f) => f.file)].forEach(place);
+  for (const excerpt of excerpts) place(excerpt.banner);
   // Banners: an event's or a section's stands for it on every card too.
   for (const event of archive.events) if (event.banner) add('banner: an event');
   for (const project of archive.projects)
@@ -249,7 +286,25 @@ export function archiveUsage(
     need(name, 1);
   for (const kind of ['related', 'depends-on', 'affects'])
     need(`relation: ${kind}`, 1);
-  for (const name of ['relation: a note per side', 'relation: a shared note'])
+  for (const name of [
+    'relation: a note per side',
+    'relation: a shared note',
+    'relation: from an excerpt',
+  ])
+    need(name, 1);
+  for (const name of [
+    'excerpt: of a project',
+    'excerpt: of an event',
+    'excerpt: of a diary entry',
+    'excerpt: private',
+    'excerpt: public',
+    'excerpt: of a private parent',
+    'excerpt: with a summary',
+    'excerpt: about a project',
+    'excerpt: about an event',
+    'excerpt: about a diary entry',
+    'excerpt: the whole of a diary entry',
+  ])
     need(name, 1);
   for (const ext of FILE_EXTENSIONS) need(`file: .${ext}`, 1);
   need('file: in more than one place', 1);
@@ -257,6 +312,7 @@ export function archiveUsage(
   need('file: without a description', 1);
   need('banner: an event', 1);
   need('banner: a section', 1);
+  need('banner: an excerpt', 1);
   need('hidden: a third slide of a gallery', 1);
   need('hidden: a second file of a group', 1);
   // Whatever else the archive uses, for the record.

@@ -124,6 +124,29 @@ export interface ArchiveSection extends Source {
   body: string;
 }
 
+/** The kind of a parent of an excerpt, as its ref names it. */
+export type ExcerptParentKind = 'project' | 'event' | 'diary';
+
+/**
+ * An excerpt: a named part of a project, an event or a diary entry, about
+ * something else in the archive (revision 2). Its parent is the folder it
+ * was found in.
+ */
+export interface ArchiveExcerpt extends Source {
+  id: string;
+  parent: { kind: ExcerptParentKind; id: string };
+  /** The owner's order of the parent's excerpts. */
+  order: number;
+  title: string;
+  summary: string;
+  slug?: string;
+  private: boolean;
+  banner?: string;
+  /** What it is about: at least one, never its parent. */
+  relations: ArchiveRelation[];
+  body: string;
+}
+
 export interface ArchiveProject extends Source {
   id: string;
   title: string;
@@ -146,6 +169,7 @@ export interface ArchiveProject extends Source {
   relations: ArchiveRelation[];
   body: string;
   sections: ArchiveSection[];
+  excerpts: ArchiveExcerpt[];
 }
 
 export interface ArchiveEvent extends Source {
@@ -167,6 +191,7 @@ export interface ArchiveEvent extends Source {
   action?: ArchiveAction;
   relations: ArchiveRelation[];
   body: string;
+  excerpts: ArchiveExcerpt[];
 }
 
 export interface ArchiveDiaryEntry extends Source {
@@ -176,7 +201,9 @@ export interface ArchiveDiaryEntry extends Source {
   reminder: string;
   notes: string;
   relations: ArchiveRelation[];
+  /** Empty when the day is told by its excerpts alone. */
   body: string;
+  excerpts: ArchiveExcerpt[];
 }
 
 export type FileKind = 'image' | 'video' | 'audio' | 'document' | 'other';
