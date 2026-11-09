@@ -1,5 +1,6 @@
 import type { ContentEntitySearchItem } from './admin/content-entity-search';
 import type { MediaDescriptor } from './media';
+import type { ProjectEventAccessLevel } from './access-level';
 
 /**
  * The kinds of entity a relation can join.
@@ -103,6 +104,8 @@ export type RelationEditItem = {
   /** Set on diary entries, which have a day instead of a title. */
   date?: string;
   iconMedia?: MediaDescriptor;
+  /** How open the other end is now: what an excerpt's form says of its privacy. */
+  access?: ProjectEventAccessLevel;
 };
 
 /**
@@ -120,6 +123,7 @@ export function relationEndOf(
     | 'publicId'
     | 'date'
     | 'previewMedia'
+    | 'access'
   > & { entityType: RelationEntityType },
 ): Omit<RelationEditItem, 'type' | 'note'> {
   return {
@@ -131,6 +135,7 @@ export function relationEndOf(
     publicId: entity.publicId,
     date: entity.date,
     iconMedia: entity.previewMedia,
+    access: entity.access,
   };
 }
 

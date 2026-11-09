@@ -39,6 +39,8 @@ export interface AiActionText {
     | 'note-other';
   /** Of a new project: the section it is written for, by its place. */
   section?: number;
+  /** Of a new project, event or diary entry: the excerpt it is written for, by its place. */
+  excerpt?: number;
 }
 
 /** The kinds whose words the owner may correct before applying them. */
@@ -73,17 +75,27 @@ type Payload = Record<string, unknown>;
 
 /**
  * The texts a new entity is written with, in editing Markdown, by its kind;
- * a new project's sections bring a body each.
+ * a new project's sections and a new parent's excerpts bring a body each.
  */
 const CREATED_TEXTS: Record<string, readonly string[]> = {
   project: ['description', 'notes'],
   'project-section': ['body'],
+  excerpt: ['body'],
   event: ['body', 'notes'],
   'diary-entry': ['body', 'notes'],
   page: ['body', 'notes'],
 };
 
-/** A new entity's words: its fields, then its texts, then its sections'. */
+/** The parts of a new entity that bring a body each, by the list they are in. */
+const CREATED_PARTS = {
+  sections: { kinds: ['project'], mark: 'section' },
+  excerpts: { kinds: ['project', 'event', 'diary-entry'], mark: 'excerpt' },
+} as const;
+
+/**
+ * A new entity's words: its fields, then its texts, then its sections' and
+ * its excerpts'.
+ */
 function createTexts(entity: string, fields: unknown): AiActionText[] {
   if (!fields || typeof fields !== 'object') return [];
   const data = fields as Payload;
@@ -102,18 +114,22 @@ function createTexts(entity: string, fields: unknown): AiActionText[] {
         shape: 'markdown',
         field,
       });
-  if (entity === 'project' && Array.isArray(data.sections))
-    data.sections.forEach((section, index) => {
-      const body = (section as Payload | null)?.body;
+  for (const [list, { kinds, mark }] of Object.entries(CREATED_PARTS)) {
+    const parts = data[list];
+    if (!(kinds as readonly string[]).includes(entity) || !Array.isArray(parts))
+      continue;
+    parts.forEach((part, index) => {
+      const body = (part as Payload | null)?.body;
       if (typeof body === 'string' && body)
         texts.push({
-          key: `fields.sections.${index}.body`,
+          key: `fields.${list}.${index}.body`,
           value: body,
           shape: 'markdown',
           field: 'body',
-          section: index,
+          ...(mark === 'section' ? { section: index } : { excerpt: index }),
         });
     });
+  }
   return texts;
 }
 
@@ -290,11 +306,18 @@ export function withActionTexts(
     if (typeof words !== 'string') continue;
     const value = valueOf(text.shape, words);
     const [head, tail] = text.key.split('.') as [string, string | undefined];
-    if (text.section !== undefined) {
+    const part =
+      text.section !== undefined
+        ? (['sections', text.section] as const)
+        : text.excerpt !== undefined
+          ? (['excerpts', text.excerpt] as const)
+          : undefined;
+    if (part) {
+      const [list, index] = part;
       const fields = data.fields as Payload;
-      const sections = [...(fields.sections as Payload[])];
-      sections[text.section] = { ...sections[text.section], body: words };
-      data.fields = { ...fields, sections };
+      const items = [...(fields[list] as Payload[])];
+      items[index] = { ...items[index], body: words };
+      data.fields = { ...fields, [list]: items };
     } else if (kind === 'relation') {
       const note = (data.note ?? { type: 'shared' }) as Payload;
       if (head === 'note' && tail === 'this') note.currentText = words;

@@ -262,6 +262,8 @@ export interface WrittenReview {
 function writtenTitle(text: NonNullable<AiReviewText['written']>[number]) {
   if (text.section !== undefined)
     return phrase.value.ai_review_written_section(publicText(text.section));
+  if (text.excerpt !== undefined)
+    return phrase.value.ai_review_written_excerpt(publicText(text.excerpt));
   return fieldName(text.field ?? 'body');
 }
 

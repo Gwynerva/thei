@@ -4,6 +4,7 @@ import type {
   ContentOutputData,
   ContentOwnerType,
 } from '#layers/thei/shared/content';
+import type { ExcerptItem } from '#layers/thei/shared/excerpt';
 import {
   orderProjectSections,
   type ProjectSectionItem,
@@ -80,6 +81,15 @@ function noteAlike(note: RelationNote | undefined) {
   return null;
 }
 
+/** A relation by its other end, its kind and its note: never the end's title. */
+function relationAlike(item: RelationEditItem) {
+  return {
+    end: `${item.entityType}:${item.entityId}`,
+    type: item.type,
+    note: noteAlike(item.note),
+  };
+}
+
 /** One field as it is compared; see `alike`. */
 function valueAlike(field: string, value: any): unknown {
   if (value === undefined || value === null) return null;
@@ -92,12 +102,23 @@ function valueAlike(field: string, value: any): unknown {
     // Their order means nothing: a list is shown one kind at a time.
     case 'relations':
       return (value as RelationEditItem[])
-        .map((item) => ({
-          end: `${item.entityType}:${item.entityId}`,
-          type: item.type,
-          note: noteAlike(item.note),
-        }))
+        .map(relationAlike)
         .sort((left, right) => left.end.localeCompare(right.end));
+    // What an excerpt is about.
+    case 'about':
+      return relationAlike(value as RelationEditItem);
+    // In the owner's order, each by the public id it is made with.
+    case 'excerpts':
+      return (value as ExcerptItem[]).map((excerpt) => ({
+        publicId: excerpt.publicId,
+        title: excerpt.title,
+        summary: excerpt.summary,
+        slug: excerpt.humanReadableSlug,
+        isPrivate: excerpt.isPrivate,
+        content: textDigest(excerpt.content),
+        banner: excerpt.bannerAssetUuid ?? null,
+        about: excerpt.about ? relationAlike(excerpt.about) : null,
+      }));
     case 'showcaseAssets':
     case 'otherAssets':
       return (
@@ -142,10 +163,10 @@ function valueAlike(field: string, value: any): unknown {
 
 /**
  * Fields of a form as they are compared: what a read gives and what a
- * change writes said alike — a tag by its name, a relation without the
- * other end's title, a text by what it says, a file or a link with what it
- * leaves out filled in, sections in the order a save keeps them, nothing as
- * null. So a change taken into a form and saved reads as made, and one that
+ * change writes said alike — a tag by its name, a relation and an
+ * excerpt's subject without the other end's title, a text by what it says,
+ * a file or a link with what it leaves out filled in, sections in the order
+ * a save keeps them, excerpts each by its public id, nothing as null. So a change taken into a form and saved reads as made, and one that
  * writes what is there already changes nothing.
  */
 export function alike(form: any, fields: string[]): string {

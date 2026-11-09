@@ -188,9 +188,9 @@ export function registerSessionTools(
             '',
             def.reference,
             '',
-            // A new entity has no target, but for a section: its project.
+            // A new entity has no target, but for a part: its owner.
             def.kind === 'create'
-              ? 'Target: none, but a new section names its project.'
+              ? 'Target: none, but a new section names its project, and a new excerpt the project, event or diary entry it is a part of.'
               : def.kind === 'describe'
                 ? 'Target: the file, named by file (or as target asset:<id>).'
                 : `Targets: ${def.targets.join(', ')}.`,

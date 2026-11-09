@@ -111,8 +111,9 @@ export type PublicExcerptCard = {
   media: MediaDescriptor;
   parent: PublicExcerptParent;
   /**
-   * The day it is dated by, its parent's: a diary entry's day, an event's
-   * last day, a project's first. Absent for a project with no dated section.
+   * The day it is dated by, its parent's: a diary entry's day, the last day
+   * of an event that has come. Absent for an excerpt of a project, which has
+   * no day of its own.
    */
   date?: string;
   about: PublicEntityLink[];

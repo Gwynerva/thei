@@ -2,7 +2,6 @@ import { validateDiaryData } from '#layers/thei/shared/admin/diary';
 import { createEmptyContentFieldValue } from '#layers/thei/shared/content';
 import {
   applyExcerpts,
-  countExcerptsOfParent,
   deleteExcerptsOfParent,
   detachExcerptsFromTarget,
   excerptIdentities,
@@ -102,7 +101,7 @@ export async function saveDiaryEdit(
     } satisfies DiarySaveResponse;
   }
   const parent = { type: 'diary-entry', id: diaryUuid } as const;
-  let preparedExcerpts;
+  let preparedExcerpts: Awaited<ReturnType<typeof prepareExcerpts>>;
   try {
     preparedExcerpts = await prepareExcerpts(parent, result.excerpts);
   } catch (error) {
@@ -111,11 +110,10 @@ export async function saveDiaryEdit(
       message: error instanceof Error ? error.message : 'Invalid excerpts',
     } satisfies DiarySaveResponse;
   }
-  // The text of the day is the entry, unless the day is told by its
-  // excerpts: those the form sends, or those it leaves as they are.
-  const hasExcerpts = preparedExcerpts
-    ? preparedExcerpts.length > 0
-    : countExcerptsOfParent(parent) > 0;
+  // The text of the day is the entry, unless the day is told by the
+  // excerpts it is saved with; one saved without its list of excerpts was
+  // held to its text already (`validateDiaryData`).
+  const hasExcerpts = Boolean(preparedExcerpts?.length);
 
   try {
     const [contentSave, notesSave] = await Promise.all([

@@ -536,28 +536,26 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
 
   // ------------------------------------------------------------- excerpts
   /**
-   * An excerpt's relations are declared on it alone and saved with its
-   * parent's form: the target's form never holds them (AGENTS.md, "What
-   * Thei Is About").
+   * What an excerpt is about is declared on it alone and saved with its
+   * parent's form: the subject's form never holds it (AGENTS.md, "What Thei
+   * Is About"). Nothing while the subject is not on the site yet.
    */
-  const excerptRelationsOf = (excerpt: ArchiveExcerpt) =>
-    excerpt.relations.flatMap((relation) => {
-      const target = known.get(relation.to);
-      if (!target) return [];
-      const note = noteOf(relation);
-      return [
-        {
-          entityType: RELATION_ENDS[relation.to.split(':')[0]!]!,
-          entityId: target.uuid,
-          type: RELATION_TYPE_OF_WORD[relation.kind],
-          ...(note ? { note: note.here } : {}),
-        },
-      ];
-    });
+  const excerptAboutOf = (excerpt: ArchiveExcerpt) => {
+    const relation = excerpt.about;
+    const target = known.get(relation.to);
+    if (!target) return undefined;
+    const note = noteOf(relation);
+    return {
+      entityType: RELATION_ENDS[relation.to.split(':')[0]!]!,
+      entityId: target.uuid,
+      type: RELATION_TYPE_OF_WORD[relation.kind],
+      ...(note ? { note: note.here } : {}),
+    };
+  };
   /**
    * A parent's excerpts as its form holds them. An excerpt is its text and
-   * what it is about, and the site refuses one about nothing, so an excerpt
-   * whose targets are not on the site yet waits for the pass after
+   * what it is about, and its form asks for what it is about, so an excerpt
+   * whose subject is not on the site yet waits for the pass after
    * everything is made.
    */
   const excerptsOf = (excerpts: ArchiveExcerpt[], form?: any) => {
@@ -568,8 +566,8 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
       .sort((a, b) => a.order - b.order)
       .flatMap((excerpt) => {
         const ref = refOf.excerpt(excerpt);
-        const relations = excerptRelationsOf(excerpt);
-        if (!relations.length) return [];
+        const about = excerptAboutOf(excerpt);
+        if (!about) return [];
         const publicId = publicIdOf(ref);
         const before = stored.get(publicId);
         return [
@@ -583,7 +581,7 @@ export async function seedSite(options: SeedOptions): Promise<SeedResult> {
             content: text(ref, 'body', excerpt.body, before?.content) ?? {
               data: { blocks: [] },
             },
-            relations,
+            about,
             ...(excerpt.banner
               ? { bannerAssetUuid: assetOf(excerpt.banner) }
               : {}),

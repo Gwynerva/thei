@@ -310,6 +310,49 @@ describe('the MCP endpoint', () => {
     expect(text).not.toContain('(also related)');
   });
 
+  it('lists a parent’s excerpts, each with the one thing it is about', async () => {
+    for (const [uuid, about] of [
+      ['x-1', true],
+      ['x-2', false],
+    ] as const) {
+      context.insert('excerpts', {
+        excerptUuid: uuid,
+        parentType: 'diary-entry',
+        parentId: 'd-1',
+        title: `${uuid} title`,
+        summary: '',
+        humanReadableSlug: uuid,
+        publicId: uuid,
+        isPrivate: 0,
+        sortOrder: uuid === 'x-1' ? 0 : 1,
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      if (about)
+        context.insert('entity-relations', {
+          firstType: 'excerpt',
+          firstId: uuid,
+          secondType: 'project',
+          secondId: PROJECT,
+          type: 'related',
+          note: null,
+          firstSortOrder: 0,
+          secondSortOrder: 0,
+        });
+    }
+    const text = (
+      await tool(handlerFor(['read']), 'read_entity', {
+        ref: 'diary-entry:2026-10-13',
+      })
+    ).content[0]!.text;
+    expect(text).toContain(
+      `- excerpt:x-1 — x-1 title · about project:${PROJECT}`,
+    );
+    expect(text).toContain(
+      '- excerpt:x-2 — x-2 title · about nothing: its subject was deleted',
+    );
+  });
+
   it('reads a project with its tags', async () => {
     const result = await tool(handlerFor(['read']), 'read_entity', {
       ref: `project:${PROJECT}`,

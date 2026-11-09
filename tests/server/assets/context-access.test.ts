@@ -18,6 +18,7 @@ import {
 } from '../../../shared/access-level';
 import { resolveRequestAdminRole } from '../../../shared/public-view';
 import type { ShareGrantOwner } from '../../../shared/share-link';
+import type { PublicViewer } from '../../../server/thei/access-links/viewer';
 
 let context: Awaited<ReturnType<typeof freshTestDb>>;
 let contextType:
@@ -28,9 +29,11 @@ let contextType:
   | 'profile-avatar'
   | 'profile-status'
   | 'project-status'
-  | 'project-section' = 'project';
+  | 'project-section'
+  | 'excerpt' = 'project';
 let contextRole: 'content' | 'icon' | 'banner' | 'favicon' = 'content';
 let contextGrantOwner: ShareGrantOwner | undefined;
+let contextOpens: ((viewer: PublicViewer) => boolean) | undefined;
 let parentAccess = ProjectEventAccessLevel.Public;
 let siteAccess = SiteAccessLevel.Public;
 const app = createApp().use(
@@ -43,6 +46,7 @@ const app = createApp().use(
       ownerId: 'parent',
       access: parentAccess,
       grantOwner: contextGrantOwner,
+      opens: contextOpens,
       role: contextRole,
       filename: 'file.webp',
     });
@@ -166,6 +170,7 @@ beforeEach(() => {
   contextType = 'project';
   contextRole = 'content';
   contextGrantOwner = undefined;
+  contextOpens = undefined;
   parentAccess = ProjectEventAccessLevel.Public;
   siteAccess = SiteAccessLevel.Public;
   const { db, schema } = context;
@@ -451,6 +456,34 @@ describe('share links and contextual attachments', () => {
     // A section open to all has a banner open to all.
     parentAccess = ProjectEventAccessLevel.Public;
     expect((await request()).status).toBe(200);
+  });
+
+  it('opens a banner by the rule its route names over any one grant', async () => {
+    // An excerpt's banner opens to whoever may open the excerpt: one
+    // private by hand about something private takes the links of both.
+    contextType = 'excerpt';
+    contextRole = 'banner';
+    parentAccess = ProjectEventAccessLevel.Private;
+    contextGrantOwner = { entityType: 'project', entityId: 'S' };
+    contextOpens = (viewer) =>
+      viewer.grants.has('project:S') && viewer.grants.has('diary-entry:D');
+    context.db
+      .insert(context.schema.assetUsages)
+      .values({
+        assetUuid: 'asset',
+        containerType: 'excerpt',
+        containerId: 'parent',
+        role: 'banner',
+      })
+      .run();
+    expect((await request()).status).toBe(404);
+    expect((await holding('project:S')).status).toBe(404);
+    contextOpens = (viewer) => viewer.grants.has('project:S');
+    const opened = await holding('project:S');
+    expect(opened.status).toBe(200);
+    expect(opened.headers.get('cache-control')).toBe('private, no-store');
+    expect((await holding('diary-entry:D')).status).toBe(404);
+    expect((await request('admin')).status).toBe(200);
   });
 
   it("keeps a file placed only in the owner's notes to the owner", async () => {

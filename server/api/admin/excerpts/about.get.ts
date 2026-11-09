@@ -9,7 +9,7 @@ import { OWNER } from '../../../thei/access-links/viewer';
 import { findContentEntity } from '../../../thei/content-entities';
 import { contentEntitySearchItem } from '../../../thei/content-entity-search';
 import { excerptRelationRowsOf, findExcerpt } from '../../../thei/excerpts';
-import { relationIconMedia, relationRowsOf } from '../../../thei/relations';
+import { relationIconMedia } from '../../../thei/relations';
 
 /**
  * The excerpts about an entity, for its form: the read-only tab of its
@@ -32,7 +32,6 @@ export default defineEventHandler(
     ];
     const parents = new Map<string, ContentEntitySearchItem | undefined>();
     const items: AdminExcerptAbout[] = [];
-    let onlyTarget = 0;
     for (const excerptUuid of ids) {
       const excerpt = findExcerpt(excerptUuid);
       if (!excerpt) continue;
@@ -46,8 +45,6 @@ export default defineEventHandler(
       }
       const parent = parents.get(key);
       if (!parent) continue;
-      if (relationRowsOf(db, schema, { type: 'excerpt', id: excerptUuid }).length === 1)
-        onlyTarget += 1;
       items.push({
         excerptUuid,
         title: excerpt.title,
@@ -62,6 +59,6 @@ export default defineEventHandler(
         ),
       });
     }
-    return { items, onlyTarget };
+    return { items };
   },
 );

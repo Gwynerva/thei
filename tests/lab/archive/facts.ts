@@ -77,13 +77,13 @@ export function archiveFacts(
     for (const r of event.relations) relate(`event:${event.id}`, r.to);
   for (const entry of archive.diary)
     for (const r of entry.relations) relate(`diary:${entry.date}`, r.to);
-  // An excerpt's relations are its own; on its targets they count as
-  // excerpts about them, not as relations.
+  // What an excerpt is about is its own; on its subject it counts as an
+  // excerpt about it, not as a relation.
   const excerptsAbout = new Map<string, number>();
   for (const excerpt of archiveExcerpts(archive)) {
-    relationCount.set(refOf.excerpt(excerpt), excerpt.relations.length);
-    for (const r of excerpt.relations)
-      excerptsAbout.set(r.to, (excerptsAbout.get(r.to) ?? 0) + 1);
+    relationCount.set(refOf.excerpt(excerpt), 1);
+    const to = excerpt.about.to;
+    excerptsAbout.set(to, (excerptsAbout.get(to) ?? 0) + 1);
   }
   const excerptFacts = (excerpts: ArchiveExcerpt[]): Facts => ({
     excerpts: excerpts.length,
@@ -161,9 +161,15 @@ export function archiveFacts(
           hasBanner: Boolean(excerpt.banner),
           hasSummary: Boolean(excerpt.summary.trim()),
           titleLength: Array.from(excerpt.title).length,
-          about: excerpt.relations.length,
-          /** The refs it is about, comma-separated: a scenario picks a pair by them. */
-          aboutRefs: excerpt.relations.map((relation) => relation.to).join(','),
+          /** The ref it is about: a scenario picks a pair by it. */
+          aboutRef: excerpt.about.to,
+          /** How open what it is about is: one not public hides the excerpt from strangers. */
+          subjectAccess: String(
+            facts.get(excerpt.about.to)?.access ?? 'public',
+          ),
+          hiddenBySubject:
+            String(facts.get(excerpt.about.to)?.access ?? 'public') !==
+            'public',
         };
       }
       case 'event': {

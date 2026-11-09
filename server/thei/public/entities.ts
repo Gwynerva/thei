@@ -76,6 +76,7 @@ import { listTagsForContainer } from '../tags';
 import { parseInternalUrl } from '#layers/thei/shared/internal-url';
 import { internalUrlSite } from '../site-url';
 import {
+  contentEntityOpens,
   findContentEntity,
   findContentEntityByTarget,
 } from '../content-entities';
@@ -799,9 +800,11 @@ async function buildPublicEntityLink(
   viewer: PublicViewer,
 ): Promise<PublicReferenceLink | undefined> {
   const entity = await findContentEntity(reference, viewer);
-  const opens = opensGrantOwner(viewer, entity?.grantOwner);
-  if (!entity || !canOpenPublicEntity(entity.access, opens)) return undefined;
-  const iconMedia = await entity.media('public', opens);
+  if (!entity || !contentEntityOpens(entity, viewer)) return undefined;
+  const iconMedia = await entity.media(
+    'public',
+    opensGrantOwner(viewer, entity.grantOwner),
+  );
   return {
     kind: entity.entityType,
     title: entity.title,

@@ -110,18 +110,27 @@ async function writeText(row: Row): Promise<Reviewed | undefined> {
 async function createdTexts(row: Row): Promise<Reviewed | undefined> {
   const texts = writtenTexts(row.kind, row.payload);
   if (!texts.length) return undefined;
-  const sections = ((row.payload as { fields?: { sections?: unknown } }).fields
-    ?.sections ?? []) as { title?: unknown }[];
+  const fields = ((row.payload as { fields?: Record<string, unknown> })
+    .fields ?? {}) as Record<string, unknown>;
+  /** The title of a part a text is written for, by its list and place. */
+  const titleIn = (list: string, index: number) => {
+    const items = Array.isArray(fields[list])
+      ? (fields[list] as { title?: unknown }[])
+      : [];
+    const title = items[index]?.title;
+    return typeof title === 'string' ? title : '';
+  };
   return {
     data: { blocks: [] },
     written: await Promise.all(
       texts.map(async (text) => {
-        const title = sections[text.section ?? -1]?.title;
         return {
           key: text.key,
-          ...(text.section === undefined
-            ? { field: text.field }
-            : { section: typeof title === 'string' ? title : '' }),
+          ...(text.section !== undefined
+            ? { section: titleIn('sections', text.section) }
+            : text.excerpt !== undefined
+              ? { excerpt: titleIn('excerpts', text.excerpt) }
+              : { field: text.field }),
           proposed: await hydrateContentData(
             (await textFromMarkdown(text.value, null)).data,
           ),

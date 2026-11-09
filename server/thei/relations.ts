@@ -10,7 +10,9 @@ import {
   type RelationNote,
   type RelationType,
 } from '#layers/thei/shared/relation';
-import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
+import type { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
+import { readExcerptSubjects } from './excerpts/subjects';
+import { excerptAccess } from './excerpts/parents';
 import type { ExcerptParentType } from '#layers/thei/shared/excerpt';
 import type {
   StoredRelationNote,
@@ -185,7 +187,10 @@ export type RelationTarget = {
   publicId: string;
   /** A diary entry's day; an excerpt's, when its parent is an entry. */
   date?: string;
-  /** Who may see it: an excerpt's is its parent's, or private. */
+  /**
+   * Who may see it: an excerpt's the strictest of its own privacy, its
+   * parent's access and its subject's (`excerptAccess`).
+   */
   access: ProjectEventAccessLevel;
   /** An excerpt's parent, named the way its cards name it. */
   parent?: { type: ExcerptParentType; id: string; title: string };
@@ -269,6 +274,11 @@ export async function loadRelationTargets(
     const parents = await loadRelationTargets(
       rows.map((row) => ({ type: row.parentType, id: row.parentId })),
     );
+    const subjects = readExcerptSubjects(
+      db,
+      schema,
+      rows.map((row) => row.excerptUuid),
+    );
     for (const row of rows) {
       const parent = parents.get(
         relationEndpointKey({ type: row.parentType, id: row.parentId }),
@@ -284,7 +294,13 @@ export async function loadRelationTargets(
         humanReadableSlug: row.humanReadableSlug,
         publicId: row.publicId,
         ...(parent.date ? { date: parent.date } : {}),
-        access: row.isPrivate ? ProjectEventAccessLevel.Private : parent.access,
+        access: excerptAccess(
+          {
+            isPrivate: row.isPrivate,
+            subject: subjects.get(row.excerptUuid) ?? null,
+          },
+          parent,
+        ),
         parent: { type: row.parentType, id: row.parentId, title: parent.title },
       });
     }
@@ -516,6 +532,7 @@ export async function getRelations(
         humanReadableSlug: found.humanReadableSlug,
         publicId: found.publicId,
         ...(found.date ? { date: found.date } : {}),
+        access: found.access,
         type: row.type,
         note: row.note,
         iconMedia: await relationIconMedia(row.other),

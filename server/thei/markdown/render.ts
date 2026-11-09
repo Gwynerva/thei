@@ -43,7 +43,7 @@ import { listPublicRelatedAll } from '../public/related';
 import {
   buildPublicExcerpt,
   listPublicExcerptsAboutAll,
-  visibleParentExcerpts,
+  findOpenParentExcerpt,
 } from '../public/excerpts';
 import {
   findExcerptParentByAddress,
@@ -155,9 +155,9 @@ export async function renderExcerptMarkdown(
 ): Promise<MarkdownDocument | undefined> {
   const parent = await findExcerptParentByAddress(address);
   if (!parent || !canOpenPublicEntity(parent.access, false)) return undefined;
-  const visible = visibleParentExcerpts(parent, STRANGER);
-  const excerpt = visible.find((item) => item.publicId === excerptPart);
-  if (!excerpt) return undefined;
+  const found = findOpenParentExcerpt(parent, STRANGER, excerptPart);
+  if (!found) return undefined;
+  const { excerpt, visible } = found;
   const data = await buildPublicExcerpt(excerpt, parent, STRANGER, {
     number: visible.indexOf(excerpt) + 1,
     count: visible.length,
@@ -409,7 +409,7 @@ export async function withEntityAddresses(
 /**
  * A parent's excerpts, whole, as its page embeds them: each under its own
  * heading, which leads to the excerpt's own copy, with what it is about and
- * its text one heading level down â a part of the page, not a page of its
+ * its text one heading level down — a part of the page, not a page of its
  * own, to a reader of the outline.
  */
 async function excerptParts(

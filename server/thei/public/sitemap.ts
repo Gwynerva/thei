@@ -18,7 +18,10 @@ import {
   buildExcerptUrl,
   type ExcerptParentAddress,
 } from '#layers/thei/shared/excerpt-url';
-import type { ExcerptParentType } from '#layers/thei/shared/excerpt';
+import {
+  excerptSubjectLimit,
+  type ExcerptParentType,
+} from '#layers/thei/shared/excerpt';
 import { utcDayOf } from '#layers/thei/shared/date-range';
 
 export type SitemapEntry = {
@@ -51,6 +54,8 @@ export type SitemapExcerpt = {
   humanReadableSlug: string;
   publicId: string;
   isPrivate: boolean;
+  /** How open what it is about is; absent for an excerpt about nothing. */
+  subjectAccess?: ProjectEventAccessLevel;
   updatedAt: number;
 };
 
@@ -135,7 +140,8 @@ export function buildSitemapEntries(input: SitemapInput): SitemapEntry[] {
     });
 
   // An excerpt is reachable only when its parent is listable and it is not
-  // private on its own, exactly as a section is.
+  // private on its own, exactly as a section is — and what it is about may
+  // be listed too (`excerptListed`).
   const eventByUuid = new Map(events.map((event) => [event.eventUuid, event]));
   const entryByUuid = new Map(
     diaryEntries.map((entry) => [entry.diaryUuid, entry]),
@@ -160,7 +166,7 @@ export function buildSitemapEntries(input: SitemapInput): SitemapEntry[] {
   };
   const excerpts = (items: readonly SitemapExcerpt[]): SitemapEntry[] =>
     items.flatMap((item) => {
-      if (item.isPrivate) return [];
+      if (item.isPrivate || excerptSubjectLimit(item.subjectAccess)) return [];
       const parent = parentAddress(item);
       if (!parent) return [];
       return [

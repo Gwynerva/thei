@@ -1,10 +1,10 @@
 ---
 title: The moon over the river
 summary: Where the lamp began
-relations:
-  - to: project:lamp
-    kind: related
-    note: the evening it all started
+about:
+  to: project:lamp
+  kind: related
+  note: the evening it all started
 ---
 
 The moon was low and orange, and I wanted one on my desk.

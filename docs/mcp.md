@@ -127,10 +127,11 @@ of its parts fails. A deletion is final and never proposed as sure.
 An excerpt — a named part of a diary entry, an event or a project, about
 something else in the archive — is an entity of its own to a model:
 `excerpt:<id>`, read with its parent and on its own, made with `create`
-under its parent as the target (a title, a body and at least one relation,
-never to the parent), changed with `update`, `field`, `write` and `revise`,
-its relations proposed with `relation` from the excerpt's own side, and
-deleted with `delete`. A parent's `excerpts` field takes them as a project's
+under its parent as the target (a title, a body and its `subject`: the one
+project, event or diary entry it is about, never the parent), changed with
+`update` — its `subject` too — `field`, `write` and `revise`, and deleted
+with `delete`. It is never an end of a `relation`. It is seen only by whoever
+may open both its parent and its subject. A parent's `excerpts` field takes them as a project's
 `sections` field takes sections.
 
 The owner applies, declines or comments on each — a comment gets a new

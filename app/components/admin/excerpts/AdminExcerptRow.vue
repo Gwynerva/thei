@@ -1,16 +1,18 @@
 <script lang="ts" setup>
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
+import { excerptSubjectLimit } from '#layers/thei/shared/excerpt';
 import type { RelationEditItem } from '#layers/thei/shared/relation';
 import { relationEntityIcon } from '#layers/thei/shared/relation-display';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 
 /**
  * One excerpt in its parent's form: its name, with a lock before it when
- * only the owner sees it, what it is about, and what it is about in the
- * archive — a chip for each entity, where a section's row has its dates —
- * over its banner or the first picture of its text, which fills the row
- * from the right edge. An excerpt about nothing, left so by a deleted
- * target, says so until the owner relates it to something.
+ * only the owner sees it — marked so, or about something private — its
+ * summary, and what it is about in the archive — a chip, where a section's
+ * row has its dates — over its banner or the first picture of its text,
+ * which fills the row from the right edge. An excerpt about nothing, left so
+ * by a deleted target, says so until the owner says what it is about.
  *
  * A row of a list that is dragged into order has its grip along the whole
  * left edge, pale until the pointer comes near. Removing an excerpt is left
@@ -19,13 +21,22 @@ import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 const { title, summary, about, media, isPrivate } = defineProps<{
   title: string;
   summary: string;
-  about: RelationEditItem[];
+  about: RelationEditItem | null;
   media?: MediaDescriptor;
   isPrivate: boolean;
 }>();
 defineEmits<{ open: []; move: [direction: -1 | 1] }>();
 
 const { engaged, events: mediaEvents } = useMediaInteraction();
+/** What closes the excerpt to visitors, said by its lock: its flag, or what it is about. */
+const lockWords = computed(() =>
+  isPrivate
+    ? phrase.value.excerpt_private
+    : about &&
+        excerptSubjectLimit(about.access) === ProjectEventAccessLevel.Private
+      ? phrase.value.excerpt_hidden_by_subject(entityListName(about))
+      : undefined,
+);
 const accent = computed(() =>
   imageAccentCssColor(media?.accent, 'var(--color-accent)'),
 );
@@ -87,12 +98,12 @@ const accent = computed(() =>
             group-hocus:text-accent"
           data-excerpt-title
           ><span
-            v-if="isPrivate"
+            v-if="lockWords"
             class="mr-1 text-accent"
-            :data-title-popup="phrase.excerpt_private"
+            :data-title-popup="lockWords"
             data-excerpt-private
             ><Icon name="lock-close" aria-hidden="true" /><span class="sr-only"
-              >{{ phrase.excerpt_private }}:
+              >{{ lockWords }}
             </span></span
           >{{ publicText(title) }}</span
         >
@@ -108,22 +119,21 @@ const accent = computed(() =>
           data-excerpt-about
         >
           <span
-            v-for="item in about"
-            :key="`${item.entityType}:${item.entityId}`"
+            v-if="about"
             class="inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm
               bg-bg-2 py-0.5 pr-1.5 pl-0.5 text-xs text-text-2"
           >
             <EntityTokenIcon
-              :media="item.iconMedia"
-              :icon="relationEntityIcon(item.entityType)"
+              :media="about.iconMedia"
+              :icon="relationEntityIcon(about.entityType)"
               class="size-4"
             />
             <span class="min-w-0 truncate">{{
-              entityListName(item, 'abbreviated')
+              entityListName(about, 'abbreviated')
             }}</span>
           </span>
           <span
-            v-if="!about.length"
+            v-else
             class="inline-flex items-center gap-1 text-xs text-text-warning
               italic"
             :data-title-popup="phrase.excerpt_without_about_hint"

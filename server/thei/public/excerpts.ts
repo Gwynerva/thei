@@ -25,6 +25,7 @@ import {
 import {
   excerptRelationRowsOf,
   listExcerpts,
+  listExcerptsByIds,
   type ExcerptRecord,
 } from '../excerpts';
 import {
@@ -32,7 +33,9 @@ import {
   eventExcerptParent,
   excerptIsOwn,
   excerptListed,
-  loadExcerptParent,
+  excerptOpens,
+  excerptShownWithParent,
+  loadExcerptParents,
   projectExcerptParent,
   type ExcerptParentInfo,
 } from '../excerpts/parents';
@@ -54,8 +57,9 @@ import { buildPublicRelatedLinks, resolvePublicRelated } from './related';
  * page of its own, and as a card on the pages of what it is about. Both are
  * built here, for one viewer, from the same record, so a card never says
  * more than the page would. What the viewer may see is decided by the
- * predicates of `../excerpts/parents.ts`: an excerpt is as open as its
- * parent unless it is private, and its private side is the parent's.
+ * predicates of `../excerpts/parents.ts`: an excerpt is as open as the
+ * stricter of its parent and what it is about, unless it is private, and is
+ * seen only by whoever may open both.
  */
 
 /** How many cards one page of the block on a target holds. */
@@ -178,14 +182,37 @@ export async function buildPublicExcerpt(
 
 /**
  * A parent's excerpts the viewer may see, in the owner's order. The parent's
- * page is open to whoever asks this, so only the private flag counts.
+ * page is open to whoever asks this, so the private flag counts, and what
+ * each is about (`excerptShownWithParent`).
  */
 export function visibleParentExcerpts(
   parent: ExcerptParentInfo,
   viewer: PublicViewer,
 ): ExcerptRecord[] {
-  const own = excerptIsOwn(viewer, parent);
-  return listExcerpts(parent).filter((excerpt) => own || !excerpt.isPrivate);
+  return listExcerpts(parent).filter((excerpt) =>
+    excerptShownWithParent(viewer, excerpt, parent),
+  );
+}
+
+/**
+ * An excerpt's own page, by its public id: the excerpt, if it opens for the
+ * viewer, and the parent's excerpts it is placed among. One about something
+ * open by its link only is not shown on its parent's page, but opens by its
+ * own address, placed among the others where it stands.
+ */
+export function findOpenParentExcerpt(
+  parent: ExcerptParentInfo,
+  viewer: PublicViewer,
+  publicId: string,
+): { excerpt: ExcerptRecord; visible: ExcerptRecord[] } | undefined {
+  const all = listExcerpts(parent);
+  const excerpt = all.find((item) => item.publicId === publicId);
+  if (!excerpt || !excerptOpens(viewer, excerpt, parent)) return undefined;
+  const visible = all.filter(
+    (item) =>
+      item === excerpt || excerptShownWithParent(viewer, item, parent),
+  );
+  return { excerpt, visible };
 }
 
 /** A parent's excerpts, whole, as its page embeds them. */
@@ -253,7 +280,8 @@ export type PublicExcerptAboutItem = {
  * by the day of the parent, then by when the excerpt was written.
  *
  * Listed only where the parent may be listed and the excerpt is not private,
- * or on the private side; for a visitor, an excerpt of a day still to come
+ * or on the parent's private side — the page's own entity is the one the
+ * visitor opened; for a visitor, an excerpt of a day still to come
  * waits for it, as the entry does on the chronology. An excerpt nobody may
  * see is simply absent: a count of hidden ones would say how much was
  * written about the page, which is what a private entry protects.
@@ -268,23 +296,19 @@ export async function resolvePublicExcerptsAbout(
   if (!joined.length) return [];
   const byId = new Map(joined.map((item) => [item.excerptUuid, item.row]));
   const rows = listExcerptsByIds([...byId.keys()]);
-  const parents = new Map<string, ExcerptParentInfo | undefined>();
+  const parents = loadExcerptParents(
+    rows.map((excerpt) => ({ type: excerpt.parentType, id: excerpt.parentId })),
+    now,
+  );
   const items: PublicExcerptAboutItem[] = [];
   for (const excerpt of rows) {
-    const key = relationEndpointKey({
-      type: excerpt.parentType,
-      id: excerpt.parentId,
-    });
-    if (!parents.has(key))
-      parents.set(
-        key,
-        await loadExcerptParent(excerpt.parentType, excerpt.parentId),
-      );
-    const parent = parents.get(key);
+    const parent = parents.get(
+      relationEndpointKey({ type: excerpt.parentType, id: excerpt.parentId }),
+    );
     if (!parent) continue;
-    const own = excerptIsOwn(viewer, parent);
-    if (!excerptListed(excerpt, parent, own)) continue;
-    if (!own && parent.arrives > now) continue;
+    if (!excerptListed(viewer, excerpt, parent, { onSubjectPage: true }))
+      continue;
+    if (!excerptIsOwn(viewer, parent) && parent.arrives > now) continue;
     const row = byId.get(excerpt.excerptUuid);
     const first = row.firstType === target.type && row.firstId === target.id;
     const note = fromStoredRelationNote(row.note ?? undefined, first);
@@ -310,34 +334,6 @@ function compareNewestFirst(
   return (
     right.excerpt.createdAt - left.excerpt.createdAt ||
     left.excerpt.excerptUuid.localeCompare(right.excerpt.excerptUuid)
-  );
-}
-
-/** The records of some excerpts, by id, with their banners. */
-function listExcerptsByIds(ids: string[]): ExcerptRecord[] {
-  const wanted = new Set(ids);
-  const { db, schema } = THEI_SERVER.useDb();
-  // Parents are few beside their excerpts: each parent's list is read once,
-  // banners and all, and the wanted ones picked from it.
-  const parents = new Map<
-    string,
-    { type: ExcerptRecord['parentType']; id: string }
-  >();
-  for (const row of db
-    .select({
-      excerptUuid: schema.excerpts.excerptUuid,
-      parentType: schema.excerpts.parentType,
-      parentId: schema.excerpts.parentId,
-    })
-    .from(schema.excerpts)
-    .all())
-    if (wanted.has(row.excerptUuid))
-      parents.set(`${row.parentType}:${row.parentId}`, {
-        type: row.parentType,
-        id: row.parentId,
-      });
-  return [...parents.values()].flatMap((parent) =>
-    listExcerpts(parent).filter((excerpt) => wanted.has(excerpt.excerptUuid)),
   );
 }
 

@@ -33,7 +33,9 @@ import { findExcerpt, listExcerpts } from '../excerpts';
 import {
   diaryExcerptParent,
   eventExcerptParent,
+  excerptAccess,
   excerptListed,
+  excerptShownWithParent,
   loadExcerptParent,
   projectExcerptParent,
   type ExcerptParentInfo,
@@ -433,8 +435,9 @@ function excerptTitleUnits(
   parent: ExcerptParentInfo,
   audience: SearchAudience,
 ): SearchUnit[] {
+  const viewer = viewerOf(audience);
   return listExcerpts(parent)
-    .filter((excerpt) => audience === 'owner' || !excerpt.isPrivate)
+    .filter((excerpt) => excerptShownWithParent(viewer, excerpt, parent))
     .flatMap((excerpt) =>
       fieldUnit('headings', 'excerpt', excerpt.title, {
         place: {
@@ -658,11 +661,11 @@ export async function excerptDocument(
   const parent =
     excerpt && (await loadExcerptParent(excerpt.parentType, excerpt.parentId));
   if (!excerpt || !parent) return undefined;
-  if (audience === 'public' && !excerptListed(excerpt, parent, false))
-    return undefined;
   const viewer = viewerOf(audience);
-  const visible = listExcerpts(parent).filter(
-    (item) => audience === 'owner' || !item.isPrivate,
+  if (audience === 'public' && !excerptListed(viewer, excerpt, parent))
+    return undefined;
+  const visible = listExcerpts(parent).filter((item) =>
+    excerptShownWithParent(viewer, item, parent),
   );
   const built = await buildPublicExcerpt(excerpt, parent, viewer, {
     number: visible.findIndex((item) => item.excerptUuid === excerptUuid) + 1,
@@ -700,7 +703,7 @@ export async function excerptDocument(
       ? { from: parent.date, to: parent.date, life: true }
       : sortOf(undefined, excerpt.createdAt),
     visibleFrom: audience === 'public' ? parent.arrives : 0,
-    ...accessOf(audience, excerpt.isPrivate ? 'private' : parent.access),
+    ...accessOf(audience, excerptAccess(excerpt, parent)),
     summary: excerpt.summary,
     media: built.media,
     tags,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeExcerpts } from '../../shared/excerpt';
+import { ProjectEventAccessLevel } from '../../shared/access-level';
+import { excerptSubjectLimit, normalizeExcerpts } from '../../shared/excerpt';
 import {
   diaryEntrySaysSomething,
   validateDiaryData,
@@ -12,7 +13,7 @@ const text = {
   },
 };
 
-const about = [{ entityType: 'project', entityId: 'p1', type: 'related' }];
+const about = { entityType: 'project', entityId: 'p1', type: 'related' };
 
 function excerpt(overrides: Record<string, unknown> = {}) {
   return {
@@ -22,15 +23,15 @@ function excerpt(overrides: Record<string, unknown> = {}) {
     publicId: 'k3f9k3f9k3f9k3',
     isPrivate: false,
     content: text,
-    relations: about,
+    about,
     ...overrides,
   };
 }
 
 describe('an excerpt as its parent form saves it', () => {
-  it('needs a title, a text and something it is about', () => {
+  it('needs a title and a text, and is about one thing', () => {
     expect(normalizeExcerpts([excerpt()])).toMatchObject([
-      { title: 'Stringers and the first glue-up', relations: about },
+      { title: 'Stringers and the first glue-up', about },
     ]);
     expect(() => normalizeExcerpts([excerpt({ title: ' ' })])).toThrow(
       'Excerpt title cannot be empty',
@@ -38,34 +39,35 @@ describe('an excerpt as its parent form saves it', () => {
     expect(() =>
       normalizeExcerpts([excerpt({ content: { data: { blocks: [] } } })]),
     ).toThrow('An excerpt needs a text');
-    expect(() => normalizeExcerpts([excerpt({ relations: [] })])).toThrow(
-      'says what it is about',
+    expect(() => normalizeExcerpts([excerpt({ about: [about] })])).toThrow(
+      'An excerpt is about one thing, not a list',
     );
-    expect(() =>
-      normalizeExcerpts([excerpt({ relations: undefined })]),
-    ).toThrow('says what it is about');
   });
 
-  it('is about projects, events and diary entries, never about an excerpt', () => {
+  it('is saved about nothing once what it was about is deleted', () => {
+    // Its parent's form still saves; the excerpt's own form asks again.
+    expect(normalizeExcerpts([excerpt({ about: null })])![0]!.about).toBe(null);
+    expect(normalizeExcerpts([excerpt({ about: undefined })])![0]!.about).toBe(
+      null,
+    );
+  });
+
+  it('is about a project, an event or a diary entry, never an excerpt', () => {
     expect(() =>
       normalizeExcerpts([
         excerpt({
-          relations: [
-            { entityType: 'excerpt', entityId: 'x1', type: 'related' },
-          ],
+          about: { entityType: 'excerpt', entityId: 'x1', type: 'related' },
         }),
       ]),
     ).toThrow('Invalid related entity');
-    expect(
-      normalizeExcerpts([
-        excerpt({
-          relations: [
-            { entityType: 'event', entityId: 'e1', type: 'influencing' },
-            { entityType: 'diary-entry', entityId: 'd1', type: 'related' },
-          ],
-        }),
-      ])![0]!.relations.map((item) => item.entityType),
-    ).toEqual(['event', 'diary-entry']);
+    for (const entityType of ['project', 'event', 'diary-entry'])
+      expect(
+        normalizeExcerpts([
+          excerpt({
+            about: { entityType, entityId: 'e1', type: 'influencing' },
+          }),
+        ])![0]!.about,
+      ).toMatchObject({ entityType, type: 'influencing' });
   });
 
   it('settles the title the way headings are settled', () => {
@@ -121,6 +123,42 @@ describe('a diary entry told by its excerpts', () => {
       date: '2024-03-02',
       content: { data: { blocks: [] } },
       excerpts: [{ title: 'Stringers and the first glue-up' }],
+    });
+  });
+});
+
+describe('what an excerpt is about, as it closes the excerpt', () => {
+  it('closes it while private or open by its link only, and never else', () => {
+    expect(excerptSubjectLimit(ProjectEventAccessLevel.Private)).toBe(
+      ProjectEventAccessLevel.Private,
+    );
+    expect(excerptSubjectLimit(ProjectEventAccessLevel.LinkOnly)).toBe(
+      ProjectEventAccessLevel.LinkOnly,
+    );
+    expect(excerptSubjectLimit(ProjectEventAccessLevel.Public)).toBeUndefined();
+    // About nothing: its subject was deleted.
+    expect(excerptSubjectLimit(undefined)).toBeUndefined();
+  });
+
+  it('keeps a section’s fields, read the same way', () => {
+    expect(() => normalizeExcerpts([excerpt({ isPrivate: 'no' })])).toThrow(
+      'Invalid excerpt privacy',
+    );
+    expect(() => normalizeExcerpts([excerpt({ publicId: '!' })])).toThrow(
+      'Invalid public ID',
+    );
+    expect(
+      normalizeExcerpts([
+        excerpt({
+          excerptUuid: ' x-1 ',
+          title: ' A title. ',
+          bannerAssetUuid: 'a-1',
+        }),
+      ])![0],
+    ).toMatchObject({
+      excerptUuid: 'x-1',
+      title: 'A title',
+      bannerAssetUuid: 'a-1',
     });
   });
 });

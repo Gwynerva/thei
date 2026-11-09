@@ -1,39 +1,9 @@
-import { publicIdFromExcerptUrlPart } from '#layers/thei/shared/excerpt-url';
-import { publicIdFromEventUrlPart } from '#layers/thei/shared/event-url';
-import { sendContextAsset } from '../../../../../../../thei/assets/context-access';
-import { listExcerpts } from '../../../../../../../thei/excerpts';
 import {
-  excerptAccess,
-  eventExcerptParent,
-} from '../../../../../../../thei/excerpts/parents';
+  routeExcerptEntity,
+  sendExcerptBanner,
+} from '../../../../../../../thei/public/excerpt-routes';
 
-/** An excerpt's banner, the one file an excerpt holds outside its text. */
-export default defineEventHandler(async (event) => {
-  const part = getRouterParam(event, 'slug') ?? '';
-  const row =
-    (await THEI_SERVER.events.findByUuid(part)) ??
-    (await THEI_SERVER.events.findByPublicId(publicIdFromEventUrlPart(part)));
-  if (!row) throw createError({ statusCode: 404 });
-  if (getRouterParam(event, 'role') !== 'banner')
-    throw createError({ statusCode: 404 });
-  const parent = eventExcerptParent(row);
-  // The address judges the file by this parent's access, so the excerpt has
-  // to be this parent's own.
-  const publicId = publicIdFromExcerptUrlPart(
-    getRouterParam(event, 'excerpt') ?? '',
-  );
-  const excerpt = listExcerpts(parent).find(
-    (item) => item.publicId === publicId,
-  );
-  if (!excerpt) throw createError({ statusCode: 404 });
-  return sendContextAsset(event, {
-    ownerType: 'excerpt',
-    ownerId: excerpt.excerptUuid,
-    // A private excerpt is the private side's, as its page is; any other is
-    // as visible as its parent.
-    access: excerptAccess(excerpt, parent),
-    grantOwner: { entityType: parent.type, entityId: parent.id },
-    role: 'banner',
-    filename: getRouterParam(event, 'filename') ?? '',
-  });
-});
+/** An excerpt's banner, under its event's address. */
+export default defineEventHandler(async (event) =>
+  sendExcerptBanner(event, await routeExcerptEntity(event, 'event', 'slug')),
+);

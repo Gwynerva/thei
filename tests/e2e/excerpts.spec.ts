@@ -2,10 +2,11 @@ import { expect, test, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 
 /**
- * Excerpts: named parts of a diary entry, an event or a project about
- * something else in the archive. In the parent's form they are a block of
- * rows that open a modal each; what an excerpt is about is its relations,
- * one at least; a diary entry may hold nothing but an excerpt. On the page
+ * Excerpts: named parts of a diary entry, an event or a project about one
+ * other thing in the archive. In the parent's form they are a block of rows
+ * that open a modal each; what an excerpt is about is one field, «About»; a
+ * diary entry may hold nothing but an excerpt. An excerpt is hidden from
+ * visitors while what it is about is private. On the page
  * of what an excerpt is about, the form shows a read-only tab of excerpts
  * and recommends their parents; the public pages show the excerpt whole on
  * its parent's page, on a page of its own and as a card on the target's.
@@ -56,12 +57,17 @@ async function freeDays(page: Page, count: number) {
   return days;
 }
 
-async function createProject(page: Page, stamp: number, name: string) {
+async function createProject(
+  page: Page,
+  stamp: number,
+  name: string,
+  access: 'public' | 'private' = 'public',
+) {
   const response = await page.request.post('/api/admin/projects', {
     data: {
       title: `${name} ${stamp}`,
       summary: 'Something an excerpt is about.',
-      access: 'public',
+      access,
       humanReadableSlug: name.toLowerCase(),
       publicId: `${name.toLowerCase()}${stamp}`,
       showcase: false,
@@ -80,7 +86,7 @@ async function createProject(page: Page, stamp: number, name: string) {
 function excerpt(
   stamp: number,
   title: string,
-  about: { type: string; id: string }[],
+  about: { type: string; id: string },
   options: { isPrivate?: boolean } = {},
 ) {
   const slug = title.toLowerCase().replace(/\s+/g, '-');
@@ -91,11 +97,7 @@ function excerpt(
     publicId: `${slug.replace(/-/g, '')}${stamp}`.slice(0, 32),
     isPrivate: options.isPrivate ?? false,
     content: content(`The ${slug} excerpt, in its own words.`),
-    relations: about.map((target) => ({
-      entityType: target.type,
-      entityId: target.id,
-      type: 'related',
-    })),
+    about: { entityType: about.type, entityId: about.id, type: 'related' },
   };
 }
 
@@ -162,8 +164,10 @@ test('an entry may be nothing but an excerpt, written in its modal and about a p
 
   // The title field: the first of the modal, its label not read as its name.
   await modal(page).getByRole('textbox').first().fill(`Stringers ${stamp}`);
-  // What it is about: a relation, chosen with the picker.
-  await modal(page).getByRole('button', { name: 'Add a relation' }).click();
+  // What it is about: one relation, chosen with the picker.
+  await modal(page)
+    .getByRole('button', { name: 'Choose what it is about' })
+    .click();
   await expect(relationModal(page)).toBeVisible();
   await picker(page).fill(`Kayak ${stamp}`);
   await page
@@ -174,8 +178,12 @@ test('an entry may be nothing but an excerpt, written in its modal and about a p
   await relationModal(page).getByRole('button', { name: 'Done' }).click();
   await expect(relationModal(page)).toBeHidden();
   await expect(
-    modal(page).locator('[data-relation-chip]', { hasText: `Kayak ${stamp}` }),
-  ).toBeVisible();
+    modal(page).locator('[data-excerpt-subject-chip]'),
+  ).toContainText(`Kayak ${stamp}`);
+  // One thing: the tile to choose is gone while it is chosen.
+  await expect(modal(page).locator('[data-excerpt-subject-pick]')).toHaveCount(
+    0,
+  );
 
   // Its text, typed in the editor and saved into the modal.
   await modal(page)
@@ -272,14 +280,11 @@ test('deleting a target asks what becomes of the excerpts about it, and both ans
   const gone = await createProject(page, stamp, 'Gone');
   const [first, second] = await freeDays(page, 2);
   const firstEntry = await createEntry(page, first!, [
-    excerpt(stamp, 'Only kept', [{ type: 'project', id: kept.uuid }]),
+    excerpt(stamp, 'About kept', { type: 'project', id: kept.uuid }),
   ]);
   const secondEntry = await createEntry(page, second!, [
-    excerpt(stamp, 'Only gone', [{ type: 'project', id: gone.uuid }]),
-    excerpt(stamp, 'Both', [
-      { type: 'project', id: gone.uuid },
-      { type: 'project', id: kept.uuid },
-    ]),
+    excerpt(stamp, 'About gone', { type: 'project', id: gone.uuid }),
+    excerpt(stamp, 'Gone too', { type: 'project', id: gone.uuid }),
   ]);
 
   // Kept without the project: the excerpt stays, about nothing until told.
@@ -288,7 +293,7 @@ test('deleting a target asks what becomes of the excerpts about it, and both ans
   const pane = page.locator('dialog[open]').last();
   const choice = pane.locator('[data-excerpts-on-delete]');
   await expect(choice).toContainText(
-    '2 excerpts are about it; for one of them it is the only thing.',
+    'One excerpt is about it. Kept, it is about nothing until you say what it is about.',
   );
   await expect(
     choice.getByRole('button', { name: 'Keep the excerpts about it' }),
@@ -300,13 +305,19 @@ test('deleting a target asks what becomes of the excerpts about it, and both ans
     await page.request.get(`/api/admin/diary/${firstEntry}`)
   ).json();
   expect(afterKeep.excerpts).toHaveLength(1);
-  expect(afterKeep.excerpts[0].relations).toEqual([]);
+  expect(afterKeep.excerpts[0].about).toBe(null);
   await open(page, `/admin/diary/${firstEntry}/edit/`);
   await expect(rows(page).locator('[data-excerpt-orphan]')).toHaveText(
     /About nothing yet/,
   );
+  // Its modal says why, in the tile that asks what it is about now.
+  await rows(page).locator('[data-excerpt-open]').click();
+  await expect(
+    modal(page).locator('[data-excerpt-subject-pick][data-excerpt-orphan]'),
+  ).toContainText('what it was about was deleted');
+  await page.keyboard.press('Escape');
 
-  // Deleted with the project: its excerpts go, the one about two things too.
+  // Deleted with the project: its excerpts go.
   await open(page, `/admin/projects/${gone.uuid}/edit/`);
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
   const second_ = page.locator('dialog[open]').last();
@@ -331,7 +342,7 @@ test('the block and the modal keep to a phone', async ({ page }) => {
   const entry = await createEntry(
     page,
     date!,
-    [excerpt(stamp, 'Narrow', [{ type: 'project', id: project.uuid }])],
+    [excerpt(stamp, 'Narrow', { type: 'project', id: project.uuid })],
     'A day with an excerpt.',
   );
   await open(page, `/admin/diary/${entry}/edit/`);
@@ -341,14 +352,74 @@ test('the block and the modal keep to a phone', async ({ page }) => {
   expect(box.x + box.width).toBeLessThanOrEqual(PHONE.width + 0.5);
   await row.locator('[data-excerpt-open]').click();
   await expect(modal(page)).toBeVisible();
-  // The square Save of a phone, and the relation chip inside the modal.
+  // The square Save of a phone, and what it is about inside the modal.
   await expect(dialogSave(page)).toBeVisible();
   await expect(
-    modal(page).locator('[data-relation-chip]', { hasText: `Phone ${stamp}` }),
-  ).toBeVisible();
+    modal(page).locator('[data-excerpt-subject-chip]'),
+  ).toContainText(`Phone ${stamp}`);
   const chip = (await modal(page)
-    .locator('[data-relation-chip]')
-    .first()
+    .locator('[data-excerpt-subject]')
     .boundingBox())!;
   expect(chip.x + chip.width).toBeLessThanOrEqual(PHONE.width + 0.5);
+});
+
+test('an excerpt about something private is hidden with it, and opens with it', async ({
+  page,
+  browser,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  const stamp = Date.now();
+  const secret = await createProject(page, stamp, 'Secret', 'private');
+  const open_ = await createProject(page, stamp, 'Open');
+  const [date] = await freeDays(page, 1);
+  const entry = await createEntry(
+    page,
+    date!,
+    [
+      excerpt(stamp, 'About the secret', { type: 'project', id: secret.uuid }),
+      excerpt(stamp, 'About the open', { type: 'project', id: open_.uuid }),
+    ],
+    'A public day.',
+  );
+
+  // The form says what closes it, beside its own switch, and marks its row.
+  await open(page, `/admin/diary/${entry}/edit/`);
+  await expect(
+    rows(page).first().locator('[data-excerpt-private]'),
+  ).toBeVisible();
+  await expect(rows(page).nth(1).locator('[data-excerpt-private]')).toHaveCount(
+    0,
+  );
+  await rows(page).first().locator('[data-excerpt-open]').click();
+  await expect(
+    modal(page).locator('[data-excerpt-subject-access]'),
+  ).toContainText(`Hidden from visitors while «Secret ${stamp}» is private.`);
+  await page.keyboard.press('Escape');
+
+  // A visitor reads the day with the open excerpt alone.
+  const visitor = await browser.newContext({ storageState: undefined });
+  try {
+    const guest = await visitor.newPage();
+    await guest.goto(`/diary/${date}/`);
+    await expect(guest.locator('[data-excerpt]')).toHaveCount(1);
+    await expect(guest.locator('[data-excerpt]')).toContainText(
+      `About the open ${stamp}`,
+    );
+    await expect(guest.locator('body')).not.toContainText(
+      `About the secret ${stamp}`,
+    );
+
+    // The project made public: the excerpt opens with it.
+    const read = await (
+      await page.request.get(`/api/admin/projects/${secret.uuid}`)
+    ).json();
+    const saved = await page.request.put(`/api/admin/projects/${secret.uuid}`, {
+      data: { ...read, access: 'public' },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    await guest.goto(`/diary/${date}/`);
+    await expect(guest.locator('[data-excerpt]')).toHaveCount(2);
+  } finally {
+    await visitor.close();
+  }
 });

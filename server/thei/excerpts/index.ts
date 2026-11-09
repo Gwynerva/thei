@@ -6,7 +6,6 @@ import type {
 } from '#layers/thei/shared/excerpt';
 import { createEmptyContentFieldValue } from '#layers/thei/shared/content';
 import {
-  relationEndpointKey,
   relationEndpointsEqual,
   type RelationEndpoint,
 } from '#layers/thei/shared/relation';
@@ -39,6 +38,10 @@ import {
 } from '../entity-banner';
 import { buildAdminAssetUrls } from '../assets/urls';
 import type { excerpts as excerptsTable } from '../db/schema/excerpts';
+import { inChunks } from '../db/in-chunks';
+import { readExcerptSubjects } from './subjects';
+
+export { readExcerptSubjects, type ExcerptSubject } from './subjects';
 
 /**
  * Excerpts as their parents' forms save and read them.
@@ -46,10 +49,10 @@ import type { excerpts as excerptsTable } from '../db/schema/excerpts';
  * A diary entry, an event and a project each hold their excerpts the way a
  * project holds its sections: the whole list travels with the form, items
  * are told apart by the uuid the server gave them, and whatever the list
- * leaves out is deleted with its text, its banner and its relations. The one
- * thing a section has not: what the excerpt is about, ordinary relations
- * with the excerpt as one end, prepared here once the excerpt has its id and
- * written in the parent's transaction.
+ * leaves out is deleted with its text, its banner and what it is about. The
+ * one thing a section has not: what the excerpt is about, one ordinary
+ * relation with the excerpt as one end, prepared here once the excerpt has
+ * its id and written in the parent's transaction.
  */
 
 export type ExcerptParent = { type: ExcerptParentType; id: string };
@@ -62,7 +65,7 @@ type PreparedExcerptRelations = NonNullable<
   Awaited<ReturnType<typeof prepareRelations>>
 >;
 
-export type PreparedExcerpt = Omit<ExcerptItem, 'relations'> & {
+export type PreparedExcerpt = Omit<ExcerptItem, 'about'> & {
   excerptUuid: string;
   contentSave: PreparedContentSave;
   relations: PreparedExcerptRelations;
@@ -96,6 +99,7 @@ export async function prepareExcerpts(
     .where(parentWhere(schema, parent))
     .all();
   const existingIds = new Set(existing.map((item) => item.excerptUuid));
+  const subjects = readExcerptSubjects(db, schema, [...existingIds]);
   const publicIds = excerpts.map((excerpt) => excerpt.publicId);
   if (new Set(publicIds).size !== publicIds.length)
     throw new ExcerptStorageError('Duplicate excerpt public ID');
@@ -127,16 +131,21 @@ export async function prepareExcerpts(
       ),
     label: 'excerpt',
     prepare: async (excerpt, excerptUuid) => {
-      for (const relation of excerpt.relations)
-        if (
-          relationEndpointsEqual(
-            { type: relation.entityType, id: relation.entityId },
-            parent,
-          )
+      const { about } = excerpt;
+      // About nothing only once what it was about is deleted: a new
+      // excerpt, or one about something, says what it is about.
+      if (!about && (!excerpt.excerptUuid || subjects.has(excerptUuid)))
+        throw new ExcerptStorageError('An excerpt says what it is about');
+      if (
+        about &&
+        relationEndpointsEqual(
+          { type: about.entityType, id: about.entityId },
+          parent,
         )
-          throw new ExcerptStorageError(
-            'An excerpt is not related to its own parent',
-          );
+      )
+        throw new ExcerptStorageError(
+          'An excerpt is not related to its own parent',
+        );
       const contentSave = await prepareContentForSave(
         'excerpt',
         excerptUuid,
@@ -145,9 +154,11 @@ export async function prepareExcerpts(
       );
       if (contentSave.type !== 'save')
         throw new ExcerptStorageError('An excerpt needs a text');
+      const { about: _about, ...rest } = excerpt;
       const relations =
-        (await prepareRelations(ownerOf(excerptUuid), excerpt.relations)) ?? [];
-      return { ...excerpt, excerptUuid, contentSave, relations };
+        (await prepareRelations(ownerOf(excerptUuid), about ? [about] : [])) ??
+        [];
+      return { ...rest, excerptUuid, contentSave, relations };
     },
   });
 }
@@ -298,21 +309,53 @@ export function deleteExcerptsOfParent(
 }
 
 /**
- * A parent's excerpts in their order, without their texts or relations:
- * what a list, a card or an address reads.
+ * A parent's excerpts in their order, without their texts: what a list, a
+ * card or an address reads, with what each is about.
  */
 export function listExcerpts(parent: ExcerptParent) {
   const { db, schema } = THEI_SERVER.useDb();
-  const rows = db
-    .select()
-    .from(schema.excerpts)
-    .where(parentWhere(schema, parent))
-    .orderBy(schema.excerpts.sortOrder)
-    .all();
+  return excerptRecords(
+    db,
+    schema,
+    db
+      .select()
+      .from(schema.excerpts)
+      .where(parentWhere(schema, parent))
+      .orderBy(schema.excerpts.sortOrder)
+      .all(),
+  );
+}
+
+/**
+ * Some excerpts by their uuids, whichever parents they are of, in no order:
+ * the rows, their banners and what they are about, a query each.
+ */
+export function listExcerptsByIds(ids: readonly string[]): ExcerptRecord[] {
+  const { db, schema } = THEI_SERVER.useDb();
+  return inChunks([...new Set(ids)]).flatMap((chunk) =>
+    excerptRecords(
+      db,
+      schema,
+      db
+        .select()
+        .from(schema.excerpts)
+        .where(inArray(schema.excerpts.excerptUuid, chunk))
+        .all(),
+    ),
+  );
+}
+
+/** The records of some rows, their banners and subjects read at once. */
+function excerptRecords(db: any, schema: any, rows: ExcerptRow[]) {
   const banners = readEntityBannerUuids(
     db,
     schema,
     'excerpt',
+    rows.map((row) => row.excerptUuid),
+  );
+  const subjects = readExcerptSubjects(
+    db,
+    schema,
     rows.map((row) => row.excerptUuid),
   );
   return rows.map((row) => ({
@@ -324,6 +367,7 @@ export function listExcerpts(parent: ExcerptParent) {
     humanReadableSlug: row.humanReadableSlug,
     publicId: row.publicId,
     isPrivate: row.isPrivate,
+    subject: subjects.get(row.excerptUuid) ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     ...(banners.has(row.excerptUuid)
@@ -332,25 +376,11 @@ export function listExcerpts(parent: ExcerptParent) {
   }));
 }
 
-export type ExcerptRecord = ReturnType<typeof listExcerpts>[number];
+export type ExcerptRecord = ReturnType<typeof excerptRecords>[number];
 
 /** One excerpt by its uuid, with its banner, or nothing when it is gone. */
 export function findExcerpt(excerptUuid: string): ExcerptRecord | undefined {
-  const { db, schema } = THEI_SERVER.useDb();
-  const row = db
-    .select({
-      parentType: schema.excerpts.parentType,
-      parentId: schema.excerpts.parentId,
-    })
-    .from(schema.excerpts)
-    .where(eq(schema.excerpts.excerptUuid, excerptUuid))
-    .get();
-  return (
-    row &&
-    listExcerpts({ type: row.parentType, id: row.parentId }).find(
-      (item) => item.excerptUuid === excerptUuid,
-    )
-  );
+  return listExcerptsByIds([excerptUuid])[0];
 }
 
 /** One excerpt by its public id, with its banner, or nothing. */
@@ -391,6 +421,7 @@ export async function readExcerptsForForm(
         updatedAt: _updatedAt,
         parentType: _parentType,
         parentId: _parentId,
+        subject: _subject,
         ...excerpt
       }) => {
         const [content, relations, banner] = await Promise.all([
@@ -410,7 +441,8 @@ export async function readExcerptsForForm(
         return {
           ...excerpt,
           content: content ?? createEmptyContentFieldValue(),
-          relations,
+          // One at most: an excerpt is about one thing (`normalizeExcerptAbout`).
+          about: relations[0] ?? null,
           ...(bannerMedia ? { bannerMedia } : {}),
         };
       },
@@ -431,8 +463,8 @@ export function excerptIdentities(
 
 /**
  * What becomes of the excerpts about an entity when it is deleted: they
- * stay, without this one relation (an excerpt left with none is marked in
- * its parent's form until the owner relates it to something else), or they
+ * stay, about nothing (marked in its parent's form until the owner says
+ * what it is about again), or they
  * go with it, texts, banners and all.
  */
 export type ExcerptsOnTargetDelete = 'keep' | 'delete';
@@ -487,6 +519,10 @@ export function detachExcerptsFromTarget(
   const joined = excerptRelationRowsOf(tx, schema, target);
   const ids = [...new Set(joined.map((item) => item.excerptUuid))];
   if (!ids.length) return ids;
+  // Either way the parents' forms change under them, so their versions
+  // move: an open one is told it is outdated, and the search reads them
+  // again. Read while the excerpts are there to name their parents.
+  for (const id of ids) touchRelationEndpoint(tx, schema, ownerOf(id));
   if (mode === 'delete') {
     removeExcerptRows(tx, schema, ids);
     return ids;
@@ -502,31 +538,5 @@ export function detachExcerptsFromTarget(
         ),
       )
       .run();
-  for (const id of ids) touchRelationEndpoint(tx, schema, ownerOf(id));
   return ids;
-}
-
-/**
- * How many excerpts are about an entity, and for how many of them it is the
- * only thing they are about: what the deletion pane says before asking.
- */
-export function countExcerptsOfTarget(target: RelationEndpoint): {
-  related: number;
-  onlyTarget: number;
-} {
-  const { db, schema } = THEI_SERVER.useDb();
-  const ids = [
-    ...new Set(
-      excerptRelationRowsOf(db, schema, target).map((item) => item.excerptUuid),
-    ),
-  ];
-  const onlyTarget = ids.filter(
-    (id) => relationRowsOf(db, schema, ownerOf(id)).length === 1,
-  ).length;
-  return { related: ids.length, onlyTarget };
-}
-
-/** The key the deletion pane and the forms name a target by. */
-export function excerptTargetKey(target: RelationEndpoint) {
-  return relationEndpointKey(target);
 }

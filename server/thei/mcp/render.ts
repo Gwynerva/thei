@@ -52,12 +52,12 @@ export function renderEntity(view: McpEntityView): string {
       '',
       '## Excerpts',
       '',
-      'Named parts of it, each about something else in the archive (its relations); read with it and on the pages of what it is about.',
+      'Named parts of it, each about one other thing in the archive (its subject); read with it and on the page of what it is about.',
       '',
     );
     for (const excerpt of view.excerpts)
       lines.push(
-        `- ${excerpt.ref} — ${excerpt.title}${excerpt.summary ? ` — ${excerpt.summary}` : ''}${excerpt.isPrivate ? ' [private]' : ''} · about ${excerpt.about.join(', ') || 'nothing yet'}`,
+        `- ${excerpt.ref} — ${excerpt.title}${excerpt.summary ? ` — ${excerpt.summary}` : ''}${excerpt.isPrivate ? ' [private]' : ''} · about ${excerpt.subject ?? 'nothing: its subject was deleted'}`,
       );
   }
   if (view.tags) {
@@ -68,7 +68,15 @@ export function renderEntity(view: McpEntityView): string {
         : ['_(none)_']),
     );
   }
-  if (view.relations) {
+  // An excerpt's one relation is what it is about: its field subject.
+  if (view.relations && view.kind === 'excerpt') {
+    lines.push('', '## Subject', '');
+    lines.push(
+      ...(view.relations.length
+        ? view.relations.map(formatRelation)
+        : ['_(nothing yet: what it was about was deleted)_']),
+    );
+  } else if (view.relations) {
     lines.push('', '## Relations', '');
     lines.push(
       ...(view.relations.length

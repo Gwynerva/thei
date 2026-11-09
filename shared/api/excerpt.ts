@@ -19,11 +19,9 @@ export type AdminExcerptAbout = {
 };
 
 /**
- * The excerpts about an entity, and for how many of them it is the only
- * thing they are about: what the deletion pane says before asking what to
- * do with them.
+ * The excerpts about an entity: what its form lists and what its deletion
+ * pane counts before asking what to do with them.
  */
 export type AdminExcerptsAboutResponse = {
   items: AdminExcerptAbout[];
-  onlyTarget: number;
 };

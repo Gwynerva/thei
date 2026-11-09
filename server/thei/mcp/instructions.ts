@@ -21,6 +21,7 @@ The entities, in short:
 - Projects: substantial episodes made of sections. A section with dates is a stage of its project; one without is a general section.
 - Pages: standalone writing outside the timeline. Tags: threads across projects and events.
 - Relations join projects, events and diary entries: related, depends on, or affects. A relation is a deliberate claim, an edge of the owner's map of their life; a link inside a text is only a mention.
+- Excerpts: named parts of a diary entry, an event or a project, each about exactly one other of them, its subject; never an end of a relation, and as open as the stricter of its parent and its subject.
 
 Rules:
 - Texts are stored exactly as typed; Thei sets quotes, dashes and spaces when it shows them. Never change typography.
@@ -59,6 +60,9 @@ Events
 Projects
 - A substantial episode: title, summary, description, private notes, sections, tags, relations, an icon and a banner, showcase files, other files and links; showcase (among the chosen projects) and cv (in the résumé). A project has no dates of its own: they come from its stages.
 - Sections are its parts, each with a body, dated periods, or both. One with periods is a stage ("stage 3 of 7"), read in time order; one without is a general section, read in the owner's order. A section is always shown under its project's title, so its own title is short and leans on the project's.
+
+Excerpts
+- A named part of a diary entry, an event or a project: a title, a body and its subject — the one other project, event or diary entry it is about, never its own parent — with a summary, a banner and privacy at will. It is read whole on its parent's page and on a page of its own, and as a card on the page and the chronology of what it is about. Its subject is its field (subject), not a relation: nothing is related to an excerpt. It is as open as the stricter of its parent and its subject, unless it is private. One whose subject was deleted is about nothing until it is given one.
 
 Pages
 - Standalone writing outside the timeline: title, summary, body, private notes, an icon and an address of its own (slug). No tags, no relations; a page may be pinned to the profile.

@@ -130,10 +130,14 @@ export function archiveUsage(
       add('excerpt: of a private parent');
     if (excerpt.summary.trim()) add('excerpt: with a summary');
     if (excerpt.banner) add('banner: an excerpt');
-    for (const relation of excerpt.relations)
-      add(
-        `excerpt: about ${named[relation.to.split(':')[0] as keyof typeof named]}`,
-      );
+    add(
+      `excerpt: about ${named[excerpt.about.to.split(':')[0] as keyof typeof named]}`,
+    );
+    // Hidden from strangers by what it is about, whatever its own switch says.
+    const subjectAccess = access.get(excerpt.about.to);
+    if (subjectAccess === 'private') add('excerpt: about a private subject');
+    if (subjectAccess === 'link-only')
+      add('excerpt: about a link-only subject');
   }
   for (const entry of archive.diary)
     if (!entry.body.trim() && entry.excerpts.length)
@@ -183,13 +187,12 @@ export function archiveUsage(
   }
 
   // Relations, an excerpt's among them.
-  for (const relation of excerpts.flatMap((excerpt) => excerpt.relations))
-    add('relation: from an excerpt');
+  for (const _excerpt of excerpts) add('relation: from an excerpt');
   for (const relation of [
     ...archive.projects.flatMap((project) => project.relations),
     ...archive.events.flatMap((event) => event.relations),
     ...archive.diary.flatMap((entry) => entry.relations),
-    ...excerpts.flatMap((excerpt) => excerpt.relations),
+    ...excerpts.map((excerpt) => excerpt.about),
   ]) {
     add(`relation: ${relation.kind}`);
     add(
@@ -303,6 +306,7 @@ export function archiveUsage(
     'excerpt: about a project',
     'excerpt: about an event',
     'excerpt: about a diary entry',
+    'excerpt: about a private subject',
     'excerpt: the whole of a diary entry',
   ])
     need(name, 1);

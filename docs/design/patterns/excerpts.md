@@ -1,8 +1,8 @@
 # Excerpts
 
 An excerpt is a named part of a diary entry, an event or a project, about
-something else in the archive: a title, a text and at least one relation,
-with a summary, a banner and the owner's privacy at will (`AGENTS.md`,
+one other thing in the archive: a title, a text and one relation — its
+subject — with a summary, a banner and the owner's privacy at will (`AGENTS.md`,
 "What Thei Is About"). This page gathers how one looks: read whole on its
 parent's page, on a page of its own, as a torn card on the pages of what it
 is about and on the chronologies, and edited in a modal of its parent's form.
@@ -37,8 +37,14 @@ proposed for it wait for the owner's word.
   `app/pages/events/[event]/excerpts/` and
   `app/pages/projects/[projectUuid]/excerpts/`).
 - Its address lives under its parent's: `…/excerpts/<slug>-<id>/`
-  (`shared/excerpt-url.ts`). It is as open as its parent unless it is private,
-  and its private side is the parent's (`server/thei/excerpts/parents.ts`).
+  (`shared/excerpt-url.ts`). It is as open as the stricter of its parent and
+  its subject unless it is private, and is seen only by whoever may open
+  both (`server/thei/excerpts/parents.ts`): one about something private is
+  not on its public parent's page, its lead, the search or the sitemap; one
+  about something open by its link only opens by its own address and on the
+  subject's page, and is listed nowhere else.
+- An excerpt about nothing — its subject deleted — has no line of what it is
+  about, and is as open as its parent.
 
 ## On the pages of what it is about
 
@@ -63,14 +69,24 @@ proposed for it wait for the owner's word.
 - A parent's form has a block «Отрывки» after its text and before its
   relations, built like a project's sections: rows that open a modal, dragged
   into the owner's order, and «Добавить» (`app/components/admin/excerpts/AdminExcerpts.vue`,
-  `AdminExcerptRow.vue`). A row shows the title, the summary and chips of what
-  the excerpt is about; one about nothing any more — its target deleted and
-  the excerpt kept — says so.
+  `AdminExcerptRow.vue`). A row shows the title, the summary and the chip of
+  what the excerpt is about; one about nothing any more — its subject deleted
+  and the excerpt kept — says so in the warning tone. Its lock is there when
+  it is private or its subject is, the hint saying which.
 - The modal follows a section's: title and privacy, the address under the
-  parent's, «Про что» as the relations block with the excerpt as its owner
-  and its parent excluded, the summary, the text, the banner and the AI's
-  memory (`AdminExcerptModal.vue`, `excerpt-modals.ts`). What it still needs
-  — a title, a text, what it is about — is said as a form's needs are.
+  parent's, «Про что», the summary, the text, the banner and the AI's memory
+  (`AdminExcerptModal.vue`, `excerpt-modals.ts`). What it still needs — a
+  title, a text, what it is about — is said as a form's needs are.
+- «Про что» is one field (`AdminExcerptAbout.vue`): empty, a dashed tile that
+  opens the relation's picker (`RelationModal`), the parent kept out of it,
+  with what the excerpt's text links to offered under it as suggested chips;
+  chosen, the relation's chip, which opens the same modal for its kind, its
+  note and another subject, and a square ✕ that clears it. Opened about
+  nothing, the tile is in the warning tone and says the subject was deleted.
+- Under the title a quiet line says when the subject closes the excerpt
+  more than its own switch: hidden while the subject is private, shown only
+  by its link while the subject is open by its link only. The switch keeps
+  the owner's own choice for when the subject opens.
 - A target's own relations block shows the excerpts about it on a fourth
   tab, read only: a chip leads to the parent's form, opened on the excerpt
   (`?excerpt=<id>`), since only that form edits it
@@ -79,12 +95,11 @@ proposed for it wait for the owner's word.
   this one, first.
 - Deleting a project, an event or an entry that excerpts are about asks what
   becomes of them, in the deletion pane: keep them (the default) or delete
-  them too, with how many there are and for how many it is the only thing
-  they are about (`AdminExcerptsOnDelete.vue`). Excerpts of the entity
+  them too, with how many there are (`AdminExcerptsOnDelete.vue`). Excerpts of the entity
   itself go with it.
 - An excerpt is edited in its parent's form by the admin and by a model
-  alike: an action on it waits at the field it changes in the modal, and its
-  relations are proposed from its own side (see
+  alike: an action on it waits at the field it changes in the modal — its
+  subject at «Про что» (see
   [AI in the UI](ai-in-the-ui.md)).
 
 ## How it is checked
@@ -93,7 +108,8 @@ proposed for it wait for the owner's word.
   the modal and about a project; the deletion pane's two answers; the block
   and the modal on a phone.
 - `tests/server/public-excerpts.test.ts`: who sees an excerpt where — the
-  parent's access, its privacy, the viewer, a day still to come.
+  parent's access, its subject's, its privacy, the viewer, a day still to
+  come.
 - `tests/server/life-excerpts.test.ts`: the chronology's points and the
   Life's cards.
 - A look in the browser at 960 and 375 px, in both themes: the parent's page

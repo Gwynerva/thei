@@ -215,7 +215,7 @@ void ai;
           :data-drag-id="id"
           :title="item.title"
           :summary="item.summary"
-          :about="item.relations"
+          :about="item.about"
           :media
           :is-private="item.isPrivate"
           @open="dragSort.guardClick(() => openItem(item))"

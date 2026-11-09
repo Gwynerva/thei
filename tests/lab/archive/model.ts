@@ -129,8 +129,8 @@ export type ExcerptParentKind = 'project' | 'event' | 'diary';
 
 /**
  * An excerpt: a named part of a project, an event or a diary entry, about
- * something else in the archive (revision 2). Its parent is the folder it
- * was found in.
+ * one other thing in the archive (revision 2; one thing since revision 3).
+ * Its parent is the folder it was found in.
  */
 export interface ArchiveExcerpt extends Source {
   id: string;
@@ -142,8 +142,8 @@ export interface ArchiveExcerpt extends Source {
   slug?: string;
   private: boolean;
   banner?: string;
-  /** What it is about: at least one, never its parent. */
-  relations: ArchiveRelation[];
+  /** What it is about: one relation, never to its parent. */
+  about: ArchiveRelation;
   body: string;
 }
 

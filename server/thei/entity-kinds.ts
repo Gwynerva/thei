@@ -1,10 +1,11 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import type { ContentSlot } from '#layers/thei/shared/content';
 import { isLifeDay } from '#layers/thei/shared/life';
 import { PROFILE_ID } from '#layers/thei/shared/profile';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import type { ExcerptParentType } from '#layers/thei/shared/excerpt';
 import { buildExcerptAdminPath } from '#layers/thei/shared/excerpt-url';
+import { countExcerptsOfParent } from './excerpts';
 
 /**
  * Every kind of thing on the site that AI sessions, their actions and access
@@ -379,19 +380,8 @@ export function entityTextOfSlot(kind: EntityKind, slot: unknown) {
  */
 export function textMayBeEmpty(slot: ContentSlot, owner?: EntityKey): boolean {
   if (slot !== 'diary-body') return true;
-  if (!owner) return false;
-  const { db, schema } = THEI_SERVER.useDb();
   return Boolean(
-    db
-      .select({ excerptUuid: schema.excerpts.excerptUuid })
-      .from(schema.excerpts)
-      .where(
-        and(
-          eq(schema.excerpts.parentType, 'diary-entry'),
-          eq(schema.excerpts.parentId, owner.id),
-        ),
-      )
-      .get(),
+    owner && countExcerptsOfParent({ type: 'diary-entry', id: owner.id }) > 0,
   );
 }
 

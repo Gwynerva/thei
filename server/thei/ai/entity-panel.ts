@@ -82,7 +82,7 @@ export const FIELD_PLACES: {
     private: 'form',
     body: 'form',
     banner: 'form',
-    relations: 'relations',
+    subject: 'field:subject',
     slug: 'form',
     publicId: 'form',
   },
@@ -178,8 +178,7 @@ function placeOf(row: ActionRow, key: EntityKey): AiOfferPlace {
 
 /**
  * The relations proposed from the other end: a relation is one claim read
- * from either side, so it waits in both forms — but an excerpt's, which
- * only the excerpt's own form holds.
+ * from either side, so it waits in both forms.
  */
 function relationsNaming(key: EntityKey): ActionRow[] {
   const { db, schema } = THEI_SERVER.useDb();
@@ -190,7 +189,6 @@ function relationsNaming(key: EntityKey): ActionRow[] {
       and(
         eq(schema.aiActions.kind, 'relation'),
         eq(schema.aiActions.state, 'pending'),
-        ne(schema.aiActions.targetType, 'excerpt'),
         sql`json_extract(${schema.aiActions.payload}, '$.other') = ${refOf(key)}`,
       ),
     )

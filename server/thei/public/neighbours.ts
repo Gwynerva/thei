@@ -9,7 +9,9 @@ import {
   sortStagesNewestFirst,
 } from '#layers/thei/shared/project-content-item';
 import type { ProjectSectionRecord } from '../projects/content-sections';
+import { OWNER, STRANGER } from '../access-links/viewer';
 import { listExcerpts } from '../excerpts';
+import { excerptShownWithParent } from '../excerpts/parents';
 import { buildPublicEntityPreviewMedia } from './content';
 import { buildPublicProjectSectionSummary } from './entities';
 
@@ -115,7 +117,12 @@ export async function buildDiaryEntryNeighbours(
           type: 'diary-entry',
           id: entry.diaryUuid,
         })
-          .filter((excerpt) => isAdmin || !excerpt.isPrivate)
+          .filter((excerpt) =>
+            excerptShownWithParent(isAdmin ? OWNER : STRANGER, excerpt, {
+              type: 'diary-entry',
+              id: entry.diaryUuid,
+            }),
+          )
           .map((excerpt) => excerpt.title),
         includePrivate: isAdmin,
         privateLabel: THEI_SERVER.phrase.content_private_section,

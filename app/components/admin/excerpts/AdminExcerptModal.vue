@@ -1,5 +1,8 @@
 <script lang="ts" setup>
-import type { ExcerptItem } from '#layers/thei/shared/excerpt';
+import {
+  excerptSubjectLimit,
+  type ExcerptItem,
+} from '#layers/thei/shared/excerpt';
 import { buildExcerptUrl } from '#layers/thei/shared/excerpt-url';
 import { normalizeHeadingText } from '#layers/thei/shared/terminal-punctuation';
 import {
@@ -9,7 +12,7 @@ import {
   type ContentFieldModelValue,
 } from '#layers/thei/shared/content';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
-import type { RelationEditItem } from '#layers/thei/shared/relation';
+import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import FieldContentEditor from '#layers/thei/app/components/field/FieldContentEditor.vue';
 import ModalContainer from '#layers/thei/app/modals/ModalContainer.vue';
 import ModalTitle from '#layers/thei/app/modals/ModalTitle.vue';
@@ -18,13 +21,14 @@ import LinkField from '#layers/thei/app/pages/admin/components/LinkField.vue';
 import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
 import type { FormNeed } from '#layers/thei/app/composables/form-needs';
 import { adminExcerptDeleteModal } from './excerpt-modals';
+import AdminExcerptAbout from './AdminExcerptAbout.vue';
 import type { ExcerptsForm } from './excerpts-form';
 
 /**
  * One excerpt of a diary entry, an event or a project, in a modal of its
  * own, built as a section's is: its title and whether it is private, its
- * address under its parent's, what it is about — the relations block with
- * the excerpt as the owner — its summary, its text, its banner, and what the
+ * address under its parent's, what it is about — one relation, with the
+ * excerpt as its owner — its summary, its text, its banner, and what the
  * AI remembers of it. Handed over to the parent's form on Save, which saves
  * itself when nothing else is waiting; the modal stays open.
  */
@@ -83,13 +87,28 @@ const bannerAssetUuid = computed({
 function bannerUsageDelta() {
   return props.modalData.usageDelta(buildItem());
 }
-const relationsModel = computed({
-  get: () => item.value.relations,
-  set: (value: RelationEditItem[]) => {
-    item.value.relations = value;
-  },
+/**
+ * What closes the excerpt to visitors beyond its own switch: what it is
+ * about, while that is private or open by its link only. Said under the
+ * switch, which keeps the owner's own choice for when that opens.
+ */
+const subjectLimit = computed(() =>
+  excerptSubjectLimit(item.value.about?.access),
+);
+const subjectNote = computed(() => {
+  const about = item.value.about;
+  if (!about || !subjectLimit.value) return undefined;
+  const name = entityListName(about);
+  return subjectLimit.value === ProjectEventAccessLevel.Private
+    ? phrase.value.excerpt_hidden_by_subject(name)
+    : phrase.value.excerpt_link_only_by_subject(name);
 });
-/** What stands for the excerpt beside its relations: its banner, else its first picture. */
+/** Opened about nothing: what it was about was deleted. */
+const orphan = computed(
+  () =>
+    Boolean(props.modalData.item?.excerptUuid) && !props.modalData.item?.about,
+);
+/** What stands for the excerpt beside what it is about: its banner, else its first picture. */
 const ownerMedia = computed(
   () =>
     item.value.bannerMedia ??
@@ -103,15 +122,16 @@ const parentEndpoint = computed(() => {
 
 /**
  * What the excerpt still needs before it can be saved: its title, its text,
- * and at least one thing it is about — an excerpt is always about something
- * in the archive.
+ * and the one thing it is about — an excerpt is always about something in
+ * the archive. Its parent's form saves one whose subject was deleted; this
+ * form asks for one again.
  */
 const needs = useFormNeeds(
   () => {
     const list: FormNeed[] = [];
     if (!item.value.title.trim())
       list.push({ key: 'title', label: phrase.value.excerpt_title });
-    if (!item.value.relations.length)
+    if (!item.value.about)
       list.push({ key: 'about', label: phrase.value.excerpt_about });
     if (!hasBody.value)
       list.push({ key: 'body', label: phrase.value.excerpt_content });
@@ -170,7 +190,7 @@ function buildItem(): ExcerptItem {
     publicId: item.value.publicId,
     isPrivate: item.value.isPrivate,
     content: item.value.content ?? createEmptyContentFieldValue(),
-    relations: item.value.relations,
+    about: item.value.about,
     ...(item.value.bannerAssetUuid
       ? {
           bannerAssetUuid: item.value.bannerAssetUuid,
@@ -189,7 +209,7 @@ function createInitialItem(data: ModalData): ExcerptDraft {
     publicId: data.item?.publicId ?? randomId(14),
     isPrivate: data.item?.isPrivate ?? false,
     content: data.item?.content ?? null,
-    relations: data.item?.relations ?? [],
+    about: data.item?.about ?? null,
     bannerAssetUuid: data.item?.bannerAssetUuid,
     bannerMedia: data.item?.bannerMedia,
   };
@@ -287,6 +307,21 @@ async function deleteItem() {
           </span>
         </div>
         <FieldInput v-model="item.title" autocomplete="off" />
+        <p
+          v-if="subjectNote"
+          class="flex items-center gap-1 text-sm text-text-3"
+          data-excerpt-subject-access
+        >
+          <Icon
+            :name="
+              subjectLimit === ProjectEventAccessLevel.Private
+                ? 'lock-close'
+                : 'link'
+            "
+            aria-hidden="true"
+          />
+          {{ subjectNote }}
+        </p>
       </Field>
       <LinkField
         v-model:title="item.title"
@@ -295,25 +330,16 @@ async function deleteItem() {
         :entity-name="phrase.excerpt"
         :link-description="linkDescription"
       />
-      <!-- What the excerpt is about: its relations, with the excerpt as
-           their owner and its parent kept out of them. -->
-      <div data-need="about">
-        <AdminRelations
-          v-model="relationsModel"
-          :owner="
-            item.excerptUuid
-              ? { type: 'excerpt', id: item.excerptUuid }
-              : undefined
-          "
-          owner-type="excerpt"
-          :owner-title="item.title.trim() || phrase.excerpt"
-          :owner-media="ownerMedia"
-          :text="item.content?.data"
-          :title="phrase.excerpt_about"
-          :description="phrase.excerpt_about_hint"
-          :exclude="parentEndpoint"
-        />
-      </div>
+      <!-- What the excerpt is about: one project, event or diary entry,
+           its parent kept out of the picker. -->
+      <AdminExcerptAbout
+        v-model="item.about"
+        :owner-title="item.title.trim() || phrase.excerpt"
+        :owner-media="ownerMedia"
+        :text="item.content?.data"
+        :exclude="parentEndpoint"
+        :orphan
+      />
       <Field ai="field:summary">
         <FieldLabel>{{ phrase.excerpt_summary }}</FieldLabel>
         <FieldTextarea v-model="item.summary" />

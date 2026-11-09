@@ -31,6 +31,7 @@ import {
 } from '../../entity-kinds';
 import { settleActions } from '../actions/apply';
 import { neverOffered } from '../actions/declined';
+import { namedRelationRefs } from '../actions/lock';
 import { findActions, sessionActions } from '../actions/rows';
 import { fileRef, isFileKey, type ActionTarget } from '../actions/target';
 import { fileOfFamily } from '../../assets/descriptions';
@@ -72,24 +73,22 @@ export function entityRef(key: EntityKey): AiEntityRef {
   };
 }
 
-/** The refs an action's payload names besides its target. */
+/**
+ * The refs an action's payload names besides its target: the ends of the
+ * relations it draws, an excerpt's subject among them, and the tags it
+ * adds or takes away.
+ */
 function refsIn(payload: unknown): Record<string, AiEntityRef> {
   const named = new Set<string>();
   const data = (payload ?? {}) as {
-    other?: unknown;
     add?: { ref?: unknown }[];
     remove?: { ref?: unknown }[];
-    fields?: { relations?: { ref?: unknown }[] };
-    changes?: { relations?: { ref?: unknown }[] };
   };
-  if (typeof data.other === 'string') named.add(data.other);
-  for (const item of [
-    ...(data.add ?? []),
-    ...(data.remove ?? []),
-    ...(Array.isArray(data.fields?.relations) ? data.fields.relations : []),
-    ...(Array.isArray(data.changes?.relations) ? data.changes.relations : []),
+  for (const ref of [
+    ...namedRelationRefs(payload),
+    ...[...(data.add ?? []), ...(data.remove ?? [])].map((item) => item?.ref),
   ])
-    if (typeof item?.ref === 'string') named.add(item.ref);
+    if (typeof ref === 'string') named.add(ref);
   const refs: Record<string, AiEntityRef> = {};
   for (const ref of named) {
     const key = findEntity(ref);

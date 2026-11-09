@@ -8,6 +8,7 @@ import { landingHash } from '#layers/thei/shared/landing';
 import {
   buildLifeUrl,
   isLifeDay,
+  lastArrivedDay,
   lifeArrivalCutoff,
   lifeFilterIncludes,
   lifeFilterKinds,
@@ -605,22 +606,25 @@ function buildRawLifePoints(cutoff?: string): RawPoint[] {
   }
 
   // An excerpt is a point of the chronology of what it is about, dated by
-  // its parent's day — an entry's day, an event's last day, the day an
-  // excerpt of a project was written — and as open as its parent. On the
-  // Life it is no point: there its parent's card names it (`buildLifeIndex`).
+  // its parent's day — an entry's day, the last day of an event that has
+  // come, the day an excerpt of a project was written — and as open as its
+  // parent: it stands
+  // only on the chronology of what it is about, which the visitor has open.
+  // On the Life it is no point: there its parent's card names it
+  // (`buildLifeIndex`), among those the visitor may see.
   const excerptBanners = readEntityBannerUuids(
     db,
     schema,
     'excerpt',
     excerpts.map((excerpt) => excerpt.excerptUuid),
   );
-  const lastDayOfEvent = new Map<string, string>();
-  for (const period of periods) {
-    if (period.ownerType !== 'event') continue;
-    const last = lastDayOfEvent.get(period.ownerId);
-    if (!last || period.endDate > last)
-      lastDayOfEvent.set(period.ownerId, period.endDate);
-  }
+  const periodsOfEvent = new Map<string, typeof periods>();
+  for (const period of periods)
+    if (period.ownerType === 'event')
+      periodsOfEvent.set(period.ownerId, [
+        ...(periodsOfEvent.get(period.ownerId) ?? []),
+        period,
+      ]);
   for (const excerpt of excerpts) {
     let date: string;
     let access: ProjectEventAccessLevel;
@@ -632,9 +636,14 @@ function buildRawLifePoints(cutoff?: string): RawPoint[] {
     } else if (excerpt.parentType === 'event') {
       const event = eventById.get(excerpt.parentId);
       if (!event) continue;
-      date =
-        lastDayOfEvent.get(event.eventUuid) ??
-        projectCreatedUtcDate(event.createdAt);
+      // The last day of the event that has come, as its own points stand:
+      // a period still running by its start; none come yet, it waits.
+      const own = periodsOfEvent.get(event.eventUuid);
+      const day = own
+        ? lastArrivedDay(own, cutoff)
+        : projectCreatedUtcDate(event.createdAt);
+      if (!day) continue;
+      date = day;
       access = event.access;
     } else {
       const parent = projectById.get(excerpt.parentId);

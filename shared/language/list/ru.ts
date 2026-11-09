@@ -558,7 +558,7 @@ export default defineI18nModule({
     llms_txt_sitemap: 'все публичные адреса этого сайта',
     llms_txt_markdown_title: 'Markdown',
     llms_txt_markdown:
-      'Любой публичный проект, раздел проекта, событие, страница или запись дневника отдаются и в Markdown: добавьте index.md к адресу, например /projects/name-id/index.md. Приватных частей там нет — ровно как и для любого другого посетителя.',
+      'Любой публичный проект, раздел проекта, событие, страница, запись дневника или отрывок отдаются и в Markdown: добавьте index.md к адресу, например /projects/name-id/index.md. Приватных частей там нет — ровно как и для любого другого посетителя.',
     public_life_period_description: (period, siteName) =>
       `События, проекты и записи дневника за ${period.toLocaleLowerCase('ru-RU')} — ${siteName}.`,
     public_pages_description:
@@ -1537,23 +1537,28 @@ export default defineI18nModule({
     excerpt_delete_entity: 'отрывок',
     edit_excerpt: 'Изменить отрывок',
     excerpt_about_hint:
-      'Проекты, события и записи дневника, которым посвящён этот отрывок.',
+      'Проект, событие или запись дневника — то одно, про что этот отрывок.',
     excerpts_empty: 'Отрывков пока нет.',
-    excerpt_without_about: 'Без целевой сущности',
+    excerpt_about_pick: 'Выбрать, про что отрывок',
+    excerpt_about_orphan:
+      'Пока ни про что: то, про что он был, удалено. Выберите, про что он теперь.',
+    excerpt_about_clear: 'Убрать, про что отрывок',
+    excerpt_about_take: (title) => `Про «${title}»`,
+    excerpt_hidden_by_subject: (title) =>
+      `Скрыт от посетителей, пока «${title}» приватен.`,
+    excerpt_link_only_by_subject: (title) =>
+      `Виден только по ссылке, пока «${title}» открыт только по ссылке.`,
+    excerpt_without_about: 'Пока ни про что',
     excerpt_without_about_hint:
       'То, про что он был, удалено. Откройте отрывок и укажите, про что он теперь.',
     excerpts_about_description: 'Написаны в других местах архива — про это.',
     relation_recommendation_excerpt: 'Есть отрывок про это',
     excerpts_on_delete_keep: 'Оставить отрывки про него',
     excerpts_on_delete_delete: 'Удалить и отрывки',
-    excerpts_on_delete_count: (related, onlyTarget) =>
+    excerpts_on_delete_count: (related) =>
       related === 1
-        ? onlyTarget
-          ? 'Про него есть один отрывок, и больше он ни про что.'
-          : 'Про него есть один отрывок, среди прочего.'
-        : onlyTarget === related
-          ? `Про него ${plural(related, 'отрывок', 'отрывка', 'отрывков')}, и больше они ни про что.`
-          : `Про него ${plural(related, 'отрывок', 'отрывка', 'отрывков')}; для ${onlyTarget} из них он — единственное, про что они.`,
+        ? 'Про него есть один отрывок. Если оставить, он будет ни про что, пока вы не укажете, про что он.'
+        : `Про него ${plural(related, 'отрывок', 'отрывка', 'отрывков')}. Если оставить, они будут ни про что, пока вы не укажете, про что каждый.`,
     content_empty: 'Контента пока нет',
     content_text_empty: 'Текстового контента нет',
     edit_content: (title) => `Редактировать: ${title}`,
@@ -2504,6 +2509,8 @@ export default defineI18nModule({
       title ? `Из сессии «${title}»` : 'Из сессии',
     ai_review_written_section: (title) =>
       title ? `Раздел «${title}»` : 'Раздел',
+    ai_review_written_excerpt: (title) =>
+      title ? `Отрывок «${title}»` : 'Отрывок',
     ai_review_applied: (count) =>
       `В тексте ${plural(count, 'правка', 'правки', 'правок')}`,
     ai_review_taken: (count) =>
@@ -2718,6 +2725,7 @@ export default defineI18nModule({
       links: 'Ссылки',
       tags: 'Теги',
       relations: 'Связи',
+      subject: 'Про что',
       notes: 'Заметки',
       sections: 'Разделы',
       sectionOrder: 'Порядок разделов',

@@ -18,7 +18,6 @@ export function useExcerptsAbout(
   target: MaybeRefOrGetter<RelationEndpoint | undefined>,
 ) {
   const items = shallowRef<AdminExcerptAbout[]>([]);
-  const onlyTarget = ref(0);
   const loading = ref(false);
   let request = 0;
 
@@ -27,7 +26,6 @@ export function useExcerptsAbout(
     const mine = ++request;
     if (!value) {
       items.value = [];
-      onlyTarget.value = 0;
       return;
     }
     loading.value = true;
@@ -38,11 +36,9 @@ export function useExcerptsAbout(
       );
       if (mine !== request) return;
       items.value = response.items;
-      onlyTarget.value = response.onlyTarget;
     } catch {
       if (mine !== request) return;
       items.value = [];
-      onlyTarget.value = 0;
     } finally {
       if (mine === request) loading.value = false;
     }
@@ -59,5 +55,5 @@ export function useExcerptsAbout(
     );
   });
 
-  return { items, onlyTarget, loading, refresh: load };
+  return { items, loading, refresh: load };
 }

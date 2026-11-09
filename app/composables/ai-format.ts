@@ -183,6 +183,9 @@ export function fieldSaid(
     typeof value === 'object'
   )
     return Object.values(value).map((text) => publicText(String(text)));
+  // What an excerpt is about: one relation, said by the entity it leads to.
+  if (field === 'subject' && typeof value === 'object')
+    return relationWords(value, options.refs ?? {});
   if (!Array.isArray(value))
     return typeof value === 'object' ? '' : fieldValueWords(value);
   if (field === 'files' || field === 'showcaseFiles') {

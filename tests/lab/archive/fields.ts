@@ -46,7 +46,7 @@ export const FIELD_MAP: Record<string, Record<string, string>> = {
     private: 'private',
     body: 'the body',
     banner: 'banner',
-    relations: 'relations',
+    subject: 'about',
     slug: 'slug (derived from the title when absent)',
     publicId: 'derived from the ref',
   },

@@ -34,18 +34,13 @@ import {
 } from '../assets/urls';
 import { describedText, describeFiles } from '../assets/descriptions';
 import { createExternalLinkLoader } from '../external-links/repository';
-import { canResolveContentEntityLink } from '../content-links/access';
 import {
   CONTENT_ENTITY_TYPES,
   isContentEntityType,
   type ContentEntityType,
 } from '#layers/thei/shared/content-link';
-import { findContentEntity } from '../content-entities';
-import {
-  opensGrantOwner,
-  STRANGER,
-  type PublicViewer,
-} from '../access-links/viewer';
+import { contentEntityOpens, findContentEntity } from '../content-entities';
+import { STRANGER, type PublicViewer } from '../access-links/viewer';
 import { resolveEntityIconMedia } from '../media/generated-icon';
 
 /**
@@ -279,10 +274,7 @@ async function hydratePublicContentData(
     const entity = await findContentEntity({ entityType, entityId }, STRANGER);
     const access: EntityLinkAccess = !entity
       ? 'missing'
-      : canResolveContentEntityLink(
-            entity.access,
-            opensGrantOwner(viewer, entity.grantOwner),
-          )
+      : contentEntityOpens(entity, viewer)
         ? 'resolvable'
         : 'restricted';
     entityLinkCache.set(key, access);

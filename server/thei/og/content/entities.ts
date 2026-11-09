@@ -18,7 +18,11 @@ import { getEventPeriods } from '../../events/periods';
 import { ownerText } from '../../owner-text';
 import { listProjectSections } from '../../projects/content-sections';
 import { findExcerptByPublicId, listExcerpts } from '../../excerpts';
-import { loadExcerptParent } from '../../excerpts/parents';
+import {
+  excerptOpens,
+  excerptShownWithParent,
+  loadExcerptParent,
+} from '../../excerpts/parents';
 import {
   isDatedSection,
   sortStagesNewestFirst,
@@ -288,10 +292,15 @@ export async function excerptContent(
   site: OgSite,
 ): Promise<OgCardContent | undefined> {
   const excerpt = findExcerptByPublicId(publicId);
-  if (!excerpt || excerpt.isPrivate) return undefined;
+  if (!excerpt) return undefined;
   const parent = await loadExcerptParent(excerpt.parentType, excerpt.parentId);
   if (!parent || !canOpenPublicEntity(parent.access, false)) return undefined;
-  const visible = listExcerpts(parent).filter((item) => !item.isPrivate);
+  if (!excerptOpens(STRANGER, excerpt, parent)) return undefined;
+  const visible = listExcerpts(parent).filter(
+    (item) =>
+      item.excerptUuid === excerpt.excerptUuid ||
+      excerptShownWithParent(STRANGER, item, parent),
+  );
   const number =
     visible.findIndex((item) => item.excerptUuid === excerpt.excerptUuid) + 1;
   const [picture, parentPicture] = await Promise.all([

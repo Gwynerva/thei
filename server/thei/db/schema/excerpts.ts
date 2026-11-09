@@ -21,7 +21,7 @@ export const EXCERPT_PARENT_TYPES = [
  * An excerpt: a named part of a diary entry, an event or a project — a
  * title, a text and what it is about — with a page of its own. Its body is
  * a row of `content` (slot `excerpt-body`), its banner a placement of the
- * `banner` role on it, and what it is about are ordinary rows of
+ * `banner` role on it, and what it is about one ordinary row of
  * `entity-relations` with the excerpt as one end. The parent's form holds
  * its excerpts in `sortOrder`, as a project's holds its sections.
  */

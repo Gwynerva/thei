@@ -254,18 +254,20 @@ describe('sitemap privacy', () => {
     expect(listed).not.toContain('/diary/2026-04-29/');
   });
 
-  it('lists an excerpt under a listable parent, never a private one', () => {
+  it('lists an excerpt under a listable parent about something listable, never a private one', () => {
     const excerpt = (
       parentType: 'project' | 'event' | 'diary-entry',
       parentId: string,
       publicId: string,
       isPrivate = false,
+      subjectAccess?: ProjectEventAccessLevel,
     ) => ({
       parentType,
       parentId,
       humanReadableSlug: `slug-${publicId}`,
       publicId,
       isPrivate,
+      ...(subjectAccess ? { subjectAccess } : {}),
       updatedAt: EPOCH,
     });
     const listed = paths(
@@ -296,6 +298,28 @@ describe('sitemap privacy', () => {
           excerpt('event', 'event-Ev', 'X4'),
           excerpt('diary-entry', 'd1', 'X5'),
           excerpt('diary-entry', 'd2', 'X6'),
+          // Closed by what it is about, though its parent is public.
+          excerpt(
+            'diary-entry',
+            'd1',
+            'X7',
+            false,
+            ProjectEventAccessLevel.Private,
+          ),
+          excerpt(
+            'diary-entry',
+            'd1',
+            'X8',
+            false,
+            ProjectEventAccessLevel.LinkOnly,
+          ),
+          excerpt(
+            'diary-entry',
+            'd1',
+            'X9',
+            false,
+            ProjectEventAccessLevel.Public,
+          ),
         ],
       }),
     );
@@ -309,6 +333,9 @@ describe('sitemap privacy', () => {
     expect(listed).toContain('/events/slug-Ev-Ev/excerpts/slug-X4-X4/');
     expect(listed).toContain('/diary/2026-04-28/excerpts/slug-X5-X5/');
     expect(listed).not.toContain('/diary/2026-04-29/excerpts/slug-X6-X6/');
+    expect(listed).not.toContain('/diary/2026-04-28/excerpts/slug-X7-X7/');
+    expect(listed).not.toContain('/diary/2026-04-28/excerpts/slug-X8-X8/');
+    expect(listed).toContain('/diary/2026-04-28/excerpts/slug-X9-X9/');
   });
 });
 

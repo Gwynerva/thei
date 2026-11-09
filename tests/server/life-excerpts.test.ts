@@ -185,6 +185,65 @@ describe("excerpts on a project's chronology", () => {
     expect(first.relatedEntities ?? []).toEqual([]);
   });
 
+  it('date an event’s excerpt by the last day of it that has come', async () => {
+    // One event still running, one still to come, each with an excerpt
+    // about the project and nothing else tying it there.
+    for (const [uuid, startDate, endDate] of [
+      ['RUN', '2026-05-25', '2026-07-01'],
+      ['SOON', '2026-08-01', '2026-08-02'],
+    ] as const) {
+      context.insert('events', {
+        ...row,
+        eventUuid: uuid,
+        publicId: uuid,
+        humanReadableSlug: uuid.toLowerCase(),
+        title: `${uuid} event`,
+        access: Public,
+      });
+      context.insert('periods', {
+        ownerType: 'event',
+        ownerId: uuid,
+        sortOrder: 0,
+        startDate,
+        endDate,
+        precision: 'exact',
+        precisionNote: '',
+        label: '',
+      });
+      excerpt(`X${uuid}`, ['event', uuid]);
+      relate([`excerpt`, `X${uuid}`], ['project', 'P']);
+    }
+    const points = await getLatestLifePoints(20, { scope, viewer: OWNER });
+    // A running one by its start, as its own point would stand; one to come
+    // waits, for the owner too.
+    expect(
+      points
+        .filter((point) => point.entityKind === 'excerpt')
+        .map((point) => [
+          point.date,
+          point.visibility === 'visible' ? point.title : '',
+        ]),
+    ).toEqual([
+      ['2026-05-25', 'XRUN title'],
+      ['2026-04-01', 'XD title'],
+      ['2026-03-02', 'XE2 title'],
+      ['2026-03-02', 'XE title'],
+    ]);
+    // Its card says the same day.
+    const { eventExcerptParent } =
+      await import('../../server/thei/excerpts/parents');
+    const running = (await context.server.events.findByUuid('RUN'))!;
+    expect(eventExcerptParent(running).date).toBe('2026-05-25');
+    expect(
+      eventExcerptParent(running, Date.parse('2026-07-05T12:00:00Z')).date,
+    ).toBe('2026-07-01');
+    const soon = (await context.server.events.findByUuid('SOON'))!;
+    expect(eventExcerptParent(soon)).toMatchObject({
+      date: '2026-08-01',
+      arrives: Date.parse('2026-08-01T00:00:00Z') - 14 * 60 * 60 * 1000,
+    });
+  });
+
   it('shows a stranger a private excerpt as a secret, and counts excerpts in the year', async () => {
     const points = await getLatestLifePoints(20, { scope, viewer: STRANGER });
     expect(points.map((point) => [point.entityKind, point.visibility])).toEqual(

@@ -127,7 +127,8 @@ export interface McpEntityView {
     title: string;
     summary: string;
     isPrivate: boolean;
-    about: string[];
+    /** The ref of what it is about; none once that was deleted. */
+    subject: string | null;
   }[];
   /** A section with dates: its place among the project's stages, in time. */
   stage?: { index: number; count: number };
@@ -340,7 +341,7 @@ async function editableFields(
   return formView(key.kind as FormKind, loaded.form);
 }
 
-/** A parent's excerpts as its view lists them, each with the refs it is about. */
+/** A parent's excerpts as its view lists them, each with the ref it is about. */
 async function excerptsOf(
   parent: ExcerptParentType,
   id: string,
@@ -363,9 +364,8 @@ async function excerptsOf(
       title: row.title,
       summary: row.summary,
       isPrivate: row.isPrivate,
-      about: (await relationsOf('excerpt', row.excerptUuid)).map(
-        (relation) => relation.ref,
-      ),
+      // One at most (`normalizeExcerptAbout`).
+      subject: (await relationsOf('excerpt', row.excerptUuid))[0]?.ref ?? null,
     })),
   );
 }

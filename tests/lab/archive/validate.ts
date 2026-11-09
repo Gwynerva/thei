@@ -266,15 +266,17 @@ export function validateArchive(
   }
 
   // -------------------------------------------------------------- excerpts
-  // An excerpt's relations are its own, declared on it alone: what it is
-  // about, never the parent it is part of.
+  // What an excerpt is about is its own, declared on it alone: one thing,
+  // never the parent it is part of.
   for (const excerpt of archiveExcerpts(archive)) {
     placed(excerpt.file, excerpt.banner, 'visual');
     const parent = parentRefOf(excerpt);
     relations(
       excerpt.file,
       refOf.excerpt(excerpt),
-      excerpt.relations.filter((relation) => {
+      // One without its about is named by the reader already.
+      [excerpt.about].filter((relation) => {
+        if (!relation.to) return false;
         if (relation.to !== parent) return true;
         error(
           excerpt.file,

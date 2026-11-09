@@ -163,13 +163,21 @@ describe('what breaks the format is named', () => {
     [
       'an excerpt about nothing',
       { 'projects/lamp/excerpts/09-x.md': '---\ntitle: X\n---\n\nWords.\n' },
-      /an excerpt needs at least one relation/,
+      /an excerpt needs about: the one thing it is about/,
+    ],
+    [
+      'an excerpt about two things',
+      {
+        'projects/lamp/excerpts/09-x.md':
+          '---\ntitle: X\nrelations:\n  - to: event:fair\n  - to: project:garden\n---\n\nWords.\n',
+      },
+      /an excerpt is about one thing: about, not relations/,
     ],
     [
       'an excerpt without a title',
       {
         'events/2021/fair/excerpts/09-x.md':
-          '---\nrelations:\n  - to: project:lamp\n---\n\nWords.\n',
+          '---\nabout:\n  to: project:lamp\n---\n\nWords.\n',
       },
       /title is required/,
     ],
@@ -177,7 +185,7 @@ describe('what breaks the format is named', () => {
       'an excerpt without a body',
       {
         'diary/2021/2021-03-04/excerpts/09-x.md':
-          '---\ntitle: X\nrelations:\n  - to: project:lamp\n---\n',
+          '---\ntitle: X\nabout:\n  to: project:lamp\n---\n',
       },
       /an excerpt needs a body/,
     ],
@@ -185,7 +193,7 @@ describe('what breaks the format is named', () => {
       'an excerpt about its own parent',
       {
         'diary/2021/2021-03-04/excerpts/09-x.md':
-          '---\ntitle: X\nrelations:\n  - to: diary:2021-03-04\n---\n\nWords.\n',
+          '---\ntitle: X\nabout:\n  to: diary:2021-03-04\n---\n\nWords.\n',
       },
       /not about its own parent diary:2021-03-04/,
     ],
@@ -232,7 +240,7 @@ describe('what breaks the format is named', () => {
       archiveWith({
         'diary/2022/2022-02-12.md': '',
         'diary/2022/2022-02-12/excerpts/01-x.md':
-          '---\ntitle: X\nrelations:\n  - to: project:lamp\n---\n\nWords.\n',
+          '---\ntitle: X\nabout:\n  to: project:lamp\n---\n\nWords.\n',
       }),
     ).toEqual([]);
     expect(archiveWith({ 'diary/2022/2022-02-12.md': '' }).join('\n')).toMatch(

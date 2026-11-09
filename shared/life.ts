@@ -63,6 +63,26 @@ export function lifeArrivalCutoff(now: Date | number = Date.now()): string {
   return utcDayOf(Number(now) + EARLIEST_ZONE_MS);
 }
 
+/**
+ * The last day of some periods that has come by a chronology's last day
+ * (`lifeArrivalCutoff`): a period's end once it has come, the start of one
+ * still running, nothing while none has started. Without a last day, the
+ * last end of them all.
+ */
+export function lastArrivedDay(
+  periods: readonly { startDate: string; endDate: string }[],
+  cutoff?: string,
+): string | undefined {
+  let last: string | undefined;
+  for (const period of periods) {
+    if (cutoff && period.startDate > cutoff) continue;
+    const day =
+      cutoff && period.endDate > cutoff ? period.startDate : period.endDate;
+    if (!last || day > last) last = day;
+  }
+  return last;
+}
+
 /** How far ahead of UTC the earliest time zone is. */
 const EARLIEST_ZONE_MS = 14 * 60 * 60 * 1000;
 

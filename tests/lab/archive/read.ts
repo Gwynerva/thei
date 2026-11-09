@@ -32,8 +32,11 @@ import type {
 
 /** The format this reader knows, and the highest revision of it. */
 export const READS_FORMAT = 1;
-/** 2: excerpts of projects, events and diary entries. */
-export const READS_REVISION = 2;
+/**
+ * 2: excerpts of projects, events and diary entries.
+ * 3: an excerpt is about one thing, its `about`, not a list of relations.
+ */
+export const READS_REVISION = 3;
 
 export const ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -236,26 +239,30 @@ const RELATION_KINDS = ['related', 'depends-on', 'affects'] as const;
 function relations(fields: Fields, issues: ArchiveIssue[]): ArchiveRelation[] {
   return fields.list('relations').flatMap((item): ArchiveRelation[] => {
     const relation = itemFields(item, fields, issues, 'a relation');
-    if (!relation) return [];
-    const result: ArchiveRelation = {
-      to: relation.string('to', true),
-      kind: relation.oneOf('kind', RELATION_KINDS, 'related'),
-    };
-    const note = relation.optionalString('note');
-    const notes = relation.object('notes');
-    if (note !== undefined && notes)
-      relation.error('a relation has a note or notes, not both');
-    if (note !== undefined) result.note = note;
-    if (notes) {
-      result.notes = {
-        this: notes.string('this'),
-        other: notes.string('other'),
-      };
-      notes.finish('in notes: ');
-    }
-    relation.finish('in a relation: ');
-    return [result];
+    return relation ? [relationOf(relation)] : [];
   });
+}
+
+/** One relation's fields: its other end, its kind, its note or its notes. */
+function relationOf(relation: Fields): ArchiveRelation {
+  const result: ArchiveRelation = {
+    to: relation.string('to', true),
+    kind: relation.oneOf('kind', RELATION_KINDS, 'related'),
+  };
+  const note = relation.optionalString('note');
+  const notes = relation.object('notes');
+  if (note !== undefined && notes)
+    relation.error('a relation has a note or notes, not both');
+  if (note !== undefined) result.note = note;
+  if (notes) {
+    result.notes = {
+      this: notes.string('this'),
+      other: notes.string('other'),
+    };
+    notes.finish('in notes: ');
+  }
+  relation.finish('in a relation: ');
+  return result;
 }
 
 function links(fields: Fields, issues: ArchiveIssue[]): ArchiveLink[] {
@@ -492,19 +499,27 @@ export function readArchive(dir: string): ReadResult {
         slug: fields.optionalString('slug'),
         private: fields.boolean('private'),
         banner: fields.optionalString('banner'),
-        relations: relations(fields, issues),
+        about: { to: '', kind: 'related' },
         body,
       };
+      const about = fields.object('about');
+      if (about) result.about = relationOf(about);
+      else
+        fields.error(
+          'an excerpt needs about: the one thing it is about, as a relation',
+        );
+      if (fields.has('relations')) {
+        fields.error(
+          'an excerpt is about one thing: about, not relations (revision 3)',
+        );
+        fields.raw('relations');
+      }
       for (const forbidden of ['periods', 'tags', 'access', 'notes'])
         if (fields.has(forbidden)) {
           fields.error(`an excerpt has no ${forbidden}`);
           fields.raw(forbidden);
         }
       if (!result.body) fields.error('an excerpt needs a body');
-      if (!result.relations.length)
-        fields.error(
-          'an excerpt needs at least one relation: what it is about',
-        );
       fields.finish();
       if (excerpts.some((other) => other.id === id))
         fields.error(`excerpt id ${id} is taken in this ${parent.kind}`);

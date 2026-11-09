@@ -169,7 +169,7 @@ async function newForm(
 export const createAction: AiActionKindDef<'create'> = {
   kind: 'create',
   reference:
-    'A new entity, private until the owner shows it: entity — project, project-section, excerpt, event, diary-entry, page or tag — and fields as update names them. It has no target, but for a section, which names its project as the target, and an excerpt, which names the project, event or diary entry it is a part of. A project’s sections, its excerpts, tags and relations come in its fields, each a part the owner may leave out. A diary entry needs its day (date) and a body: one a day. An excerpt needs its title, its body and at least one relation: what it is about, never its parent.',
+    'A new entity, private until the owner shows it: entity — project, project-section, excerpt, event, diary-entry, page or tag — and fields as update names them. It has no target, but for a section, which names its project as the target, and an excerpt, which names the project, event or diary entry it is a part of. A project’s sections, its excerpts, tags and relations come in its fields, each a part the owner may leave out. A diary entry needs its day (date) and a body: one a day. An excerpt needs its title, its body and its subject: the one project, event or diary entry it is about, never its parent.',
   schema: z.object({
     entity: z.enum(CREATED_KINDS),
     fields: z.record(z.string(), z.unknown()),
@@ -189,9 +189,13 @@ export const createAction: AiActionKindDef<'create'> = {
         );
       if (typeof fields.body !== 'string' || !fields.body.trim())
         fail('An excerpt needs its text: body, in editing Markdown.');
-      if (!Array.isArray(fields.relations) || !fields.relations.length)
+      if (
+        !fields.subject ||
+        typeof fields.subject !== 'object' ||
+        Array.isArray(fields.subject)
+      )
         fail(
-          'An excerpt says what it is about: relations, at least one — a project, an event or a diary entry.',
+          'An excerpt says what it is about: subject, one { ref, kind?, note? } — a project, an event or a diary entry.',
         );
     } else if (key) fail(`A new ${entity} has no target.`);
     if (entity === 'project' && 'sectionOrder' in fields)

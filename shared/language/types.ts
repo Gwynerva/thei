@@ -1084,6 +1084,17 @@ export type LanguagePhrases = {
   /** Under the excerpt's "About": which kinds it may be about. */
   excerpt_about_hint: string;
   excerpts_empty: string;
+  /** The empty tile of what an excerpt is about. */
+  excerpt_about_pick: string;
+  /** The same tile, once what it was about was deleted. */
+  excerpt_about_orphan: string;
+  excerpt_about_clear: string;
+  /** An entity the excerpt's text links to, offered as what it is about. */
+  excerpt_about_take: (title: string) => string;
+  /** Under the private switch: the excerpt is hidden while what it is about is private. */
+  excerpt_hidden_by_subject: (title: string) => string;
+  /** The same, while what it is about is open by its link only. */
+  excerpt_link_only_by_subject: (title: string) => string;
   /** An excerpt left about nothing by a deleted target. */
   excerpt_without_about: string;
   excerpt_without_about_hint: string;
@@ -1091,7 +1102,7 @@ export type LanguagePhrases = {
   relation_recommendation_excerpt: string;
   excerpts_on_delete_keep: string;
   excerpts_on_delete_delete: string;
-  excerpts_on_delete_count: (related: number, onlyTarget: number) => string;
+  excerpts_on_delete_count: (related: number) => string;
   content_empty: string;
   content_text_empty: string;
   edit_content: (title: string) => string;
@@ -1816,6 +1827,8 @@ export type LanguagePhrases = {
   ai_review_from_session: (title: string) => string;
   /** A new project's section, at the head of the text written for it. */
   ai_review_written_section: (title: string) => string;
+  /** A new parent's excerpt, at the head of the text written for it. */
+  ai_review_written_excerpt: (title: string) => string;
   ai_review_applied: (count: number) => string;
   ai_review_taken: (count: number) => string;
   ai_memory_search: string;
@@ -1995,6 +2008,7 @@ export type LanguagePhrases = {
     | 'links'
     | 'tags'
     | 'relations'
+    | 'subject'
     | 'notes'
     | 'sections'
     | 'sectionOrder'

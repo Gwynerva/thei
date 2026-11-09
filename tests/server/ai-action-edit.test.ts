@@ -3,6 +3,7 @@ import {
   AI_EDITABLE_KINDS,
   actionTexts,
   withActionTexts,
+  writtenTexts,
 } from '../../shared/ai-action-texts';
 import { AI_ACTION_KINDS, type AiActionKind } from '../../shared/ai-actions';
 import { applyActions } from '../../server/thei/ai/actions/apply';
@@ -285,6 +286,52 @@ describe('every kind with words to correct', () => {
     });
     // The proposal it was made from stays as it was.
     expect(payload.fields.sections[2]!.body).toBe('Last.');
+  });
+
+  it('a new excerpt’s text, and a new parent’s excerpts’, are read whole and corrected', () => {
+    const excerpt = {
+      kind: 'create',
+      entity: 'excerpt',
+      fields: { title: 'X', body: 'The boss fell.', subject: { ref: 'p' } },
+    };
+    expect(
+      actionTexts('create', excerpt).map((text) => [text.key, text.shape]),
+    ).toEqual([
+      ['fields.title', 'line'],
+      ['fields.body', 'markdown'],
+    ]);
+    expect(writtenTexts('create', excerpt).map((text) => text.key)).toEqual([
+      'fields.body',
+    ]);
+    const entry = {
+      kind: 'create',
+      entity: 'diary-entry',
+      fields: {
+        date: '2026-01-02',
+        body: 'The day.',
+        excerpts: [
+          { title: 'One', body: 'First.' },
+          { title: 'Two', body: 'Second.' },
+        ],
+      },
+    };
+    const texts = actionTexts('create', entry);
+    expect(texts.map((text) => [text.key, text.excerpt])).toEqual([
+      ['fields.body', undefined],
+      ['fields.excerpts.0.body', 0],
+      ['fields.excerpts.1.body', 1],
+    ]);
+    const changed = withActionTexts('create', entry, {
+      'fields.excerpts.1.body': 'Corrected.',
+    });
+    expect(changed.fields).toMatchObject({
+      body: 'The day.',
+      excerpts: [
+        { title: 'One', body: 'First.' },
+        { title: 'Two', body: 'Corrected.' },
+      ],
+    });
+    expect(entry.fields.excerpts[1]!.body).toBe('Second.');
   });
 });
 

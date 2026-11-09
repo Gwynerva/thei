@@ -52,9 +52,21 @@ export interface LibraryQuery extends AssetSelectionConstraints {
   page?: number;
 }
 
+// An excerpt about something private is private with it (`excerptAccess`).
+const EXCERPT_SUBJECT_PRIVATE_SQL = ['first', 'second']
+  .map((side) => {
+    const other = side === 'first' ? 'second' : 'first';
+    return `(r.${side}Type='excerpt' AND r.${side}Id=x.excerptUuid AND (
+      (r.${other}Type='project' AND r.${other}Id IN (SELECT projectUuid FROM projects WHERE access='private'))
+      OR (r.${other}Type='event' AND r.${other}Id IN (SELECT eventUuid FROM events WHERE access='private'))
+      OR (r.${other}Type='diary-entry' AND r.${other}Id IN (SELECT diaryUuid FROM "diary-entries" WHERE access='private'))))`;
+  })
+  .join(' OR ');
+const EXCERPT_PRIVATE_SQL = `(x.isPrivate OR EXISTS (SELECT 1 FROM "entity-relations" r WHERE ${EXCERPT_SUBJECT_PRIVATE_SQL}))`;
+
 // Resolve owners in SQL. Only page assets and their placements are materialized;
 // rendering the library never hydrates content or invokes media processing.
-// A section or an excerpt is a source of its own, carrying what it is a part of as the parent; a private parent makes everything in it private.
+// A section or an excerpt is a source of its own, carrying what it is a part of as the parent; a private parent makes everything in it private, and a private subject its excerpts.
 const ownersSql = `
 WITH sources AS (
   SELECT 'project' AS sourceType, projectUuid AS sourceId, title, summary,
@@ -70,13 +82,13 @@ WITH sources AS (
     (se.isPrivate OR p.access='private'),p.projectUuid,p.title,p.humanReadableSlug,p.publicId,'project'
     FROM "project-content-sections" se JOIN projects p ON p.projectUuid=se.projectUuid
   UNION ALL SELECT 'excerpt',x.excerptUuid,x.title,x.summary,x.humanReadableSlug,x.publicId,x.updatedAt,
-    (x.isPrivate OR p.access='private'),p.projectUuid,p.title,p.humanReadableSlug,p.publicId,'project'
+    (${EXCERPT_PRIVATE_SQL} OR p.access='private'),p.projectUuid,p.title,p.humanReadableSlug,p.publicId,'project'
     FROM excerpts x JOIN projects p ON x.parentType='project' AND p.projectUuid=x.parentId
   UNION ALL SELECT 'excerpt',x.excerptUuid,x.title,x.summary,x.humanReadableSlug,x.publicId,x.updatedAt,
-    (x.isPrivate OR e.access='private'),e.eventUuid,e.title,e.humanReadableSlug,e.publicId,'event'
+    (${EXCERPT_PRIVATE_SQL} OR e.access='private'),e.eventUuid,e.title,e.humanReadableSlug,e.publicId,'event'
     FROM excerpts x JOIN events e ON x.parentType='event' AND e.eventUuid=x.parentId
   UNION ALL SELECT 'excerpt',x.excerptUuid,x.title,x.summary,x.humanReadableSlug,x.publicId,x.updatedAt,
-    (x.isPrivate OR d.access='private'),d.diaryUuid,d.date,d.date,'','diary-entry'
+    (${EXCERPT_PRIVATE_SQL} OR d.access='private'),d.diaryUuid,d.date,d.date,'','diary-entry'
     FROM excerpts x JOIN "diary-entries" d ON x.parentType='diary-entry' AND d.diaryUuid=x.parentId
 ),
 contexts AS (

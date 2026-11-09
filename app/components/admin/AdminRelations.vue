@@ -44,21 +44,11 @@ import { scrollIntoSight } from '#layers/thei/app/modals/layer-motion';
  * Below the line at the foot, the block recommends what the entity's own
  * text links to and is not related yet, and the parents of the excerpts
  * about it, first. Those excerpts have a tab of their own, read only here:
- * an excerpt is edited in its parent's form, which each chip opens.
- *
- * An excerpt is an owner too — what it is about is its relations — with
- * words of its own for the block and its parent kept out of the picker.
+ * an excerpt is edited in its parent's form, which each chip opens. What
+ * an excerpt is about is no block of relations but one field of its own
+ * (`AdminExcerptAbout`).
  */
-const {
-  owner,
-  ownerType,
-  ownerTitle,
-  ownerMedia,
-  text,
-  title,
-  description,
-  exclude,
-} = defineProps<{
+const { owner, ownerType, ownerTitle, ownerMedia, text } = defineProps<{
   /** The entity being edited, kept out of the picker; absent until created. */
   owner?: RelationEndpoint;
   ownerType: RelationEntityType;
@@ -68,11 +58,6 @@ const {
   ownerMedia?: MediaDescriptor;
   /** Its text as it is being edited, whose links the block recommends. */
   text?: ContentOutputData | null;
-  /** The block's words where it is not "Related entities": an excerpt's "About". */
-  title?: string;
-  description?: string;
-  /** Entities kept out of the picker besides the owner: an excerpt's parent. */
-  exclude?: RelationEndpoint[];
 }>();
 
 const model = defineModel<RelationEditItem[]>({ required: true });
@@ -82,7 +67,6 @@ const panel = useTemplateRef<HTMLElement>('panel');
 const relations = computed(() => model.value ?? []);
 const excludedKeys = computed(() => [
   ...(owner ? [relationEndpointKey(owner)] : []),
-  ...(exclude ?? []).map(relationEndpointKey),
   ...relations.value.map(relationKey),
 ]);
 
@@ -362,8 +346,8 @@ const { guardClick } = useDragSort(panel, {
   <div>
     <SectionHeader
       icon="arrow-cycle"
-      :title="title ?? phrase.related_entities"
-      :description="description ?? phrase.related_entities_hint"
+      :title="phrase.related_entities"
+      :description="phrase.related_entities_hint"
       ai="relations"
       class="mb-md"
     >
@@ -379,7 +363,7 @@ const { guardClick } = useDragSort(panel, {
       <UnderlineTabs
         :model-value="selected"
         :tabs="tabs"
-        :label="title ?? phrase.related_entities"
+        :label="phrase.related_entities"
         :controls="panelId"
         class="px-xs max-sm:justify-center sm:px-sm"
         @update:model-value="choose"

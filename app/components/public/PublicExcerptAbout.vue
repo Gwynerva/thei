@@ -5,9 +5,9 @@ import {
 } from '#layers/thei/shared/api/public';
 
 /**
- * What an excerpt is about: the word for it, and a chip for each entity, as
- * the visitor may see them. An excerpt about nothing the visitor may see
- * says nothing at all, rather than that it is about something hidden.
+ * What an excerpt is about: the word for it and the chip of the one entity.
+ * An excerpt about nothing — its subject deleted — says nothing at all; one
+ * about something the visitor may not see is not shown to the visitor.
  */
 const { links } = defineProps<{ links: PublicEntityLink[] }>();
 

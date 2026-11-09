@@ -315,15 +315,20 @@ async function saveEdit() {
 
 /** What a text is, when a proposal carries several. */
 function textLabel(text: AiActionText) {
-  if (text.section !== undefined) {
-    const sections = (payload.value.fields as { sections?: unknown[] })
-      ?.sections;
-    const title = (sections?.[text.section] as { title?: unknown } | undefined)
-      ?.title;
+  /** The title of the part of a new entity a text is written for. */
+  const titleIn = (list: 'sections' | 'excerpts', index: number) => {
+    const items = (payload.value.fields as Record<string, unknown[]>)?.[list];
+    const title = (items?.[index] as { title?: unknown } | undefined)?.title;
+    return typeof title === 'string' ? publicText(title) : '';
+  };
+  if (text.section !== undefined)
     return phrase.value.ai_review_written_section(
-      typeof title === 'string' ? publicText(title) : '',
+      titleIn('sections', text.section),
     );
-  }
+  if (text.excerpt !== undefined)
+    return phrase.value.ai_review_written_excerpt(
+      titleIn('excerpts', text.excerpt),
+    );
   if (text.field) return fieldName(text.field);
   return text.role ? phrase.value.ai_action_text_roles[text.role] : '';
 }

@@ -89,7 +89,7 @@ export const FORM_KEYS = {
     publicId: 'publicId',
     isPrivate: 'private',
     content: 'body',
-    relations: 'relations',
+    about: 'subject',
     bannerAssetUuid: 'banner',
     // How the form shows its banner; no save reads it.
     bannerMedia: null,

@@ -3,6 +3,8 @@ import { ProjectEventAccessLevel } from '../../shared/access-level';
 import { parseInternalUrl } from '../../shared/internal-url';
 import { OWNER, STRANGER } from '../../server/thei/access-links/viewer';
 import {
+  diaryExcerptParent,
+  excerptAccess,
   excerptListed,
   excerptOpens,
 } from '../../server/thei/excerpts/parents';
@@ -10,9 +12,11 @@ import {
   buildParentExcerpts,
   buildPublicExcerptsPage,
   countPublicExcerptsAbout,
+  findOpenParentExcerpt,
   resolvePublicExcerptsAbout,
 } from '../../server/thei/public/excerpts';
 import {
+  contentEntityOpens,
   findContentEntity,
   findContentEntityByTarget,
 } from '../../server/thei/content-entities';
@@ -28,8 +32,10 @@ import { serverRepositories } from '../helpers/server-repositories';
 
 /**
  * What a visitor may read of excerpts, by the one rule every surface keeps:
- * an excerpt is as open as its parent unless it is private, its private
- * side is the parent's, and a diary entry's excerpts wait for its day.
+ * an excerpt is as open as the stricter of its parent and what it is about,
+ * unless it is private; it is seen only by whoever may open both; its own
+ * private side is the parent's; and a diary entry's excerpts wait for its
+ * day.
  */
 const { Public, LinkOnly, Private } = ProjectEventAccessLevel;
 let context: Awaited<ReturnType<typeof freshTestDb>>;
@@ -143,18 +149,60 @@ function excerpt(
 }
 
 describe('who may see an excerpt', () => {
+  const parent = (access: ProjectEventAccessLevel) =>
+    ({ type: 'diary-entry', id: 'd', access }) as const;
+  const subject = (access: ProjectEventAccessLevel) =>
+    ({ type: 'project', id: 'p', access }) as const;
+  const of = (
+    isPrivate: boolean,
+    about: ProjectEventAccessLevel | null = Public,
+  ) => ({ isPrivate, subject: about ? subject(about) : null });
+  const parentGuest = { isAdmin: false, grants: new Set(['diary-entry:d']) };
+  const subjectGuest = { isAdmin: false, grants: new Set(['project:p']) };
+
   it('opens and lists it as its parent, unless it is private', () => {
-    const open = { isPrivate: false };
-    const closed = { isPrivate: true };
-    expect(excerptOpens(open, { access: Public }, false)).toBe(true);
-    expect(excerptOpens(open, { access: LinkOnly }, false)).toBe(true);
-    expect(excerptOpens(open, { access: Private }, false)).toBe(false);
-    expect(excerptOpens(closed, { access: Public }, false)).toBe(false);
-    expect(excerptOpens(closed, { access: Private }, true)).toBe(true);
-    expect(excerptListed(open, { access: Public }, false)).toBe(true);
-    expect(excerptListed(open, { access: LinkOnly }, false)).toBe(false);
-    expect(excerptListed(closed, { access: Public }, false)).toBe(false);
-    expect(excerptListed(closed, { access: LinkOnly }, true)).toBe(true);
+    expect(excerptOpens(STRANGER, of(false), parent(Public))).toBe(true);
+    expect(excerptOpens(STRANGER, of(false), parent(LinkOnly))).toBe(true);
+    expect(excerptOpens(STRANGER, of(false), parent(Private))).toBe(false);
+    expect(excerptOpens(STRANGER, of(true), parent(Public))).toBe(false);
+    expect(excerptOpens(parentGuest, of(true), parent(Private))).toBe(true);
+    expect(excerptListed(STRANGER, of(false), parent(Public))).toBe(true);
+    expect(excerptListed(STRANGER, of(false), parent(LinkOnly))).toBe(false);
+    expect(excerptListed(STRANGER, of(true), parent(Public))).toBe(false);
+    expect(excerptListed(parentGuest, of(true), parent(LinkOnly))).toBe(true);
+  });
+
+  it('closes it with what it is about, whatever its own switch says', () => {
+    // A private subject: hidden from a stranger and from the parent's guest,
+    // open to the subject's guest and the owner.
+    for (const viewer of [STRANGER, parentGuest])
+      expect(excerptOpens(viewer, of(false, Private), parent(Public))).toBe(
+        false,
+      );
+    expect(excerptOpens(subjectGuest, of(false, Private), parent(Public))).toBe(
+      true,
+    );
+    expect(excerptListed(OWNER, of(false, Private), parent(Public))).toBe(true);
+    // One open by its link: opens by its address, is listed nowhere.
+    expect(excerptOpens(STRANGER, of(false, LinkOnly), parent(Public))).toBe(
+      true,
+    );
+    expect(excerptListed(STRANGER, of(false, LinkOnly), parent(Public))).toBe(
+      false,
+    );
+    // On its subject's own page the subject is the one the visitor opened.
+    expect(
+      excerptListed(STRANGER, of(false, LinkOnly), parent(Public), {
+        onSubjectPage: true,
+      }),
+    ).toBe(true);
+    // About nothing: its parent alone decides.
+    expect(excerptListed(STRANGER, of(false, null), parent(Public))).toBe(true);
+    // One value, where one is asked for: the strictest of the three.
+    expect(excerptAccess(of(false, LinkOnly), parent(Public))).toBe(LinkOnly);
+    expect(excerptAccess(of(false, Private), parent(LinkOnly))).toBe(Private);
+    expect(excerptAccess(of(true, Public), parent(Public))).toBe(Private);
+    expect(excerptAccess(of(false, null), parent(LinkOnly))).toBe(LinkOnly);
   });
 });
 
@@ -278,6 +326,127 @@ describe('the excerpts about an entity', () => {
   });
 });
 
+describe('an excerpt about something closed', () => {
+  function seed() {
+    project('p');
+    project('p-secret', Private);
+    project('p-link', LinkOnly);
+    diary('d', '2026-05-01');
+    excerpt('x-open', ['diary-entry', 'd'], [['project', 'p']]);
+    excerpt('x-secret', ['diary-entry', 'd'], [['project', 'p-secret']]);
+    excerpt('x-link', ['diary-entry', 'd'], [['project', 'p-link']]);
+    excerpt('x-own', ['diary-entry', 'd'], [['project', 'p']], {
+      isPrivate: true,
+    });
+  }
+  async function entry() {
+    return diaryExcerptParent((await context.server.diary.findByUuid('d'))!);
+  }
+  const titles = (items: { title: string }[]) =>
+    items.map((item) => item.title);
+
+  it("is not on its public parent's page while what it is about is closed", async () => {
+    seed();
+    const parent = await entry();
+    expect(titles(await buildParentExcerpts(parent, STRANGER))).toEqual([
+      'x-open title',
+    ]);
+    expect(titles(await buildParentExcerpts(parent, OWNER))).toEqual([
+      'x-open title',
+      'x-secret title',
+      'x-link title',
+      'x-own title',
+    ]);
+    // A share link of the subject opens what is about it; one of the
+    // parent opens the parent's own private side.
+    const subjectGuest = {
+      isAdmin: false,
+      grants: new Set(['project:p-secret']),
+    };
+    expect(titles(await buildParentExcerpts(parent, subjectGuest))).toEqual([
+      'x-open title',
+      'x-secret title',
+    ]);
+    const parentGuest = { isAdmin: false, grants: new Set(['diary-entry:d']) };
+    expect(titles(await buildParentExcerpts(parent, parentGuest))).toEqual([
+      'x-open title',
+      'x-own title',
+    ]);
+  });
+
+  it('opens by its own address while what it is about is open by its link', async () => {
+    seed();
+    const parent = await entry();
+    const found = findOpenParentExcerpt(parent, STRANGER, 'x-link')!;
+    expect(found.excerpt.excerptUuid).toBe('x-link');
+    expect(found.visible.map((item) => item.excerptUuid)).toEqual([
+      'x-open',
+      'x-link',
+    ]);
+    expect(findOpenParentExcerpt(parent, STRANGER, 'x-secret')).toBeUndefined();
+    expect(findOpenParentExcerpt(parent, STRANGER, 'x-own')).toBeUndefined();
+    // On the page of what it is about, it is among the excerpts about it.
+    expect(
+      (
+        await resolvePublicExcerptsAbout(
+          { type: 'project', id: 'p-link' },
+          STRANGER,
+        )
+      ).map((item) => item.excerpt.excerptUuid),
+    ).toEqual(['x-link']);
+  });
+
+  it('is not searched, nor named in its parent, while what it is about is closed', async () => {
+    seed();
+    expect(await excerptDocument('x-secret', 'public')).toBeUndefined();
+    expect(await excerptDocument('x-link', 'public')).toBeUndefined();
+    expect((await excerptDocument('x-secret', 'owner'))?.access).toBe(
+      'private',
+    );
+    const headings = (await diaryDocument('d', 'public'))!.units.filter(
+      (unit) => unit.where === 'excerpt',
+    );
+    expect(headings.map((unit) => unit.text)).toEqual(['x-open title']);
+    const record = await findContentEntity(
+      { entityType: 'diary-entry', entityId: 'd' },
+      STRANGER,
+    );
+    expect(record?.summary).toContain('x-open title');
+    expect(record?.summary).not.toContain('x-secret title');
+    const secret = (await findContentEntity(
+      { entityType: 'excerpt', entityId: 'x-secret' },
+      STRANGER,
+    ))!;
+    // Opened by the subject's link; its private side stays the parent's.
+    expect(secret).toMatchObject({
+      access: Private,
+      grantOwner: { entityType: 'diary-entry', entityId: 'd' },
+    });
+    expect(
+      contentEntityOpens(secret, {
+        isAdmin: false,
+        grants: new Set(['project:p-secret']),
+      }),
+    ).toBe(true);
+    expect(contentEntityOpens(secret, STRANGER)).toBe(false);
+  });
+
+  it('opens again once what it is about is public, unless it is private by hand', async () => {
+    seed();
+    context.server
+      .useDb()
+      .rawDb.prepare(
+        "UPDATE projects SET access = 'public' WHERE projectUuid IN ('p-secret', 'p-link')",
+      )
+      .run();
+    expect(titles(await buildParentExcerpts(await entry(), STRANGER))).toEqual([
+      'x-open title',
+      'x-secret title',
+      'x-link title',
+    ]);
+  });
+});
+
 describe('an excerpt as the rest of the site finds it', () => {
   it('is a content entity with its parent, by uuid and by address', async () => {
     diary('d', '2026-04-04');
@@ -370,17 +539,112 @@ describe('an excerpt as the rest of the site finds it', () => {
         }),
       });
     use('content-x-private');
-    expect(await contentAttachmentAccess('diary-entry', 'd', 'a')).toEqual({
+    const entry = { type: 'diary-entry', id: 'd', access: Public } as const;
+    const parentGuest = { isAdmin: false, grants: new Set(['diary-entry:d']) };
+    expect(await contentAttachmentAccess(entry, 'a')).toEqual({
       exists: true,
-      shared: true,
+      granted: false,
+      public: false,
+    });
+    expect(await contentAttachmentAccess(entry, 'a', parentGuest)).toEqual({
+      exists: true,
+      granted: true,
       public: false,
     });
     use('content-x');
-    expect(await contentAttachmentAccess('diary-entry', 'd', 'a')).toEqual({
+    expect(await contentAttachmentAccess(entry, 'a')).toEqual({
       exists: true,
-      shared: true,
+      granted: true,
       public: true,
     });
+  });
+
+  it('serves the pictures of an excerpt to whoever may open it, by its subject’s link too', async () => {
+    // A public entry with an excerpt about a private project, shared by its
+    // link: the friend with that link reads the excerpt, pictures and all;
+    // the holder of the entry's link alone does not.
+    diary('d', '2026-05-01');
+    project('s', Private);
+    excerpt('x', ['diary-entry', 'd'], [['project', 's']]);
+    excerpt('x-hand', ['diary-entry', 'd'], [['project', 's']], {
+      isPrivate: true,
+    });
+    context.insert('assets', {
+      assetUuid: 'a',
+      slug: 'a',
+      extension: 'webp',
+      familyUuid: 'a',
+      contentHash: 'a-hash',
+      settingsKey: 'image',
+      settings: null,
+      type: 'image',
+      size: 1,
+      touchedAt: 1,
+      meta: null,
+    });
+    const use = (contentUuid: string, isPrivate = false) =>
+      context.insert('asset-usages', {
+        assetUuid: 'a',
+        containerType: 'content',
+        containerId: contentUuid,
+        role: 'content',
+        meta: JSON.stringify({
+          role: 'content',
+          refs: [{ blockId: 'b', isPrivate }],
+        }),
+      });
+    const entry = { type: 'diary-entry', id: 'd', access: Public } as const;
+    const guest = (...grants: string[]) => ({
+      isAdmin: false,
+      grants: new Set(grants),
+    });
+    const subjectGuest = guest('project:s');
+    const parentGuest = guest('diary-entry:d');
+    const both = guest('project:s', 'diary-entry:d');
+    const granted = async (viewer: typeof STRANGER) =>
+      (await contentAttachmentAccess(entry, 'a', viewer)).granted;
+
+    use('content-x');
+    expect(await granted(subjectGuest)).toBe(true);
+    expect(await granted(parentGuest)).toBe(false);
+    expect(await granted(STRANGER)).toBe(false);
+    expect((await contentAttachmentAccess(entry, 'a', OWNER)).exists).toBe(
+      true,
+    );
+    expect((await contentAttachmentAccess(entry, 'a', both)).public).toBe(
+      false,
+    );
+    // The link that opens the excerpt opens it as its own page does: a
+    // private part of its text is its parent's private side.
+    context.db.delete(context.schema.assetUsages).run();
+    use('content-x', true);
+    expect(await granted(subjectGuest)).toBe(false);
+    expect(await granted(both)).toBe(true);
+    // Private by hand, the excerpt takes both links.
+    context.db.delete(context.schema.assetUsages).run();
+    use('content-x-hand');
+    expect(await granted(subjectGuest)).toBe(false);
+    expect(await granted(parentGuest)).toBe(false);
+    expect(await granted(both)).toBe(true);
+
+    // A link to it opens by the same rule, its private side the parent's.
+    const record = (await findContentEntity(
+      { entityType: 'excerpt', entityId: 'x' },
+      STRANGER,
+    ))!;
+    expect(contentEntityOpens(record, subjectGuest)).toBe(true);
+    expect(contentEntityOpens(record, parentGuest)).toBe(false);
+    expect(contentEntityOpens(record, STRANGER)).toBe(false);
+    expect(record.grantOwner).toEqual({
+      entityType: 'diary-entry',
+      entityId: 'd',
+    });
+    const byHand = (await findContentEntity(
+      { entityType: 'excerpt', entityId: 'x-hand' },
+      STRANGER,
+    ))!;
+    expect(contentEntityOpens(byHand, subjectGuest)).toBe(false);
+    expect(contentEntityOpens(byHand, both)).toBe(true);
   });
 });
 

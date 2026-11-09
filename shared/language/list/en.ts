@@ -502,7 +502,7 @@ export default defineI18nBase({
     llms_txt_sitemap: 'every public address on this site',
     llms_txt_markdown_title: 'Markdown',
     llms_txt_markdown:
-      'Any public project, project section, event, page or diary entry is also served as Markdown: add index.md to its address, for example /projects/name-id/index.md. Private parts are absent there, exactly as they are for any other visitor.',
+      'Any public project, project section, event, page, diary entry or excerpt is also served as Markdown: add index.md to its address, for example /projects/name-id/index.md. Private parts are absent there, exactly as they are for any other visitor.',
     public_life_period_description: (period, siteName) =>
       `Events, projects and diary entries for ${period} — ${siteName}.`,
     public_pages_description:
@@ -1471,8 +1471,17 @@ export default defineI18nBase({
     excerpt_delete_entity: 'excerpt',
     edit_excerpt: 'Edit excerpt',
     excerpt_about_hint:
-      'Projects, events and diary entries this excerpt is about.',
+      'The one project, event or diary entry this excerpt is about.',
     excerpts_empty: 'No excerpts yet.',
+    excerpt_about_pick: 'Choose what it is about',
+    excerpt_about_orphan:
+      'About nothing yet: what it was about was deleted. Choose what it is about now.',
+    excerpt_about_clear: 'Clear what it is about',
+    excerpt_about_take: (title) => `About «${title}»`,
+    excerpt_hidden_by_subject: (title) =>
+      `Hidden from visitors while «${title}» is private.`,
+    excerpt_link_only_by_subject: (title) =>
+      `Shown only by its link while «${title}» is open by its link only.`,
     excerpt_without_about: 'About nothing yet',
     excerpt_without_about_hint:
       'What it was about is gone. Open the excerpt and say what it is about now.',
@@ -1480,14 +1489,10 @@ export default defineI18nBase({
     relation_recommendation_excerpt: 'Has an excerpt about this',
     excerpts_on_delete_keep: 'Keep the excerpts about it',
     excerpts_on_delete_delete: 'Delete the excerpts too',
-    excerpts_on_delete_count: (related, onlyTarget) =>
+    excerpts_on_delete_count: (related) =>
       related === 1
-        ? onlyTarget
-          ? 'One excerpt is about it, and about nothing else.'
-          : 'One excerpt is about it, among other things.'
-        : onlyTarget === related
-          ? `${related} excerpts are about it, and about nothing else.`
-          : `${related} excerpts are about it; for ${onlyTarget === 1 ? 'one of them' : `${onlyTarget} of them`} it is the only thing.`,
+        ? 'One excerpt is about it. Kept, it is about nothing until you say what it is about.'
+        : `${related} excerpts are about it. Kept, they are about nothing until you say what each is about.`,
     content_empty: 'No content yet',
     content_text_empty: 'No text content',
     edit_content: (title) => `Edit: ${title}`,
@@ -2426,6 +2431,8 @@ export default defineI18nBase({
       title ? `From the session “${title}”` : 'From the session',
     ai_review_written_section: (title) =>
       title ? `Section “${title}”` : 'Section',
+    ai_review_written_excerpt: (title) =>
+      title ? `Excerpt “${title}”` : 'Excerpt',
     ai_review_applied: (count) =>
       `${plural(count, 'change', 'changes')} in the text`,
     ai_review_taken: (count) => `${plural(count, 'part', 'parts')} taken`,
@@ -2638,6 +2645,7 @@ export default defineI18nBase({
       links: 'Links',
       tags: 'Tags',
       relations: 'Relations',
+      subject: 'About',
       notes: 'Notes',
       sections: 'Sections',
       sectionOrder: 'Order of sections',

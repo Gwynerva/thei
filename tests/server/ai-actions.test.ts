@@ -29,6 +29,7 @@ import { subscribeSession } from '../../server/thei/ai/sessions/bus';
 import { saveProjectEdit } from '../../server/thei/projects/edit';
 import { undoAction, undoState } from '../../server/thei/ai/actions/undo';
 import { findAction } from '../../server/thei/ai/actions/rows';
+import { actionItems } from '../../server/thei/ai/sessions/view';
 import { assetIdsIn } from '../../server/thei/ai/actions/values';
 import { assetsHeldByAi } from '../../server/thei/assets/holds';
 import { freshAiTestDb } from '../helpers/fresh-ai-db';
@@ -1241,7 +1242,7 @@ describe('making and deleting', () => {
       fields: {
         title: 'The boss',
         body: 'The boss fell.',
-        relations: [{ ref: parent, kind: 'related' }],
+        subject: { ref: parent, kind: 'related' },
       },
     });
     expect(aboutParent.results[0]).toMatchObject({
@@ -1254,7 +1255,20 @@ describe('making and deleting', () => {
       fields: { title: 'The boss', body: 'The boss fell.' },
     });
     expect(aboutNothing.results[0]).toMatchObject({
-      refused: expect.stringMatching(/at least one/),
+      refused: expect.stringMatching(/what it is about: subject/),
+    });
+    const aboutTwo = await propose(session(), {
+      kind: 'create',
+      target: parent,
+      entity: 'excerpt',
+      fields: {
+        title: 'The boss',
+        body: 'The boss fell.',
+        subject: [{ ref: `project:${PROJECT}` }, { ref: `project:${PROJECT}` }],
+      },
+    });
+    expect(aboutTwo.results[0]).toMatchObject({
+      refused: expect.stringMatching(/subject, one/),
     });
     const actionUuid = await proposed(session(), {
       kind: 'create',
@@ -1263,12 +1277,9 @@ describe('making and deleting', () => {
       fields: {
         title: 'The boss',
         body: 'The boss fell.',
-        relations: [{ ref: `project:${PROJECT}`, kind: 'related' }],
+        subject: { ref: `project:${PROJECT}`, kind: 'related' },
       },
     });
-    expect(findAction(actionUuid)?.parts).toEqual([
-      { id: 'relations:0', state: 'pending' },
-    ]);
     const outcome = await applyActions({
       actionUuids: [actionUuid],
       by: 'owner',
@@ -1301,7 +1312,7 @@ describe('making and deleting', () => {
     ).toBe(0);
   });
 
-  it('changes an excerpt, relates it from its own side, and deletes it', async () => {
+  it('changes an excerpt and what it is about, and deletes it', async () => {
     const parent = 'diary-entry:2026-10-13';
     const made = await applyActions({
       actionUuids: [
@@ -1312,7 +1323,7 @@ describe('making and deleting', () => {
           fields: {
             title: 'The boss',
             body: 'The boss fell.',
-            relations: [{ ref: `project:${PROJECT}`, kind: 'related' }],
+            subject: { ref: `project:${PROJECT}`, kind: 'related' },
           },
         }),
       ],
@@ -1335,25 +1346,34 @@ describe('making and deleting', () => {
     expect(
       one('SELECT summary FROM excerpts WHERE excerptUuid = ?', id)?.summary,
     ).toBe('How it ended');
-    // Its last relation cannot go; one to its parent is no relation of it.
-    const bare = await propose(session(), {
-      kind: 'update',
-      target: ref,
-      changes: { relations: [] },
-    });
-    expect(bare.results[0]).toMatchObject({
-      refused: expect.stringMatching(/what it is about/),
-    });
-    const toParent = await propose(session(), {
+    // What it is about cannot go, nor be its parent, nor two things; and
+    // it is changed by its field, never as a relation.
+    for (const subject of [
+      null,
+      { ref: parent },
+      [{ ref: `project:${PROJECT}` }],
+    ]) {
+      const refused = await propose(session(), {
+        kind: 'update',
+        target: ref,
+        changes: { subject },
+      });
+      expect(refused.results[0]).toMatchObject({
+        refused: expect.stringMatching(
+          /what it is about|own parent|about one thing/,
+        ),
+      });
+    }
+    const asRelation = await propose(session(), {
       kind: 'relation',
       target: ref,
-      other: parent,
+      other: 'event:' + 'none',
       relation: 'related',
-      reason: 'The day it is part of',
-      whyNotInlineLink: 'It is the parent',
+      reason: 'Also about this',
+      whyNotInlineLink: 'It is about it',
     });
-    expect(toParent.results[0]).toMatchObject({
-      refused: expect.stringMatching(/own parent/),
+    expect(asRelation.results[0]).toMatchObject({
+      refused: expect.stringMatching(/not excerpt/),
     });
     await tick();
     const deletion = await proposed(session(), {
@@ -1366,6 +1386,206 @@ describe('making and deleting', () => {
       one('SELECT excerptUuid FROM excerpts WHERE excerptUuid = ?', id),
     ).toBeUndefined();
     await expect(undoAction(deletion)).rejects.toThrow(/final/);
+  });
+
+  it('moves, locks and tells what an excerpt is about, given and left', async () => {
+    const parent = 'diary-entry:2026-10-13';
+    const EVENT = 'e-launch';
+    context.insert('events', {
+      eventUuid: EVENT,
+      title: 'Launch',
+      summary: '',
+      access: 'public',
+      humanReadableSlug: 'launch',
+      publicId: 'Launch',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const made = await applyActions({
+      actionUuids: [
+        await proposed(session(), {
+          kind: 'create',
+          target: parent,
+          entity: 'excerpt',
+          fields: {
+            title: 'The boss',
+            body: 'The boss fell.',
+            subject: { ref: `project:${PROJECT}`, kind: 'related' },
+          },
+        }),
+      ],
+      by: 'owner',
+    });
+    // Made about the project, the project's form is told.
+    expect(made.changed).toContain(`project:${PROJECT}`);
+    const ref = made.applied[0]!.entity!;
+    await tick();
+    const moved = await proposed(session(), {
+      kind: 'update',
+      target: ref,
+      changes: { subject: { ref: `event:${EVENT}` } },
+    });
+    // Locked: its parent's form, the subject it is given and the one it
+    // leaves.
+    expect(actionLocks(findAction(moved)!).sort()).toEqual(
+      [`diary-entry:${DIARY}`, `event:${EVENT}`, `project:${PROJECT}`].sort(),
+    );
+    // The card names the new subject, for the form to show it by name.
+    const [item] = await actionItems([findAction(moved)!]);
+    expect(item!.refs).toEqual(
+      expect.objectContaining({
+        [`event:${EVENT}`]: expect.objectContaining({ title: 'Launch' }),
+      }),
+    );
+    const projectBefore = one(
+      'SELECT updatedAt FROM projects WHERE projectUuid = ?',
+      PROJECT,
+    )!.updatedAt;
+    const outcome = await applyActions({ actionUuids: [moved], by: 'owner' });
+    expect(outcome.changed).toEqual(
+      expect.arrayContaining([parent, `event:${EVENT}`, `project:${PROJECT}`]),
+    );
+    expect(
+      one('SELECT updatedAt FROM projects WHERE projectUuid = ?', PROJECT)!
+        .updatedAt,
+    ).toBeGreaterThan(projectBefore);
+
+    // Deleting what it is about moves its parent; deleting its parent,
+    // what it is about.
+    expect(
+      actionLocks({
+        kind: 'delete',
+        payload: { kind: 'delete' },
+        targetType: 'event',
+        targetId: EVENT,
+      }),
+    ).toEqual([`event:${EVENT}`, `diary-entry:${DIARY}`]);
+    expect(
+      actionLocks({
+        kind: 'delete',
+        payload: { kind: 'delete' },
+        targetType: 'diary-entry',
+        targetId: DIARY,
+      }),
+    ).toEqual([`diary-entry:${DIARY}`, `event:${EVENT}`]);
+  });
+
+  it('changes an excerpt about nothing as it is, and gives it a subject', async () => {
+    const parent = 'diary-entry:2026-10-13';
+    const made = await applyActions({
+      actionUuids: [
+        await proposed(session(), {
+          kind: 'create',
+          target: parent,
+          entity: 'excerpt',
+          fields: {
+            title: 'The boss',
+            body: 'The boss fell.',
+            subject: { ref: `project:${PROJECT}`, kind: 'related' },
+          },
+        }),
+      ],
+      by: 'owner',
+    });
+    const ref = made.applied[0]!.entity!;
+    // What it was about is deleted, and the excerpt kept.
+    context.rawDb
+      .prepare(
+        "DELETE FROM `entity-relations` WHERE firstType = 'excerpt' OR secondType = 'excerpt'",
+      )
+      .run();
+    await tick();
+    const fix = await proposed(session(), {
+      kind: 'update',
+      target: ref,
+      changes: { title: 'The boss at last' },
+    });
+    expect(
+      (await applyActions({ actionUuids: [fix], by: 'owner' })).applied,
+    ).toHaveLength(1);
+    // Nothing is no subject to give it.
+    const cleared = await propose(session(), {
+      kind: 'update',
+      target: ref,
+      changes: { subject: null },
+    });
+    expect(cleared.results[0]).toMatchObject({
+      refused: expect.stringMatching(/never about nothing/),
+    });
+    await tick();
+    const given = await proposed(session(), {
+      kind: 'update',
+      target: ref,
+      changes: { subject: { ref: `project:${PROJECT}` } },
+    });
+    expect(
+      (await applyActions({ actionUuids: [given], by: 'owner' })).applied,
+    ).toHaveLength(1);
+  });
+
+  it('settles a new subject of an excerpt once its parent’s form saved it', async () => {
+    const parent = 'diary-entry:2026-10-13';
+    context.insert('events', {
+      eventUuid: 'e-walk',
+      title: 'Ice walk',
+      summary: '',
+      access: 'public',
+      humanReadableSlug: 'walk',
+      publicId: 'Walk',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const made = await applyActions({
+      actionUuids: [
+        await proposed(session(), {
+          kind: 'create',
+          target: parent,
+          entity: 'excerpt',
+          fields: {
+            title: 'The boss',
+            body: 'The boss fell.',
+            subject: { ref: `project:${PROJECT}`, kind: 'related' },
+          },
+        }),
+      ],
+      by: 'owner',
+    });
+    const ref = made.applied[0]!.entity!;
+    const id = ref.slice('excerpt:'.length);
+    await tick();
+    for (const changes of [
+      { subject: { ref: 'event:e-walk' } },
+      { excerpts: [{ id, title: 'The boss at last' }] },
+    ]) {
+      const change = await proposed(session(), {
+        kind: 'update',
+        target: 'subject' in changes ? ref : parent,
+        changes,
+      });
+      const { after } = findAction(change)!.base as {
+        after: Record<string, unknown>;
+      };
+      // The owner's form lays it in as it is kept, and saves.
+      const loaded = await loadForm({ kind: 'diary-entry', id: DIARY });
+      const form =
+        'subject' in changes
+          ? {
+              ...loaded.form,
+              excerpts: loaded.form.excerpts.map(
+                (excerpt: { excerptUuid: string }) =>
+                  excerpt.excerptUuid === id
+                    ? { ...excerpt, ...after }
+                    : excerpt,
+              ),
+            }
+          : { ...loaded.form, ...after };
+      expect(
+        (await loaded.save(form, { expectedUpdatedAt: loaded.version })).type,
+      ).toBe('success');
+      const [settled] = await settleActions([findAction(change)!]);
+      expect(settled!.state).toBe('applied');
+      await tick();
+    }
   });
 
   it('refuses a second entry for a day, and deletes for good', async () => {

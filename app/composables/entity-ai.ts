@@ -469,6 +469,16 @@ function fieldsOf(form: Record<string, unknown>, keys: string[]): string {
   return JSON.stringify(keys.map((key) => form[key] ?? null));
 }
 
+/** One end of a relation as a form holds it. */
+function isRelationItem(value: unknown): value is RelationEditItem {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    'entityType' in value &&
+    'entityId' in value,
+  );
+}
+
 function setFields(
   form: Record<string, unknown>,
   values: Record<string, unknown>,
@@ -484,6 +494,9 @@ function setFields(
     const now = form[key];
     const next = values[key];
     if (Array.isArray(now)) return Array.isArray(next);
+    // What an excerpt is about: one relation, laid in whole over another
+    // or over none.
+    if (isRelationItem(next)) return now === null || isRelationItem(now);
     if (now === null || typeof now === 'object') return false;
     return typeof now === typeof next || (now === undefined && next !== null);
   });
@@ -570,6 +583,49 @@ function takeRelation(
 }
 
 /**
+ * What an excerpt is about, as a proposal leaves it: named by the refs the
+ * proposal carries, as a relation's chip is, until the form is saved and
+ * read again with the subject described. One named already is left as it
+ * is.
+ */
+export function describedSubject(
+  about: unknown,
+  refs: AiActionItem['refs'],
+): unknown {
+  const item = about as RelationEditItem | null | undefined;
+  if (!item?.entityType || item.title || item.date) return about;
+  const end = Object.values(refs).find(
+    (ref) => ref.type === item.entityType && ref.id === item.entityId,
+  );
+  if (!end) return about;
+  return {
+    ...item,
+    ...(end.type === 'diary-entry'
+      ? { date: end.title }
+      : { title: end.title }),
+  };
+}
+
+/**
+ * An update's fields as a form takes them, each excerpt's subject — its
+ * own, or those of a parent's excerpts — named.
+ */
+function describedUpdate(
+  after: Record<string, unknown>,
+  refs: AiActionItem['refs'],
+): Record<string, unknown> {
+  const fields = { ...after };
+  if ('about' in fields) fields.about = describedSubject(fields.about, refs);
+  if (Array.isArray(fields.excerpts))
+    fields.excerpts = fields.excerpts.map((excerpt) =>
+      excerpt && typeof excerpt === 'object' && 'about' in excerpt
+        ? { ...excerpt, about: describedSubject(excerpt.about, refs) }
+        : excerpt,
+    );
+  return fields;
+}
+
+/**
  * Lays a proposal into the form; none when the form cannot take it. Which
  * kinds it takes is held to `tests/server/ai-actions-contract.test.ts`.
  */
@@ -595,7 +651,9 @@ export function takeInto(
     case 'update': {
       const after = (action.base as { after?: Record<string, unknown> } | null)
         ?.after;
-      return after ? setFields(form, after) : undefined;
+      return after
+        ? setFields(form, describedUpdate(after, action.refs))
+        : undefined;
     }
     case 'describe':
       return setFields(form, { description: payload.text });
