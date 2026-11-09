@@ -406,8 +406,6 @@ export const baselineSql: string[] = [
 	\`sessionUuid\` text PRIMARY KEY NOT NULL,
 	\`title\` text DEFAULT '' NOT NULL,
 	\`origin\` text NOT NULL,
-	\`tokenUuid\` text,
-	\`client\` text,
 	\`templateId\` text,
 	\`model\` text,
 	\`state\` text DEFAULT 'idle' NOT NULL,
@@ -425,7 +423,6 @@ export const baselineSql: string[] = [
 );
 `,
   `CREATE INDEX \`ai-sessions-active-idx\` ON \`ai-sessions\` (\`archivedAt\`,\`lastActiveAt\`);`,
-  `CREATE INDEX \`ai-sessions-app-idx\` ON \`ai-sessions\` (\`tokenUuid\`,\`client\`,\`lastActiveAt\`);`,
   `CREATE INDEX \`ai-sessions-template-idx\` ON \`ai-sessions\` (\`templateId\`,\`createdAt\`);`,
   `CREATE INDEX \`ai-sessions-waiting-idx\` ON \`ai-sessions\` (\`waiting\`);`,
   `CREATE TABLE \`ai-messages\` (

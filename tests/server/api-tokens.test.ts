@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { API_TOKEN_LIMIT } from '../../shared/api-token';
 import {
-  apiTokenWaiting,
   authenticateMcpRequest,
   createApiToken,
   isApiTokenFailureLimited,
@@ -125,24 +124,6 @@ describe('API tokens', () => {
       request('Bearer nope', '10.0.0.9', { 'x-forwarded-for': claim });
     recordApiTokenFailure(claiming('198.51.100.1'));
     expect(isApiTokenFailureLimited(claiming('198.51.100.2'))).toBe(true);
-  });
-
-  it('count what waits in their sessions out of the archive', () => {
-    const session = (
-      sessionUuid: string,
-      waiting: number,
-      archivedAt: number | null = null,
-    ) =>
-      context.rawDb
-        .prepare(
-          "INSERT INTO `ai-sessions` (sessionUuid, origin, tokenUuid, waiting, archivedAt, createdAt, lastActiveAt) VALUES (?, 'app', 'tk-w', ?, ?, 1, 1)",
-        )
-        .run(sessionUuid, waiting, archivedAt);
-    // More sessions than a page of the list holds.
-    for (let index = 0; index < 60; index++) session(`as-${index}`, 1);
-    session('as-archived', 5, 2);
-    expect(apiTokenWaiting('tk-w')).toBe(60);
-    expect(apiTokenWaiting('tk-other')).toBe(0);
   });
 
   it('spend a budget per token per minute', () => {

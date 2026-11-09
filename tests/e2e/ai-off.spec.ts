@@ -75,8 +75,6 @@ let projectUuid = '';
 let projectTitle = '';
 /** A picture of the spec's own, a description proposed for it. */
 let pictureUuid = '';
-/** The app's key the proposals came with. */
-let tokenUuid = '';
 let model: FakeModel;
 
 async function made(response: Awaited<ReturnType<APIRequestContext['post']>>) {
@@ -85,48 +83,53 @@ async function made(response: Awaited<ReturnType<APIRequestContext['post']>>) {
   return body;
 }
 
-/** Proposes one action as an app with a reader's key: it waits, undecided. */
+/**
+ * Has the site's model propose these actions in a session of the owner's,
+ * one call each: they wait, undecided.
+ */
 async function propose(
   request: APIRequestContext,
-  token: string,
-  action: Record<string, unknown>,
+  actions: Record<string, unknown>[],
 ) {
-  const response = await request.post('/api/mcp', {
-    headers: {
-      accept: 'application/json, text/event-stream',
-      'mcp-protocol-version': '2026-07-28',
-      'mcp-method': 'tools/call',
-      'mcp-name': 'propose',
-      authorization: `Bearer ${token}`,
-    },
-    data: {
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: {
-        name: 'propose',
-        arguments: { actions: [action] },
-        _meta: {
-          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
-          'io.modelcontextprotocol/clientInfo': { name: 'e2e', version: '1' },
-          'io.modelcontextprotocol/clientCapabilities': {},
-        },
+  model = await startFakeModel(
+    [
+      {
+        toolCalls: actions.map((action, index) => ({
+          id: `call_${index}`,
+          name: 'propose',
+          input: { actions: [action] },
+        })),
       },
-    },
-  });
-  const answer = (await response.json()) as {
-    result: { content: { text: string }[]; isError?: boolean };
-  };
-  const text = answer.result.content.map((part) => part.text).join('\n');
-  expect(answer.result.isError, text).toBeFalsy();
-  expect(text).toMatch(/- aia-[\w-]+: proposed/);
+      { text: 'Proposed.' },
+    ],
+    { models: ['fake-e2e'] },
+  );
+  await turnAiOn(request, model);
+  const { sessionUuid } = await (
+    await request.post('/api/admin/ai/sessions', {
+      data: { text: 'Look it over.' },
+    })
+  ).json();
+  await expect
+    .poll(
+      async () =>
+        (
+          await (
+            await request.get(`/api/admin/ai/sessions/${sessionUuid}`)
+          ).json()
+        ).actions?.filter(
+          (action: { state: string }) => action.state === 'pending',
+        ).length,
+      { timeout: 15_000 },
+    )
+    .toBe(actions.length);
 }
 
 /**
  * One entity of each kind: the fixture holds pages, and the other specs make
  * the rest for themselves. A diary day and a tag title are each one of a
  * kind, so a run makes its own, and the spec can run again on the same
- * database. While AI is on, an app proposes what would show at a form's
+ * database. While AI is on, the site's model proposes what would show at a form's
  * labels, in a text's editor, in a section's window and at a file's
  * description; then it is turned off.
  */
@@ -224,50 +227,44 @@ test.beforeAll(async ({ request }) => {
   const sectionUuid = sections[0].sectionUuid as string;
   expect(sectionUuid).toBeTruthy();
 
-  model = await startFakeModel([], { models: ['fake-e2e'] });
-  await turnAiOn(request, model);
-  const { token, item } = await (
-    await request.post('/api/admin/api-tokens', {
-      data: { label: 'Quiet', preset: 'reader' },
-    })
-  ).json();
-  tokenUuid = item.tokenUuid;
   const projectRef = `project:${projectUuid}`;
-  await propose(request, token, {
-    kind: 'field',
-    target: projectRef,
-    field: 'summary',
-    value: 'Nothing at all to see.',
-    reason: 'Says it plainly.',
-  });
-  await propose(request, token, {
-    kind: 'revise',
-    target: projectRef,
-    text: 'description',
-    mode: 'proofread',
-    reason: 'A word missing.',
-    corrections: [
-      {
-        find: 'Nothing here',
-        replace: 'Nothing is here',
-        category: 'grammar',
-        reason: 'A word missing.',
-      },
-    ],
-  });
-  await propose(request, token, {
-    kind: 'field',
-    target: `project-section:${sectionUuid}`,
-    field: 'summary',
-    value: 'A quiet part of it.',
-    reason: 'Says which part.',
-  });
-  await propose(request, token, {
-    kind: 'describe',
-    file: pictureUuid,
-    text: 'A square of one colour',
-    reason: 'What the picture shows.',
-  });
+  await propose(request, [
+    {
+      kind: 'field',
+      target: projectRef,
+      field: 'summary',
+      value: 'Nothing at all to see.',
+      reason: 'Says it plainly.',
+    },
+    {
+      kind: 'revise',
+      target: projectRef,
+      text: 'description',
+      mode: 'proofread',
+      reason: 'A word missing.',
+      corrections: [
+        {
+          find: 'Nothing here',
+          replace: 'Nothing is here',
+          category: 'grammar',
+          reason: 'A word missing.',
+        },
+      ],
+    },
+    {
+      kind: 'field',
+      target: `project-section:${sectionUuid}`,
+      field: 'summary',
+      value: 'A quiet part of it.',
+      reason: 'Says which part.',
+    },
+    {
+      kind: 'describe',
+      file: pictureUuid,
+      text: 'A square of one colour',
+      reason: 'What the picture shows.',
+    },
+  ]);
   // On, all of it waits where it would be shown.
   const panel = await (
     await request.get(`/api/admin/ai/entities/project/${projectUuid}`)
@@ -281,7 +278,6 @@ test.beforeAll(async ({ request }) => {
 });
 
 test.afterAll(async ({ request }) => {
-  if (tokenUuid) await request.delete(`/api/admin/api-tokens/${tokenUuid}`);
   await turnAiOff(request);
   await model?.close();
 });

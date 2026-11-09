@@ -934,11 +934,10 @@ export default defineI18nBase({
     api_token_label_required: 'Name the key: say what it is for.',
     api_token_access: 'Access',
     api_token_preset_reader: 'Reader',
-    api_token_preset_reader_hint:
-      'Reads everything and proposes changes for you to take or not. Changes nothing itself.',
+    api_token_preset_reader_hint: 'Reads everything. Changes nothing.',
     api_token_preset_editor: 'Editor',
     api_token_preset_editor_hint:
-      'May do whatever you can: create, edit, upload files, publish and delete. Every change shows in its session and can be undone; a deletion cannot.',
+      'May do whatever you can: create, edit, upload files, publish and delete. It changes at once what you ask it for in your conversation with the app; Thei keeps no journal of it, and a deletion cannot be undone.',
     api_token_preset_custom: 'Custom',
     api_token_empty: 'No access keys yet',
     api_token_never_used: 'Never used',
@@ -959,9 +958,10 @@ export default defineI18nBase({
     ai_switch: 'AI in Thei',
     ai_welcome:
       'AI in Thei works in sessions: you talk about the archive with a ' +
-      'model or an app, and it reads, proofreads and proposes actions — ' +
-      'relations, tags, notes, edits. Nothing changes without you; what an ' +
-      'Editor key applied shows in its session and can be undone.',
+      'model, and it reads, proofreads and proposes actions — relations, ' +
+      'tags, notes, edits. Nothing changes without you. An AI app works ' +
+      'in your conversation with it: with an Editor key it makes the ' +
+      'changes you ask for there.',
     ai_ways_facts: {
       what: 'What',
       how: 'How',
@@ -975,7 +975,7 @@ export default defineI18nBase({
         how: 'Thei gives out an access key, and the app connects with it.',
         pays: 'The app, on your usual subscription. Thei spends nothing.',
         rights:
-          'A Reader only reads and proposes. An Editor makes changes itself; every one shows in its session and can be undone.',
+          'A Reader only reads. An Editor makes the changes you ask for in the app, at once and as you would.',
       },
       model: {
         title: 'Thei calls a model itself',
@@ -1058,8 +1058,6 @@ export default defineI18nBase({
     },
     oauth_restart:
       'Nothing was sent to the app. Start connecting in it again; if that fails, connect it with an access key.',
-    api_token_history: 'What it did',
-    api_token_history_empty: 'Nothing has been done with this key yet.',
     ai_settings_link:
       'AI apps and their access keys, the model with your API key and your ' +
       'rules for AI live on the AI page.',
@@ -2067,7 +2065,6 @@ export default defineI18nBase({
       waiting: 'Waiting for you',
       applied: 'With something applied',
       rejected: 'With something declined',
-      app: 'From apps',
       template: 'From ready requests',
     },
     ai_session_new: 'New session',
@@ -2096,7 +2093,7 @@ export default defineI18nBase({
     ai_sessions_back: 'To sessions',
     ai_no_model_title: 'No model is set up',
     ai_no_model_text:
-      'Sessions here are answered by the model from “Connection”: a service’s, by its API key, or your own, with Ollama or LM Studio. Sessions of apps over MCP are below.',
+      'Sessions here are answered by the model from “Connection”: a service’s, by its API key, or your own, with Ollama or LM Studio.',
     ai_no_model_action: 'Set up',
     ai_session_menu: 'Session',
     ai_session_pin: 'Pin',
@@ -2108,11 +2105,8 @@ export default defineI18nBase({
     ai_session_delete_confirm: (title) =>
       `Delete the session “${title}”? What it applied stays, but can no longer be undone from it.`,
     ai_session_by_you: (when) => `Started by you · ${when}`,
-    ai_session_via_app: (client) => `${client} over MCP`,
     ai_session_tokens: (amount) =>
       amount === '1' ? '1 token' : `${amount} tokens`,
-    ai_session_app_note:
-      'Here is what the app proposed and applied. The conversation itself stayed in the app: write to it there.',
     ai_session_archived_note: 'Archived: nothing can be written here',
     ai_session_model: 'Model',
     ai_steps: {
@@ -2592,8 +2586,7 @@ export default defineI18nBase({
     ai_action_never: 'Never offer again',
     ai_action_pick: 'Include in applying',
     ai_action_unsure: 'Your call.',
-    ai_action_applied: (by, when) => `Applied ${by} · ${when}`,
-    ai_action_by: { owner: 'by you', app: 'by the app' },
+    ai_action_applied: (when) => `Applied by you · ${when}`,
     ai_action_states: {
       rejected: 'Declined',
       never: 'Never offered again',

@@ -230,21 +230,19 @@ test('a form opened before an AI change does not write over it', async ({
   const projectUuid = await makeProject(request, 'Race');
   await open(page, `/admin/projects/${projectUuid}/edit/`);
 
-  // An editor's key proposes and applies at once, as the owner would.
-  const changed = await callTool(request, token, 'propose', {
+  // An editor's key applies at once, as the owner would.
+  const changed = await callTool(request, token, 'apply_actions', {
     actions: [
       {
         kind: 'field',
         target: `project:${projectUuid}`,
         field: 'summary',
         value: 'Changed by AI',
-        reason: 'Clearer',
       },
     ],
-    apply: true,
   });
   expect(changed.isError, changed.text).toBe(false);
-  expect(changed.text).toMatch(/Applied: aia-/);
+  expect(changed.text).toMatch(/^Applied 1: project:/);
 
   // The form still holds the old summary; saving it would undo the change.
   await page.getByPlaceholder(/Find\s+the\s+photos/).fill('Look again');
@@ -265,87 +263,52 @@ test('a form opened before an AI change does not write over it', async ({
   await request.delete(`/api/admin/projects/${projectUuid}`);
 });
 
-test('what an editor key applied is undone from its session', async ({
+test('an editor key changes the archive as the owner, and leaves no trace of it', async ({
   page,
   request,
 }) => {
   await setAccess(request, true);
   const { token } = await (
     await request.post('/api/admin/api-tokens', {
-      data: { label: 'Undoable', preset: 'editor' },
+      data: { label: 'Direct', preset: 'editor' },
     })
   ).json();
-  const projectUuid = await makeProject(request, 'Undo me');
-  const applied = await callTool(request, token, 'propose', {
+  const projectUuid = await makeProject(request, 'Direct');
+  const before = await (await request.get('/api/admin/ai/sessions')).json();
+  const applied = await callTool(request, token, 'apply_actions', {
     actions: [
       {
         kind: 'field',
         target: `project:${projectUuid}`,
         field: 'summary',
         value: 'After',
-        reason: 'Shorter',
       },
     ],
-    apply: true,
   });
   expect(applied.isError, applied.text).toBe(false);
-  const sessionUuid = applied.text.match(/In session (ais-[\w-]+)/)![1]!;
-  const actionUuid = applied.text.match(/Applied: (aia-[\w-]+)/)![1]!;
   expect(await summaryOf(request, projectUuid)).toBe('After');
 
-  // The owner finds it in the app's session, applied, and takes it back.
-  await open(page, `/admin/ai/?session=${sessionUuid}`);
-  const row = page.locator(`[data-action="${actionUuid}"]`);
-  await expect(row).toHaveAttribute('data-action-state', 'applied');
-  await expect(page.locator('[data-session-app-note]')).toBeVisible();
-  await expect(page.locator('[data-composer]')).toHaveCount(0);
-  await row.locator('[data-action-undo]').click();
-  await expect(row).toHaveAttribute('data-action-state', 'undone');
-  expect(await summaryOf(request, projectUuid)).toBe('Before');
-
-  // The app reads what became of it.
-  const read = await callTool(request, token, 'session_actions', {
-    session: sessionUuid,
-  });
-  expect(read.text).toMatch(new RegExp(`${actionUuid}.*undone`));
+  // No session, nothing waiting: the work lives in the app's conversation.
+  const after = await (await request.get('/api/admin/ai/sessions')).json();
+  expect(after.sessions).toEqual(before.sessions);
+  expect(after.waiting).toBe(before.waiting);
+  // Its form reads as the owner's own save left it, with nothing proposed.
+  await open(page, `/admin/projects/${projectUuid}/edit/`);
+  await expect(page.locator('textarea').first()).toHaveValue('After');
+  await expect(page.locator('[data-ai-offer]')).toHaveCount(0);
   await request.delete(`/api/admin/projects/${projectUuid}`);
 });
 
-test('a reader key only proposes, and the owner applies it', async ({
-  page,
-  request,
-}) => {
+test('a reader key only reads', async ({ request }) => {
   await setAccess(request, true);
   const { token } = await (
     await request.post('/api/admin/api-tokens', {
       data: { label: 'Reader', preset: 'reader' },
     })
   ).json();
-  const projectUuid = await makeProject(request, 'Proposed to');
-  const proposed = await callTool(request, token, 'propose', {
-    actions: [
-      {
-        kind: 'field',
-        target: `project:${projectUuid}`,
-        field: 'summary',
-        value: 'Proposed',
-        reason: 'Says what it is',
-      },
-    ],
-    // A reader's key has no apply: the word is not even heard.
-    apply: true,
-  });
-  expect(proposed.isError, proposed.text).toBe(false);
-  expect(proposed.text).not.toMatch(/Applied:/);
-  const sessionUuid = proposed.text.match(/In session (ais-[\w-]+)/)![1]!;
-  const actionUuid = proposed.text.match(/- (aia-[\w-]+): proposed/)![1]!;
-  expect(await summaryOf(request, projectUuid)).toBe('Before');
-
-  await open(page, `/admin/ai/?session=${sessionUuid}`);
-  const row = page.locator(`[data-action="${actionUuid}"]`);
-  await expect(row).toHaveAttribute('data-action-state', 'pending');
-  await row.locator('[data-action-apply]').click();
-  await expect(row).toHaveAttribute('data-action-state', 'applied');
-  expect(await summaryOf(request, projectUuid)).toBe('Proposed');
-  await request.delete(`/api/admin/projects/${projectUuid}`);
+  const listed = await (await mcp(request, token, 'tools/list')).json();
+  const names = listed.result.tools.map((tool: { name: string }) => tool.name);
+  expect(names).toContain('read_entity');
+  for (const name of ['apply_actions', 'propose', 'upload_file'])
+    expect(names).not.toContain(name);
 });

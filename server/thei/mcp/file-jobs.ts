@@ -12,8 +12,7 @@ import { isRefusal, logToolFailure } from './result';
  * done by then goes on: its job id tells `file_status` where it stands.
  *
  * A file brought in is a file of the library like any other: one no entity
- * places, and no action waiting holds, is let go by the library's own sweep.
- * A job is cancelled with its session — archived by the owner — and with AI
+ * places is let go by the library's own sweep. A job is cancelled with AI
  * turned off: its download or encoding stops, and what it made is not kept.
  * One still running after a few hours is stuck, and is stopped as failed.
  */
@@ -34,8 +33,6 @@ const MAX_RUN_MS = 4 * 60 * 60 * 1000;
 export interface FileJob {
   job: string;
   tokenUuid: string;
-  /** The session the file is brought into. */
-  sessionUuid: string;
   /** What the file is: its name, or the file it was made from. */
   what: string;
   status: 'running' | 'done' | 'failed' | 'cancelled';
@@ -54,13 +51,12 @@ function sweep(now = Date.now()) {
 }
 
 /**
- * Starts work on a file for a session and waits for it a little: the job,
+ * Starts work on a file and waits for it a little: the job,
  * done or still running. A token has at most two files on their way at once.
  * `work` stops when its signal aborts.
  */
 export async function runFileJob(
   principal: ApiTokenPrincipal,
-  sessionUuid: string,
   what: string,
   work: (signal: AbortSignal) => Promise<AssetUploadResponse>,
 ): Promise<FileJob> {
@@ -75,7 +71,6 @@ export async function runFileJob(
   const job: FileJob = {
     job: `fj-${randomBytes(9).toString('base64url')}`,
     tokenUuid: principal.tokenUuid,
-    sessionUuid,
     what,
     status: 'running',
   };
@@ -129,17 +124,6 @@ function stop(job: FileJob, status: 'cancelled' | 'failed', error?: string) {
   if (error) job.error = error;
   job.finishedAt = Date.now();
   stoppers.get(job.job)?.abort();
-}
-
-/** Cancels the files still on their way into a session; returns how many. */
-export function cancelSessionFileJobs(sessionUuid: string): number {
-  let count = 0;
-  for (const job of jobs.values())
-    if (job.sessionUuid === sessionUuid && job.status === 'running') {
-      stop(job, 'cancelled');
-      count++;
-    }
-  return count;
 }
 
 /** Cancels every file still on its way: AI was turned off. */

@@ -3,9 +3,9 @@
 Thei can work with AI two ways, each optional and independent of the other:
 
 - **An AI app works with the archive.** Claude, ChatGPT, Claude Code or any
-  other app that speaks MCP reads the site as the owner sees it, proposes
-  changes for the owner to apply — and, with Editor rights, applies them
-  itself. The app pays for its model as it always does.
+  other app that speaks MCP reads the site as the owner sees it and, with
+  Editor rights, makes the changes the owner asks for in the conversation
+  with it, at once. The app pays for its model as it always does.
 - **Thei's own model answers in sessions.** With an API key from a service
   the owner chooses, the owner talks to a model on the AI page, and
   runs its built-in checks. It reads and proposes only. The owner pays
@@ -60,43 +60,64 @@ claude mcp add --transport http thei https://example.com/api/mcp --header "Autho
 ```
 
 Keys and connections are listed together as chips, the most lately used
-first; each opens a window with its latest sessions, a check of the
-connection as that key, and revoking it, which ends it at once.
+first; each opens a window with its rights, when and by which app it was
+last used, a check of the connection as that key, and revoking it, which
+ends it at once.
 
 ## Rights
 
-| Rights | May                                                                                     |
-| ------ | --------------------------------------------------------------------------------------- |
-| Reader | Read everything as the owner sees it; propose actions; keep the model's digests.        |
-| Editor | All a reader may, and apply actions as the owner would: create, change, upload, delete. |
+| Rights | May                                                                                          |
+| ------ | -------------------------------------------------------------------------------------------- |
+| Reader | Read everything as the owner sees it; keep the model's digests.                              |
+| Editor | All a reader may, and change the archive as the owner would: create, change, upload, delete. |
 
 Which change needs which right is decided in `server/thei/mcp/scope.ts`
-only. An editor applies through the admin's own forms, with the version it
-read, so a change over something changed since is refused rather than
-written over it.
+only.
+
+## How an app writes
+
+An app has no session in Thei. The owner talks to it in the app, and that
+conversation — what was asked, what was agreed, what was done — is where
+the work is followed; Thei keeps no copy of it. So an editor's key changes
+the archive at once with `apply_actions`, as the owner would in the admin:
+nothing waits at a field's ✦, nothing is counted in the admin bar, and
+nothing is kept to undo. What the owner asked for in the conversation is
+their consent.
+
+It goes the way an action of the site's model goes when the owner applies
+it (`server/thei/mcp/direct.ts`): checked against the archive, read from the
+admin's own form, laid over it and saved back with the version it read, so
+a change over something changed since is refused rather than written over
+it; a bundle is applied in order, an atomic one whole or not at all, and one
+that fails midway is taken back. A text keeps its earlier wording in its
+history, as after the owner's own save; a deletion is final. What the owner
+declined of the site's model's proposals, or kept as written of its
+corrections, does not stop it. Every part of a text edit is made, sure or
+not; a remark on meaning with no rewording changes no words, so it is left
+out, with a note telling the app to say it to the owner. The answer names
+what was applied, what was left out and what did not land.
+
+A file an app uploads, imports or re-encodes goes into the library unplaced,
+like an upload of the owner's not yet saved: a change that uses it puts it
+in place, and one nothing uses is let go by the library's sweep a day later.
 
 ## Sessions
 
-Everything a model does happens in a **session**: a conversation, the
-actions proposed in it and what became of them. The owner starts one on the
-**Sessions** tab, from the ✦ of an entity's form — about that entity — or
-from the ✦ of the admin bar. An app opens one with `open_session`; one that
-does not is given one per key and app name, a new one after half an hour of
-quiet. A template's run is a session too.
+Everything Thei's own model does happens in a **session**: a conversation,
+the actions proposed in it and what became of them. The owner starts one on
+the **Sessions** tab, from the ✦ of an entity's form — about that entity —
+or from the ✦ of the admin bar. A template's run is a session too.
 
 A session waits for the owner while an action in it is undecided or a
 question unanswered; the admin bar counts what waits. Archived by the owner,
 or quiet for a week, a session goes to the archive, the last group of the
-list; there it is only read until the owner brings it back, and an app may not
-go on with one the owner archived: the files it still has on their way into
-it are cancelled. A month in the archive and it is deleted, unless pinned,
-leaving its summary.
+list; there it is only read until the owner brings it back. A month in the
+archive and it is deleted, unless pinned, leaving its summary.
 
 The owner may bring files along with a message — from the «+» menu, pasted or
-dropped, several at once — and an app's uploads, imports and re-encodings are
-brought into its session the same way. Each goes into the library with its
-place there, in the session, and goes a day after the session does unless
-something else holds it. Every file is told of by its name and id, so a
+dropped, several at once. Each goes into the library with its place there,
+in the session, and goes a day after the session does unless something else
+holds it. Every file is told of by its name and id, so a
 text it proposes can take one in, and shown to the model in the form its
 service takes — one table of it in `server/thei/ai/sessions/files.ts`: a
 picture made small; a drawing by its preview; a PDF whole; a text's words; a
@@ -263,27 +284,26 @@ a restart cut off says so.
 
 ## Tools
 
-| Tool                              | What it does                                                         |
-| --------------------------------- | -------------------------------------------------------------------- |
-| `site_overview`                   | The site, its kinds of entities, and what the owner asks of models.  |
-| `search_archive`                  | Words across every text, grouped by kind, each place by its ids.     |
-| `list_entities`                   | Entities of a kind, by dates too.                                    |
-| `read_entity`                     | One entity whole, its memory, its files.                             |
-| `changes_since`                   | What changed in a span of time.                                      |
-| `life_timeline`                   | The one timeline of everything dated.                                |
-| `relation_graph`                  | The relations around an entity.                                      |
-| `tag_candidates`                  | Entities a tag might belong on.                                      |
-| `outline`                         | The headings and sections a link may lead to inside an entity.       |
-| `links_in`                        | Every link of an entity, where it leads, and which repeat in a part. |
-| `broken_links`                    | Links leading nowhere now, with where each may lead instead.         |
-| `read_memory`                     | What is remembered of entities or a kind, and the dictionary.        |
-| `read_digests`, `write_digest`    | The model's own few lines about entities.                            |
-| `open_session`, `session_actions` | A session to work in, and what became of its actions.                |
-| `describe_actions`                | The kinds of actions, and what each takes.                           |
-| `propose`                         | Actions for the owner; with `apply`, an editor applies them at once. |
-| `undo_action`                     | Takes back an action the app applied, in a session not archived.     |
-| `find_files`, `read_file`         | Files found by description and place; one with what its places say.  |
-| `look_at_file`                    | A library file shown as the model's service takes it.                |
-| `download_file`                   | A one-time address for an app to download a library file as stored.  |
-| `upload_file`, `import_file`      | A file into the library, as the admin uploads one (editor).          |
-| `reprocess_file`, `file_status`   | A new variant of a library file, and how its processing goes.        |
+| Tool                            | What it does                                                           |
+| ------------------------------- | ---------------------------------------------------------------------- |
+| `site_overview`                 | The site, its kinds of entities, and what the owner asks of models.    |
+| `search_archive`                | Words across every text, grouped by kind, each place by its ids.       |
+| `list_entities`                 | Entities of a kind, by dates too.                                      |
+| `read_entity`                   | One entity whole, its memory, its files.                               |
+| `changes_since`                 | What changed in a span of time.                                        |
+| `life_timeline`                 | The one timeline of everything dated.                                  |
+| `relation_graph`                | The relations around an entity.                                        |
+| `tag_candidates`                | Entities a tag might belong on.                                        |
+| `outline`                       | The headings and sections a link may lead to inside an entity.         |
+| `links_in`                      | Every link of an entity, where it leads, and which repeat in a part.   |
+| `broken_links`                  | Links leading nowhere now, with where each may lead instead.           |
+| `read_memory`                   | What is remembered of entities or a kind, and the dictionary.          |
+| `read_digests`, `write_digest`  | The model's own few lines about entities.                              |
+| `describe_actions`              | The kinds of actions, and what each takes (editor).                    |
+| `apply_actions`                 | Changes the archive at once, as the owner would (editor).              |
+| `propose`, `session_actions`    | Thei's own model only: actions for the owner, and what became of them. |
+| `find_files`, `read_file`       | Files found by description and place; one with what its places say.    |
+| `look_at_file`                  | A library file shown as the model's service takes it.                  |
+| `download_file`                 | A one-time address for an app to download a library file as stored.    |
+| `upload_file`, `import_file`    | A file into the library, as the admin uploads one (editor).            |
+| `reprocess_file`, `file_status` | A new variant of a library file, and how its processing goes.          |

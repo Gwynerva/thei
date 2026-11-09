@@ -2,6 +2,7 @@ import type { AiMessagePart, AiTranscriptTurn } from '#layers/thei/shared/ai';
 import { desc, eq } from 'drizzle-orm';
 import { cancelFileJobs } from '../../mcp/file-jobs';
 import { publishSession } from '../sessions/bus';
+import { sweepAppContainers } from '../sessions/lifecycle';
 import {
   sessionMessages,
   updateMessage,
@@ -211,4 +212,6 @@ export function recoverAiSessions() {
     .where(eq(schema.aiActions.state, 'applying'))
     .run();
   db.delete(schema.aiTemplateBatches).run();
+  // No call of an app runs at boot: what one was writing is let go.
+  sweepAppContainers(0);
 }

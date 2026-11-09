@@ -182,11 +182,15 @@ export interface AiActionKindDef<K extends AiActionKind> {
    * section's is its project.
    */
   targets: readonly ActionTargetKind[];
-  /** Checks it against the archive as it is now; throws a refusal. */
+  /**
+   * Checks it against the archive as it is now; throws a refusal. `direct`
+   * when an app applies it at once (`../../mcp/direct.ts`): nobody decides it
+   * part by part, so what only the owner could decide here is left out.
+   */
   prepare(
     target: TargetOf<K> | undefined,
     input: any,
-    context: { reason: string; sources: string[] },
+    context: { reason: string; sources: string[]; direct?: boolean },
   ): Promise<PreparedAction<K>>;
   /**
    * What makes two of it the same one, beside its kind and target: what the

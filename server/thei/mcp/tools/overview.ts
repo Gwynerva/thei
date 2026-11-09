@@ -46,7 +46,7 @@ export function registerOverviewTool(
           '',
           `## Your access key: “${context.principal.label}”`,
           '',
-          ...scopeSummary(context.principal.scopes).map((line) => `- ${line}`),
+          ...scopeSummary(context).map((line) => `- ${line}`),
           '',
           "## The owner's own instructions",
           '',

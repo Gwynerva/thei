@@ -348,11 +348,8 @@ const modelWords = computed(() => {
 const appliedLine = computed(() => {
   const action = props.action;
   if (action.state !== 'applied') return '';
-  const by = action.appliedBy
-    ? phrase.value.ai_action_by[action.appliedBy]
-    : phrase.value.ai_action_by.owner;
+  // Only the owner applies what a session holds: an app has none.
   return phrase.value.ai_action_applied(
-    by,
     action.decidedAt ? shortWhen(action.decidedAt) : '',
   );
 });

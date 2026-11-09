@@ -23,8 +23,6 @@ export type MessageRow =
 export interface NewSession {
   origin: AiSessionOrigin;
   title?: string;
-  tokenUuid?: string;
-  client?: string;
   templateId?: string;
   model?: string;
 }
@@ -37,8 +35,6 @@ export function createSession(input: NewSession, now = Date.now()): string {
       sessionUuid,
       title: input.title ?? '',
       origin: input.origin,
-      tokenUuid: input.tokenUuid ?? null,
-      client: input.client ?? null,
       templateId: input.templateId ?? null,
       model: input.model ?? null,
       createdAt: now,
@@ -48,12 +44,9 @@ export function createSession(input: NewSession, now = Date.now()): string {
   return sessionUuid;
 }
 
-/**
- * What a session is called where another page names it as a source: its
- * title, or the name of the app that leads it.
- */
-export function sessionName(row: Pick<SessionRow, 'title' | 'client'>): string {
-  return row.title || row.client || '';
+/** What a session is called where another page names it as a source. */
+export function sessionName(row: Pick<SessionRow, 'title'>): string {
+  return row.title;
 }
 
 export function findSession(sessionUuid: string): SessionRow | undefined {

@@ -272,27 +272,16 @@ export function aiEntityName(entity: {
     : entityListName({ title: entity.title, entityId: entity.id });
 }
 
-/**
- * What a session is called: its title, an app's name and day, or untitled.
- * Where only its title is at hand, that or untitled.
- */
-export function sessionTitle(
-  item: Pick<AiSessionItem, 'title'> &
-    Partial<Pick<AiSessionItem, 'origin' | 'client' | 'createdAt'>>,
-): string {
-  if (item.title) return publicText(item.title);
-  if (item.origin === 'app' && item.client && item.createdAt)
-    return `${item.client} · ${shortWhen(item.createdAt)}`;
-  return phrase.value.ai_session_untitled;
+/** What a session is called: its title, or untitled. */
+export function sessionTitle(item: Pick<AiSessionItem, 'title'>): string {
+  return item.title ? publicText(item.title) : phrase.value.ai_session_untitled;
 }
 
-/** Where a session came from: the owner, a template, an app by its name. */
-export function sessionSource(item: Pick<AiSessionItem, 'origin' | 'client'>): {
+/** Where a session came from: the owner or a template. */
+export function sessionSource(item: Pick<AiSessionItem, 'origin'>): {
   icon: IconName;
   label: string;
 } {
-  if (item.origin === 'app')
-    return { icon: 'key', label: item.client ?? 'MCP' };
   if (item.origin === 'template')
     return { icon: 'template', label: phrase.value.ai_session_template };
   return { icon: 'person', label: phrase.value.ai_session_you };

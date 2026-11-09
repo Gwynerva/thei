@@ -7,24 +7,15 @@ import {
   storeStagedFile,
   takeUploadTicket,
 } from '../../../thei/mcp/files';
-import { placeAppFile } from '../../../thei/ai/sessions/files';
-import { findSession } from '../../../thei/ai/sessions/store';
-
-/** Whether a session still takes files in: not archived by the owner, nor gone. */
-function sessionOpen(sessionUuid: string) {
-  const session = findSession(sessionUuid);
-  return Boolean(session && !session.closedAt);
-}
-
-const ARCHIVED = 'The owner archived the session this address was opened in.';
 
 /**
  * The one-time address `upload_file` hands an AI client: the raw bytes of one
  * file, streamed to disk and stored as the admin's uploads are. The address
  * itself is the permission — opened by a token that may edit, good for one
  * file and a few minutes — so no other credential travels with the bytes.
- * The file is kept in the session the address was opened in, unless the
- * owner archived it while the bytes came: then nothing is kept.
+ * The file is in the library like an upload of the owner's not yet placed:
+ * a change that uses it puts it in place, and one nothing uses is let go by
+ * the library's own sweep a day later.
  */
 export default defineEventHandler(async (event) => {
   // A file is no content until a text or a field holds it.
@@ -41,21 +32,9 @@ export default defineEventHandler(async (event) => {
       message:
         'This upload address is used up or has lapsed; ask for a new one.',
     });
-  // An archived session takes nothing more in.
-  if (!sessionOpen(ticket.sessionUuid))
-    throw createError({ statusCode: 404, message: ARCHIVED });
   const staged = await stageUploadBody(event, {
     maxSizeBytes: ticket.maxSizeBytes,
   });
-  if (!sessionOpen(ticket.sessionUuid)) {
-    await staged.discard();
-    throw createError({ statusCode: 404, message: ARCHIVED });
-  }
   const file = await storeStagedFile(staged, ticket, signal);
-  // Archived while it was stored: the file is placed nowhere, and the
-  // library lets it go as it does any file nothing holds.
-  if (!sessionOpen(ticket.sessionUuid))
-    throw createError({ statusCode: 404, message: ARCHIVED });
-  placeAppFile(ticket.sessionUuid, file.assetUuid);
   return describeFile(file);
 });

@@ -6,12 +6,17 @@ import type { AiMessagePiece } from './ai-message-text';
  * what a message carries beside its words, the states an action goes
  * through and how memory is anchored.
  *
- * A session is a conversation about the archive. The owner starts one, or
- * runs a built-in check that starts one, or an app over MCP leaves one. In
- * it a model answers, asks, and proposes actions; the owner applies them.
+ * A session is a conversation about the archive with the site's own model.
+ * The owner starts one, or runs a built-in check that starts one. In it a
+ * model answers, asks, and proposes actions; the owner applies them. An app
+ * over MCP has no session here: the owner talks to it in the app.
  */
 
-/** Who started a session. */
+/**
+ * Who started a session. `app` is no session of anyone's: the container an
+ * app's direct write is checked and applied in, deleted with its call
+ * (`server/thei/mcp/direct.ts`) and listed nowhere.
+ */
 export const AI_SESSION_ORIGINS = ['owner', 'app', 'template'] as const;
 export type AiSessionOrigin = (typeof AI_SESSION_ORIGINS)[number];
 
@@ -241,8 +246,6 @@ export interface AiSessionItem {
   sessionUuid: string;
   title: string;
   origin: AiSessionOrigin;
-  /** The app's name for itself. */
-  client: string | null;
   templateId: string | null;
   /** The model chosen for it; none for the connection's own. */
   model: string | null;

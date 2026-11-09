@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { and, eq, isNull, lt, ne, or } from 'drizzle-orm';
 import { createError, getHeader, type H3Event } from 'h3';
 import {
   API_TOKEN_LABEL_MAX,
@@ -203,25 +203,6 @@ export function touchApiToken(tokenUuid: string) {
       ),
     )
     .run();
-}
-
-/**
- * How much waits for the owner in a key's sessions — actions undecided,
- * questions unanswered — in all of them but the archived, whose waiting
- * counts nowhere.
- */
-export function apiTokenWaiting(tokenUuid: string): number {
-  const { db, schema } = THEI_SERVER.useDb();
-  const sessions = schema.aiSessions;
-  return Number(
-    db
-      .select({ total: sql<number>`coalesce(sum(${sessions.waiting}), 0)` })
-      .from(sessions)
-      .where(
-        and(eq(sessions.tokenUuid, tokenUuid), isNull(sessions.archivedAt)),
-      )
-      .get()?.total ?? 0,
-  );
 }
 
 /** Whether a token still exists: revoked, what it opened opens nothing. */

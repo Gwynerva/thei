@@ -26,6 +26,7 @@ import aiContext from './0.0.7-ai';
 import checkCoverageSession from './0.0.7-check-coverage-session';
 import sessionTokenHashes from './0.0.7-session-token-hashes';
 import excerpts from './0.0.8-excerpts';
+import directAppWrites from './0.0.8-direct-app-writes';
 
 /**
  * Every migration Thei has ever shipped, oldest first.
@@ -65,6 +66,7 @@ export const migrationRegistry: TheiMigration[] = [
   checkCoverageSession,
   sessionTokenHashes,
   excerpts,
+  directAppWrites,
 ];
 
 export { baselineSql } from './0.0.1-baseline';

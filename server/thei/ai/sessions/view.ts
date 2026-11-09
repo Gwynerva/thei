@@ -5,6 +5,7 @@ import {
   inArray,
   isNull,
   lt,
+  ne,
   or,
   sql,
   type SQL,
@@ -127,7 +128,6 @@ function sessionItem(row: SessionRow, about: AiEntityRef[]): AiSessionItem {
     sessionUuid: row.sessionUuid,
     title: row.title,
     origin: row.origin,
-    client: row.client,
     templateId: row.templateId,
     model: row.model,
     state: row.state,
@@ -256,17 +256,25 @@ export async function actionItems(rows: ActionRow[]): Promise<AiActionItem[]> {
 }
 
 /**
- * Whether the site's model answers in a session: an app's it does not, nor
- * one in the archive until it is brought back.
+ * Whether the site's model answers in a session: not in one in the archive,
+ * until it is brought back.
  */
 export function sessionAnswerable(row: SessionRow): boolean {
-  return row.origin !== 'app' && !row.closedAt && !row.archivedAt;
+  return !row.closedAt && !row.archivedAt;
+}
+
+/**
+ * The sessions the owner has: all but the containers of an app's direct
+ * writes (`../../mcp/direct.ts`), which live for one call and are no one's.
+ */
+function owned(table: { origin: unknown }) {
+  return ne(table.origin as never, 'app');
 }
 
 /**
  * The owner's sessions, the latest first, a page at a time: by where they
- * came from, archived or not, and by words of their title, app or of what
- * was said in them. Sessions touched in one moment — several at one apply —
+ * came from, archived or not, and by words of their title or of what was
+ * said in them. Sessions touched in one moment — several at one apply —
  * stand together: a page never ends among them, so the next one, read from
  * before that moment, skips none.
  */
@@ -278,8 +286,6 @@ export function listSessions(
     /** Only the sessions with something applied, or declined. */
     applied?: boolean;
     rejected?: boolean;
-    /** Only the sessions of this access key. */
-    tokenUuid?: string;
     /** Only the runs of this template. */
     templateId?: string;
     /** Only the sessions about this entity, or that touched it. */
@@ -300,6 +306,7 @@ export function listSessions(
     sql`${sql.raw(WORDS_SQL)}(${value}, ${words}) = 1`;
   const where = (moment?: SQL) =>
     and(
+      owned(table),
       filter.origin ? eq(table.origin, filter.origin) : undefined,
       filter.archived === undefined
         ? undefined
@@ -309,14 +316,12 @@ export function listSessions(
       filter.waiting ? sql`${table.waiting} > 0` : undefined,
       filter.applied ? sql`${table.applied} > 0` : undefined,
       filter.rejected ? sql`${table.rejected} > 0` : undefined,
-      filter.tokenUuid ? eq(table.tokenUuid, filter.tokenUuid) : undefined,
       filter.templateId ? eq(table.templateId, filter.templateId) : undefined,
       about ? inArray(table.sessionUuid, about) : undefined,
       filter.before ? lt(table.lastActiveAt, filter.before) : undefined,
       words
         ? or(
             found(sql`${table.title}`),
-            found(sql`coalesce(${table.client}, '')`),
             sql`EXISTS (SELECT 1 FROM "ai-messages" said WHERE said."sessionUuid" = "ai-sessions"."sessionUuid" AND ${found(sql`said."text"`)})`,
           )
         : undefined,
@@ -394,7 +399,9 @@ export function sessionOverview(room = 9): AiSessionOverview {
       db
         .select({ total: sql<number>`count(*)` })
         .from(schema.aiSessions)
-        .where(isNull(schema.aiSessions.archivedAt))
+        .where(
+          and(isNull(schema.aiSessions.archivedAt), owned(schema.aiSessions)),
+        )
         .get()?.total ?? 0,
     ),
     waiting: waitingShown,
@@ -436,7 +443,9 @@ export function aiWaiting(): number {
         total: sql<number>`coalesce(sum(${schema.aiSessions.waiting}), 0)`,
       })
       .from(schema.aiSessions)
-      .where(isNull(schema.aiSessions.archivedAt))
+      .where(
+        and(isNull(schema.aiSessions.archivedAt), owned(schema.aiSessions)),
+      )
       .get()?.total ?? 0,
   );
 }

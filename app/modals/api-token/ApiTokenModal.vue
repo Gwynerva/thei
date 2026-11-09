@@ -2,19 +2,17 @@
 import type { AiCheckReport } from '#layers/thei/shared/ai-check';
 import {
   apiTokenPresetOf,
-  type ApiTokenActivityResponse,
   type ApiTokenItem,
 } from '#layers/thei/shared/api-token';
 import ModalContainer from '../ModalContainer.vue';
 import ModalHeaderButton from '../ModalHeaderButton.vue';
 import ModalTitle from '../ModalTitle.vue';
-import ModalWaiting from '../ModalWaiting.vue';
 
 /**
- * One access key: what it may do, when it was made and last used, and its
- * latest sessions, with how many of the actions it proposed still wait for
- * the owner. From here it is checked, as an app holding it connects, or
- * revoked. The header is the key's name and its revoke; what the key is
+ * One access key: what it may do, when it was last used and by which app.
+ * What an app did with it is followed in the app's own conversation, so
+ * nothing of that is kept here. From here it is checked, as an app holding
+ * it connects, or revoked. The header is the key's name and its revoke; what the key is
  * opens the body, with the check.
  */
 const { modalData } = defineProps<{
@@ -23,20 +21,9 @@ const { modalData } = defineProps<{
 const emit = defineEmits<{ modalResult: [{ type: 'revoked' }] }>();
 
 const token = modalData.token;
-const activity = ref<ApiTokenActivityResponse>();
 const report = ref<AiCheckReport>();
 const busy = ref<'check' | 'revoke'>();
 const error = ref('');
-
-onMounted(async () => {
-  try {
-    activity.value = await $fetch<ApiTokenActivityResponse>(
-      `/api/admin/api-tokens/${token.tokenUuid}`,
-    );
-  } catch (caught) {
-    error.value = errorMessage(caught, phrase.value.error_title);
-  }
-});
 
 const preset = apiTokenPresetOf(token.scopes);
 const PRESET_ICONS = { reader: 'visibility', editor: 'edit' } as const;
@@ -171,41 +158,6 @@ async function revoke() {
         <Icon name="warning" class="mr-xs" />{{ error }}
       </p>
       <AiCheckSteps v-if="report" :report />
-
-      <section class="flex flex-col gap-xs">
-        <h3 class="text-sm font-semibold text-text-2">
-          {{ phrase.api_token_history }}
-        </h3>
-        <ModalWaiting v-if="!activity && !error" class="h-16" />
-        <template v-else-if="activity">
-          <TheiLink
-            v-if="activity.waiting > 0"
-            to="/admin/ai/"
-            class="flex items-center gap-xs text-sm font-semibold text-accent
-              hocus:underline"
-            data-api-token-waiting
-            @click="closeModal"
-          >
-            <Icon name="sparkles" />{{
-              phrase.ai_session_waiting(activity.waiting)
-            }}
-          </TheiLink>
-          <p
-            v-if="!activity.sessions.length"
-            class="text-sm text-text-3 italic"
-          >
-            {{ phrase.api_token_history_empty }}
-          </p>
-          <div v-else class="-mx-2 flex flex-col" data-api-token-sessions>
-            <AiSessionLink
-              v-for="session in activity.sessions"
-              :key="session.sessionUuid"
-              :item="session"
-              @click="closeModal"
-            />
-          </div>
-        </template>
-      </section>
     </div>
   </ModalContainer>
 </template>

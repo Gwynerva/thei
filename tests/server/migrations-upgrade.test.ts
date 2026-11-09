@@ -426,10 +426,16 @@ describe.each([
 describe('the schema migrations of 0.0.6', () => {
   it('change nothing run again over what they made', async () => {
     for (const statement of schema_0_0_5) rawDb.prepare(statement).run();
+    // What 0.0.6 made, and only that: a later release may take part of it
+    // away — 0.0.8 drops the columns of an app's session — and a 0.0.6
+    // migration run again over that is no case of its own.
     seedLedger(
       rawDb,
-      migrationRegistry.filter(({ id }) =>
-        (migrations_0_0_5 as readonly string[]).includes(id),
+      migrationRegistry.filter(
+        ({ id, version }) =>
+          (migrations_0_0_5 as readonly string[]).includes(id) ||
+          !version.startsWith('0.0.') ||
+          Number(version.split('.')[2]) > 6,
       ),
     );
     await runPendingMigrations(rawDb, { contentPath });
@@ -438,5 +444,243 @@ describe('the schema migrations of 0.0.6', () => {
       if (['0.0.6/001-ai', '0.0.6/003-entities'].includes(migration.id))
         migration.up!({ rawDb } as never);
     expect(describeSchema(rawDb)).toEqual(made);
+  });
+});
+
+describe('upgrading a 0.0.7 site with sessions of apps', () => {
+  it('takes the apps’ sessions away whole, and keeps the owner’s', async () => {
+    for (const statement of schema_0_0_7) rawDb.prepare(statement).run();
+    seedLedger(
+      rawDb,
+      migrationRegistry.filter(({ id }) =>
+        (migrations_0_0_7 as readonly string[]).includes(id),
+      ),
+    );
+    const insert = (table: string, row: Record<string, unknown>) =>
+      insertRow(rawDb, table, row);
+    const session = (sessionUuid: string, origin: string) =>
+      insert('ai-sessions', {
+        sessionUuid,
+        origin,
+        tokenUuid: origin === 'app' ? 'tk-app' : null,
+        client: origin === 'app' ? 'Claude' : null,
+        createdAt: 1,
+        lastActiveAt: 1,
+      });
+    session('s-app', 'app');
+    session('s-owner', 'owner');
+    for (const [actionUuid, sessionUuid] of [
+      ['ac-app', 's-app'],
+      ['ac-owner', 's-owner'],
+    ] as const) {
+      insert('ai-actions', {
+        actionUuid,
+        sessionUuid,
+        kind: 'field',
+        payload: {},
+        certainty: 'sure',
+        state: 'applied',
+        fingerprint: actionUuid,
+        createdAt: 1,
+      });
+      insert('ai-messages', {
+        messageUuid: `m-${sessionUuid}`,
+        sessionUuid,
+        seq: 1,
+        role: 'model',
+        createdAt: 1,
+      });
+      insert('ai-session-entities', {
+        sessionUuid,
+        entityType: 'project',
+        entityId: 'p-1',
+        role: 'touched',
+        at: 1,
+      });
+      insert('asset-usages', {
+        assetUuid: `a-${sessionUuid}`,
+        containerType: 'ai-session',
+        containerId: sessionUuid,
+        role: 'ai-attachment',
+      });
+      insert('content-history', {
+        id: `h-${sessionUuid}`,
+        ownerType: 'project',
+        ownerRef: 'p-1',
+        slot: 'project-description',
+        kind: 'version',
+        reason: 'before-ai',
+        data: { blocks: [] },
+        digest: 'd',
+        wordCount: 0,
+        blockCount: 0,
+        assetCount: 0,
+        size: 2,
+        assetUuids: [],
+        createdAt: 1,
+        updatedAt: 1,
+        heldBy: actionUuid,
+      });
+      insert('ai-memory', {
+        memoryUuid: `mem-${sessionUuid}`,
+        anchor: 'owner',
+        type: 'fact',
+        text: 'Remembered',
+        sessionUuid,
+        createdAt: 1,
+        updatedAt: 1,
+      });
+    }
+
+    await runPendingMigrations(rawDb, { contentPath });
+
+    const ids = (sql: string) =>
+      (rawDb.prepare(sql).all() as Record<string, unknown>[]).map((row) =>
+        Object.values(row).join(' '),
+      );
+    expect(ids('SELECT sessionUuid FROM `ai-sessions`')).toEqual(['s-owner']);
+    expect(ids('SELECT actionUuid FROM `ai-actions`')).toEqual(['ac-owner']);
+    expect(ids('SELECT sessionUuid FROM `ai-messages`')).toEqual(['s-owner']);
+    expect(ids('SELECT sessionUuid FROM `ai-session-entities`')).toEqual([
+      's-owner',
+    ]);
+    expect(ids('SELECT containerId FROM `asset-usages`')).toEqual(['s-owner']);
+    // The version an app's action held stays in the history, held no more.
+    expect(
+      ids(
+        "SELECT id, coalesce(heldBy, '-') FROM `content-history` ORDER BY id",
+      ),
+    ).toEqual(['h-s-app -', 'h-s-owner ac-owner']);
+    expect(
+      ids(
+        "SELECT memoryUuid, coalesce(sessionUuid, '-') FROM `ai-memory` ORDER BY memoryUuid",
+      ),
+    ).toEqual(['mem-s-app -', 'mem-s-owner s-owner']);
+  });
+
+  it('starts the last day only of the files nothing holds any more, and keeps the others’ dates', async () => {
+    for (const statement of schema_0_0_7) rawDb.prepare(statement).run();
+    seedLedger(
+      rawDb,
+      migrationRegistry.filter(({ id }) =>
+        (migrations_0_0_7 as readonly string[]).includes(id),
+      ),
+    );
+    const insert = (table: string, row: Record<string, unknown>) =>
+      insertRow(rawDb, table, row);
+    const months = Date.UTC(2026, 5, 1);
+    for (const assetUuid of [
+      'a-released',
+      'a-named',
+      'a-used',
+      'a-versioned',
+      'a-owners',
+      'a-elsewhere',
+    ])
+      insert('assets', {
+        assetUuid,
+        slug: assetUuid,
+        extension: 'webp',
+        familyUuid: assetUuid,
+        contentHash: assetUuid,
+        settingsKey: 'original',
+        type: 'image',
+        size: 1,
+        touchedAt: months,
+      });
+    for (const [sessionUuid, origin] of [
+      ['s-app', 'app'],
+      ['s-owner', 'owner'],
+    ])
+      insert('ai-sessions', {
+        sessionUuid,
+        origin,
+        tokenUuid: origin === 'app' ? 'tk-app' : null,
+        client: origin === 'app' ? 'Claude' : null,
+        createdAt: 1,
+        lastActiveAt: 1,
+      });
+    const action = (
+      actionUuid: string,
+      sessionUuid: string,
+      assetUuids: string[],
+    ) =>
+      insert('ai-actions', {
+        actionUuid,
+        sessionUuid,
+        kind: 'field',
+        payload: {},
+        certainty: 'sure',
+        state: 'applied',
+        fingerprint: actionUuid,
+        assetUuids,
+        createdAt: 1,
+      });
+    action('ac-app', 's-app', ['a-named', 'a-versioned', 'a-owners']);
+    action('ac-owner', 's-owner', ['a-owners']);
+    for (const assetUuid of ['a-released', 'a-used'])
+      insert('asset-usages', {
+        assetUuid,
+        containerType: 'ai-session',
+        containerId: 's-app',
+        role: 'ai-attachment',
+      });
+    insert('asset-usages', {
+      assetUuid: 'a-used',
+      containerType: 'project',
+      containerId: 'p-1',
+      role: 'media',
+    });
+    insert('content-history', {
+      id: 'h-1',
+      ownerType: 'project',
+      ownerRef: 'p-1',
+      slot: 'project-description',
+      kind: 'revision',
+      reason: 'autosave',
+      data: { blocks: [] },
+      digest: 'd',
+      wordCount: 0,
+      blockCount: 0,
+      assetCount: 1,
+      size: 2,
+      assetUuids: ['a-versioned'],
+      createdAt: 1,
+      updatedAt: 1,
+    });
+
+    const before = Date.now();
+    await runPendingMigrations(rawDb, { contentPath });
+
+    const dates = Object.fromEntries(
+      (
+        rawDb
+          .prepare('SELECT assetUuid, touchedAt, createdAt FROM `assets`')
+          .all() as {
+          assetUuid: string;
+          touchedAt: number;
+          createdAt: number;
+        }[]
+      ).map((row) => [row.assetUuid, row]),
+    );
+    // Held by nothing now: its last day starts, and the upload date the next
+    // migration takes from it is today's — the sweep takes it a day later.
+    for (const assetUuid of ['a-released', 'a-named']) {
+      expect(dates[assetUuid]!.touchedAt).toBeGreaterThanOrEqual(before);
+      expect(dates[assetUuid]!.createdAt).toBe(dates[assetUuid]!.touchedAt);
+    }
+    // Still placed, kept in a version of a text, or named by an action of the
+    // owner's own session: its dates stay as they were.
+    for (const assetUuid of [
+      'a-used',
+      'a-versioned',
+      'a-owners',
+      'a-elsewhere',
+    ])
+      expect(dates[assetUuid]).toEqual({
+        assetUuid,
+        touchedAt: months,
+        createdAt: months,
+      });
   });
 });

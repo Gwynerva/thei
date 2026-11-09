@@ -57,6 +57,14 @@ export interface ProposeInput {
   sources?: string[];
   /** For a turn of Thei's own model: whether it may still write. */
   live?: () => boolean;
+  /**
+   * Applied at once by an app the owner asked in its own conversation
+   * (`../../mcp/direct.ts`): nobody decides it here, so what the owner
+   * declined before, a reason and a new version of a waiting action are not
+   * asked of it, and a remark of a text edit, which only the owner could
+   * act on, is left out.
+   */
+  direct?: boolean;
 }
 
 export type ProposeResult =
@@ -99,6 +107,7 @@ async function check(
   proposal: ActionProposal,
   sessionUuid: string,
   sources: string[],
+  direct = false,
 ): Promise<Checked> {
   const lostLetters = lostLettersProblem(proposal);
   if (lostLetters) fail(lostLetters);
@@ -122,7 +131,11 @@ async function check(
     typeof proposal.reason === 'string'
       ? proposal.reason.replace(/\s+/g, ' ').trim().slice(0, 500)
       : '';
-  const prepared = await def.prepare(target, parsed.data, { reason, sources });
+  const prepared = await def.prepare(target, parsed.data, {
+    reason,
+    sources,
+    direct,
+  });
   // A kind that names what it is about in its own fields — a file — says so.
   if (prepared.target) target = prepared.target;
   const fingerprint = fingerprintOf([
@@ -136,6 +149,7 @@ async function check(
     : proposal.certainty === 'unsure'
       ? 'unsure'
       : 'sure';
+  if (direct) return { kind, target, prepared, fingerprint, certainty, reason };
   if (certainty === 'unsure' && !reason)
     fail('An action left to the owner says why: give its reason.');
   let supersedes: string | undefined;
@@ -388,16 +402,18 @@ export async function proposeActions(
   const outcomes: (Checked | { refused: string })[] = [];
   for (const proposal of input.actions) {
     try {
-      outcomes.push(await check(proposal, input.sessionUuid, sources));
+      outcomes.push(
+        await check(proposal, input.sessionUuid, sources, input.direct),
+      );
     } catch (error) {
       if (!(error instanceof EntityPatchError)) throw error;
       outcomes.push({ refused: error.message });
     }
   }
   const alone = oneVersionEach(sameChange(outcomes));
-  const met = metBefore(
-    alone.filter((item): item is Checked => !('refused' in item)),
-  );
+  const met = input.direct
+    ? new Map<string, string>()
+    : metBefore(alone.filter((item): item is Checked => !('refused' in item)));
   const decided = alone.map((item) =>
     'refused' in item || !met.has(item.fingerprint)
       ? item

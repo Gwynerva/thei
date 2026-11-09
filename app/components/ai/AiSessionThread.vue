@@ -66,7 +66,6 @@ const aboutLeft = computed(
   () => (session.value?.about.length ?? 0) - aboutShown.value.length,
 );
 
-const app = computed(() => session.value?.origin === 'app');
 const running = computed(() => session.value?.state === 'running');
 const archived = computed(() => Boolean(session.value?.archivedAt));
 provideAiArchived(archived);
@@ -74,12 +73,10 @@ provideAiArchived(archived);
 const origin = computed(() => {
   const item = session.value;
   if (!item) return '';
-  if (item.origin === 'app')
-    return phrase.value.ai_session_via_app(item.client ?? 'MCP');
   return phrase.value.ai_session_by_you(shortWhen(item.createdAt));
 });
 
-/** The actions of each message; an app's have no message of their own. */
+/** The actions of each message. */
 const byMessage = computed(() => {
   const map = new Map<string, AiActionItem[]>();
   for (const action of detail.value?.actions ?? []) {
@@ -90,8 +87,6 @@ const byMessage = computed(() => {
   }
   return map;
 });
-/** What an app proposed has no message of its own. */
-const appCards = computed(() => actionCards(byMessage.value.get('') ?? []));
 
 function actionOf(actionUuid: string) {
   return detail.value?.actions.find(
@@ -355,7 +350,6 @@ async function remove() {
             <!-- Which model answers it from here on; what it spent is the
                  hint of its mark, a word few owners need in the head. -->
             <span
-              v-if="!app"
               class="inline-flex min-w-0 items-center gap-1"
               data-session-model
               ><span
@@ -408,16 +402,6 @@ async function remove() {
           </div>
         </div>
 
-        <p
-          v-if="app"
-          class="flex items-start gap-2.5 rounded-normal border border-dashed
-            border-border-2 px-3 py-2.5 text-sm leading-snug text-text-2"
-          data-session-app-note
-        >
-          <Icon name="key" class="mt-0.5 shrink-0" />
-          {{ phrase.ai_session_app_note }}
-        </p>
-
         <AiMessage
           v-for="message in detail.messages"
           :key="message.messageUuid"
@@ -429,28 +413,12 @@ async function remove() {
           :action-of="actionOf"
           @answer="answer"
         />
-
-        <!-- What an app proposed has no message of its own. -->
-        <div
-          v-if="appCards.length"
-          class="flex min-w-0 flex-col gap-2.5"
-          data-session-app-actions
-        >
-          <p class="flex items-center gap-1.5 text-xs text-text-2">
-            <Icon name="key" class="text-accent" />{{ session.client ?? 'MCP' }}
-          </p>
-          <AiActionCard
-            v-for="card in appCards"
-            :key="card.key"
-            :actions="card.actions"
-          />
-        </div>
       </div>
       <ModalWaiting v-else class="py-lg" />
     </div>
 
     <!-- An archived session is brought back before anything is written in
-         it; an app's is written in the app, as the note above says. -->
+         it. -->
     <div
       v-if="archived && session"
       class="px-sm pt-1.5
@@ -477,7 +445,7 @@ async function remove() {
       </div>
     </div>
     <div
-      v-else-if="!app"
+      v-else
       class="px-sm pt-1.5
         pb-[calc(var(--spacing-sm)+env(safe-area-inset-bottom,0px))]"
     >

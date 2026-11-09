@@ -50,10 +50,6 @@ export const aiSessions = sqliteTable(
     sessionUuid: text().primaryKey(),
     title: text().notNull().default(''),
     origin: text().notNull().$type<AiSessionOrigin>(),
-    /** The access key of an app's session. */
-    tokenUuid: text(),
-    /** The app's own name for itself, as it introduced itself over MCP. */
-    client: text(),
     templateId: text(),
     /**
      * The model the owner chose for it, as the service names it; none for
@@ -84,7 +80,6 @@ export const aiSessions = sqliteTable(
   },
   (t) => [
     index('ai-sessions-active-idx').on(t.archivedAt, t.lastActiveAt),
-    index('ai-sessions-app-idx').on(t.tokenUuid, t.client, t.lastActiveAt),
     index('ai-sessions-template-idx').on(t.templateId, t.createdAt),
     index('ai-sessions-waiting-idx').on(t.waiting),
   ],

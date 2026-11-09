@@ -20,8 +20,6 @@ import {
 import { turnFiles, type StreamFile } from '../model/stream';
 import { fileKind, fileSettings, storeStagedFile } from '../../mcp/files';
 import { stageUploadStream } from '../../assets/upload-stream';
-import { publishSession } from './bus';
-import { findSession, touchSession } from './store';
 
 /**
  * Files in sessions. What the owner brings along with a message goes into
@@ -113,26 +111,6 @@ export function placeSessionFiles(
     .set({ touchedAt: now })
     .where(inArray(schema.assets.assetUuid, unique))
     .run();
-}
-
-/**
- * Gives a file an app brought — uploaded, imported, re-encoded — its place
- * in the app's session, as the owner's files have theirs: kept while the
- * session lives, and shown in the library where it is.
- */
-export function placeAppFile(
-  sessionUuid: string,
-  assetUuid: string,
-  now = Date.now(),
-) {
-  const session = findSession(sessionUuid);
-  if (!session) return;
-  const { db, schema } = THEI_SERVER.useDb();
-  db.transaction((tx) => {
-    placeSessionFiles(tx, schema, sessionUuid, [assetUuid], now);
-    touchSession(tx, schema, sessionUuid, now);
-  });
-  publishSession(sessionUuid, { type: 'session' });
 }
 
 /**

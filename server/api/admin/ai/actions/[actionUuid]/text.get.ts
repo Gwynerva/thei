@@ -46,7 +46,6 @@ export default defineEventHandler(async (event): Promise<AiReviewText> => {
       ? {
           session: {
             sessionUuid: session.sessionUuid,
-            // An app's session goes by the app's name until it has a title.
             title: sessionName(session),
           },
         }

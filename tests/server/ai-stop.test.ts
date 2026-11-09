@@ -31,11 +31,7 @@ import {
   turnsSettled,
 } from '../../server/thei/ai/runner/queue';
 import { TURN_LIMITS } from '../../server/thei/ai/runner/turns';
-import {
-  cancelSessionFileJobs,
-  runFileJob,
-  type FileJob,
-} from '../../server/thei/mcp/file-jobs';
+import { runFileJob, type FileJob } from '../../server/thei/mcp/file-jobs';
 import {
   startFakeModel,
   type FakeModel,
@@ -518,11 +514,9 @@ describe('everything at once', () => {
       startOwnerSession({ text: 'Three' }),
       startOwnerSession({ text: 'Four' }),
     ];
-    const app = createSession({ origin: 'app', title: 'App' });
     let job: FileJob | undefined;
     void runFileJob(
       { tokenUuid: 'tk-app', label: 'App', scopes: ['read', 'edit'] },
-      app,
       'video.mp4',
       (signal) =>
         new Promise((_, reject) =>
@@ -555,48 +549,5 @@ describe('everything at once', () => {
       expect(answers(sessionUuid)).toHaveLength(0);
     await until(() => job !== undefined);
     expect(job!.status).toBe('cancelled');
-  });
-
-  it('cancels the files of an app session archived by the owner', async () => {
-    await useModel([]);
-    const app = createSession({ origin: 'app', title: 'App' });
-    const other = createSession({ origin: 'app', title: 'Other' });
-    const principal = {
-      tokenUuid: 'tk-app',
-      label: 'App',
-      scopes: ['read', 'edit'] as ('read' | 'edit')[],
-    };
-    const signals: AbortSignal[] = [];
-    const slow = (signal: AbortSignal) => {
-      signals.push(signal);
-      return new Promise<never>((_, reject) =>
-        signal.addEventListener('abort', () => reject(new Error('stopped'))),
-      );
-    };
-    let cancelled: FileJob | undefined;
-    void runFileJob(principal, app, 'video.mp4', slow).then(
-      (job) => (cancelled = job),
-    );
-    void runFileJob(principal, other, 'other.mp4', slow);
-
-    const handler = (
-      await import('../../server/api/admin/ai/sessions/[sessionUuid]/index.patch')
-    ).default;
-    const handle = toWebHandler(
-      createApp().use(createRouter().patch('/sessions/:sessionUuid', handler)),
-    );
-    const response = await handle(
-      new Request(`http://localhost/sessions/${app}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ archived: true }),
-      }),
-    );
-    expect(response.status).toBe(200);
-    expect(findSession(app)!.closedAt).not.toBeNull();
-    await until(() => cancelled !== undefined);
-    expect(cancelled!.status).toBe('cancelled');
-    expect(signals.map((signal) => signal.aborted)).toEqual([true, false]);
-    cancelSessionFileJobs(other);
   });
 });

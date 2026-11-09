@@ -17,19 +17,15 @@ vi.mock('../../server/thei/assets/upload-stream', async (original) => ({
 }));
 
 import { stageUploadBody } from '../../server/thei/assets/upload-stream';
-import { createApiToken } from '../../server/thei/api-tokens';
-import {
-  createSession,
-  findSession,
-} from '../../server/thei/ai/sessions/store';
+import { createApiToken, revokeApiToken } from '../../server/thei/api-tokens';
 import { fileJob, runFileJob } from '../../server/thei/mcp/file-jobs';
 import { fileSettings, issueUploadTicket } from '../../server/thei/mcp/files';
 import { McpToolError } from '../../server/thei/mcp/result';
 
 /**
  * Files an app brings in over MCP: what it is told when making one fails,
- * how long one may take, and that a session the owner archived takes in
- * nothing more, however late its bytes come.
+ * how long one may take, and that an address of a revoked key takes in
+ * nothing.
  */
 let context: Awaited<ReturnType<typeof freshAiTestDb>>;
 const logged: unknown[][] = [];
@@ -56,8 +52,7 @@ afterEach(async () => {
 
 describe('a file job', () => {
   it('tells an app why it failed only when the reason is for it', async () => {
-    const session = createSession({ origin: 'app', title: 'App' });
-    const raw = await runFileJob(principal, session, 'clip.mp4', async () => {
+    const raw = await runFileJob(principal, 'clip.mp4', async () => {
       throw new Error('ffmpeg exited 1: /srv/thei/.thei/tmp/abc/input.mp4');
     });
     expect(raw.status).toBe('failed');
@@ -69,20 +64,14 @@ describe('a file job', () => {
       raw.error!.match(/error (\w+)/)![1],
     );
 
-    const refused = await runFileJob(
-      principal,
-      session,
-      'clip.mp4',
-      async () => {
-        throw new McpToolError('The address answered 404; no file was taken.');
-      },
-    );
+    const refused = await runFileJob(principal, 'clip.mp4', async () => {
+      throw new McpToolError('The address answered 404; no file was taken.');
+    });
     expect(refused.error).toBe('The address answered 404; no file was taken.');
   });
 
   it('is stopped when it runs for hours, and gives its place back', async () => {
     vi.useFakeTimers();
-    const session = createSession({ origin: 'app', title: 'App' });
     const signals: AbortSignal[] = [];
     const hung = (signal: AbortSignal) => {
       signals.push(signal);
@@ -90,20 +79,20 @@ describe('a file job', () => {
       return new Promise<never>(() => {});
     };
     const started = [
-      runFileJob(principal, session, 'one.mp4', hung),
-      runFileJob(principal, session, 'two.mp4', hung),
+      runFileJob(principal, 'one.mp4', hung),
+      runFileJob(principal, 'two.mp4', hung),
     ];
     await vi.advanceTimersByTimeAsync(30_000);
     const jobs = await Promise.all(started);
     expect(jobs.map((job) => job.status)).toEqual(['running', 'running']);
-    await expect(
-      runFileJob(principal, session, 'three.mp4', hung),
-    ).rejects.toThrow(/already on their way/);
+    await expect(runFileJob(principal, 'three.mp4', hung)).rejects.toThrow(
+      /already on their way/,
+    );
 
     await vi.advanceTimersByTimeAsync(4 * 60 * 60 * 1000);
     expect(fileJob(jobs[0]!.job, principal.tokenUuid)?.status).toBe('failed');
     expect(signals.every((signal) => signal.aborted)).toBe(true);
-    const next = runFileJob(principal, session, 'three.mp4', async () => {
+    const next = runFileJob(principal, 'three.mp4', async () => {
       throw new McpToolError('Not this one.');
     });
     await vi.advanceTimersByTimeAsync(0);
@@ -112,34 +101,19 @@ describe('a file job', () => {
 });
 
 describe('an upload address', () => {
-  it('places nothing in a session archived while the bytes came', async () => {
+  it('takes in nothing once its key is revoked', async () => {
     Object.assign(globalThis, {
       defineEventHandler,
       createError,
       getRouterParam,
     });
     const { item } = await createApiToken('App', 'editor');
-    const session = createSession({
-      origin: 'app',
-      title: 'App',
-      tokenUuid: item.tokenUuid,
-    });
     const { ticket } = issueUploadTicket(
       { ...principal, tokenUuid: item.tokenUuid },
       'photo.jpg',
       fileSettings(undefined),
-      session,
     );
-    const discard = vi.fn(async () => {});
-    vi.mocked(stageUploadBody).mockImplementation(async () => {
-      // The owner archives the session while the bytes are on their way.
-      context.rawDb
-        .prepare(
-          'UPDATE `ai-sessions` SET closedAt = 2, archivedAt = 2 WHERE sessionUuid = ?',
-        )
-        .run(session);
-      return { path: 'staged', size: 3, hash: 'h', discard } as never;
-    });
+    revokeApiToken(item.tokenUuid);
     const route = (await import('../../server/api/mcp/upload/[ticket].put'))
       .default;
     const server = createServer(
@@ -157,8 +131,7 @@ describe('an upload address', () => {
         { method: 'PUT', body: 'abc', signal: AbortSignal.timeout(5000) },
       );
       expect(response.status).toBe(404);
-      expect(discard).toHaveBeenCalled();
-      expect(findSession(session)?.closedAt).toBe(2);
+      expect(vi.mocked(stageUploadBody)).not.toHaveBeenCalled();
       expect(
         context.rawDb.prepare('SELECT COUNT(*) AS n FROM `asset-usages`').get(),
       ).toEqual({ n: 0 });

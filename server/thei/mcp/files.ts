@@ -70,8 +70,6 @@ interface UploadTicket {
   sourceType: AssetType;
   maxSizeBytes: number;
   settings: AssetUploadRequest;
-  /** The session the file is brought into. */
-  sessionUuid: string;
 }
 
 const uploads = ticketBook<UploadTicket>('upload');
@@ -109,13 +107,11 @@ export function issueUploadTicket(
   principal: ApiTokenPrincipal,
   name: string,
   settings: AssetUploadRequest,
-  sessionUuid: string,
 ) {
   return uploads.issue({
     tokenUuid: principal.tokenUuid,
     ...fileKind(name),
     settings,
-    sessionUuid,
   });
 }
 

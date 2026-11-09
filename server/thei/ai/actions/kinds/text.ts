@@ -163,7 +163,7 @@ export async function writtenText(
 export const writeAction: AiActionKindDef<'write'> = {
   kind: 'write',
   reference:
-    'A text written at the owner’s request: text (its name, as read_entity gives it — body, notes, description, about), mode new (only into an empty text) | append | replace, and markdown in editing Markdown. Never for rewording the owner’s own words: that is revise.',
+    'A text written at the owner’s request: text (its name, as read_entity gives it — body, notes, description, about), mode new (only into an empty text) | append | replace, and markdown in editing Markdown. Never for rewording the owner’s own words unless they asked for the text anew: a fix of their words is revise.',
   schema: z.object({
     text: z.string(),
     mode: z.enum(['new', 'append', 'replace']).default('append'),
@@ -342,9 +342,11 @@ async function prepareRelinks(
   data: ContentOutputData,
   relinks: z.infer<typeof relinkInput>[],
   dropped: string[],
+  /** Applied by an app at once: what the owner kept before does not stop it. */
+  direct: boolean,
 ): Promise<AiRevisePart[]> {
   const parts: Relink[] = [];
-  const kept = partsKeptLately(entity, textName);
+  const kept = direct ? new Set<string>() : partsKeptLately(entity, textName);
   for (const relink of relinks) {
     const why = (problem: string) => dropped.push(`${relink.link}: ${problem}`);
     if (parts.some((part) => part.link === relink.link)) {
@@ -411,7 +413,10 @@ async function prepareRelinks(
       place,
       to && theiLinkUrl(to),
     );
-    if (kept.has(fingerprint) || neverOffered([fingerprint]).size) {
+    if (
+      kept.has(fingerprint) ||
+      (!direct && neverOffered([fingerprint]).size)
+    ) {
       why('the owner has kept it as it is.');
       continue;
     }
@@ -667,6 +672,7 @@ export const reviseAction: AiActionKindDef<'revise'> = {
         text.data,
         relinks,
         dropped,
+        context.direct ?? false,
       );
       if (!parts.length) fail(`Nothing left to propose: ${dropped.join(' ')}`);
       return {
@@ -680,10 +686,16 @@ export const reviseAction: AiActionKindDef<'revise'> = {
       typeof correctionInput
     >[];
     if (!corrections.length) fail('Give the corrections.');
-    const kept = partsKeptLately(entity, input.text);
-    const never = neverOffered(
-      corrections.map((c) => correctionFingerprint(entity, input.text, c)),
-    );
+    // What the owner kept of the site's model's corrections does not stop an
+    // app: the owner asked it for this one in the app's own conversation.
+    const kept = context.direct
+      ? new Set<string>()
+      : partsKeptLately(entity, input.text);
+    const never = context.direct
+      ? new Set<string>()
+      : neverOffered(
+          corrections.map((c) => correctionFingerprint(entity, input.text, c)),
+        );
     const parts: AiRevisePart[] = [];
     const outlines = outlineCache();
     for (const correction of corrections) {
@@ -701,6 +713,13 @@ export const reviseAction: AiActionKindDef<'revise'> = {
         continue;
       }
       if (isMeaningCategory(correction.category)) {
+        // A remark changes no words, and nobody here would read it.
+        if (context.direct && correction.replace === undefined) {
+          why(
+            'a remark changes no words: say it to the owner in your conversation, and give a rewording if they want one.',
+          );
+          continue;
+        }
         const meant = prepareMeaning(text.data, correction);
         if ('problem' in meant) why(meant.problem);
         else parts.push({ ...meant.part, id: `c${parts.length + 1}` });

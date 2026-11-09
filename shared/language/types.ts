@@ -767,8 +767,6 @@ export type LanguagePhrases = {
     string
   >;
   oauth_restart: string;
-  api_token_history: string;
-  api_token_history_empty: string;
   ai_settings_link: string;
   ai_open_page: string;
   ai_instructions_placeholder: string;
@@ -1576,7 +1574,7 @@ export type LanguagePhrases = {
   ai_sessions_search: string;
   ai_sessions_filter: string;
   ai_sessions_filters: Record<
-    'all' | 'waiting' | 'applied' | 'rejected' | 'app' | 'template',
+    'all' | 'waiting' | 'applied' | 'rejected' | 'template',
     string
   >;
   ai_session_new: string;
@@ -1614,10 +1612,8 @@ export type LanguagePhrases = {
   ai_session_delete: string;
   ai_session_delete_confirm: (title: string) => string;
   ai_session_by_you: (when: string) => string;
-  ai_session_via_app: (client: string) => string;
   /** An amount as `compactAmount` says it: «21», «1.2K». */
   ai_session_tokens: (amount: string) => string;
-  ai_session_app_note: string;
   ai_session_archived_note: string;
   ai_session_model: string;
   ai_steps: {
@@ -1963,8 +1959,7 @@ export type LanguagePhrases = {
   ai_action_never: string;
   ai_action_pick: string;
   ai_action_unsure: string;
-  ai_action_applied: (by: string, when: string) => string;
-  ai_action_by: Record<'owner' | 'app', string>;
+  ai_action_applied: (when: string) => string;
   ai_action_states: Record<
     | 'rejected'
     | 'never'

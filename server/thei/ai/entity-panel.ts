@@ -220,7 +220,6 @@ export async function waitingOffers(
       .select({
         sessionUuid: schema.aiSessions.sessionUuid,
         title: schema.aiSessions.title,
-        client: schema.aiSessions.client,
       })
       .from(schema.aiSessions)
       .where(
@@ -229,6 +228,9 @@ export async function waitingOffers(
             ...new Set(pending.map((row) => row.sessionUuid)),
           ]),
           isNull(schema.aiSessions.archivedAt),
+          // An app's direct write waits for nobody, even for the moment
+          // between its check and its apply.
+          ne(schema.aiSessions.origin, 'app'),
         ),
       )
       .all()

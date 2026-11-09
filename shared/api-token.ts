@@ -1,5 +1,3 @@
-import type { AiSessionItem } from './ai';
-
 /**
  * Tokens that let a program outside the browser — an AI client over MCP —
  * work with the site on the owner's behalf.
@@ -92,13 +90,4 @@ export interface ApiTokenListResponse {
      */
     proxyRule?: { from: string; to: string };
   };
-}
-
-/** One access key and what it did lately, for its own window. */
-export interface ApiTokenActivityResponse {
-  item: ApiTokenItem;
-  /** Its sessions, the latest first. */
-  sessions: AiSessionItem[];
-  /** Actions it proposed that still wait for the owner. */
-  waiting: number;
 }
