@@ -8,15 +8,10 @@ import {
   type AssetQualityLevel,
   type AssetQualityStop,
 } from '#layers/thei/shared/asset-quality-levels';
+import { AUTO_LOSSY_IMAGE_FORMATS } from '#layers/thei/shared/asset-image-format-auto';
 import type { AssetImageFormat } from '#layers/thei/shared/asset-upload-settings';
 import type { LanguageSizeUnits } from '#layers/thei/shared/language/types';
 import { sizeShare } from './format-labels';
-
-/** The formats "Auto" weighs at a lossy stop; lossless is a stop of its own. */
-export const LOSSY_IMAGE_FORMATS: readonly AssetImageFormat[] = [
-  'avif',
-  'webp',
-];
 
 /** A dry run worth asking for: a lossy level in a format. */
 export interface StopRender {
@@ -38,8 +33,10 @@ export function stopRenderOrder(
 ): StopRender[] {
   const formats: AssetImageFormat[] =
     chosen === 'auto'
-      ? [...LOSSY_IMAGE_FORMATS]
-      : LOSSY_IMAGE_FORMATS.includes(chosen)
+      ? [...AUTO_LOSSY_IMAGE_FORMATS]
+      : (AUTO_LOSSY_IMAGE_FORMATS as readonly AssetImageFormat[]).includes(
+            chosen,
+          )
         ? [chosen]
         : [];
   if (!formats.length) return [];
@@ -66,6 +63,10 @@ export interface DraftRenderSlot {
  * lossless stop it is the lossless WebP and not "Auto"'s stand-in — then
  * the other formats "Auto" weighs at this stop, then the other stops nearest
  * first. A place that fixes the format gets only that format.
+ *
+ * A photograph is not weighed: "Auto" gives it AVIF, so only the format
+ * that would be stored is encoded, at this stop and at the others, and
+ * another format only once it is the one chosen.
  */
 export function draftRenderOrder(input: {
   format: AssetImageFormat | undefined;
@@ -73,15 +74,25 @@ export function draftRenderOrder(input: {
   fixedFormat: AssetImageFormat | undefined;
   availableFormats: readonly AssetImageFormat[];
   level: AssetQualityStop;
+  photographic?: boolean;
 }): DraftRenderSlot[] {
   const chosen = input.fixedFormat ?? input.format ?? input.availableFormats[0];
   if (!chosen) return [];
-  const formats = input.fixedFormat
-    ? [input.fixedFormat]
-    : [chosen, ...input.availableFormats.filter((format) => format !== chosen)];
+  const formats =
+    input.fixedFormat || input.photographic
+      ? [chosen]
+      : [
+          chosen,
+          ...input.availableFormats.filter((format) => format !== chosen),
+        ];
+  const atOtherStops =
+    input.fixedFormat ??
+    (input.photographic && input.formatChoice === 'auto'
+      ? 'avif'
+      : input.formatChoice);
   return [
     ...formats.map((format) => ({ format })),
-    ...stopRenderOrder(input.level, input.fixedFormat ?? input.formatChoice),
+    ...stopRenderOrder(input.level, atOtherStops),
   ];
 }
 

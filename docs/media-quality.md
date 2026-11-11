@@ -12,11 +12,11 @@ so files made by older versions at other numbers stay described exactly:
 
 | Level    | Stored `quality` |    WebP quality | AVIF quality | Video bitrate × medium | Video's Opus | Recording, stereo / mono |
 | -------- | ---------------: | --------------: | -----------: | ---------------------: | -----------: | -----------------------: |
-| minimal  |               40 |              40 |           30 |                    0.3 |         64 k |              48 k / 24 k |
-| low      |               60 |              60 |           45 |                   0.55 |         96 k |              64 k / 32 k |
-| medium   |               75 |              75 |           55 |                      1 |        128 k |              96 k / 48 k |
-| high     |               90 |              90 |           65 |                    1.7 |        128 k |             128 k / 64 k |
-| maximum  |               95 |              95 |           72 |                    2.8 |        128 k |             160 k / 80 k |
+| minimal  |               40 |              35 |           30 |                    0.3 |         64 k |              48 k / 24 k |
+| low      |               60 |              62 |           45 |                   0.55 |         96 k |              64 k / 32 k |
+| medium   |               75 |              80 |           55 |                      1 |        128 k |              96 k / 48 k |
+| high     |               90 |              86 |           65 |                    1.7 |        128 k |             128 k / 64 k |
+| maximum  |               95 |              89 |           72 |                    2.8 |        128 k |             160 k / 80 k |
 | lossless |              100 | `webp-lossless` |            — |                      — |            — |                        — |
 
 A number between two levels reads the tables along the line between them
@@ -24,6 +24,13 @@ A number between two levels reads the tables along the line between them
 medium; a place with an upload profile of its own may start higher
 (`shared/asset-upload-profiles.ts`). The tables live in
 `shared/asset-quality-levels.ts`.
+
+The recipe describes what was asked for, not what an encoder was told. The
+WebP column dates from 0.0.9: 0.0.8 and earlier gave libwebp the stored
+number as it was, so a WebP file they made at `quality` 75, 90 or 95 was
+encoded at libwebp 75, 90 or 95, where the same recipe now encodes at 80, 86
+or 89. Such a file keeps its recipe and its settings key, and its bytes are
+its own; nothing re-encodes it.
 
 ## Recordings
 
@@ -199,12 +206,97 @@ qualities; on photographs those cost a full level, so they were not kept.
 4:2:0 chroma, which would have been faster still, lost a decibel of PSNR
 and was not taken.
 
+## Image formats: one quality for a level, and what "Auto" picks
+
+A level is the same closeness to the source in AVIF and in WebP: each has a
+table of its own (`AVIF_QUALITY_BY_LEVEL`, `WEBP_QUALITY_BY_LEVEL`). WebP
+cannot take the stored number as it is: libwebp's scale has a knee at 75
+(`QualityToCompression` in its `quant_enc.c`), three times steeper above it
+than below, so 40, 60 and 75 are nearly one quality and 90 and 95 twice
+AVIF's size.
+
+"Auto" stores a picture in whichever format comes out smallest for the exact
+settings, on real sizes (`recommendImageFormat` in
+`shared/asset-image-format-auto.ts`):
+
+- A photograph is AVIF at once. Nothing else is encoded for it until chosen;
+  a format not encoded shows a guess of its size.
+- Anything else is weighed. AVIF and WebP decide as soon as both are
+  encoded; lossless WebP takes the longest, joins when it arrives and takes
+  the choice over only when it is also the smallest.
+
+A picture committed from a draft with no format named — a file pasted into a
+text — gets the same choice on the server (`autoFormat` in
+`server/thei/assets/drafts.ts`). A variant made outside a draft with no
+format named — the admin's direct upload (`POST /api/admin/assets`), a file
+an app brings over MCP — is not weighed: it is AVIF, or WebP when its long
+side is under 128 pixels (`resolveAssetImageFormat` in
+`shared/asset-upload-settings.ts`).
+
+The server tells a photograph when a draft opens
+(`server/thei/assets/image-content.ts`, `photographic` of the draft). The
+picture's brightness is cut into blocks of 16×16 pixels, and the share of
+blocks holding one value, or two to four, is counted: the count AV1 encoders
+decide "screen content" by, with the flat blocks counted too, so a large
+drawing, nearly all flat blocks, stays a drawing. Under 10 % of such blocks
+is a photograph; anything else, and any picture of fewer than 64 blocks, is
+weighed. A picture over four megapixels is sampled by the nearest pixel,
+each taken as it is; only a JPEG of 64 megapixels and more is first decoded
+at half its size or less by libjpeg, which averages. Counting a 45-megapixel
+JPEG takes under a second, nearly all of it the decode.
+
+Both rules are weighed on real pictures. `bun run bench:corpus` brings 111
+free ones — photographs, screenshots of 3D and 2D games, logos, diagrams and
+interface screenshots, 72 to 8256 pixels — listed with their authors and
+licences in `tests/bench/image-corpus/manifest.json`; eighteen are kept in
+`tests/fixtures/image-content/` and hold the threshold in the ordinary
+tests. What the two benches found on 2026-11-10 (libaom 3.15, libwebp 1.6):
+
+`bun run bench:image-quality` sweeps both encoders over 48 of the pictures at
+every fifth quality and puts each result against its source by SSIM and PSNR
+of the brightness, XPSNR and VMAF. Brightness, because AVIF keeps colour
+whole and lossy WebP at half the resolution, which an eye sees far less than
+a count over red, green and blue does: such a count puts the matching WebP
+qualities 3 to 14 points too high.
+
+| Level   | AVIF | WebP as close | WebP against AVIF, bytes, photographs |
+| ------- | ---: | ------------: | ------------------------------------: |
+| minimal |   30 |            35 |                                 ×1.85 |
+| low     |   45 |            62 |                                 ×1.37 |
+| medium  |   55 |            80 |                                 ×1.39 |
+| high    |   65 |            86 |                                 ×1.37 |
+| maximum |   72 |            89 |                                 ×1.35 |
+
+- The four measures agree. At these pairs VMAF differs by less than a point
+  and XPSNR by about a decibel on photographs and game screenshots, except
+  at minimal, where WebP at 35 is still a little the closer.
+- A photograph weighs about 0.73 of its WebP at the same closeness, which is
+  what others measured at equal DSSIM (a median of 27 % smaller).
+- A drawing would need more than WebP has: at high and maximum most never
+  get as close as AVIF at any WebP quality.
+
+`bun run bench:image-content` counts the blocks of all 111 and encodes each
+at every level in every format.
+
+- AVIF is the smallest of the three for 97 to 107 of the 111, by level.
+  Lossy WebP is the smallest four times in the 555 encodes: two night
+  photographs at low (AVIF 5 % and 11 % larger), one of them at medium
+  (2 %), one small drawing at maximum (3 %).
+- Lossless WebP is the smallest at some level for 13: a 72-pixel icon, too
+  small to count blocks in, and twelve pictures with 24 % of flat and
+  few-valued blocks or more. The least drawn logo or diagram has 13 %.
+- Under 10 % are 33 pictures: 19 of the 27 photographs, 4 of the 19 3D
+  screenshots, no logo and no diagram. Storing them as AVIF without looking
+  costs those two night photographs their 5 % and 11 % at low, and saves 57 %
+  of the time one encode in each format takes over the corpus.
+
 ## Dry runs, the queue and cancellation
 
 The editor asks for its dry runs in order of worth (`draftRenderOrder` in
 `app/modals/upload-settings/quality-stops.ts`): first the format "Use" would
-store at the chosen stop, then the other formats "Auto" weighs there, then
-the other stops nearest first. Three requests are under way at a time — as
+store at the chosen stop, then the other formats "Auto" weighs there —
+lossless WebP last, and none at all for a photograph — then the other stops
+nearest first. Three requests are under way at a time — as
 many as the image lane runs on the largest box (`RenderPump` in
 `render-pump.ts`) — so "Use" is enabled as soon as the first one answers, and
 the rest fill in behind it. A settled change drops the requests no longer
@@ -248,7 +340,7 @@ now only have to cover the upload of the file itself and a quick commit.
 
 A picture or a video pasted into the text is stored without asking, through
 a draft of its own, at medium quality, the whole frame at its own size, in
-the format the long-side rule picks (`shared/asset-paste-defaults.ts`). SVG
+the format "Auto" picks (`shared/asset-paste-defaults.ts`). SVG
 and GIF are kept as they are: a re-encode would rasterise the one and flatten
 the other. The block shows the upload's progress and offers the asset editor
 meanwhile; the editor opens on the same draft, and an image encode the default

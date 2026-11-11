@@ -27,7 +27,10 @@ export const ASSET_QUALITY_STOPS: readonly AssetQualityStop[] = [
   'lossless',
 ];
 
-/** The stored quality each level stands for. WebP takes it as it is. */
+/**
+ * The stored quality each level stands for: the name of a level in a recipe,
+ * not what an encoder is asked for. Each encoder has a table of its own.
+ */
 export const ASSET_QUALITY_LEVEL_QUALITY: Record<AssetQualityLevel, number> = {
   minimal: 40,
   low: 60,
@@ -114,7 +117,7 @@ export function interpolateByQualityLevel(
  * AVIF's own quality at each level.
  *
  * AVIF and WebP do not share a scale: AVIF 90 is near-lossless and larger
- * than WebP 90 at a large encoding cost, while AVIF 55 looks like WebP 75.
+ * than WebP 90 at a large encoding cost, while AVIF 55 looks like WebP 80.
  * Encoded at `effort: 3` since 0.0.8: on real photographs the files weigh
  * what they did at effort 4 (97–108 %) and the SSIM against the source is
  * lower by 0.0005–0.003, a fraction of the step between two levels, for a
@@ -127,6 +130,33 @@ export const AVIF_QUALITY_BY_LEVEL: Record<AssetQualityLevel, number> = {
   medium: 55,
   high: 65,
   maximum: 72,
+};
+
+/**
+ * WebP's own quality at each level: the one that stays as close to the
+ * source as AVIF does there, so a level is one quality whatever the format,
+ * and "Auto", which takes the smaller file, compares like with like.
+ *
+ * The stored number will not do as it is: libwebp's scale has a knee at 75,
+ * three times steeper above it than below, so 40, 60 and 75 are nearly one
+ * quality, rougher than AVIF's medium, and 90 and 95 twice AVIF's size. The
+ * numbers here are where four measures agree (SSIM and PSNR of the
+ * brightness, XPSNR, VMAF) on the photographs and game screenshots of the
+ * image quality bench (docs/media-quality.md); a drawing needs more than
+ * WebP has to match AVIF, and is better stored lossless anyway.
+ *
+ * Since 0.0.9: before it libwebp was asked for the stored number as it was,
+ * so a WebP file made by 0.0.8 or earlier under the same recipe (`q90`) was
+ * encoded at libwebp 90, not 86. Its bytes, and so its `contentHash`, differ
+ * from what the recipe makes now; the row describes itself, and nothing is
+ * re-encoded.
+ */
+export const WEBP_QUALITY_BY_LEVEL: Record<AssetQualityLevel, number> = {
+  minimal: 35,
+  low: 62,
+  medium: 80,
+  high: 86,
+  maximum: 89,
 };
 
 /** Video bitrate at each level, relative to medium. */

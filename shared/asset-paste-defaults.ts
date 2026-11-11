@@ -21,9 +21,10 @@ const KEPT_AS_IS = new Set(['svg', 'gif']);
 
 /**
  * What a file pasted into the text is stored as, without anyone asking:
- * medium quality, the whole frame at the file's own size, in the format the
- * long-side rule picks. Those are the editor's own defaults, so an encode
- * interrupted to open the editor on the file is the editor's first dry run.
+ * medium quality, the whole frame at the file's own size, and no format
+ * named, which leaves it to "Auto" (`commitDraft`). Those are the editor's
+ * own defaults, so an encode interrupted to open the editor on the file is
+ * the editor's first dry run.
  */
 export function pastedMediaRequest(
   draft: Pick<AssetDraftSource, 'type' | 'extension' | 'codec'>,

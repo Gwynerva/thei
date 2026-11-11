@@ -7,8 +7,10 @@ export interface UploadSettingsFormatOption {
   label: string;
   /** Why "Auto" picked what it picked. */
   detail?: string;
-  /** Exact size of the result in this format, once encoded. */
+  /** Size of the result in this format: exact once encoded. */
   size?: number;
+  /** The size is a guess: the format is encoded only when chosen. */
+  approximate?: boolean;
   pending?: boolean;
   failed?: boolean;
   /** Not to be had with the current settings, for the reason in `hint`. */
@@ -18,7 +20,9 @@ export interface UploadSettingsFormatOption {
 
 /**
  * The output formats, one per row, each with the exact size the current
- * settings produce in it — so the choice is made on real numbers.
+ * settings produce in it — so the choice is made on real numbers. A format
+ * not encoded in advance shows what it would roughly come to, marked as a
+ * guess.
  */
 const props = defineProps<{
   options: UploadSettingsFormatOption[];
@@ -30,6 +34,8 @@ const props = defineProps<{
 const model = defineModel<FormatChoice>({ required: true });
 const humanSize = useHumanSize();
 const share = (size: number) => sizeShare(size, props.sourceSize);
+const sizeText = (option: UploadSettingsFormatOption) =>
+  `${option.approximate ? '≈ ' : ''}${humanSize(option.size!)}`;
 </script>
 
 <template>
@@ -72,7 +78,7 @@ const share = (size: number) => sizeShare(size, props.sourceSize);
           class="text-text-error"
         />
         <template v-else-if="option.size !== undefined">
-          <span>{{ humanSize(option.size) }}</span>
+          <span>{{ sizeText(option) }}</span>
           <span
             v-if="share(option.size)"
             :class="SIZE_SHARE_CLASS[share(option.size)!.tone]"

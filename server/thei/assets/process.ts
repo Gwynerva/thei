@@ -2,7 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { rm } from 'node:fs/promises';
 import { createError } from 'h3';
-import sharp, { type OutputInfo, type Sharp } from 'sharp';
+import sharp, {
+  type AvifOptions,
+  type OutputInfo,
+  type Sharp,
+  type WebpOptions,
+} from 'sharp';
 import { theiTempPath } from './temp';
 import { runFfmpeg } from './ffmpeg';
 import {
@@ -27,6 +32,7 @@ import {
 } from '../../../shared/asset-upload-settings';
 import {
   imageDisplayQualityToAvifQuality,
+  imageDisplayQualityToWebpQuality,
   videoAudioBitrate,
   videoTargetBitrate,
   type VideoBitrateSource,
@@ -208,6 +214,32 @@ export async function processMediaTransformAsset(
 }
 
 /**
+ * What each encoder is asked for, at a quality of its own scale: the one
+ * place that says it, read by the transform below and by the image quality
+ * bench (`tests/bench/image-quality.test.ts`), which sweeps these very
+ * settings.
+ *
+ * `effort` is not comparable between the two encoders, and the bench
+ * (`bun run bench:media`, docs/media-quality.md) weighed each one: AVIF at
+ * effort 3 is 4-5 times faster than at 4 for the same picture, the files
+ * weighing what they did on real photographs; WebP at 4 is a sixth faster
+ * than at 6 for the same bytes. Lossy WebP is always 4:2:0; smart subsampling
+ * keeps coloured edges, such as red text on white, from fringing, and AVIF
+ * stays 4:4:4, where 4:2:0 loses a decibel.
+ */
+export function avifEncodeOptions(quality: number): AvifOptions {
+  return { quality, effort: 3 };
+}
+
+export function webpEncodeOptions(quality: number): WebpOptions {
+  return { quality, effort: 4, smartSubsample: true };
+}
+
+export function webpLosslessEncodeOptions(): WebpOptions {
+  return { lossless: true, effort: 4 };
+}
+
+/**
  * A started sharp encode cannot be stopped: there is no signal to hand it,
  * and it runs to the end in the thread pool. Callers check their signal
  * before starting it and again before storing what it made.
@@ -217,29 +249,23 @@ async function processImage(
   settings: AssetImageTransformSettings,
 ): Promise<ProcessedAsset> {
   if (settings.format === 'svg') return await keepVector(source, settings);
-  // `effort` is not comparable between the two encoders, and the bench
-  // (`bun run bench:media`, docs/media-quality.md) weighed each one: AVIF at
-  // effort 3 is 4-5 times faster than at 4 for the same picture, the files
-  // weighing what they did on real photographs; WebP at 4 is a
-  // sixth faster than at 6 for the same bytes. Lossy WebP is always 4:2:0;
-  // smart subsampling keeps coloured edges, such as red text on white, from
-  // fringing, and AVIF stays 4:4:4, where 4:2:0 loses a decibel.
   const { data, info } = await withImagePipeline(
     source,
     settings,
     (pipeline) =>
       settings.format === 'webp-lossless'
-        ? pipeline.webp({ lossless: true, effort: 4 })
+        ? pipeline.webp(webpLosslessEncodeOptions())
         : settings.format === 'webp'
-          ? pipeline.webp({
-              quality: settings.quality,
-              effort: 4,
-              smartSubsample: true,
-            })
-          : pipeline.avif({
-              quality: imageDisplayQualityToAvifQuality(settings.quality),
-              effort: 3,
-            }),
+          ? pipeline.webp(
+              webpEncodeOptions(
+                imageDisplayQualityToWebpQuality(settings.quality),
+              ),
+            )
+          : pipeline.avif(
+              avifEncodeOptions(
+                imageDisplayQualityToAvifQuality(settings.quality),
+              ),
+            ),
   );
 
   return {

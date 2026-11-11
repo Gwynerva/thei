@@ -9,6 +9,7 @@ import {
   interpolateByQualityLevel,
   VIDEO_AUDIO_BITRATE_BY_LEVEL,
   VIDEO_BITRATE_FACTOR_BY_LEVEL,
+  WEBP_QUALITY_BY_LEVEL,
 } from '../../shared/asset-quality-levels';
 
 describe('asset quality levels', () => {
@@ -30,6 +31,7 @@ describe('asset quality levels', () => {
     expect(qualities).toEqual([...qualities].sort((a, b) => a - b));
     for (const table of [
       AVIF_QUALITY_BY_LEVEL,
+      WEBP_QUALITY_BY_LEVEL,
       VIDEO_BITRATE_FACTOR_BY_LEVEL,
       VIDEO_AUDIO_BITRATE_BY_LEVEL,
     ]) {

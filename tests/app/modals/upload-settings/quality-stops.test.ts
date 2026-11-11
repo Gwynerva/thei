@@ -56,6 +56,45 @@ describe('draft render order', () => {
     expect(order).toHaveLength(1 + 4);
   });
 
+  it('encodes a photograph only in the format that would be stored', () => {
+    const auto = draftRenderOrder({
+      format: 'avif',
+      formatChoice: 'auto',
+      fixedFormat: undefined,
+      availableFormats: raster,
+      level: 'medium',
+      photographic: true,
+    });
+    expect(auto.every((item) => item.format === 'avif')).toBe(true);
+    expect(auto).toHaveLength(1 + 4);
+
+    // WebP is encoded once it is the one chosen, and nothing beside it.
+    const chosen = draftRenderOrder({
+      format: 'webp',
+      formatChoice: 'webp',
+      fixedFormat: undefined,
+      availableFormats: raster,
+      level: 'medium',
+      photographic: true,
+    });
+    expect(chosen.every((item) => item.format === 'webp')).toBe(true);
+    expect(chosen).toHaveLength(1 + 4);
+
+    // The lossless stop is one render; the levels below it stay AVIF.
+    const lossless = draftRenderOrder({
+      format: 'webp-lossless',
+      formatChoice: 'auto',
+      fixedFormat: undefined,
+      availableFormats: raster,
+      level: 'lossless',
+      photographic: true,
+    });
+    expect(lossless[0]).toEqual({ format: 'webp-lossless' });
+    expect(lossless.slice(1).every((item) => item.format === 'avif')).toBe(
+      true,
+    );
+  });
+
   it('keeps a vector first when that is what "Auto" picked', () => {
     const order = draftRenderOrder({
       format: 'svg',

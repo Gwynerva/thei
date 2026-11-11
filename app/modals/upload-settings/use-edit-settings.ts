@@ -210,7 +210,10 @@ export function useEditSettings(options: {
 
   const autoFormat = computed<AutoImageFormat | undefined>(() =>
     outputDimensions.value
-      ? recommendImageFormat(options.formatSizes(), frameSource.value?.isVector)
+      ? recommendImageFormat(options.formatSizes(), {
+          isVector: frameSource.value?.isVector,
+          photographic: frameSource.value?.photographic,
+        })
       : undefined,
   );
 

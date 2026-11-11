@@ -7,6 +7,7 @@ import {
   interpolateByQualityLevel,
   VIDEO_AUDIO_BITRATE_BY_LEVEL,
   VIDEO_BITRATE_FACTOR_BY_LEVEL,
+  WEBP_QUALITY_BY_LEVEL,
 } from './asset-quality-levels';
 import type { FileDimensions } from './asset-upload-dimensions';
 import { normalizeAssetUploadQuality } from './asset-upload-settings';
@@ -21,6 +22,16 @@ export function imageDisplayQualityToAvifQuality(quality: number): number {
   return Math.round(
     interpolateByQualityLevel(
       AVIF_QUALITY_BY_LEVEL,
+      normalizeAssetUploadQuality(quality),
+    ),
+  );
+}
+
+/** Maps the stored 10-100 image quality onto WebP's own scale, the same way. */
+export function imageDisplayQualityToWebpQuality(quality: number): number {
+  return Math.round(
+    interpolateByQualityLevel(
+      WEBP_QUALITY_BY_LEVEL,
       normalizeAssetUploadQuality(quality),
     ),
   );
