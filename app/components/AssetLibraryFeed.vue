@@ -17,6 +17,7 @@ import {
   assetDeletionLabel,
   assetRoleLabel,
   assetSourceTitle,
+  assetUseLabel,
 } from '../composables/asset-library-labels';
 import {
   libraryFeedMonths,
@@ -323,10 +324,20 @@ function monthLabel(key: string) {
   return `${month.charAt(0).toLocaleUpperCase(language.value.code)}${month.slice(1)} ${key.slice(0, 4)}`;
 }
 
-function tileTitle(item: AssetLibraryItem, place?: AssetLibraryPlace) {
+function tileTitle(
+  item: AssetLibraryItem | AssetLibraryEntry,
+  place?: AssetLibraryPlace,
+) {
   return [
     place && place.type !== 'unused' ? assetSourceTitle(place) : undefined,
-    item.roles.map((role) => assetRoleLabel(role)).join(' · '),
+    item.roles
+      .map((role) =>
+        // In a place, a text is named as that place's: «Section text».
+        'place' in item
+          ? assetUseLabel(role, item.place.type)
+          : assetRoleLabel(role),
+      )
+      .join(' · '),
     item.selectionError === 'size'
       ? phrase.value.asset_selection_size
       : undefined,

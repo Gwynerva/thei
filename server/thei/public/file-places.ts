@@ -102,10 +102,7 @@ async function pageParts(
         excerpt &&
         (await loadExcerptParent(excerpt.parentType, excerpt.parentId));
       if (!excerpt || !parent) return [];
-      const page = await buildPublicExcerpt(excerpt, parent, STRANGER, {
-        number: 1,
-        count: 1,
-      });
+      const page = await buildPublicExcerpt(excerpt, parent, STRANGER);
       return [
         ['banner', page.bannerMedia],
         ['content', page.content],
@@ -213,6 +210,7 @@ async function placeOf(
   return {
     kind,
     title: entity.title,
+    summary: entity.summary,
     href: landing ? `${entity.href}#${landing}` : entity.href,
     ...(media ? { media } : {}),
     ...(entity.parent ? { parent: entity.parent } : {}),

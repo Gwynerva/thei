@@ -64,7 +64,7 @@ async function chooseInEditor(page: Page, assetUuid: string) {
   await assetButton.hover();
   const edit = assetButton
     .locator('..')
-    .getByRole('button', { name: 'How to take the file' });
+    .getByRole('button', { name: 'Create variant' });
   await expect(edit).toBeVisible();
   await edit.click();
   // The editor asks how to take the stored file; as it is, it is handed over
@@ -307,7 +307,7 @@ for (const width of [1280, 390]) {
       .filter({ hasText: 'Library usage test' });
     await expect(chip).toHaveCount(1);
     const uses = chip.locator('[data-asset-usage-uses]');
-    await expect(uses).toContainText('Page content');
+    await expect(uses).toContainText('Page text');
     await expect(uses).toContainText('Icon');
     await expect(chip).toHaveAttribute('target', '_blank');
     await expect(chip).toHaveAttribute(

@@ -90,8 +90,8 @@ for (const viewport of [
     const useResult = uploadControls(page).next;
     await expect(useResult).toBeEnabled({ timeout: 20_000 });
     await expect(page.getByText('1200 × 675').first()).toBeVisible();
-    // "Auto" names whichever format came out smallest.
-    const auto = page.getByText(/(AVIF|WebP):\s+the\s+smallest/);
+    // "Auto" knows a photograph, and gives it AVIF with nothing to weigh.
+    const auto = page.getByText(/AVIF:\s+a\s+photograph/);
     await expect(auto).toBeVisible({ timeout: 20_000 });
     await expect(
       page.getByRole('group', { name: /Crop\s+area/ }),
@@ -359,7 +359,8 @@ test('"Next" is ready with the render "Auto" stands on, before the other formats
     if (body?.settings?.format === 'avif') await route.continue();
     else held.push(route);
   });
-  await openBannerEditor(page, await photo(800, 600));
+  // A drawing: a photograph is not weighed, so nothing of it would wait.
+  await openBannerEditor(page, await flatGraphic());
   const useResult = uploadControls(page).next;
   await expect(useResult).toBeEnabled({ timeout: 20_000 });
   expect(held.length).toBeGreaterThan(0);
@@ -367,11 +368,186 @@ test('"Next" is ready with the render "Auto" stands on, before the other formats
   await expect(page.getByText(/the\s+smallest/)).toHaveCount(0);
 
   for (const route of held.splice(0)) await route.continue().catch(() => {});
-  await expect(page.getByText(/(AVIF|WebP):\s+the\s+smallest/)).toBeVisible({
+  await expect(page.getByText(/the\s+smallest/)).toBeVisible({
     timeout: 20_000,
   });
   await expect(useResult).toBeEnabled();
 });
+
+/** A drawing: one flat field on another. */
+async function flatGraphic() {
+  return await sharp({
+    create: { width: 800, height: 450, channels: 3, background: '#ffffff' },
+  })
+    .composite([
+      {
+        input: await sharp({
+          create: {
+            width: 300,
+            height: 200,
+            channels: 3,
+            // Never the same file twice: the library would know it.
+            background: { r: 208, g: randomBytes(1)[0]!, b: 64 },
+          },
+        })
+          .png()
+          .toBuffer(),
+        left: 100,
+        top: 100,
+      },
+    ])
+    .png()
+    .toBuffer();
+}
+
+test('"Auto" names the smaller lossy format without waiting for lossless WebP', async ({
+  page,
+}) => {
+  // Lossless is the slowest encode; here it never ends until let through.
+  const held: Route[] = [];
+  await page.route('**/api/admin/assets/drafts/*/renders', async (route) => {
+    const body = route.request().postDataJSON() as {
+      settings?: { format?: string };
+    };
+    if (body?.settings?.format === 'webp-lossless') held.push(route);
+    else await route.continue();
+  });
+  await openBannerEditor(page, await flatGraphic());
+
+  const formats = page.getByRole('radiogroup', { name: 'Format' });
+  const auto = formats.getByRole('radio', { name: /^Auto/ });
+  await expect(auto).toContainText(/(AVIF|WebP):\s+the\s+smallest/, {
+    timeout: 20_000,
+  });
+  // Nothing spins on its row, though lossless is still on its way.
+  expect(held.length).toBeGreaterThan(0);
+  await expect(auto.locator('use[href*="loading"]')).toHaveCount(0);
+
+  // It arrives the smallest, and takes the choice over.
+  for (const route of held.splice(0)) await route.continue().catch(() => {});
+  await expect(auto).toContainText(/WebP\s+lossless:\s+the\s+smallest/, {
+    timeout: 20_000,
+  });
+});
+
+test('a photograph is AVIF at once, and no other format is encoded until chosen', async ({
+  page,
+}) => {
+  const asked: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() !== 'POST') return;
+    if (!/\/drafts\/[^/]+\/renders$/.test(new URL(request.url()).pathname))
+      return;
+    asked.push(request.postDataJSON()?.settings?.format ?? '');
+  });
+  await openBannerEditor(page, await photo(800, 600));
+  const formats = page.getByRole('radiogroup', { name: 'Format' });
+  await expect(formats.getByRole('radio', { name: /^Auto/ })).toContainText(
+    /AVIF:\s+a\s+photograph/,
+    { timeout: 20_000 },
+  );
+  // Every dry run worth having has been asked for once they stop coming.
+  await expect
+    .poll(
+      async () => {
+        const seen = asked.length;
+        await page.waitForTimeout(800);
+        return asked.length === seen;
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(true);
+  expect(asked).toContain('avif');
+  expect(asked.every((format) => format === 'avif')).toBe(true);
+  // WebP's row says roughly what it would weigh instead of waiting.
+  const webp = formats.getByRole('radio', { name: /^WebP/ });
+  await expect(webp).toContainText('≈');
+
+  // Chosen by hand, WebP is encoded, and its size is then the real one.
+  await webp.click();
+  await expect.poll(() => asked, { timeout: 20_000 }).toContain('webp');
+  await expect(webp).not.toContainText('≈', { timeout: 20_000 });
+  expect(asked).not.toContain('webp-lossless');
+
+  // So is lossless, like any other stop.
+  await page.getByRole('slider', { name: 'Quality' }).press('End');
+  await expect
+    .poll(() => asked, { timeout: 20_000 })
+    .toContain('webp-lossless');
+});
+
+for (const picture of [
+  { name: 'a drawing', make: () => flatGraphic() },
+  { name: 'a photograph', make: () => photo(800, 600) },
+]) {
+  test(`quick changes of level and format settle on the last ones chosen (${picture.name})`, async ({
+    page,
+    request,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(String(error)));
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+    await openBannerEditor(page, await picture.make());
+    const next = uploadControls(page).next;
+    await expect(next).toBeEnabled({ timeout: 20_000 });
+    const slider = page.getByRole('slider', { name: 'Quality' });
+    const formats = page.getByRole('radiogroup', { name: 'Format' });
+    const format = (name: RegExp) => formats.getByRole('radio', { name });
+
+    // Along the bar and back, to lossless and off it, with no pause for
+    // any dry run to answer.
+    for (const key of [
+      'ArrowRight',
+      'ArrowRight',
+      'ArrowLeft',
+      'End',
+      'Home',
+      'ArrowRight',
+      'End',
+      'ArrowLeft',
+      'ArrowLeft',
+    ]) {
+      await slider.press(key);
+    }
+    await expect(slider).toHaveAttribute('aria-valuetext', 'High');
+    // Every format in turn, twice over.
+    for (const name of [/^WebP/, /^AVIF/, /^Auto/, /^WebP/, /^AVIF/, /^Auto/]) {
+      await format(name).click();
+    }
+    // To lossless under "Auto" and off it again, then the choice to keep.
+    await slider.press('End');
+    await slider.press('ArrowLeft');
+    await format(/^WebP/).click();
+    await slider.press('ArrowLeft');
+    await slider.press('ArrowRight');
+
+    await expect(slider).toHaveAttribute('aria-valuetext', 'Maximum');
+    const webp = format(/^WebP/);
+    await expect(webp).toHaveAttribute('aria-checked', 'true');
+    // Its row settles on a real size: no wait, no guess, no failure.
+    await expect(webp.locator('use')).toHaveCount(0, { timeout: 30_000 });
+    await expect(webp).not.toContainText('≈');
+    await expect(webp).toContainText(/\d/);
+    await expect(next).toBeEnabled({ timeout: 20_000 });
+    await expect(page.getByText(/could not|failed|error/i)).toHaveCount(0);
+
+    // What is stored is what was chosen last.
+    await next.click();
+    await skipDescription(page);
+    await expect(page.locator('[data-result]')).toContainText('assetUuid');
+    const [stored] = JSON.parse(
+      (await page.locator('[data-result]').textContent())!,
+    ) as { assetUuid: string }[];
+    const { asset } = await (
+      await request.get(`/api/admin/assets/${stored!.assetUuid}/usages`)
+    ).json();
+    expect(asset.extension).toBe('webp');
+    expect(asset.settings).toMatchObject({ format: 'webp', quality: 95 });
+    expect(errors).toEqual([]);
+  });
+}
 
 test('a change of settings drops the dry runs still under way', async ({
   page,

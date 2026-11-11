@@ -91,7 +91,7 @@ test('the window names the other public pages the file is on, and goes there', a
   await expect(chips).toHaveCount(1);
   await expect(chips).toContainText(`Lighthouse ${run}`);
   await expect(chips.locator('[data-asset-usage-uses]')).toHaveText(
-    'Icon · Page content',
+    'Icon · Page text',
   );
   const answer = await (
     await visitor.request.get(`/api/files/${picture.slug}/places`)

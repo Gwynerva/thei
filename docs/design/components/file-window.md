@@ -74,11 +74,15 @@ The library's window:
 - Its sections: the facts; the description, saved on its own; «Превью», for
   a video; «Где используется»; «Как получен файл»; «Другие варианты».
 - «Где используется» lists each place as a chip: the place's picture along
-  the chip's right edge (its kind's icon when it has none), its name, and
-  under it every way the file is used there, with how many times and how many
-  of them are private. A section says its project above its name, from the
-  chip's left edge, after a mirrored arrow going down to it and the project's
-  icon. A chip opens the place's editor in a new tab.
+  the chip's right edge (its kind's icon when it has none), its name after
+  its kind's icon, and under it every way the file is used there, with how
+  many times and how many of them are private. A file in a text is said by
+  whose text it is — «Текст раздела», «Текст отрывка», «Текст записи»,
+  «Описание проекта» (`assetUseLabel` in
+  `app/composables/asset-library-labels.ts`). A section or an excerpt says
+  what it is a part of above its name, from the chip's left edge, after a
+  mirrored arrow going down to it and the icon of the parent's kind. A chip
+  opens the place's editor in a new tab.
 - A file nothing uses says so in one quiet line with an icon and a «?» hint —
   when it goes, that a text's history still keeps it, or that an AI action
   still needs it — never with a count of nothing. Its tile and its row among
@@ -147,9 +151,12 @@ A visitor's window:
   `divide-y divide-border-1`.
 - `app/modals/asset-modal/AssetModalFileInfo.vue` — the facts; `pending`
   draws their placeholders.
-- `app/modals/asset-modal/AssetPlaceChip.vue` — a place as a chip, its texts
-  given formatted; `app/modals/asset-library/AssetUsageChip.vue` makes one of
-  the library's placements.
+- `app/modals/asset-modal/AssetPlaceChip.vue` — a place as a chip, its title
+  and uses given formatted, what it is a part of given as `parent` and named
+  by `app/modals/asset-modal/AssetPlaceParent.vue`, the line the library's
+  run draws over a place's name too;
+  `app/modals/asset-library/AssetUsageChip.vue` makes one of the library's
+  placements.
 - `app/components/FileDescriptionField.vue` — `global` adds «Глобально»,
   `required` the hint of why; an `embedded` one has no button of its own, and
   the window's action saves it through the exposed `save()`, reading `filled`
@@ -204,6 +211,7 @@ A visitor's window:
       :media="place.media"
       :icon="assetSourceIcon[place.kind]"
       :title="assetSourceTitle({ type: place.kind, title: place.title })"
+      :parent="place.parent"
       :uses="place.uses.map((use) => assetUseLabel(use, place.kind)).join(' · ')"
       @click="goTo($event, place.href)"
     />

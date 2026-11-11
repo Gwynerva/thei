@@ -292,6 +292,7 @@ function sourceInfo(row: SourceRow): AssetSource {
       ),
       editUrl: `/admin/projects/${row.parentId}/edit/?section=${encodeURIComponent(publicId)}`,
       parent: {
+        type: 'project',
         title: row.parentTitle,
         url: buildProjectUrl(row.parentSlug, row.parentPublicId),
       },
@@ -312,7 +313,13 @@ function sourceInfo(row: SourceRow): AssetSource {
       ...base,
       url: buildExcerptUrl(parent, slug, publicId),
       editUrl: buildExcerptAdminPath(row.parentType, row.parentId, publicId),
-      parent: { title: row.parentTitle, url: buildExcerptParentUrl(parent) },
+      parent: {
+        type: row.parentType,
+        ...(row.parentType === 'diary-entry'
+          ? { title: '', date: row.parentSlug }
+          : { title: row.parentTitle }),
+        url: buildExcerptParentUrl(parent),
+      },
     };
   }
   const url =

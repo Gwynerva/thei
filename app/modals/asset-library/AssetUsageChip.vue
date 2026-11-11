@@ -44,11 +44,10 @@ const privateCount = computed(() =>
   <AssetPlaceChip
     :href="source.editUrl"
     new-tab
-    :hint="source.editUrl ? phrase.asset_open_place(title) : undefined"
     :media="source.media"
     :icon="assetSourceIcon[source.type]"
     :title
-    :parent="source.parent ? publicText(source.parent.title) : undefined"
+    :parent="source.parent"
     :uses
     :private-count="privateCount"
   />
