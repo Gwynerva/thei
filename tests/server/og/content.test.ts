@@ -490,43 +490,52 @@ describe('Open Graph content', () => {
     expect(await resolve({ kind: 'section', id: 'inside' })).toBeUndefined();
 
     const content = (await resolve({ kind: 'section', id: 's2' }))!;
-    // Its place among the dated sections a stranger sees.
-    expect(content.chips[0]!.label).toBe('Stage 2 of 2');
-    expect(content.parent?.title).toBe('p title');
+    // "Project section" and its project, with no count of the stages.
+    expect(content.chips[0]!.label).toBe('Project section');
+    expect(content.lineage).toMatchObject([
+      { label: 'Project section', title: 'p title', icon: 'project' },
+    ]);
     expect(content.meta[0]!.text).toBe('May — August 2021');
     expect(content.date).toBeUndefined();
   });
+
+  function excerpt(
+    uuid: string,
+    parent: [string, string],
+    options: {
+      isPrivate?: boolean;
+      about?: [string, string] | null;
+      summary?: string;
+    } = {},
+  ) {
+    context.db
+      .insert(context.schema.excerpts)
+      .values({
+        excerptUuid: uuid,
+        parentType: parent[0] as never,
+        parentId: parent[1],
+        title: `${uuid} title`,
+        summary: options.summary ?? `${uuid} summary`,
+        humanReadableSlug: uuid,
+        publicId: uuid,
+        isPrivate: options.isPrivate ?? false,
+        sortOrder: 0,
+        createdAt: Date.parse('2026-03-05T00:00:00Z'),
+        updatedAt: Date.parse('2026-03-05T00:00:00Z'),
+      })
+      .run();
+    const about =
+      options.about === undefined ? ['project', 'p'] : options.about;
+    if (about) relate(['excerpt', uuid], about as [string, string]);
+  }
 
   it('draws an excerpt as a part of its parent, only where both are open', async () => {
     project('p', Public);
     project('closed', Private);
     diary('d', '2026-03-04', Public, 'The day.');
-    const excerpt = (
-      uuid: string,
-      parent: [string, string],
-      isPrivate = false,
-    ) => {
-      context.db
-        .insert(context.schema.excerpts)
-        .values({
-          excerptUuid: uuid,
-          parentType: parent[0] as never,
-          parentId: parent[1],
-          title: `${uuid} title`,
-          summary: `${uuid} summary`,
-          humanReadableSlug: uuid,
-          publicId: uuid,
-          isPrivate,
-          sortOrder: 0,
-          createdAt: Date.parse('2026-03-05T00:00:00Z'),
-          updatedAt: Date.parse('2026-03-05T00:00:00Z'),
-        })
-        .run();
-      relate(['excerpt', uuid], ['project', 'p']);
-    };
     excerpt('x1', ['diary-entry', 'd']);
     excerpt('x2', ['diary-entry', 'd']);
-    excerpt('x-private', ['diary-entry', 'd'], true);
+    excerpt('x-private', ['diary-entry', 'd'], { isPrivate: true });
     excerpt('x-closed', ['project', 'closed']);
     expect(await resolve({ kind: 'excerpt', id: 'x-private' })).toBeUndefined();
     expect(await resolve({ kind: 'excerpt', id: 'x-closed' })).toBeUndefined();
@@ -535,15 +544,153 @@ describe('Open Graph content', () => {
     const content = (await resolve({ kind: 'excerpt', id: 'x2' }))!;
     expect(content.kind).toBe('excerpt');
     expect(content.headline).toBe('x2 title');
-    // Its place among the excerpts of its parent a stranger sees, and the
-    // parent named by its day.
-    expect(content.chips[0]!.label).toBe('Excerpt 2 of 2');
-    expect(content.parent?.title).toBe('March 4, 2026');
+    // One line, as its page opens: what it is a part of — a diary entry by
+    // its day — and what it is about, each with what stands for it.
+    expect(content.lineage).toEqual([
+      {
+        label: 'Excerpt',
+        title: 'March 4, 2026',
+        icon: 'thought',
+        picture: expect.objectContaining({ kind: 'diary-entry' }),
+      },
+      {
+        label: 'About',
+        title: 'p title',
+        icon: 'project',
+        picture: expect.objectContaining({ kind: 'project' }),
+      },
+    ]);
+    // It is called an excerpt, with no place among the others, and carries
+    // neither a parent line nor a row of dates.
+    expect(content.chips).toEqual([
+      { icon: expect.any(String), label: 'Excerpt' },
+    ]);
+    expect(content.alt).toContain('Excerpt');
+    expect(content.meta).toEqual([]);
     expect(content.summary).toBe('x2 summary');
     expect(content.picture).toMatchObject({
       type: 'generated',
       kind: 'excerpt',
     });
+  });
+
+  it('names what an excerpt is about as a stranger may know it', async () => {
+    project('p', Public);
+    project('by-link', LinkOnly);
+    event('e', Public);
+    diary('d', '2026-03-04', Public, 'The day.');
+    excerpt('of-event', ['event', 'e'], { about: ['diary-entry', 'd'] });
+    excerpt('of-project', ['project', 'p'], { about: ['project', 'by-link'] });
+    excerpt('about-nothing', ['project', 'p'], { about: null });
+
+    // A diary entry is named by its day on either side.
+    const ofEvent = (await resolve({ kind: 'excerpt', id: 'of-event' }))!;
+    expect(ofEvent.lineage!.map((item) => [item.label, item.title])).toEqual([
+      ['Excerpt', 'e title'],
+      ['About', 'March 4, 2026'],
+    ]);
+    expect(ofEvent.lineage![0]!.icon).toBe('event');
+
+    // What a stranger may not list is its codename and the icon drawn for
+    // it, never its name.
+    const ofProject = (await resolve({ kind: 'excerpt', id: 'of-project' }))!;
+    expect(ofProject.lineage![0]).toMatchObject({ title: 'p title' });
+    expect(ofProject.lineage![1]!.title).not.toContain('by-link');
+    expect(ofProject.lineage![1]).toMatchObject({
+      label: 'About',
+      title: expect.stringMatching(/^Secret project /),
+      picture: { type: 'generated', kind: 'secret' },
+    });
+
+    // About nothing any more: the first half of the line alone.
+    const bare = (await resolve({ kind: 'excerpt', id: 'about-nothing' }))!;
+    expect(bare.lineage).toHaveLength(1);
+  });
+
+  it('quotes how an excerpt without a summary begins, its public part only', async () => {
+    project('p', Public);
+    diary('d', '2026-03-04', Public, 'The day.');
+    excerpt('quoted', ['diary-entry', 'd'], { summary: '' });
+    excerpt('empty', ['diary-entry', 'd'], { summary: '' });
+    const paragraph = (text: string) => ({ type: 'paragraph', data: { text } });
+    const edge = (side: 'start' | 'end') => ({
+      type: 'privateSectionBoundary',
+      data: { sectionId: 'hidden', edge: side },
+    });
+    context.db
+      .insert(context.schema.content)
+      .values({
+        contentUuid: 'content-quoted',
+        ownerType: 'excerpt',
+        ownerId: 'quoted',
+        slot: 'excerpt-body',
+        data: {
+          blocks: [
+            paragraph('The stringers went on first.'),
+            edge('start'),
+            paragraph('What nobody should read.'),
+            edge('end'),
+            paragraph(`Then the varnish. ${'It took days. '.repeat(60)}`),
+          ],
+        },
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+      .run();
+
+    const quoted = (await resolve({ kind: 'excerpt', id: 'quoted' }))!;
+    expect(quoted.summary).toMatch(/^The stringers went on first\./);
+    expect(quoted.summary).toContain('Then the varnish.');
+    expect(quoted.summary).not.toContain('nobody should read');
+    // Cut at a word, longer than the card's lines hold.
+    expect(quoted.summary!.length).toBeGreaterThan(300);
+    expect(quoted.summary!.length).toBeLessThanOrEqual(361);
+    expect(quoted.summary!.endsWith('…')).toBe(true);
+
+    const empty = (await resolve({ kind: 'excerpt', id: 'empty' }))!;
+    expect(empty.summary).toBeUndefined();
+  });
+
+  it('quotes how a section without a summary begins, its public part only', async () => {
+    project('p', Public);
+    section('quoted', 'p');
+    section('empty', 'p');
+    const paragraph = (text: string) => ({ type: 'paragraph', data: { text } });
+    const edge = (side: 'start' | 'end') => ({
+      type: 'privateSectionBoundary',
+      data: { sectionId: 'hidden', edge: side },
+    });
+    context.db
+      .insert(context.schema.content)
+      .values({
+        contentUuid: 'content-quoted',
+        ownerType: 'project-section',
+        ownerId: 'quoted',
+        slot: 'project-section-body',
+        data: {
+          blocks: [
+            paragraph('The stringers went on first.'),
+            edge('start'),
+            paragraph('What nobody should read.'),
+            edge('end'),
+            paragraph(`Then the varnish. ${'It took days. '.repeat(60)}`),
+          ],
+        },
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+      .run();
+
+    const quoted = (await resolve({ kind: 'section', id: 'quoted' }))!;
+    expect(quoted.summary).toMatch(/^The stringers went on first\./);
+    expect(quoted.summary).toContain('Then the varnish.');
+    expect(quoted.summary).not.toContain('nobody should read');
+    expect(quoted.summary!.length).toBeGreaterThan(300);
+    expect(quoted.summary!.length).toBeLessThanOrEqual(361);
+    expect(quoted.summary!.endsWith('…')).toBe(true);
+
+    const empty = (await resolve({ kind: 'section', id: 'empty' }))!;
+    expect(empty.summary).toBeUndefined();
   });
 
   it('shows the first picture of a public body a card can draw', async () => {

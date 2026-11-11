@@ -34,30 +34,51 @@ function drawRow(
   item: Extract<OgStackItem, { kind: 'row' }>,
   fitted: OgFittedRow,
 ): OgNode {
-  return el(
-    'div',
-    {
+  // The width goes on the item itself: satori ends a label that does not
+  // fit with an ellipsis only when its own box is too narrow, and merely
+  // cuts it off when a wrapper is.
+  const shown = item.items.slice(0, fitted.shown).map((entry, index) => ({
+    ...entry.node,
+    props: {
+      ...entry.node.props,
       style: {
-        display: 'flex',
-        alignItems: 'center',
-        height: item.height,
-        gap: item.gap,
+        ...(entry.node.props.style as Record<string, unknown>),
+        flexShrink: 0,
+        width: fitted.widths[index],
       },
     },
-    // The width goes on the item itself: satori ends a label that does not
-    // fit with an ellipsis only when its own box is too narrow, and merely
-    // cuts it off when a wrapper is.
-    ...item.items.slice(0, fitted.shown).map((entry, index) => ({
-      ...entry.node,
-      props: {
-        ...entry.node.props,
+  }));
+  const line = (...children: OgNode[]) =>
+    el(
+      'div',
+      {
         style: {
-          ...(entry.node.props.style as Record<string, unknown>),
-          flexShrink: 0,
-          width: fitted.widths[index],
+          display: 'flex',
+          alignItems: 'center',
+          height: item.height,
+          gap: item.gap,
         },
       },
-    })),
+      ...children,
+    );
+  if (item.wrap && fitted.lines) {
+    let from = 0;
+    return el(
+      'div',
+      {
+        style: {
+          display: 'flex',
+          flexDirection: 'column',
+          gap: item.wrap.rowGap,
+        },
+      },
+      ...fitted.lines.map((count) =>
+        line(...shown.slice(from, (from += count))),
+      ),
+    );
+  }
+  return line(
+    ...shown,
     ...(fitted.plus && item.plus ? [item.plus(fitted.plus)] : []),
   );
 }

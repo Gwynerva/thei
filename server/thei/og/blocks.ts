@@ -8,6 +8,7 @@ import { ogIcon, OG_META_ICONS } from './icons';
 import type {
   OgCardContent,
   OgChip,
+  OgLineageItem,
   OgMeta,
   OgPicture,
   OgSite,
@@ -19,7 +20,7 @@ import type { OgStackPainter } from './stack';
 
 /**
  * The pieces every layout is made of: the field, a chip, a fact with its
- * icon, a tag, the site's signature, the line naming a parent.
+ * icon, a tag, the plate naming a thing, the site's signature.
  *
  * A piece that holds owner-typed words ends them with an ellipsis when it
  * is given less room than they need, so no piece ever runs past its box.
@@ -210,6 +211,189 @@ export async function thumbnail(
   });
 }
 
+/** The sizes of a plate naming a thing: its type, its height, its picture. */
+interface OgEntityChipSize {
+  font: number;
+  height: number;
+  icon: number;
+}
+
+/**
+ * A rounded plate naming a thing: its picture, or the icon of its kind
+ * without one, its name and, where it is counted, how much it holds.
+ */
+export async function entityChip(
+  value: { title: string; icon: string; picture?: OgPicture; count?: number },
+  plate: OgPlate,
+  size: OgEntityChipSize,
+  options: {
+    /** The corners of the picture; a circle unless told otherwise. */
+    radius?: number;
+    /** Wider than this, the name ends with an ellipsis. */
+    maxWidth?: number;
+    /**
+     * The picture lies along the plate's right edge and dissolves towards
+     * the name, as an entity's chip on the site shows it (`MediaEdge`); the
+     * icon of its kind stands there without one.
+     */
+    edge?: boolean;
+    style?: Record<string, unknown>;
+  } = {},
+): Promise<OgNode> {
+  if (options.edge) {
+    const art =
+      (await edgePicture(value.picture, size.height)) ??
+      el(
+        'div',
+        {
+          style: {
+            display: 'flex',
+            flexShrink: 0,
+            paddingRight: Math.round(size.height * 0.3),
+            opacity: 0.6,
+          },
+        },
+        ogIcon(value.icon, plate.text, size.icon),
+      );
+    return el(
+      'div',
+      {
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          height: size.height,
+          paddingLeft: Math.round(size.height * 0.36),
+          borderRadius: size.height / 2,
+          background: plate.background,
+          color: plate.text,
+          fontSize: size.font,
+          fontWeight: 600,
+          whiteSpace: 'nowrap',
+          ...options.style,
+        },
+      },
+      label(
+        value.title,
+        options.maxWidth ? { maxWidth: options.maxWidth } : {},
+      ),
+      art,
+    );
+  }
+  const picture = await thumbnail(
+    value.picture,
+    size.icon,
+    options.radius ?? size.icon / 2,
+  );
+  return el(
+    'div',
+    {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        height: size.height,
+        padding: `0 ${Math.round(size.height * 0.36)}px 0 ${Math.round(size.height * 0.2)}px`,
+        borderRadius: size.height / 2,
+        background: plate.background,
+        color: plate.text,
+        fontSize: size.font,
+        fontWeight: 600,
+        whiteSpace: 'nowrap',
+        ...options.style,
+      },
+    },
+    picture ?? ogIcon(value.icon, plate.text, size.icon),
+    label(value.title, options.maxWidth ? { maxWidth: options.maxWidth } : {}),
+    ...(value.count
+      ? [
+          el(
+            'div',
+            { style: { display: 'flex', color: plate.muted, fontWeight: 400 } },
+            String(value.count),
+          ),
+        ]
+      : []),
+  );
+}
+
+/**
+ * A plate's picture along its right edge, as tall as the plate: a photo
+ * fills a strip wider than it is tall, a mark is shown whole in a square.
+ * It is rounded as the plate's end is and dissolves towards the name.
+ */
+async function edgePicture(
+  picture: OgPicture | undefined,
+  height: number,
+): Promise<OgNode | undefined> {
+  if (!picture) return undefined;
+  const analysis = await analyzePicture(picture);
+  if (!analysis) return undefined;
+  const width = analysis.iconLike ? height : Math.round(height * 1.8);
+  const src = await pictureDataUri(picture, width * 2, height * 2, {
+    fit: analysis.iconLike ? 'contain' : 'cover',
+    alpha: analysis.transparent > 0,
+  });
+  if (!src) return undefined;
+  return el('img', {
+    src,
+    width,
+    height,
+    style: {
+      flexShrink: 0,
+      borderTopRightRadius: height / 2,
+      borderBottomRightRadius: height / 2,
+      maskImage:
+        'linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 60%)',
+    },
+  });
+}
+
+const LINEAGE_CHIP: OgEntityChipSize = {
+  font: TYPE.chip,
+  height: ROW.chip,
+  icon: 28,
+};
+
+/**
+ * One part of the line over a title: the word and the plate of what it names.
+ * Given less room than it needs, the name on the plate is what gives way.
+ */
+async function lineageGroup(
+  item: OgLineageItem,
+  palette: OgPalette,
+): Promise<OgNode> {
+  return el(
+    'div',
+    {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        height: ROW.chip,
+        whiteSpace: 'nowrap',
+      },
+    },
+    el(
+      'div',
+      {
+        style: {
+          display: 'flex',
+          flexShrink: 0,
+          color: palette.muted,
+          fontSize: TYPE.chip,
+          fontWeight: 600,
+        },
+      },
+      item.label,
+    ),
+    await entityChip(item, palette.chip, LINEAGE_CHIP, {
+      edge: true,
+      style: { flexShrink: 1, minWidth: 0 },
+    }),
+  );
+}
+
 /**
  * The site's mark: its uploaded favicon, or the Thei mark in the card's
  * text colour. A see-through favicon that would vanish on this field — a
@@ -288,33 +472,6 @@ export async function signature(
   );
 }
 
-/** The line naming what a section belongs to. */
-export async function parentLine(
-  parent: NonNullable<OgCardContent['parent']>,
-  palette: OgPalette,
-  width: number,
-): Promise<OgNode> {
-  const picture = await thumbnail(parent.picture, 32, 8);
-  return el(
-    'div',
-    {
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        width,
-        height: ROW.parent,
-        color: palette.muted,
-        fontSize: TYPE.parent,
-        fontWeight: 600,
-        whiteSpace: 'nowrap',
-      },
-    },
-    picture ?? ogIcon('project', palette.muted, 30),
-    label(parent.title),
-  );
-}
-
 /** A number the archive holds: "18 projects", the figure bold. */
 export function stat(value: OgStat, palette: OgPalette) {
   return el(
@@ -386,10 +543,15 @@ export interface OgColumnOptions {
   crest?: { node: OgNode; height: number; gap: number };
   /** Line everything up down the middle of the column. */
   align?: 'start' | 'center';
+  /** How many lines the summary may take, three unless told otherwise. */
+  summaryLines?: number;
 }
 
+const SUMMARY_LINES = 3;
+
 /**
- * The text column most layouts share: chips, the parent line, the headline,
+ * The text column most layouts share: chips — or the line of an excerpt or
+ * a section in their place — the headline,
  * the summary or the quote, the status, facts, what it belongs to, tags —
  * each only when the content has it — and the ladder of what to give up,
  * in order, when there is more than the column holds.
@@ -401,6 +563,7 @@ export async function column(
 ): Promise<{ plan: OgStackPlan; painter: OgStackPainter }> {
   const items: OgStackItem[] = [];
   const blocks = new Map<string, OgNode>();
+  const summaryLines = options.summaryLines ?? SUMMARY_LINES;
 
   if (options.crest) {
     blocks.set('crest', options.crest.node);
@@ -413,7 +576,28 @@ export async function column(
     });
   }
 
-  if (options.chips !== false && content.chips.length)
+  // The line of an excerpt or a section says what it is and where it comes
+  // from — an excerpt's, what it is about too — so it stands where the
+  // chips would. Two parts share a line while they fit one, and take one
+  // each otherwise.
+  if (content.lineage?.length)
+    items.push({
+      kind: 'row',
+      key: 'lineage',
+      height: ROW.chip,
+      gap: 20,
+      wrap: { rowGap: 10 },
+      items: await Promise.all(
+        content.lineage.map(async (value, index) => ({
+          key: `lineage${index}`,
+          node: await lineageGroup(value, palette),
+          maxWidth: options.width,
+        })),
+      ),
+      required: true,
+      gapBefore: options.crest?.gap ?? 0,
+    });
+  else if (options.chips !== false && content.chips.length)
     items.push({
       kind: 'row',
       key: 'chips',
@@ -427,19 +611,6 @@ export async function column(
       required: true,
       gapBefore: options.crest?.gap ?? 0,
     });
-
-  if (content.parent) {
-    blocks.set(
-      'parent',
-      await parentLine(content.parent, palette, options.width),
-    );
-    items.push({
-      kind: 'block',
-      key: 'parent',
-      height: ROW.parent,
-      gapBefore: 22,
-    });
-  }
 
   const showQuote = options.quote && content.quote;
   if (options.lead) blocks.set('lead', options.lead.node);
@@ -455,7 +626,7 @@ export async function column(
       balance: true,
       keepWords: true,
       required: true,
-      gapBefore: content.parent ? 12 : 24,
+      gapBefore: 24,
       ...(options.lead
         ? {
             lead: {
@@ -490,7 +661,7 @@ export async function column(
       sizes: [TYPE.summary],
       lineHeight: 1.35,
       weight: 400,
-      maxLines: 3,
+      maxLines: summaryLines,
       gapBefore: 16,
     });
 
@@ -565,6 +736,16 @@ export async function column(
     });
 
   const ladder: OgFitStep[] = [
+    // A summary given more lines than usual gives them back first, one at
+    // a time.
+    ...Array.from(
+      { length: Math.max(0, summaryLines - SUMMARY_LINES) },
+      (_, index): OgFitStep => ({
+        op: 'lines',
+        key: 'summary',
+        to: summaryLines - 1 - index,
+      }),
+    ),
     { op: 'lines', key: 'summary', to: 2 },
     { op: 'lines', key: 'quote', to: 5 },
     { op: 'size', key: 'headline' },
@@ -580,7 +761,6 @@ export async function column(
     { op: 'size', key: 'headline' },
     { op: 'drop', key: 'summary' },
     { op: 'size', key: 'headline' },
-    { op: 'drop', key: 'parent' },
     { op: 'size', key: 'headline' },
     { op: 'drop', key: 'meta' },
     { op: 'size', key: 'headline' },

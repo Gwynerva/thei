@@ -46,6 +46,7 @@ import {
   findOpenParentExcerpt,
 } from '../public/excerpts';
 import {
+  excerptParentRef,
   findExcerptParentByAddress,
   type ExcerptParentInfo,
 } from '../excerpts/parents';
@@ -53,6 +54,7 @@ import { listProjectSections } from '../projects/content-sections';
 import { siteUrl } from '../site-url';
 import { STRANGER } from '../access-links/viewer';
 import { ownerText } from '../owner-text';
+import { entityName } from '../entity-name';
 import type { Period } from '#layers/thei/shared/period';
 import {
   isApproximateDate,
@@ -157,11 +159,8 @@ export async function renderExcerptMarkdown(
   if (!parent || !canOpenPublicEntity(parent.access, false)) return undefined;
   const found = findOpenParentExcerpt(parent, STRANGER, excerptPart);
   if (!found) return undefined;
-  const { excerpt, visible } = found;
-  const data = await buildPublicExcerpt(excerpt, parent, STRANGER, {
-    number: visible.indexOf(excerpt) + 1,
-    count: visible.length,
-  });
+  const { excerpt } = found;
+  const data = await buildPublicExcerpt(excerpt, parent, STRANGER);
   const lines = [
     `# ${ownerText(data.title)}`,
     ownerText(data.summary),
@@ -174,9 +173,7 @@ export async function renderExcerptMarkdown(
 
 /** What a parent is called in a copy: a diary entry by its day. */
 function parentName(parent: ExcerptParentInfo) {
-  return parent.type === 'diary-entry'
-    ? parent.row.date
-    : ownerText(parent.title);
+  return entityName(excerptParentRef(parent));
 }
 
 function parentWord(parent: ExcerptParentInfo) {
@@ -265,7 +262,7 @@ export async function renderDiaryMarkdown(
   const data = await buildPublicDiaryEntry(stored, STRANGER);
   // The day is the heading, because an entry has nothing else to be called.
   const lines = [
-    `# ${data.date}`,
+    `# ${entityName({ date: data.date })}`,
     await body(event, data.content),
     ...(await excerptParts(event, data.excerpts)),
     ...(await excerptsAbout(event, {
@@ -397,7 +394,9 @@ export async function withEntityAddresses(
                   entity.href,
                   normalizeLinkFragment(block.data.fragment),
                 ),
-                title: entity.title,
+                title: entity.date
+                  ? entityName({ date: entity.date })
+                  : entity.title,
               },
             }
           : block;
@@ -436,7 +435,7 @@ function aboutLine(event: H3Event, excerpt: PublicExcerptCard): string[] {
   if (!links.length) return [];
   return [
     `${THEI_SERVER.phrase.excerpt_about}: ${links
-      .map((link) => `[${ownerText(link.title)}](${siteUrl(event, link.href)})`)
+      .map((link) => `[${entityName(link)}](${siteUrl(event, link.href)})`)
       .join(', ')}`,
   ];
 }
@@ -456,7 +455,8 @@ async function excerptsAbout(
   return [
     `## ${phrase.excerpts}`,
     ...cards.map((card) => {
-      const parent = card.parent.date ?? ownerText(card.parent.title);
+      // A card's parent has a day only when it is a diary entry.
+      const parent = entityName(card.parent);
       const said = [
         card.relationType && card.relationType !== 'related'
           ? relationLabel(phrase, card.relationType)
@@ -556,7 +556,7 @@ async function relatedEntities(
         .filter(Boolean)
         .join(' · ');
       lines.push(
-        `- [${ownerText(link.title)}](${siteUrl(event, link.href)})` +
+        `- [${entityName(link)}](${siteUrl(event, link.href)})` +
           (said ? ` — ${said}` : ''),
       );
     }

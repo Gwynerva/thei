@@ -6,6 +6,8 @@ import {
   type DatedPeriod,
 } from '#layers/thei/shared/date-precision';
 import { diaryLead } from '#layers/thei/shared/diary-text';
+import { OG_OPENING_LENGTH } from '#layers/thei/shared/content-opening';
+import { describedSummary } from '../../content/described';
 import {
   formatAbsolutePublicDate,
   formatCompactPublicPeriod,
@@ -16,17 +18,15 @@ import { tagAccent } from '#layers/thei/shared/tag';
 import { STRANGER } from '../../access-links/viewer';
 import { getEventPeriods } from '../../events/periods';
 import { ownerText } from '../../owner-text';
+import { entityName } from '../../entity-name';
 import { listProjectSections } from '../../projects/content-sections';
-import { findExcerptByPublicId, listExcerpts } from '../../excerpts';
+import { findExcerptByPublicId } from '../../excerpts';
 import {
   excerptOpens,
-  excerptShownWithParent,
+  excerptParentRef,
   loadExcerptParent,
 } from '../../excerpts/parents';
-import {
-  isDatedSection,
-  sortStagesNewestFirst,
-} from '#layers/thei/shared/project-content-item';
+import { isDatedSection } from '#layers/thei/shared/project-content-item';
 import {
   buildPublicEntityChronology,
   buildPublicEntityReference,
@@ -47,6 +47,7 @@ import { OG_KIND_ICONS, OG_META_ICONS } from '../icons';
 import {
   emptyOgContent,
   type OgCardContent,
+  type OgLineageItem,
   type OgMeta,
   type OgPicture,
   type OgSite,
@@ -221,14 +222,19 @@ export async function sectionContent(
   const section = sections.find((item) => item.sectionUuid === row.uuid);
   if (!section) return undefined;
   const reference = await buildPublicEntityReference(project);
-  const parent = {
-    title: ownerText(project.title),
-    picture: await ogPictureOfMedia(reference.iconMedia),
-  };
+  const projectPicture = await ogPictureOfMedia(reference.iconMedia);
   const picture = await ogBodyPicture(
     'project-section',
     section.sectionUuid,
     'project-section-body',
+  );
+  // Its summary, or else how its text begins, from the public part only.
+  const summary = await describedSummary(
+    'project-section',
+    section.sectionUuid,
+    section.summary,
+    false,
+    OG_OPENING_LENGTH,
   );
   const content = {
     ...emptyOgContent(
@@ -238,36 +244,30 @@ export async function sectionContent(
       site,
       accentOf(picture, section.sectionUuid),
     ),
-    parent,
-    summary: ownerText(section.summary),
+    // "Project section" and the project's plate, as the page's own line.
+    // The chip is not drawn. Its icon is read as the card's kind
+    // (`kindIcon`), and its label as what the card is called: in the
+    // picture's description, and as a headline that cannot be drawn.
+    chips: [{ icon: OG_KIND_ICONS.section, label: phrase().content_section }],
+    lineage: [
+      {
+        label: phrase().content_section,
+        title: ownerText(project.title),
+        icon: OG_KIND_ICONS.project,
+        ...(projectPicture ? { picture: projectPicture } : {}),
+      },
+    ],
+    summary: ownerText(summary),
     ...(picture ? { picture } : {}),
   };
 
-  if (isDatedSection(section)) {
-    // Its place among the stages — the dated sections a stranger sees —
-    // counted from the oldest of the order the page lists them in: "Stage 3
-    // of 7". It is still a section; the number says which stage of the
-    // project's way it was.
-    const stages = sortStagesNewestFirst(sections);
-    return {
-      ...content,
-      chips: [
-        {
-          icon: OG_KIND_ICONS.section,
-          label: phrase().og_section_position(
-            stages.length - stages.indexOf(section),
-            stages.length,
-          ),
-        },
-      ],
-      meta: [dated(section.periods)],
-    };
-  }
+  // A stage is dated by its periods; a general section by its last change.
+  if (isDatedSection(section))
+    return { ...content, meta: [dated(section.periods)] };
 
   const chronology = buildPublicEntityChronology(section);
   return {
     ...content,
-    chips: [{ icon: OG_KIND_ICONS.section, label: phrase().content_section }],
     meta: [
       {
         icon: OG_META_ICONS.updated,
@@ -283,9 +283,13 @@ export async function sectionContent(
 }
 
 /**
- * An excerpt's card: a part of its parent, like a section of its project,
- * with its own picture and its place among its parent's excerpts a stranger
- * sees. Nothing where the excerpt or its parent is closed.
+ * An excerpt's card opens as its page does, with one line: "Excerpt" and
+ * what it is a part of, "About" and what it is about — a diary entry by its
+ * day, a thing a stranger may not open by its codename — each with what
+ * stands for it on a card. An excerpt about nothing any more has the first
+ * half alone. Under its title is its summary, or else how its text begins,
+ * from the public part of it only. Nothing where the excerpt or its parent
+ * is closed.
  */
 export async function excerptContent(
   publicId: string,
@@ -296,14 +300,7 @@ export async function excerptContent(
   const parent = await loadExcerptParent(excerpt.parentType, excerpt.parentId);
   if (!parent || !canOpenPublicEntity(parent.access, false)) return undefined;
   if (!excerptOpens(STRANGER, excerpt, parent)) return undefined;
-  const visible = listExcerpts(parent).filter(
-    (item) =>
-      item.excerptUuid === excerpt.excerptUuid ||
-      excerptShownWithParent(STRANGER, item, parent),
-  );
-  const number =
-    visible.findIndex((item) => item.excerptUuid === excerpt.excerptUuid) + 1;
-  const [picture, parentPicture] = await Promise.all([
+  const [picture, parentPicture, about, summary] = await Promise.all([
     ogBodyPicture('excerpt', excerpt.excerptUuid, 'excerpt-body'),
     parent.type === 'project'
       ? buildPublicEntityReference(parent.row).then((reference) =>
@@ -312,9 +309,38 @@ export async function excerptContent(
       : parent.type === 'event'
         ? ogBodyPicture('event', parent.id, 'event-body')
         : ogBodyPicture('diary-entry', parent.id, 'diary-body'),
+    // What it is about, as its page and its cards name it.
+    resolvePublicRelated(
+      { type: 'excerpt', id: excerpt.excerptUuid },
+      STRANGER,
+    ).then((related) => buildPublicRelatedLinks(related, STRANGER)),
+    describedSummary(
+      'excerpt',
+      excerpt.excerptUuid,
+      excerpt.summary,
+      false,
+      OG_OPENING_LENGTH,
+    ),
   ]);
-  const periods = parent.type === 'event' ? getEventPeriods(parent.id) : [];
-  const chronology = buildPublicEntityChronology(excerpt);
+  const subject = about[0];
+  const subjectPicture = await ogPictureOfMedia(subject?.iconMedia);
+  const lineage: OgLineageItem[] = [
+    {
+      label: phrase().excerpt,
+      title: entityName(excerptParentRef(parent)),
+      icon: LINEAGE_ICONS[parent.type],
+      ...(parentPicture ? { picture: parentPicture } : {}),
+    },
+  ];
+  if (subject)
+    lineage.push({
+      label: phrase().public_excerpt_about,
+      title: 'secret' in subject ? subject.title : entityName(subject),
+      icon: subject.entityType
+        ? LINEAGE_ICONS[subject.entityType]
+        : OG_KIND_ICONS.excerpt,
+      ...(subjectPicture ? { picture: subjectPicture } : {}),
+    });
   return {
     ...emptyOgContent(
       'excerpt',
@@ -323,39 +349,22 @@ export async function excerptContent(
       site,
       accentOf(picture, excerpt.excerptUuid),
     ),
-    parent: {
-      title:
-        parent.type === 'diary-entry'
-          ? formatAbsolutePublicDate(parent.row.date, locale())
-          : ownerText(parent.title),
-      ...(parentPicture ? { picture: parentPicture } : {}),
-    },
-    chips: [
-      {
-        icon: OG_KIND_ICONS.excerpt,
-        label:
-          visible.length > 1
-            ? phrase().excerpt_position(number, visible.length)
-            : phrase().excerpt,
-      },
-    ],
-    summary: ownerText(excerpt.summary),
-    meta: [
-      periods.length
-        ? dated(periods)
-        : {
-            icon: OG_META_ICONS.updated,
-            text: phrase().og_updated(
-              formatAbsolutePublicDate(
-                chronology.updatedAt ?? chronology.createdAt,
-                locale(),
-              ),
-            ),
-          },
-    ],
+    // Not drawn: the line above says it. Its icon is read as the card's kind
+    // (`kindIcon`), and its label as what the card is called: in the
+    // picture's description, and as a headline that cannot be drawn.
+    chips: [{ icon: OG_KIND_ICONS.excerpt, label: phrase().excerpt }],
+    lineage,
+    summary: ownerText(summary),
     ...(picture ? { picture } : {}),
   };
 }
+
+/** The icon of the kind of thing a part of an excerpt's line names. */
+const LINEAGE_ICONS = {
+  project: OG_KIND_ICONS.project,
+  event: OG_KIND_ICONS.event,
+  'diary-entry': OG_KIND_ICONS.diary,
+} as const;
 
 export async function eventContent(
   publicId: string,
@@ -429,7 +438,7 @@ export async function diaryContent(
     ...emptyOgContent(
       'diary',
       stored.date,
-      formatAbsolutePublicDate(stored.date, locale()),
+      entityName({ date: stored.date }),
       site,
       accentOf(picture, stored.diaryUuid),
     ),

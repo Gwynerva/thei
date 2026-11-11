@@ -57,6 +57,14 @@ export interface OgMeta {
   text: string;
 }
 
+/** A word and the thing it names: "Excerpt" and its parent. */
+export interface OgLineageItem {
+  label: string;
+  title: string;
+  icon: string;
+  picture?: OgPicture;
+}
+
 export interface OgTag {
   title: string;
   accent: ImageAccent;
@@ -92,8 +100,14 @@ export interface OgCardContent {
   accent: ImageAccent;
   /** The kind first, then badges such as "In showcase". */
   chips: OgChip[];
-  /** What a section or an excerpt belongs to. */
-  parent?: { title: string; picture?: OgPicture };
+  /**
+   * The line a part's page opens with: where an excerpt comes from and what
+   * it is about, "Excerpt [parent] About [subject]", or the project a
+   * section is of, "Project section [project]". Each is a word and the
+   * thing it names, shown by its picture, or by its kind's icon without one.
+   * A card with it draws it in place of the chips.
+   */
+  lineage?: OgLineageItem[];
   headline: string;
   summary?: string;
   /** The opening words of a diary entry. */

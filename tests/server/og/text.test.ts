@@ -131,14 +131,7 @@ describe('drawableContent', () => {
   const site = { name: 'Site' };
   const accent = { hue: 0, chroma: 0.1 };
 
-  it('falls back to the parent title, then to the kind', () => {
-    const withParent = {
-      ...emptyOgContent('section', 's', '🚀', site, accent),
-      parent: { title: 'Parent project' },
-    };
-    expect(drawableContent(withParent, 'Section').headline).toBe(
-      'Parent project',
-    );
+  it('falls back to the kind', () => {
     expect(
       drawableContent(
         emptyOgContent('project', 'p', '漢字', site, accent),

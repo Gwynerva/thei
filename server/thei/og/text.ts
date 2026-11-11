@@ -114,7 +114,7 @@ export function ogDrawable(value: string | undefined): string | undefined {
 /**
  * The content with every word made drawable: an optional text that cannot
  * be drawn goes, a list keeps what can, and a headline that cannot falls
- * back to the parent's title and then to the name of the kind, which the
+ * back to the name of the kind, which the
  * card's own phrases always can draw.
  */
 export function drawableContent(
@@ -123,21 +123,26 @@ export function drawableContent(
 ): OgCardContent {
   const list = (values: string[]) =>
     values.map(ogDrawable).filter((value): value is string => Boolean(value));
-  const parentTitle = ogDrawable(content.parent?.title);
   return {
     ...content,
     headline:
       ogDrawable(content.headline) ??
-      parentTitle ??
       ogDrawable(fallbackHeadline) ??
       fallbackHeadline,
     chips: content.chips
       .map((chip) => ({ ...chip, label: ogDrawable(chip.label) ?? '' }))
       .filter((chip) => chip.label),
-    parent:
-      content.parent && parentTitle
-        ? { ...content.parent, title: parentTitle }
-        : undefined,
+    ...(content.lineage
+      ? {
+          lineage: content.lineage
+            .map((item) => ({
+              ...item,
+              label: ogDrawable(item.label) ?? '',
+              title: ogDrawable(item.title) ?? '',
+            }))
+            .filter((item) => item.label && item.title),
+        }
+      : {}),
     summary: ogDrawable(content.summary),
     quote: ogDrawable(content.quote),
     status: ogDrawable(content.status),

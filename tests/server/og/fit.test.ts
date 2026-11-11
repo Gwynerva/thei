@@ -259,6 +259,39 @@ describe('solveStack', () => {
     expect(fitted.order.map(({ key }) => key)).toEqual(['title']);
     expect(fitted.height).toBe(80);
   });
+
+  it('wraps a row that leaves nothing out, and counts its lines', () => {
+    const { plus: _plus, ...row } = tagRow(3);
+    const plan: OgStackPlan = {
+      width: 400,
+      height: 1000,
+      items: [{ ...row, wrap: { rowGap: 6 } }, title('Hi')],
+      ladder: [],
+    };
+    // Side by side while they fit one line.
+    const one = solveStack(plan, measure(plan, { t0: 150, t1: 120, t2: 100 }));
+    expect(one.items.get('tags')).toMatchObject({
+      shown: 3,
+      plus: 0,
+      lines: [3],
+      height: 30,
+    });
+    // A line each once they do not, one wider than the column cut to it; the
+    // stack is as tall as the lines make it.
+    const wrapped = solveStack(
+      plan,
+      measure(plan, { t0: 250, t1: 900, t2: 120 }),
+    );
+    expect(wrapped.items.get('tags')).toMatchObject({
+      shown: 3,
+      lines: [1, 1, 1],
+      widths: [250, 400, 120],
+      height: 3 * 30 + 2 * 6,
+    });
+    expect(wrapped.height).toBe(102 + 80);
+    const pair = solveStack(plan, measure(plan, { t0: 250, t1: 120, t2: 300 }));
+    expect(pair.items.get('tags')).toMatchObject({ lines: [2, 1], height: 66 });
+  });
 });
 
 describe('a text beside a picture', () => {
