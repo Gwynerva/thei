@@ -245,11 +245,16 @@ async function mention(page: Page, query: string) {
   await expect(picker).toBeHidden();
 }
 
-/** What the admin bar says waits: a number, or nothing at all. */
+/** The admin bar's link to the AI page counts the sessions outside the archive. */
 async function expectBarCount(page: Page, count: number) {
-  const badge = page.locator('[data-ai-bar-count]');
-  if (count) await expect(badge).toHaveText(String(count));
-  else await expect(badge).toHaveCount(0);
+  const link = page.locator('[data-ai-bar]');
+  await expect(link).toHaveAttribute('href', /\/admin\/ai\/$/);
+  await expect(link).toHaveText(String(count));
+}
+
+async function sessionCount(page: Page) {
+  return (await (await page.request.get('/api/admin/dashboard-summary')).json())
+    .aiSessionCount as number;
 }
 
 async function height(locator: Locator) {
@@ -311,15 +316,14 @@ test('a bundle applied in part, the rest declined, undone and brought back', asy
   page,
 }) => {
   await open(page, `/admin/ai/?session=${sessionUuid}`);
-  // The admin bar counts what waits in every session, other runs' too.
-  const before = (
-    await (await page.request.get('/api/admin/dashboard-summary')).json()
-  ).aiWaiting as number;
+  const waits = page.locator(
+    `[data-session-item="${sessionUuid}"] [data-session-waiting]`,
+  );
   await say(page, 'Propose something');
   await answered(page);
   const card = page.locator('[data-card="bundle"]').last();
   await expect(card.locator('[data-action]')).toHaveCount(2);
-  await expectBarCount(page, before + 2);
+  await expect(waits).toHaveText('2');
 
   // The second is unticked: applying the rest declines it.
   await card.locator('[data-action-pick]').nth(1).click();
@@ -331,7 +335,7 @@ test('a bundle applied in part, the rest declined, undone and brought back', asy
   await expect(summary).toHaveAttribute('data-action-state', 'applied');
   await expect(reminder).toHaveAttribute('data-action-state', 'rejected');
   await expect(page.locator('[data-toast]')).toBeVisible();
-  await expectBarCount(page, before);
+  await expect(waits).toHaveCount(0);
   const saved = await (
     await page.request.get(`/api/admin/projects/${projectUuid}`)
   ).json();
@@ -341,11 +345,7 @@ test('a bundle applied in part, the rest declined, undone and brought back', asy
   await expect(summary).toHaveAttribute('data-action-state', 'undone');
   await summary.locator('[data-action-restore]').click();
   await expect(summary).toHaveAttribute('data-action-state', 'pending');
-  await expectBarCount(page, before + 1);
-  // The list says it waits.
-  await expect(
-    page.locator(`[data-session-item="${sessionUuid}"] [data-session-waiting]`),
-  ).toHaveText('1');
+  await expect(waits).toHaveText('1');
 });
 
 test('a comment says what it is about, and its field grows', async ({
@@ -692,10 +692,14 @@ test('an archived session is the last group, only read until brought back', asyn
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await open(page, `/admin/ai/?session=${sessionUuid}`);
+  // The bar counts the sessions outside the archive, other runs' too.
+  const before = await sessionCount(page);
+  await expectBarCount(page, before);
   await page.locator('[data-session-menu]').click();
   await page.locator('[data-session-menu-item="archive"]').click();
 
   await expect(page.locator('[data-session-archived]')).toBeVisible();
+  await expectBarCount(page, before - 1);
   await expect(composer(page)).toHaveCount(0);
   // What was decided in it is read, not decided again.
   const thread = page.locator('[data-session-thread]');
@@ -714,6 +718,7 @@ test('an archived session is the last group, only read until brought back', asyn
 
   await page.locator('[data-session-unarchive]').click();
   await expect(composer(page)).toBeVisible();
+  await expectBarCount(page, before);
   await expect(page.locator('[data-session-archived]')).toHaveCount(0);
   await expect(
     thread.locator('[data-action-undo], [data-action-restore]'),

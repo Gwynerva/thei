@@ -55,8 +55,6 @@ tall and a square too on a phone, and under a finger they grow together, to
 - Projects and events show their latest items under it
   (`app/components/admin/AdminEntityOverview.vue`); the other lists are links
   with a count (`app/components/admin/AdminDashboardLink.vue`).
-- The AI box spans both columns, comes with the page and appears only when
-  there are sessions to show (`app/components/admin/AdminAiSessions.vue`).
 - A box with nothing in it says so in one faded line.
 
 ## Lists and search

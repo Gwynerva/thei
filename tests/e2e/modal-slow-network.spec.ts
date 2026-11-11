@@ -187,7 +187,7 @@ test('the picker, the library and the editor each stand in their frame at once',
   await asset.hover();
   await asset
     .locator('..')
-    .getByRole('button', { name: 'How to take the file' })
+    .getByRole('button', { name: 'Create variant' })
     .click();
 
   // The editor opens over the library at once and fetches the file itself.

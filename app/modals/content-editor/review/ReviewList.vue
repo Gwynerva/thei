@@ -159,12 +159,12 @@ const stateOf = (part: ReviewPart) => props.decisions[part.id] ?? 'pending';
               >{{ phrase.quoted(part.link.words) }} → </template
             ><ReviewMark v-if="!part.link.made" kind="removed">{{
               part.link.from
-                ? publicText(part.link.from)
+                ? entityPlaceName(part.link.from)
                 : phrase.ai_review_link_gone
             }}</ReviewMark
             ><ReviewMark kind="added">{{
               part.link.to
-                ? publicText(part.link.to)
+                ? entityPlaceName(part.link.to)
                 : part.link.made
                   ? phrase.ai_review_kinds.link
                   : phrase.ai_review_link_off

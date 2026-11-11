@@ -167,6 +167,9 @@ export function fieldSaid(
   )
     return publicText(plainWords(value, 200));
   if (field === 'slug' || field === 'publicId') return String(value);
+  // A diary entry's day, which is its name.
+  if (field === 'date' && typeof value === 'string')
+    return aiEntityName({ type: 'diary-entry', title: value });
   if (field === 'access')
     return (
       said.ai_action_access[value as keyof typeof said.ai_action_access] ??
@@ -246,7 +249,7 @@ export function actionLabel(action: AiActionItem): string {
       ] ?? actionName(action);
     const title = payload.fields?.title ?? payload.fields?.date;
     return typeof title === 'string' && title
-      ? `${made} · ${publicText(title)}`
+      ? `${made} · ${aiEntityName({ type: payload.entity, title })}`
       : made;
   }
   const kind = actionName(action);

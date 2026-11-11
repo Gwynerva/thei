@@ -66,7 +66,7 @@ async function chooseFromLibrary(page: Page, assetUuid: string) {
   await asset.hover();
   await asset
     .locator('..')
-    .getByRole('button', { name: 'How to take the file' })
+    .getByRole('button', { name: 'Create variant' })
     .click();
 }
 

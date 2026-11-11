@@ -12,7 +12,7 @@ about how it looks.
 
 - Nothing shown only because of AI renders anything while it is off: the ✦ of
   a form, the ✦ of the admin bar, a memory block, a proposal at a label, the
-  dashboard's AI box, the counts of what waits.
+  counts of what waits and of the sessions.
 - Nothing asks about it either: no request goes out from a page about AI while
   it is off.
 - The admin learns whether it is on from `aiEnabled` in the admin bar's
@@ -30,14 +30,13 @@ about how it looks.
 
 ## Where the ✦ goes
 
-| Place           | Component                                  | What it holds                                                                |
-| --------------- | ------------------------------------------ | ---------------------------------------------------------------------------- |
-| A form's header | `app/components/ai/AiEntityButton.vue`     | A badge counting the proposals in the form; a menu to ask about the entity.  |
-| The admin bar   | `app/components/admin/bar/AdminBarAi.vue`  | How much waits; the sessions that wait; a new one about the page's entity.   |
-| A field's label | `app/components/ai/AiFieldOffer.vue`       | Quiet, asks about the field; the proposals for it; a file's description too. |
-| A list's title  | `app/components/SectionHeader.vue` (`ai`)  | Asks about the list — tags, relations — whose proposals are its chips.       |
-| A text's editor | `app/components/ai/AiTextAsk.vue`          | Left of its history: asks about the text in hand; what waits for it counted. |
-| The dashboard   | `app/components/admin/AdminAiSessions.vue` | The sessions, under the `sparkles` icon of their box.                        |
+| Place           | Component                                 | What it holds                                                                |
+| --------------- | ----------------------------------------- | ---------------------------------------------------------------------------- |
+| A form's header | `app/components/ai/AiEntityButton.vue`    | A badge counting the proposals in the form; a menu to ask about the entity.  |
+| The admin bar   | `app/components/admin/bar/AdminBar.vue`   | A link to the AI page, counting the sessions outside the archive.            |
+| A field's label | `app/components/ai/AiFieldOffer.vue`      | Quiet, asks about the field; the proposals for it; a file's description too. |
+| A list's title  | `app/components/SectionHeader.vue` (`ai`) | Asks about the list — tags, relations — whose proposals are its chips.       |
+| A text's editor | `app/components/ai/AiTextAsk.vue`         | Left of its history: asks about the text in hand; what waits for it counted. |
 
 The AI page itself is named by `sparkles` wherever it is linked. Nowhere else:
 never a banner, never a block under a field, never a badge that asks for

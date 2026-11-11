@@ -94,6 +94,7 @@ async function load(options: { fresh?: boolean } = {}) {
     if (!tail.length) next.value = page.next;
     loaded.value = true;
     setAiWaiting(page.waiting);
+    setAiSessionCount(page.total);
   } catch (caught) {
     // AI was turned off elsewhere: the page hears it, and asks no more.
     // Anything else leaves the list as it was; the next refresh tries again.

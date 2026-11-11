@@ -104,9 +104,6 @@ export interface EntityAi {
 
 const KEY: InjectionKey<EntityAi> = Symbol('entity-ai');
 
-/** The forms in hand so far, to tell their entries apart. */
-let hands = 0;
-
 /** How often a form reads again while one of its fields' ✦ is answered. */
 const FOLLOW_MS = 1500;
 
@@ -226,7 +223,7 @@ function useDeclinedHere(options: {
       ...offer,
       action: { ...offer.action, state: 'rejected', never: false },
     });
-    // Read again, so the counts — the admin bar's too — drop it at once.
+    // Read again, so the counts drop it at once.
     void options.refresh();
   }
   async function restore(offer: AiEntityOffer) {
@@ -294,17 +291,6 @@ export function provideEntityAi(options: EntityAiOptions): EntityAi {
 /** The entity AI of the nearest form; none outside one. */
 export function useEntityAi(): EntityAi | undefined {
   return inject(KEY, undefined);
-}
-
-/**
- * The entities whose forms are open, the latest last — a section's window
- * over its project's form: what the admin bar's ✦ starts a session about.
- */
-export function useAiEntitiesInHand() {
-  return useState<{ id: string; ref: string; title: string }[]>(
-    'ai-entities-in-hand',
-    () => [],
-  );
 }
 
 // ---- Telling other tabs ------------------------------------------------------------
@@ -804,13 +790,6 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
           // was taken is told as saved.
           const took = outdated.value ? [] : core.taken();
           const form = options.form?.() as Record<string, unknown> | undefined;
-          // Saved, what was taken waits no more: counted so at once, rather
-          // than counted again until the form's AI is read anew.
-          if (panel.value && took.length)
-            panel.value = {
-              ...panel.value,
-              waiting: Math.max(0, panel.value.waiting - took.length),
-            };
           laid.clear();
           core.hideTakenToast();
           outdated.value = false;
@@ -820,27 +799,6 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
         },
       );
     });
-    // In hand while the form is open, for the admin bar's ✦.
-    const inHand = useAiEntitiesInHand();
-    // Not `useId`: called in the browser only, it would shift every id the
-    // server rendered after it.
-    const handId = String(++hands);
-    const letGo = () => {
-      inHand.value = inHand.value.filter((entry) => entry.id !== handId);
-    };
-    watch(
-      () => [canonical.value, panel.value?.memory.entity.title] as const,
-      ([ref, title]) => {
-        if (!ref || !shown.value) return letGo();
-        const entry = { id: handId, ref, title: title ?? '' };
-        const index = inHand.value.findIndex((item) => item.id === handId);
-        inHand.value =
-          index < 0
-            ? [...inHand.value, entry]
-            : inHand.value.map((item, at) => (at === index ? entry : item));
-      },
-    );
-    onScopeDispose(letGo);
   }
 
   onEntitiesChanged(
@@ -853,18 +811,13 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
 
   const offers = core.offers;
 
-  // The admin bar's ✦ counts what waits for the owner, as the server read
-  // it with this form — less what is taken into the form, which waits only
-  // for its save, as the header's ✦ counts it.
+  // A ✦ asked here or a request run from the form makes a session: the
+  // admin bar counts it as the server read it with this form.
   if (import.meta.client)
     watch(
-      () =>
-        [
-          panel.value?.waiting,
-          [...laid.taken.value.keys()].filter((id) => stillTaken(id)).length,
-        ] as const,
-      ([waiting, takes]) => {
-        if (waiting !== undefined) setAiWaiting(Math.max(0, waiting - takes));
+      () => panel.value?.total,
+      (total) => {
+        if (total !== undefined) setAiSessionCount(total);
       },
     );
 
@@ -979,8 +932,7 @@ export interface FileAiOptions {
  * fields: the descriptions proposed for the file wait at the label, and one
  * accepted is laid into the field — applied once the field is saved, when
  * the server finds the description reading as it would leave it. A file is
- * no entity: it is never in hand for the admin bar's ✦, and nothing of it
- * is remembered here. With AI off nothing is shown.
+ * no entity: nothing of it is remembered here. With AI off nothing is shown.
  */
 export function provideFileAi(options: FileAiOptions): EntityAi {
   const aiEnabled = useAiEnabled();

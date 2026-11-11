@@ -451,9 +451,10 @@ onBeforeUnmount(removeDismissLayer);
                 sure.length
               }}</span></Button
             >
-            <span ref="finishButton" class="inline-flex">
+            <span ref="finishButton" class="group/anchor inline-flex">
               <Button
-                class="flex h-8 items-center gap-xs text-sm pointer-coarse:h-11"
+                class="flex h-8 items-center gap-xs text-sm
+                  group-popup-open/anchor:bg-accent pointer-coarse:h-11"
                 :disabled="busy"
                 data-review-finish
                 @click="finish"

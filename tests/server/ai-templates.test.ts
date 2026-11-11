@@ -1329,3 +1329,29 @@ describe('batches the owner asks for', () => {
     );
   });
 });
+
+describe('the words of «Mistakes in the text»', () => {
+  // The request the owner reads and sends says what the check does: the
+  // mistakes of meaning it marks (`MEANING_CATEGORIES`) are named in it.
+  it('name the check of meaning in every language', async () => {
+    const { default: en } = await import('../../shared/language/list/en');
+    const { default: ru } = await import('../../shared/language/list/ru');
+    const request = (module: unknown) =>
+      (
+        module as {
+          phrases: {
+            ai_template_builtins: { proofread: { instruction: string } };
+          };
+        }
+      ).phrases.ai_template_builtins.proofread.instruction;
+    for (const word of [
+      'again',
+      'does not follow',
+      'contradicting',
+      'stumbles',
+    ])
+      expect(request(en)).toContain(word);
+    for (const word of ['повтор', 'не следует', 'противоречие', 'спотыкается'])
+      expect(request(ru)).toContain(word);
+  });
+});

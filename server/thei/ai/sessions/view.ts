@@ -11,7 +11,6 @@ import {
   type SQL,
 } from 'drizzle-orm';
 import {
-  aiSessionStanding,
   type AiActionItem,
   type AiEntityRef,
   type AiEntityType,
@@ -21,7 +20,6 @@ import {
   type AiSessionItem,
   type AiSessionListResponse,
   type AiSessionOrigin,
-  type AiSessionOverview,
 } from '#layers/thei/shared/ai';
 import { useWordsSql, WORDS_SQL } from '../../search/words-sql';
 import {
@@ -368,94 +366,31 @@ export function listSessions(
 }
 
 /**
- * The latest sessions that wait for the owner, that work now, and that were
- * done within the week, archived ones aside: `room` of them in all, shared
- * evenly, what one kind cannot fill going to the others.
+ * The owner's sessions outside the archive, counted once: how many there are
+ * — the number beside the admin bar's ✦ — and what waits for the owner in
+ * them, actions and questions. What an archived session holds waits for
+ * nobody until it is brought back.
  */
-export function sessionOverview(room = 9): AiSessionOverview {
-  const now = Date.now();
-  // What waits may be older than the latest page; it is read on its own.
-  const latest = listSessions({ archived: false }).sessions;
-  const waiting = listSessions({ archived: false, waiting: true }).sessions;
-  const standing = (
-    items: AiSessionItem[],
-    wanted: ReturnType<typeof aiSessionStanding>,
-  ) => items.filter((item) => aiSessionStanding(item, now) === wanted);
-  const lists = [
-    standing(waiting, 'waiting'),
-    standing(latest, 'running'),
-    standing(latest, 'recent'),
-  ];
-  const shown = shareRoom(
-    lists.map((list) => list.length),
-    room,
-  );
-  const [waitingShown, running, recent] = lists.map((list, index) =>
-    list.slice(0, shown[index]),
-  ) as [AiSessionItem[], AiSessionItem[], AiSessionItem[]];
+export function aiCounts(): { waiting: number; total: number } {
   const { db, schema } = THEI_SERVER.useDb();
-  return {
-    total: Number(
-      db
-        .select({ total: sql<number>`count(*)` })
-        .from(schema.aiSessions)
-        .where(
-          and(isNull(schema.aiSessions.archivedAt), owned(schema.aiSessions)),
-        )
-        .get()?.total ?? 0,
-    ),
-    waiting: waitingShown,
-    running,
-    recent,
-  };
-}
-
-/**
- * How many of each list `room` places hold: even shares, and what a short
- * list leaves goes to the longer ones.
- */
-function shareRoom(lengths: number[], room: number): number[] {
-  const shown = lengths.map(() => 0);
-  let left = room;
-  for (;;) {
-    const open = lengths
-      .map((_, index) => index)
-      .filter((index) => shown[index]! < lengths[index]!);
-    if (!left || !open.length) return shown;
-    const each = Math.max(1, Math.floor(left / open.length));
-    for (const index of open) {
-      const take = Math.min(each, lengths[index]! - shown[index]!, left);
-      shown[index] = shown[index]! + take;
-      left -= take;
-    }
-  }
-}
-
-/**
- * What waits for the owner across sessions: actions and questions. What an
- * archived session holds waits for nobody until it is brought back.
- */
-export function aiWaiting(): number {
-  const { db, schema } = THEI_SERVER.useDb();
-  return Number(
-    db
-      .select({
-        total: sql<number>`coalesce(sum(${schema.aiSessions.waiting}), 0)`,
-      })
-      .from(schema.aiSessions)
-      .where(
-        and(isNull(schema.aiSessions.archivedAt), owned(schema.aiSessions)),
-      )
-      .get()?.total ?? 0,
-  );
+  const row = db
+    .select({
+      total: sql<number>`count(*)`,
+      waiting: sql<number>`coalesce(sum(${schema.aiSessions.waiting}), 0)`,
+    })
+    .from(schema.aiSessions)
+    .where(and(isNull(schema.aiSessions.archivedAt), owned(schema.aiSessions)))
+    .get();
+  return { waiting: Number(row?.waiting ?? 0), total: Number(row?.total ?? 0) };
 }
 
 /**
  * What every place that starts a session reads with it: whether a model is
- * set to answer one, and what waits for the owner, for the admin bar's ✦.
+ * set to answer one, what waits for the owner and how many sessions there
+ * are, as the admin bar counts them.
  */
 export function aiReadiness() {
-  return { modelReady: Boolean(sessionModel()), waiting: aiWaiting() };
+  return { modelReady: Boolean(sessionModel()), ...aiCounts() };
 }
 
 export function sessionHead(sessionUuid: string): AiSessionItem | undefined {

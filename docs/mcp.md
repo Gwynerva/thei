@@ -80,7 +80,7 @@ An app has no session in Thei. The owner talks to it in the app, and that
 conversation — what was asked, what was agreed, what was done — is where
 the work is followed; Thei keeps no copy of it. So an editor's key changes
 the archive at once with `apply_actions`, as the owner would in the admin:
-nothing waits at a field's ✦, nothing is counted in the admin bar, and
+nothing waits at a field's ✦, no session is counted in the admin bar, and
 nothing is kept to undo. What the owner asked for in the conversation is
 their consent.
 
@@ -105,14 +105,15 @@ in place, and one nothing uses is let go by the library's sweep a day later.
 
 Everything Thei's own model does happens in a **session**: a conversation,
 the actions proposed in it and what became of them. The owner starts one on
-the **Sessions** tab, from the ✦ of an entity's form — about that entity —
-or from the ✦ of the admin bar. A template's run is a session too.
+the **Sessions** tab or from the ✦ of an entity's form — about that entity.
+A template's run is a session too.
 
 A session waits for the owner while an action in it is undecided or a
-question unanswered; the admin bar counts what waits. Archived by the owner,
-or quiet for a week, a session goes to the archive, the last group of the
-list; there it is only read until the owner brings it back. A month in the
-archive and it is deleted, unless pinned, leaving its summary.
+question unanswered. The ✦ of the admin bar leads to the AI page and counts
+the sessions outside the archive. Archived by the owner, or quiet for a
+week, a session goes to the archive, the last group of the list; there it is
+only read until the owner brings it back. A month in the archive and it is
+deleted, unless pinned, leaving its summary.
 
 The owner may bring files along with a message — from the «+» menu, pasted or
 dropped, several at once. Each goes into the library with its place there,

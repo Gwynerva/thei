@@ -360,10 +360,12 @@ async function deleteItem() {
       <Field ai="periods" need="body-or-periods">
         <div class="flex items-center justify-between gap-sm">
           <FieldLabel>{{ phrase.section_periods }}</FieldLabel>
-          <div ref="periodPopupAnchor">
+          <div ref="periodPopupAnchor" class="group/anchor">
             <ModalHeaderButton
               icon="plus"
               :label="phrase.add"
+              class="group-popup-open/anchor:bg-bg-4
+                group-popup-open/anchor:text-text-1"
               @click="
                 periodPopupOpen ? (periodPopupOpen = false) : openPeriod()
               "

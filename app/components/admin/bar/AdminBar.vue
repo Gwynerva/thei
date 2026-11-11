@@ -276,7 +276,16 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
             class="font-semibold"
           />
 
-          <AdminBarAi v-if="adminBarData.aiEnabled" />
+          <AdminBarButton
+            v-if="adminBarData.aiEnabled"
+            to="/admin/ai/"
+            icon="sparkles"
+            :label="adminBarData.aiSessionCount + ''"
+            :title="phrase.x_ai_sessions(adminBarData.aiSessionCount)"
+            compact-label
+            class="font-semibold"
+            data-ai-bar
+          />
 
           <AdminBarButton
             v-if="contextAdminButton"
@@ -295,8 +304,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
             v-bind="{ [SITE_SEARCH_ANCHOR]: '' }"
             class="flex h-full shrink-0 cursor-pointer items-center
               bg-transparent px-2 opacity-80 transition max-xs:px-1.5 sm:px-3
-              popup-open:bg-accent/25 popup-open:opacity-100 hocus:bg-accent/25
-              hocus:opacity-100"
+              hocus:bg-accent/25 hocus:opacity-100"
             @click="showSearch($event.currentTarget as HTMLElement)"
           >
             <Icon name="search" class="shrink-0 text-xl max-xs:text-lg" />

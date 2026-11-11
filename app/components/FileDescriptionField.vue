@@ -63,7 +63,7 @@ async function load(keepTyped = false) {
     offers.value = read.offers ?? [];
     asking.value = read.asking ?? [];
     modelReady.value = Boolean(read.modelReady);
-    if (read.waiting !== undefined) setAiWaiting(read.waiting);
+    if (read.total !== undefined) setAiSessionCount(read.total);
     loaded.value = true;
   } catch (caught) {
     if (ticket !== reading) return;
