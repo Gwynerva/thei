@@ -584,7 +584,6 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
     if (this.pastedUrl)
       return h(ContentLinkPreviewCard, {
         label: this.pastedUrl,
-        loading: true,
         interactive: false,
       });
     return h(ContentAssetSkeleton, {
@@ -1932,7 +1931,7 @@ function getLabels(
       privateSection: 'Private section',
       privateSectionStart: 'Start of private section',
       privateSectionEnd: 'End of private section',
-      removePrivateSection: 'Remove private section',
+      removePrivateSection: 'Remove section',
       externalLinkError: 'Could not load link preview',
       refreshExternalLink: 'Refresh link',
       linkNote: 'A note for the link',

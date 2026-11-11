@@ -109,9 +109,23 @@ export function classifyAnchor(target: Element, anchor: Element): AnchorKind {
 }
 
 /**
+ * Whether `outer` holds `inner` and is not it: `Node.contains` counts a node
+ * as holding itself, which would let two hints of one anchor each claim to be
+ * inside the other.
+ */
+export function holdsAnchor(
+  outer: Pick<Node, 'contains'>,
+  inner: Node,
+): boolean {
+  return outer !== inner && outer.contains(inner);
+}
+
+/**
  * The anchors found around one point, innermost first: an icon with its own
  * hint inside a chip with another is the icon's. `contains(outer, inner)`
- * tells which holds which.
+ * tells which holds which, and never says an anchor holds itself: anchors
+ * neither of which holds the other — two hints of one element too — keep the
+ * order they came in.
  */
 export function innermostFirst<T>(
   anchors: readonly T[],
@@ -166,8 +180,10 @@ export function installPressHints(win: Window & typeof globalThis): PressHints {
       if (anchor) found.push({ anchor, provider });
     }
     if (!found.length) return null;
+    // Two kinds of hint on one element stay in the order their providers
+    // were registered in: the title popup, the page's first, is the one shown.
     const ordered = innermostFirst(found, (outer, inner) =>
-      outer.anchor.contains(inner.anchor),
+      holdsAnchor(outer.anchor, inner.anchor),
     );
     // An anchor with nothing to say right now — a name not cut short —
     // gives way to the one around it.

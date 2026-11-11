@@ -5,7 +5,9 @@ import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 /**
  * One entity in a picker's list: its picture along the right edge, its
  * kind's glyph and its title — and, with `secondary`, what it belongs to or
- * says of itself on a quieter line under it. `active` is the row Enter
+ * says of itself on a quieter line under it. An excerpt is told apart by what
+ * it is about, and found by it: that line names it wherever the row
+ * stands, in place of its parent. `active` is the row Enter
  * takes, ringed as the select's option is; `chosen`, the choice a confirming
  * picker holds, marked in the accent.
  */
@@ -18,10 +20,24 @@ const props = defineProps<{
 }>();
 defineEmits<{ pick: []; point: [event: PointerEvent] }>();
 
-const detail = computed(() =>
-  props.secondary
-    ? [props.item.parent?.title, props.item.summary].filter(Boolean).join(' · ')
+const about = computed(() =>
+  props.item.subject
+    ? `${phrase.value.public_excerpt_about} ${entityListName(props.item.subject, 'abbreviated')}`
     : '',
+);
+const detail = computed(() =>
+  about.value
+    ? [about.value, props.secondary && props.item.summary]
+        .filter(Boolean)
+        .join(' · ')
+    : props.secondary
+      ? [
+          props.item.parent && entityListName(props.item.parent),
+          props.item.summary,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : '',
 );
 </script>
 
@@ -37,7 +53,7 @@ const detail = computed(() =>
         overflow-hidden rounded-sm bg-bg-1 text-left transition-colors
         hocus:bg-bg-3"
       :class="[
-        secondary ? 'min-h-12' : 'min-h-10 pointer-coarse:min-h-11',
+        secondary || detail ? 'min-h-12' : 'min-h-10 pointer-coarse:min-h-11',
         {
           'entity-row-active bg-bg-3': active,
           'entity-row-chosen': chosen,
@@ -59,7 +75,7 @@ const detail = computed(() =>
            across the picture: each gets room for the halo all round. -->
       <span
         class="relative flex min-w-0 flex-1 flex-col gap-0.5 py-1 pr-16 pl-xs
-          text-halo-bg-1"
+          text-halo-strong-bg-1"
       >
         <span class="flex min-w-0 items-center gap-1 text-sm font-semibold"
           ><Icon
@@ -75,6 +91,7 @@ const detail = computed(() =>
           v-if="detail"
           class="-m-[0.75em] block truncate p-[0.75em] text-xs text-text-3"
           :class="{ italic: item.date }"
+          :data-entity-about="about ? '' : undefined"
           >{{ detail }}</span
         >
       </span>

@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import type { PublicEntityReference } from '#layers/thei/shared/api/public';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
+import {
+  entityCardFromLink,
+  vEntityCard,
+} from '#layers/thei/app/composables/entity-cards';
 
 defineProps<{ projects: PublicEntityReference[] }>();
 
@@ -40,7 +44,7 @@ function accentStyle(project: PublicEntityReference) {
         :key="project.href"
         :to="project.href"
         :aria-label="publicText(project.title)"
-        :data-title-popup="publicText(project.summary) || undefined"
+        v-entity-card="entityCardFromLink(project)"
         class="group flex w-24 min-w-0 flex-col items-center text-center
           text-text-2 transition-colors sm:w-30 hocus:text-text-1"
       >

@@ -2,6 +2,10 @@
 import type { PublicTagSummary } from '#layers/thei/shared/api/public';
 import { tagAccentCssColor } from '#layers/thei/shared/tag';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
+import {
+  entityCardFromTag,
+  vEntityCard,
+} from '#layers/thei/app/composables/entity-cards';
 
 withDefaults(
   defineProps<{
@@ -26,7 +30,7 @@ withDefaults(
       v-for="tag in tags"
       :key="tag.publicId"
       :to="buildTagUrl(tag.slug, tag.publicId)"
-      v-bind="titlePopup(publicText(tag.description))"
+      v-entity-card="entityCardFromTag(tag)"
       class="pointer-events-auto relative z-3 inline-flex max-w-full
         items-center gap-[0.4em] leading-none font-normal transition
         focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-accent

@@ -103,7 +103,7 @@ const accentColor = computed(() =>
   color: color-mix(in oklab, var(--tag-accent) 75%, var(--color-text-1));
 }
 
-.tag-chip:focus-visible {
+:is(.tag-chip:focus-visible, [data-popup-open] > .tag-chip) {
   border-color: color-mix(in oklab, var(--tag-accent) 80%, transparent);
 }
 
@@ -113,7 +113,7 @@ const accentColor = computed(() =>
   }
 }
 
-.tag-chip:focus-visible::before {
+:is(.tag-chip:focus-visible, [data-popup-open] > .tag-chip)::before {
   opacity: 1;
 }
 

@@ -2,6 +2,10 @@
 import TheiLink from '../TheiLink';
 import type { ProfilePageLink } from '#layers/thei/shared/profile';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
+import {
+  entityCard,
+  vEntityCard,
+} from '#layers/thei/app/composables/entity-cards';
 
 const props = defineProps<{
   page: ProfilePageLink;
@@ -20,6 +24,15 @@ const accent = computed(() => imageAccentCssColor(props.page.media?.accent));
   <component
     :is="linked ? TheiLink : 'div'"
     v-on="events"
+    v-entity-card="
+      linked
+        ? entityCard('page', {
+            title: page.title,
+            summary: page.summary,
+            iconMedia: page.media,
+          })
+        : undefined
+    "
     :to="linked ? page.href : undefined"
     class="pinned-page group relative flex size-full min-h-14 min-w-0
       items-center overflow-hidden text-text-1 no-underline transition-colors"
@@ -51,7 +64,7 @@ const accent = computed(() => imageAccentCssColor(props.page.media?.accent));
 </template>
 
 <style scoped>
-.pinned-page:is(:focus-visible, :has(:focus-visible)) {
+.pinned-page:is(:focus-visible, :has(:focus-visible), [data-popup-open]) {
   border-color: color-mix(in oklab, var(--pinned-page-accent) 40%, transparent);
   background-color: color-mix(
     in oklab,
@@ -82,7 +95,11 @@ const accent = computed(() => imageAccentCssColor(props.page.media?.accent));
  * ended in a hard edge against them. There the tint dissolves toward them
  * instead, drawn as a layer of its own so that it can still fade in.
  */
-.pinned-page-fading:is(:focus-visible, :has(:focus-visible)) {
+.pinned-page-fading:is(
+  :focus-visible,
+  :has(:focus-visible),
+  [data-popup-open]
+) {
   background-color: transparent;
 }
 
@@ -106,7 +123,11 @@ const accent = computed(() => imageAccentCssColor(props.page.media?.accent));
     var(--default-transition-timing-function);
 }
 
-.pinned-page-fading:is(:focus-visible, :has(:focus-visible))::before {
+.pinned-page-fading:is(
+    :focus-visible,
+    :has(:focus-visible),
+    [data-popup-open]
+  )::before {
   opacity: 1;
 }
 
@@ -116,7 +137,8 @@ const accent = computed(() => imageAccentCssColor(props.page.media?.accent));
   }
 }
 
-.pinned-page:is(:focus-visible, :has(:focus-visible)) :deep(svg) {
+.pinned-page:is(:focus-visible, :has(:focus-visible), [data-popup-open])
+  :deep(svg) {
   color: var(--pinned-page-accent);
 }
 

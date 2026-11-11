@@ -84,6 +84,20 @@ describe('hocus', () => {
     }
   });
 
+  it('holds for an anchor whose popup is open, whatever points at it', async () => {
+    const found = rules(await build(candidates));
+    for (const candidate of ['hocus', 'group-hocus', 'has-hocus', 'applied']) {
+      const open = found.filter(
+        ({ selector }) =>
+          selector.startsWith(`.${candidate}`) &&
+          selector.includes('[data-popup-open]'),
+      );
+      expect(open.length, candidate).toBeGreaterThan(0);
+      for (const rule of open)
+        expect(rule.media, rule.selector).toBeUndefined();
+    }
+  });
+
   it('reaches the group it names', async () => {
     const css = await build(['group-hocus/upload:[color:red]']);
     expect(css).toContain(':where(.group\\/upload):hover *');

@@ -192,6 +192,60 @@ const fieldValue = computed<ContentFieldModelValue>(() => ({
         :interactive="false"
       />
     </div>
+    <!-- One card for every link: its kind, and what it belongs to. -->
+    <div class="mx-auto grid max-w-180 gap-sm p-sm" data-link-cards>
+      <ContentEntityLinkPreviewCard
+        entity-type="excerpt"
+        title="An excerpt of a day"
+        summary="A named part of a diary entry"
+        :parent="{ type: 'diary-entry', title: '', date: '2026-04-06' }"
+        :interactive="false"
+        data-test-excerpt-link
+      />
+      <ContentEntityLinkPreviewCard
+        entity-type="project-section"
+        title="Launch"
+        summary="A section names its project"
+        :parent="{ type: 'project', title: 'The project' }"
+        :interactive="false"
+        data-test-section-link
+      />
+      <ExternalLinksExternalLinkPreviewCard
+        :link="{
+          url: 'https://example.org/page',
+          title: 'A page of another site',
+          description: 'What the site says of itself',
+          faviconMedia: image('square'),
+        }"
+        :interactive="false"
+        data-test-external-link
+      />
+      <ContentEntityLinkPreviewCard
+        entity-type="project"
+        title="A project of its own"
+        summary="Nothing above its title: it belongs to nothing"
+        :interactive="false"
+        data-test-project-link
+      />
+      <!-- A sign as dark or as light as the ground keeps its outline. -->
+      <ExternalLinksExternalLinkPreviewCard
+        v-for="tone in ['black', 'white']"
+        :key="tone"
+        :link="{
+          url: `https://example.org/a/long/address/that/runs/out/of/room/${tone}/and/then/goes/on/for/a/while/longer/than/any/card/is/wide`,
+          title: `A site with a ${tone} sign`,
+          faviconMedia: {
+            kind: 'image',
+            src: `/mark-${tone}.svg`,
+            previewSrc: `/mark-${tone}.svg`,
+            width: 32,
+            height: 32,
+          },
+        }"
+        :interactive="false"
+        :data-test-mark="tone"
+      />
+    </div>
     <div class="mx-auto grid max-w-72 gap-sm p-sm" data-generated-card>
       <PublicContentCard
         href="#"
@@ -235,6 +289,25 @@ const fieldValue = computed<ContentFieldModelValue>(() => ({
         :media="banner"
         titleless
         cloud
+      />
+    </div>
+    <!-- Entries naming their excerpts: under a lead, and with no text of
+         their own. -->
+    <div class="mx-auto grid w-full max-w-180 gap-sm p-sm" data-diary-parts>
+      <PublicContentCard
+        v-for="(lead, index) in ['A thought of the day', '']"
+        :key="index"
+        href="#"
+        title=""
+        :summary="lead"
+        :date="`2026-09-2${index}`"
+        :parts="[
+          { title: 'The stringers', href: '#stringers' },
+          { title: 'Varnish', href: '#varnish' },
+        ]"
+        titleless
+        cloud
+        :data-lead="lead ? 'own' : 'none'"
       />
     </div>
     <button type="button" data-clear-focus>Leave previews</button>

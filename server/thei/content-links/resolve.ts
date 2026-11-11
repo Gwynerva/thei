@@ -30,6 +30,7 @@ export async function resolveContentEntityLink(
   const media = await entity.media(
     viewer.isAdmin ? 'admin' : 'public',
     opensGrantOwner(viewer, entity.grantOwner),
+    viewer,
   );
   return {
     ...reference,

@@ -259,7 +259,6 @@ onBeforeUnmount(() => {
       :result="result"
       :label="anchor.textContent || ''"
       :note="anchor.dataset.contentNote"
-      :loading="!result"
       :interactive="false"
       :playback
       :continuous-project-media="

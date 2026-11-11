@@ -101,13 +101,6 @@ const props = defineProps<{
   parts?: LifeExcerptName[];
 }>();
 
-/** What an excerpt of the card is about, by name, as its token's hint. */
-function aboutName(part: Extract<LifeExcerptName, { href: string }>) {
-  return part.about
-    ? publicExcerptSubjectName(part.about)
-    : phrase.value.excerpt_without_about;
-}
-
 const datePresentation = computed(
   () =>
     props.datePresentation ??
@@ -163,6 +156,26 @@ const drawn = computed(
 const relationText = computed(() =>
   props.relation?.note ? publicText(props.relation.note) : '',
 );
+/** A plain "related" with no reason says nothing the card's place does not. */
+const showsRelation = computed(
+  () =>
+    !props.parent &&
+    Boolean(props.relation) &&
+    (props.relation!.type !== 'related' || Boolean(relationText.value)),
+);
+/**
+ * Whether the card has any copy to show. An entry with no text of its own
+ * has no lead, and one whose excerpts the reader is not shown has none of
+ * those either.
+ */
+const hasCopy = computed(
+  () =>
+    Boolean(props.parent) ||
+    !props.titleless ||
+    Boolean(props.summary) ||
+    showsRelation.value ||
+    Boolean(props.parts?.length),
+);
 
 const visibleTags = computed(() => props.tags?.slice(0, 3) ?? []);
 const visibleProjects = computed(() => props.projects ?? []);
@@ -217,7 +230,9 @@ const hasFooter = computed(
     <TheiLink
       v-if="href"
       :to="href"
-      :aria-label="publicText(title)"
+      :aria-label="
+        titleless ? entityListName({ title, date }) : publicText(title)
+      "
       class="absolute inset-0 z-1 rounded-normal focus-visible:ring-2
         focus-visible:ring-accent focus-visible:ring-inset"
     />
@@ -347,21 +362,26 @@ const hasFooter = computed(
         neighbour. Only a title and its summary sit closer: they are one unit.
         A clamped block clips its own halo, which draws a hard seam across the
         media, so it gets room for the halo on either side; none above or
-        below, where it would uncover the next line.
+        below, where it would uncover the next line. A piece that is not there
+        is not drawn, so it takes no step either: an entry that is nothing but
+        its excerpts names them right under its date.
       -->
       <div
+        v-if="hasCopy"
         class="public-card-copy flex max-w-4/5 min-w-0 flex-col gap-sm
           sm:max-w-3/4"
       >
         <PublicParentLink v-if="parent" :parent="parent" :relation />
-        <p
-          v-if="titleless"
-          class="public-card-title -mx-[0.75em] line-clamp-4 px-[0.75em]
-            text-base leading-relaxed font-medium text-balance text-text-2
-            italic transition sm:text-lg"
-        >
-          {{ publicText(summary) }}
-        </p>
+        <template v-if="titleless">
+          <p
+            v-if="summary"
+            class="public-card-title -mx-[0.75em] line-clamp-4 px-[0.75em]
+              text-base leading-relaxed font-medium text-balance text-text-2
+              italic transition sm:text-lg"
+          >
+            {{ publicText(summary) }}
+          </p>
+        </template>
         <div v-else class="min-w-0">
           <h3
             class="public-card-title text-xl font-bold tracking-tight transition
@@ -379,23 +399,24 @@ const hasFooter = computed(
           </p>
         </div>
         <RelationLine
-          v-if="
-            !parent && relation && (relation.type !== 'related' || relationText)
-          "
+          v-if="showsRelation && relation"
           :type="relation.type"
           :text="relationText"
           italic
           class="-mx-[0.75em] line-clamp-2 px-[0.75em] text-sm text-text-2"
         />
-        <!-- The excerpts in a row while they fit, each after the token of
-             what it is about — its picture, or its kind's icon, or a dead
-             face once that is deleted — whose name its hint gives. One the
-             reader may not read is its codename with a lock, as a secret
-             card is, leading nowhere. The links stay clickable above the
-             card's own full-size link. -->
+        <!-- The excerpts in a row while they fit, each a chip (`EntityChip`)
+             of its title with the picture of what it is about, or its
+             kind's icon, showing the excerpt's card. One about nothing any
+             more has a dead face there and says so in a hint in place of
+             the card: one element shows one of the two, the hint
+             (`resolveHit` in `press-hint-dom.ts`). One the reader may not
+             read is its codename, leading nowhere, as a secret card is.
+             The chips stay clickable above the card's own full-size
+             link. -->
         <ul
           v-if="parts?.length"
-          class="flex min-w-0 flex-wrap gap-x-sm gap-y-1 text-sm"
+          class="flex min-w-0 flex-wrap gap-1.5"
           data-card-parts
         >
           <li
@@ -403,45 +424,43 @@ const hasFooter = computed(
             :key="part.secret ? part.key : part.href"
             class="flex min-w-0"
           >
-            <span
+            <EntityChip
               v-if="part.secret"
-              class="pointer-events-auto relative z-3 inline-flex min-w-0
-                items-center gap-xs text-text-3"
+              :title="publicText(part.title)"
+              :media="part.iconMedia"
+              icon="excerpt"
+              size="sm"
+              role="img"
+              :aria-label="`${publicText(part.title)} — ${phrase.secret_hint}`"
+              :data-title-popup="phrase.secret_hint"
+              class="pointer-events-auto z-3"
               data-card-part-secret
-            >
-              <EntityTokenIcon
-                :media="part.iconMedia"
-                icon="excerpt"
-                class="size-6"
-              />
-              <span class="min-w-0 truncate italic">{{ part.title }}</span>
-              <Icon
-                name="lock-close"
-                :data-title-popup="phrase.secret_hint"
-                :aria-label="phrase.secret_hint"
-                role="img"
-                class="shrink-0 opacity-60"
-              />
-            </span>
-            <TheiLink
+            />
+            <EntityChip
               v-else
-              :to="part.href"
-              class="group/part pointer-events-auto relative z-3 inline-flex
-                min-w-0 items-center gap-xs font-semibold text-text-2 transition
-                hocus:text-accent"
-            >
-              <EntityTokenIcon
-                :media="part.about?.iconMedia"
-                :icon="
-                  part.about
-                    ? relationEntityIcon(part.about.entityType ?? 'project')
-                    : 'face-dead'
-                "
-                :data-title-popup="aboutName(part)"
-                class="size-6 transition group-hocus/part:brightness-125"
-              />
-              <span class="min-w-0 truncate">{{ publicText(part.title) }}</span>
-            </TheiLink>
+              :title="publicText(part.title)"
+              :href="part.href"
+              :media="part.about?.iconMedia"
+              :icon="
+                part.about
+                  ? relationEntityIcon(part.about.entityType ?? 'project')
+                  : 'face-dead'
+              "
+              :card="
+                part.about
+                  ? entityCard('excerpt', {
+                      title: part.title,
+                      summary: part.summary,
+                      iconMedia: part.about.iconMedia,
+                    })
+                  : undefined
+              "
+              size="sm"
+              :data-title-popup="
+                part.about ? undefined : phrase.excerpt_without_about
+              "
+              class="pointer-events-auto z-3"
+            />
           </li>
         </ul>
       </div>

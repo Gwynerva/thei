@@ -113,6 +113,28 @@ export function externalLinkHostname(url: string): string {
 }
 
 /**
+ * An address as a reader reads it under a link's card: without the scheme,
+ * `www.`, a trailing slash and the fragment, with a port it names kept, and
+ * with its letters decoded, not as percent signs. An address that cannot be
+ * read stays as given.
+ */
+export function externalLinkAddress(url: string): string {
+  try {
+    const { host, pathname, search } = new URL(url);
+    const path = `${pathname}${search}`.replace(/\/$/, '');
+    let read = path;
+    try {
+      read = decodeURI(path);
+    } catch {
+      // A stray percent sign: the path is shown as written.
+    }
+    return `${host.replace(/^www\./i, '')}${read}`;
+  } catch {
+    return url;
+  }
+}
+
+/**
  * What makes two addresses "the same link" to a reader: the fragment and a
  * trailing slash do not open a different page. Everything that decides
  * whether two links repeat each other compares this.

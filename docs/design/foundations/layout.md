@@ -34,8 +34,8 @@ numeric utilities, the named spacing, type — tightens together on a phone.
 
 A component that sits both across a page and in a narrow card or column answers
 to the room it is given, not to the screen. Mark its container with `@container`
-and write the size inline, as `app/components/external-links/ExternalLinkPreviewCard.vue`
-does with `@max-[24rem]:`. This needs no permission. Where the screen is what
+and write the size inline, as `app/components/ai/AiFormOffers.vue`
+does with `@max-[26rem]:`. This needs no permission. Where the screen is what
 matters, keep to `sm:`.
 
 ## Page width
@@ -87,8 +87,12 @@ and under the sign-in, install, update and OAuth pages.
 - `tr-normal`, `tr-section`, `th`, `p-td` and `p-td-tight` for tables;
 - `scrollbar-mini`, `scrollbar-hover` and `scrollbar-clear` for boxes that
   scroll inside a surface;
-- `text-halo-*` for words over a picture's fading edge, `mask-ease` for that
-  fade itself.
+- `text-halo-*` for words over a picture's fading edge, its denser
+  `text-halo-strong-*` for the short lines of a link's card, in a popup or
+  in a text (`app/components/LinkPreviewCard.vue`), and of a row of a list
+  (`app/components/content/ContentEntityRow.vue`,
+  `app/components/search/SearchQuickRow.vue`), `mask-ease` for that fade
+  itself.
 
 ## Why
 

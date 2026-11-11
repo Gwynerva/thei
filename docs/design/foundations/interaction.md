@@ -10,7 +10,10 @@ must always see.
 `hocus:` is a mouse or a pen pointing at something, or the keyboard's focus on
 it (`@custom-variant hocus` in `app/styles/main.css`). A touch screen never
 matches it, as with Tailwind's own `hover:`: a phone reports the last tap as a
-hover, and the look would stay on whatever was tapped.
+hover, and the look would stay on whatever was tapped. An anchor whose popup
+is open (`data-popup-open`) matches it too, for as long as the popup is: the
+anchor shows where its popup came from in the look it already has
+([Popups](../components/popups.md)).
 
 - Use `hocus:` for the look of a thing pointed at or focused, rather than a
   pair of `hover:` and `focus-visible:`. `group-hocus:` follows a parent.

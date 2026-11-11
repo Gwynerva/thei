@@ -120,6 +120,8 @@ Components:
   under small captions, facts, the file's description, a video's still chosen
   by hand, places as chips, the editor's screens, a visitor's «Где ещё
   используется».
+- [Entity chip](components/entity-chip.md) — `EntityChip`, another entity
+  named in a line, and the card it shows.
 - [File library](components/file-library.md) — the stored files as one run
   through time, in the picker and on the storage page: days of places, the
   bar of the month and the years, here and used lately, words read as

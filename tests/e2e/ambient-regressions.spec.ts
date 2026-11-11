@@ -715,7 +715,7 @@ test('an internal link card keeps most of a narrow column for its words', async 
   await link.scrollIntoViewIfNeeded();
   const linkBox = (await link.boundingBox())!;
   const words = await link
-    .locator('[data-entity-preview-text]')
+    .locator('[data-link-preview-text]')
     .evaluate(
       (element) =>
         element.clientWidth -
@@ -723,9 +723,97 @@ test('an internal link card keeps most of a narrow column for its words', async 
     );
   expect(words).toBeGreaterThan(linkBox.width * 0.6);
   // A truncated title ends in an ellipsis rather than a cut letter.
+  await expect(link.locator('[data-link-preview-title]')).toHaveCSS(
+    'text-overflow',
+    'ellipsis',
+  );
+});
+
+test('a link card says what its target is and what it belongs to', async ({
+  page,
+}) => {
+  await open(page, '/ambient-regression?banner=wide');
+  const cards = page.locator('[data-link-cards]');
+  await cards.scrollIntoViewIfNeeded();
+  const glyph = (scope: Locator) =>
+    scope.locator('use').evaluate((use) => use.getAttribute('href'));
+  // An excerpt of a diary entry: its kind is the glyph before its title, and
+  // the line over it names the entry by its glyph and its day written out.
+  const excerpt = cards.locator('[data-test-excerpt-link]');
+  const kind = excerpt.locator('[data-link-preview-kind]');
+  await expect(kind).toHaveAttribute('aria-label', 'Excerpt');
+  expect(await glyph(kind)).toContain('excerpt');
+  await expect(excerpt).not.toContainText('Excerpt');
+  const parents = excerpt.locator('[data-link-preview-parents]');
+  await expect(parents.locator('[data-link-preview-parent]')).toHaveText(
+    'April 6, 2026',
+  );
+  expect(await glyph(parents.locator('svg').first())).toContain('thought');
+  await expect(excerpt).not.toContainText('2026-04-06');
+  const [above, title] = [
+    (await parents.boundingBox())!,
+    (await excerpt.locator('[data-link-preview-title]').boundingBox())!,
+  ];
+  expect(above.y + above.height).toBeLessThanOrEqual(title.y + 12);
+  // A section names its project there, with a project's glyph.
+  const section = cards.locator('[data-test-section-link]');
+  await expect(section.locator('[data-link-preview-kind]')).toHaveAttribute(
+    'aria-label',
+    'Project section',
+  );
+  await expect(section.locator('[data-link-preview-parent]')).toHaveText(
+    'The project',
+  );
+  // What belongs to nothing has no line over its title.
   await expect(
-    link.locator('[data-entity-preview-text] .truncate').first(),
-  ).toHaveCSS('text-overflow', 'ellipsis');
+    cards.locator('[data-test-project-link] [data-link-preview-parents]'),
+  ).toHaveCount(0);
+  // Another site is the same card: a globe before its title, its address
+  // last, its favicon on the edge at its own size over its blurred copy, and
+  // nothing standing to the left of the words.
+  const external = cards.locator('[data-test-external-link]');
+  await expect(external.locator('[data-link-preview-kind]')).toHaveAttribute(
+    'aria-label',
+    'External link',
+  );
+  await expect(external.locator('[data-link-preview-parents]')).toHaveCount(0);
+  await expect(external.locator('[data-link-preview-address]')).toHaveText(
+    'example.org/page',
+  );
+  await expect(external.locator('.media-edge-strip img')).toHaveCount(1);
+  const mark = (await external
+    .locator('[data-link-preview-mark]')
+    .boundingBox())!;
+  expect(mark.width).toBeGreaterThanOrEqual(40);
+  expect(mark.width).toBeLessThanOrEqual(48);
+  expect(mark.height).toBeLessThanOrEqual(48);
+  const [box, words] = [
+    (await external.boundingBox())!,
+    (await external.locator('[data-link-preview-text]').boundingBox())!,
+  ];
+  expect(words.x - box.x).toBeLessThan(20);
+  // A long address is cut with an ellipsis, on one line inside the card.
+  const long = cards.locator('[data-test-mark="black"]');
+  const address = long.locator('[data-link-preview-address]');
+  await expect(address).toHaveCSS('text-overflow', 'ellipsis');
+  expect(
+    await address.evaluate(
+      (element) => element.scrollWidth > element.clientWidth,
+    ),
+  ).toBe(true);
+  // A favicon is ringed light and dark, whatever it is and whatever the
+  // theme; the site's own glyph on a card with no picture never is.
+  expect(
+    await cards
+      .locator('[data-test-project-link] [data-link-preview-mark]')
+      .evaluate((element) => getComputedStyle(element).filter),
+  ).toBe('none');
+  for (const tone of ['black', 'white'])
+    expect(
+      await cards
+        .locator(`[data-test-mark="${tone}"] [data-link-preview-mark]`)
+        .evaluate((element) => getComputedStyle(element).filter),
+    ).toMatch(/drop-shadow.*drop-shadow.*drop-shadow/);
 });
 
 test('admin previews play only while hovered or focused, including nested focus', async ({
@@ -819,6 +907,32 @@ test('a diary cloud decodes its video once and draws the backdrop from what the 
       .toBeLessThan(12);
   }
 });
+
+for (const width of [390, 1280]) {
+  test(`a diary cloud with no text of its own names its excerpts right under its date at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await open(page, '/ambient-regression?banner=none');
+    const withLead = page.locator('[data-diary-parts] [data-lead="own"]');
+    const bare = page.locator('[data-diary-parts] [data-lead="none"]');
+    await bare.scrollIntoViewIfNeeded();
+    // No lead means no paragraph and no heading: nothing empty takes a step.
+    await expect(withLead.locator('.public-card-title')).toHaveCount(1);
+    await expect(bare.locator('.public-card-copy p, h3')).toHaveCount(0);
+    await expect(bare.locator('[data-card-parts] li')).toHaveCount(2);
+    const below = async (card: Locator, selector: string) => {
+      const date = (await card.locator('time').boundingBox())!;
+      const piece = (await card.locator(selector).boundingBox())!;
+      return piece.y - (date.y + date.height);
+    };
+    // The excerpts stand as far under the date as a lead does.
+    expect(await below(bare, '[data-card-parts]')).toBeCloseTo(
+      await below(withLead, '.public-card-title'),
+      0,
+    );
+  });
+}
 
 test('a video in the hero showcase wears its mark and plays only while pointed at or focused', async ({
   page,

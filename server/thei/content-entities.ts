@@ -1,6 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import type {
+  ContentEntityParent,
   ContentEntityReference,
   ContentEntityType,
 } from '#layers/thei/shared/content-link';
@@ -13,6 +14,7 @@ import {
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import type { InternalUrlTarget } from '#layers/thei/shared/internal-url';
 import { diaryLead } from '#layers/thei/shared/diary-text';
+import { describedSummaries, describedSummary } from './content/described';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
@@ -32,7 +34,9 @@ import {
 } from './excerpts';
 import {
   excerptAccess,
+  excerptIsOwn,
   excerptOpens,
+  excerptParentRef,
   excerptShownWithParent,
   findExcerptParentByAddress,
   loadExcerptParent,
@@ -49,8 +53,16 @@ import {
 } from './assets/urls';
 import { resolveEntityIconMedia } from './media/generated-icon';
 import { buildAdminEntityBanner, buildPublicBanner } from './entity-banner';
+import { buildAdminExcerptsPreviewMedia } from './excerpts/preview-media';
+import {
+  diaryMediaParent,
+  eventMediaParent,
+  findExcerptsMedia,
+  type MediaParent,
+} from './public/parent-media';
 import {
   OWNER,
+  STRANGER,
   opensGrantOwner,
   opensPrivate,
   type PublicViewer,
@@ -87,8 +99,15 @@ export type ContentEntityRecord = {
   synonyms?: string[];
   /** The day of a diary entry, which is also its title. */
   date?: string;
-  /** The project a section belongs to; the parent of an excerpt, a diary entry by its day. */
-  parent?: { title: string; href: string };
+  /** The project a section belongs to; the parent of an excerpt. */
+  parent?: ContentEntityParent;
+  /**
+   * What an excerpt is about, and that entity's other names: what the
+   * owner's picker finds the excerpt by, and names it with. Only a list read
+   * as the owner carries them (`listContentEntities`).
+   */
+  subject?: ContentEntityParent;
+  subjectSynonyms?: string[];
   /**
    * The entity whose share link opens this one's private side: itself, the
    * project of a section, the parent of an excerpt. A tag has none; it is
@@ -106,11 +125,14 @@ export type ContentEntityRecord = {
    * first picture of its body. Drawn on demand, because a search lists far more entities than
    * it ever shows. `admin` serves the files through the admin's own preview
    * addresses; `public` through the entity's public ones, from the public part
-   * of its body unless `includePrivate`.
+   * of its body unless `includePrivate`. An event or a diary entry with no
+   * picture of its own takes one from its excerpts — those `viewer` is shown
+   * on its page, a stranger's when no viewer is given.
    */
   media: (
     view: MediaView,
     includePrivate?: boolean,
+    viewer?: PublicViewer,
   ) => Promise<MediaDescriptor>;
 };
 
@@ -184,7 +206,8 @@ function iconMedia(
 
 /**
  * The banner of an event or a section, else the first picture of the body,
- * else the drawn icon of the kind when the body opens with none — the same
+ * else — for an event or a diary entry, `excerpts` — the first picture of its
+ * excerpts the viewer is shown, else the drawn icon of the kind — the same
  * fallback a project without an icon gets.
  */
 function bodyMedia(
@@ -193,24 +216,31 @@ function bodyMedia(
   slot: ContentSlot,
   context: PublicContentEntity,
   banner?: (view: MediaView) => Promise<MediaDescriptor | undefined>,
+  excerpts?: MediaParent,
 ) {
-  return async (view: MediaView, includePrivate = false) =>
+  return async (
+    view: MediaView,
+    includePrivate = false,
+    viewer: PublicViewer = STRANGER,
+  ) =>
     (await banner?.(view)) ??
     resolveEntityIconMedia(
       ownerType,
       id,
       view === 'admin'
-        ? buildContentPreview(
+        ? (buildContentPreview(
             (await THEI_SERVER.content.buildFieldValue(ownerType, id, slot))
               ?.data,
-          ).media
-        : await buildPublicContentPreviewMedia(
+          ).media ??
+            (excerpts && (await buildAdminExcerptsPreviewMedia(excerpts))))
+        : ((await buildPublicContentPreviewMedia(
             ownerType,
             id,
             slot,
             context,
             includePrivate,
-          ),
+          )) ??
+            (excerpts && (await findExcerptsMedia(excerpts, viewer)))),
     );
 }
 
@@ -242,12 +272,13 @@ function sectionRecord(
   id: string,
   child: ChildRow,
   project: ProjectRow,
+  summary: string,
 ): ContentEntityRecord {
   return {
     entityType: 'project-section',
     entityId: id,
     title: child.title,
-    summary: child.summary,
+    summary,
     href: buildProjectSectionUrl(
       project.humanReadableSlug,
       project.publicId,
@@ -259,6 +290,7 @@ function sectionRecord(
     humanReadableSlug: child.humanReadableSlug,
     publicId: child.publicId,
     parent: {
+      type: 'project',
       title: project.title,
       href: buildProjectUrl(project.humanReadableSlug, project.publicId),
     },
@@ -278,6 +310,46 @@ function sectionRecord(
             }),
     ),
   };
+}
+
+/**
+ * A section is described by its summary, or else by how its text begins, as
+ * far as the viewer reads its project.
+ */
+async function sectionRecordOf(
+  child: ChildRow & { sectionUuid: string },
+  project: ProjectRow,
+  viewer: PublicViewer,
+): Promise<ContentEntityRecord> {
+  return sectionRecord(
+    child.sectionUuid,
+    child,
+    project,
+    await describedSummary(
+      'project-section',
+      child.sectionUuid,
+      child.summary,
+      opensPrivate(viewer, 'project', project.projectUuid),
+    ),
+  );
+}
+
+/** An excerpt the same, as far as the viewer reads its parent. */
+async function excerptRecordOf(
+  excerpt: ExcerptRecord,
+  parent: ExcerptParentInfo,
+  viewer: PublicViewer,
+): Promise<ContentEntityRecord> {
+  return excerptRecord(
+    excerpt,
+    parent,
+    await describedSummary(
+      'excerpt',
+      excerpt.excerptUuid,
+      excerpt.summary,
+      excerptIsOwn(viewer, parent),
+    ),
+  );
 }
 
 /**
@@ -304,13 +376,17 @@ export function contentEntityOpens(
 function excerptRecord(
   excerpt: ExcerptRecord,
   parent: ExcerptParentInfo,
+  summary: string,
+  subject?: ExcerptParentInfo,
 ): ContentEntityRecord {
+  const subjectSynonyms =
+    subject && subject.type !== 'diary-entry' ? subject.row.synonyms : [];
   const holder = { type: 'excerpt', parent: parent.address, excerpt } as const;
   return {
     entityType: 'excerpt',
     entityId: excerpt.excerptUuid,
     title: excerpt.title,
-    summary: excerpt.summary,
+    summary,
     href: buildExcerptUrl(
       parent.address,
       excerpt.humanReadableSlug,
@@ -320,7 +396,9 @@ function excerptRecord(
     updatedAt: excerpt.updatedAt,
     humanReadableSlug: excerpt.humanReadableSlug,
     publicId: excerpt.publicId,
-    parent: { title: parent.title || parent.date || '', href: parent.href },
+    parent: excerptParentRef(parent),
+    ...(subject ? { subject: excerptParentRef(subject) } : {}),
+    ...(subjectSynonyms.length ? { subjectSynonyms } : {}),
     grantOwner: { entityType: parent.type, entityId: parent.id },
     opens: (viewer) => excerptOpens(viewer, excerpt, parent),
     media: bodyMedia(
@@ -358,6 +436,7 @@ function eventRecord(event: EventRow): ContentEntityRecord {
         view === 'admin'
           ? buildAdminEntityBanner('event', event.eventUuid)
           : buildPublicBanner({ type: 'event', event }),
+      eventMediaParent(event),
     ),
   };
 }
@@ -467,10 +546,14 @@ function diaryRecord(
     humanReadableSlug: entry.date,
     date: entry.date,
     grantOwner: { entityType: 'diary-entry', entityId: entry.diaryUuid },
-    media: bodyMedia('diary-entry', entry.diaryUuid, 'diary-body', {
-      type: 'diary-entry',
-      date: entry.date,
-    }),
+    media: bodyMedia(
+      'diary-entry',
+      entry.diaryUuid,
+      'diary-body',
+      { type: 'diary-entry', date: entry.date },
+      undefined,
+      diaryMediaParent(entry),
+    ),
   };
 }
 
@@ -569,7 +652,7 @@ export async function findContentEntity(
       const project =
         child && (await THEI_SERVER.projects.findByUuid(child.projectUuid));
       return child && project
-        ? sectionRecord(entityId, child, project)
+        ? await sectionRecordOf(child, project, viewer)
         : undefined;
     }
     case 'excerpt': {
@@ -577,7 +660,9 @@ export async function findContentEntity(
       const parent =
         excerpt &&
         (await loadExcerptParent(excerpt.parentType, excerpt.parentId));
-      return excerpt && parent ? excerptRecord(excerpt, parent) : undefined;
+      return excerpt && parent
+        ? await excerptRecordOf(excerpt, parent, viewer)
+        : undefined;
     }
     case 'event': {
       const event = await THEI_SERVER.events.findByUuid(entityId);
@@ -637,7 +722,7 @@ export async function findContentEntityByTarget(
         )
         .get();
       return section
-        ? sectionRecord(section.sectionUuid, section, project)
+        ? await sectionRecordOf(section, project, viewer)
         : undefined;
     }
     case 'excerpt': {
@@ -645,7 +730,9 @@ export async function findContentEntityByTarget(
       const excerpt =
         parent &&
         listExcerpts(parent).find((item) => item.publicId === target.publicId);
-      return parent && excerpt ? excerptRecord(excerpt, parent) : undefined;
+      return parent && excerpt
+        ? await excerptRecordOf(excerpt, parent, viewer)
+        : undefined;
     }
     case 'event': {
       const event = await THEI_SERVER.events.findByPublicId(target.publicId);
@@ -693,15 +780,29 @@ export async function listContentEntities(
     : new Map<string, ProjectRow>();
   if (types.has('project'))
     records.push(...[...projects.values()].map(projectRecord));
-  if (types.has('project-section'))
-    for (const section of db
-      .select()
-      .from(schema.projectContentSections)
-      .all()) {
+  if (types.has('project-section')) {
+    const sections = db.select().from(schema.projectContentSections).all();
+    const summaries = describedSummaries(
+      'project-section',
+      sections.map((section) => ({
+        id: section.sectionUuid,
+        summary: section.summary,
+      })),
+      true,
+    );
+    for (const section of sections) {
       const project = projects.get(section.projectUuid);
       if (project)
-        records.push(sectionRecord(section.sectionUuid, section, project));
+        records.push(
+          sectionRecord(
+            section.sectionUuid,
+            section,
+            project,
+            summaries.get(section.sectionUuid) ?? '',
+          ),
+        );
     }
+  }
   if (types.has('event'))
     records.push(...db.select().from(schema.events).all().map(eventRecord));
   if (types.has('page'))
@@ -764,12 +865,39 @@ export async function listContentEntities(
         id: row.parentId,
       });
     const parents = loadExcerptParents([...keys.values()]);
-    for (const key of keys.keys()) {
+    const listed = [...keys.keys()].flatMap((key) => {
       const parent = parents.get(key);
-      if (!parent) continue;
-      for (const excerpt of listExcerpts(parent))
-        records.push(excerptRecord(excerpt, parent));
-    }
+      return parent
+        ? listExcerpts(parent).map((excerpt) => ({ excerpt, parent }))
+        : [];
+    });
+    const summaries = describedSummaries(
+      'excerpt',
+      listed.map(({ excerpt }) => ({
+        id: excerpt.excerptUuid,
+        summary: excerpt.summary,
+      })),
+      true,
+    );
+    // What each is about, read the same way: one deleted names nothing.
+    const subjects = loadExcerptParents(
+      listed.flatMap(({ excerpt }) =>
+        excerpt.subject
+          ? [{ type: excerpt.subject.type, id: excerpt.subject.id }]
+          : [],
+      ),
+    );
+    for (const { excerpt, parent } of listed)
+      records.push(
+        excerptRecord(
+          excerpt,
+          parent,
+          summaries.get(excerpt.excerptUuid) ?? '',
+          excerpt.subject
+            ? subjects.get(`${excerpt.subject.type}:${excerpt.subject.id}`)
+            : undefined,
+        ),
+      );
   }
   if (types.has('tag')) {
     const open = publicTagUuids();

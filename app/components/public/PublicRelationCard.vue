@@ -5,6 +5,10 @@ import {
 } from '#layers/thei/shared/api/public';
 import type { RelationEntityType } from '#layers/thei/shared/relation';
 import { relationEntityIcon } from '#layers/thei/shared/relation-display';
+import {
+  entityCardFromLink,
+  vEntityCard,
+} from '#layers/thei/app/composables/entity-cards';
 import TheiLink from '../TheiLink';
 
 /**
@@ -15,9 +19,9 @@ import TheiLink from '../TheiLink';
  *
  * A smaller sibling of a search result, drawn the same way: the words keep
  * to the left three quarters with a halo of the card's colour, and under the
- * pointer the card lifts and takes its picture's accent. Whatever it cuts
- * short is in its popup in full. A secret is its codename and its generated
- * icon, never a link.
+ * pointer the card lifts and takes its picture's accent. Resting on it
+ * shows the entity's card, as a link in a text does. A secret is its
+ * codename and its generated icon, never a link.
  */
 const { link, kind } = defineProps<{
   link: PublicEntityLink;
@@ -49,15 +53,6 @@ const text = computed(() => note.value || summary.value);
 const italic = computed(
   () => Boolean(note.value) || isDiary.value || secret.value,
 );
-
-/** Everything the card says, in full, only when the card had to cut it. */
-const popup = computed(() => ({
-  ...titlePopup(
-    { text: title.value, bold: true },
-    text.value && { text: text.value, italic: italic.value },
-  ),
-  'data-title-popup-clipped': '',
-}));
 </script>
 
 <template>
@@ -66,7 +61,7 @@ const popup = computed(() => ({
     :to="href"
     :media="link.iconMedia"
     :interactive="Boolean(href)"
-    v-bind="popup"
+    v-entity-card="entityCardFromLink(link, kind)"
     class="min-h-14 items-center"
     :data-public-secret="secret || undefined"
     :data-relation-href="href"
@@ -92,7 +87,6 @@ const popup = computed(() => ({
         class="-mx-[0.75em] truncate px-[0.75em] font-semibold
           transition-colors"
         :class="secret ? 'text-text-2 italic' : 'group-hocus:text-accent'"
-        data-title-popup-clip
         data-relation-title
         >{{ title }}</span
       >
@@ -103,7 +97,6 @@ const popup = computed(() => ({
         :italic
         class="-mx-[0.75em] line-clamp-2 px-[0.75em] leading-relaxed
           text-text-2"
-        data-title-popup-clip
       />
     </span>
   </MediaEdgeCard>

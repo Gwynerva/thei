@@ -75,10 +75,11 @@ the modal it is in — so the field asked about stays in sight (`FloatingPopup`)
   and goes when it would point past the anchor. Turn it off (`:arrow="false"`)
   only for a popup that covers its anchor.
 - **The anchor shows its popup is open.** An element anchor carries
-  `data-popup-open` while it is: a plain control looks pressed by the base
-  rule of `app/styles/main.css`, and a control with a colour of its own says
-  how it looks with `popup-open:`, as `Button` and `ModalHeaderButton` do —
-  the look it has under the pointer. Words are no element: their popup points
+  `data-popup-open` while it is, and keeps the look it has under the pointer:
+  `hocus:` matches it (`app/styles/main.css`), so nothing is drawn for the
+  occasion that the control does not already wear. A look that does not come
+  from `hocus:` is said with `popup-open:`, as `Button` and
+  `ModalHeaderButton` do. Words are no element: their popup points
   at a range (`rangeAnchor()`), and they are marked with a CSS highlight. An
   element inside a text being edited is never marked, since that would change
   the text.
@@ -179,7 +180,15 @@ The others built on it:
   arrow and no border, `shadow-hint` ([Hints](hints.md)).
 - **Link cards**, `app/components/LinkHoverPopup.vue`: one popup for every link
   a selector finds in a root, opened as a hint is — on hover, on focus, on a
-  first long press. Its cards are `flush`.
+  first long press. Its cards are `flush`; the link blocks of a text are the
+  same card with a surface of its own. Every card is
+  `app/components/LinkPreviewCard.vue`, whatever the link leads to, and its
+  doc comment says what stands on it and where;
+  `app/components/content/EntityLinkPreviewCard.vue`,
+  `app/components/external-links/ExternalLinkPreviewCard.vue` and
+  `app/components/content/ContentLinkPreviewCard.vue` only fill its lines.
+  An entity or a site named outside a text shows the same card through
+  `app/components/EntityCardPopup.vue` ([Entity chip](entity-chip.md)).
 - **Editor.js's menus**, `app/composables/editor-popover-layer.ts`: Editor.js
   draws the settings of a block and the inline toolbar itself. The layer lifts
   each tree into the top layer, so a modal's scrolling never clips it, places
@@ -188,7 +197,7 @@ The others built on it:
   `app/styles/editor.css` gives it the popup's surface and motion. On a phone
   the block's settings are Editor.js's own sheet, styled as ours; Editor.js
   turns to it at its own layout's width, 650px, a little wider than `sm`.
-  The edge of a private section has "Remove private section" in place of
+  The edge of a private section has "Remove section" in place of
   Editor.js's own Delete, which the styles hide beside it: one way out, which
   takes both edges and keeps the blocks.
 
