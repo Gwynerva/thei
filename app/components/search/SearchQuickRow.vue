@@ -13,9 +13,18 @@ export interface SearchQuickRowData {
   title: string;
   /** The title with the words found marked. */
   titleSegments?: SearchSegment[];
-  /** What it is a part of, quiet after the title: a section's project. */
-  /** `whole`: a name never cut short, such as a day's date. */
-  parent?: { title: string; media?: MediaDescriptor; whole?: boolean };
+  /**
+   * What it is a part of, quiet after the title: a section's project. Of an
+   * excerpt, what it is about instead, after `label`, the word for it.
+   * `whole`: a name never cut short, such as a day's date.
+   */
+  parent?: {
+    label?: string;
+    title: string;
+    icon: IconName;
+    media?: MediaDescriptor;
+    whole?: boolean;
+  };
   /** Its day or period, quiet after the title. */
   when?: string;
   /** Its years, for a phone's line that has no room for its days. */
@@ -96,8 +105,8 @@ defineEmits<{
       <!-- A truncated line clips its own halo, which draws a hard seam
            across the picture: each gets room for the halo all round. -->
       <span
-        class="text-halo-(--row-ground) relative flex min-w-0 flex-1 flex-col
-          gap-0.5 py-1.5 pl-xs"
+        class="text-halo-strong-(--row-ground) relative flex min-w-0 flex-1
+          flex-col gap-0.5 py-1.5 pl-xs"
         :class="row.media && !row.preview ? 'pr-16' : 'pr-xs'"
       >
         <!-- A title cut short reads whole in its hint: a long query, a long
@@ -134,9 +143,12 @@ defineEmits<{
             :class="row.parent.whole ? 'shrink-0' : 'shrink-[1000]'"
           >
             <span aria-hidden="true">·</span>
+            <span v-if="row.parent.label" class="shrink-0">{{
+              row.parent.label
+            }}</span>
             <EntityTokenIcon
               :media="row.parent.media"
-              icon="project"
+              :icon="row.parent.icon"
               class="size-3.5 rounded-xs"
             />
             <span

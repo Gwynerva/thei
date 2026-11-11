@@ -171,6 +171,66 @@ test('a pasted picture is stored at medium, whole, at its own size, with progres
   expect(original?.deleteAfter).toBeGreaterThan(Date.now());
 });
 
+test('a pasted picture is stored in the format "Auto" picks', async ({
+  page,
+}) => {
+  await openFixture(page);
+  const commits: string[] = [];
+  page.on('response', async (response) => {
+    if (!/\/drafts\/[^/]+\/commit$/.test(new URL(response.url()).pathname))
+      return;
+    const stored = (await response.json()) as {
+      settings: { format: string };
+    };
+    commits.push(stored.settings.format);
+  });
+  const before = await figures(page).count();
+
+  // A photograph is AVIF.
+  await emptyParagraph(page);
+  await paste(page, [await png()]);
+  await expect(figures(page)).toHaveCount(before + 1, { timeout: 30_000 });
+  expect(commits).toEqual(['avif']);
+
+  // A drawing — flat fields — is weighed, and lossless WebP is the smallest.
+  const drawing = await sharp({
+    create: { width: 640, height: 480, channels: 3, background: '#ffffff' },
+  })
+    .composite([
+      {
+        input: await sharp({
+          create: {
+            width: 240,
+            height: 160,
+            channels: 3,
+            background: '#1060d0',
+          },
+        })
+          .png()
+          .toBuffer(),
+        left: 80,
+        top: 80,
+      },
+    ])
+    .png()
+    .toBuffer();
+  await emptyParagraph(page);
+  await paste(page, [
+    {
+      name: 'scheme.png',
+      type: 'image/png',
+      base64: drawing.toString('base64'),
+    },
+  ]);
+  await expect(figures(page)).toHaveCount(before + 2, { timeout: 30_000 });
+  expect(commits).toEqual(['avif', 'webp-lossless']);
+  expect(
+    await page
+      .locator('[data-upload-errors]')
+      .getAttribute('data-upload-errors'),
+  ).toBe('');
+});
+
 test('the editor opened on a pasted picture makes new variants from the kept original', async ({
   page,
 }) => {
@@ -196,7 +256,7 @@ test('the editor opened on a pasted picture makes new variants from the kept ori
   await tile.hover();
   await tile
     .locator('..')
-    .getByRole('button', { name: 'How to take the file' })
+    .getByRole('button', { name: 'Create variant' })
     .click();
 
   // The original is among the saved variants, marked as going unless

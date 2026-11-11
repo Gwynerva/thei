@@ -36,6 +36,7 @@ import {
 } from '../external-links/repository';
 import { assetSelectionError } from '#layers/thei/shared/asset-library';
 import { optionalContentDraftRef } from '#layers/thei/shared/content-history';
+import { giveBlockIds } from '#layers/thei/shared/content-block-ids';
 import {
   recordContentDeletion,
   recordContentSave,
@@ -142,7 +143,11 @@ export async function prepareContentForSave(
     }
 > {
   const existing = await findContentByOwner(ownerType, ownerId, slot);
-  const data = canonicalizeContentData(value?.data);
+  // Every block is stored with an id, whoever wrote the text.
+  const data = giveBlockIds(
+    canonicalizeContentData(value?.data),
+    existing?.data,
+  );
   const draft = optionalContentDraftRef(value?.draftRef);
 
   if (data.blocks.length === 0) {

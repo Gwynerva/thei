@@ -6,6 +6,8 @@ import {
   type SearchHit,
 } from '#layers/thei/shared/search/api';
 import type { IconName } from '#thei/icons';
+import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
+import { relationEntityIcon } from '#layers/thei/shared/relation-display';
 import { SEARCH_QUERY_MAX_LENGTH } from '#layers/thei/shared/search/tokens';
 import { formatAbsolutePublicDate } from '#layers/thei/shared/public-date-format';
 import type { SearchQuickRowData } from './SearchQuickRow.vue';
@@ -104,6 +106,16 @@ function hitRow(hit: SearchHit): Row {
   const place = find ? searchFindPlace(find) : undefined;
   const page = find?.href ?? hit.href;
   const edit = hit.editHref;
+  // An excerpt is told apart by what it is about, more than by where it was
+  // written: its line names that, and its parent only when it has none.
+  const about = hit.subject;
+  const subject = about && {
+    label: phrase.value.public_excerpt_about,
+    title: entityLinkName(about, 'abbreviated'),
+    icon: relationEntityIcon(about.entityType ?? 'project') as IconName,
+    media: about.iconMedia,
+    whole: 'date' in about && Boolean(about.date),
+  };
   return {
     key: hit.ref,
     hit: true,
@@ -111,19 +123,25 @@ function hitRow(hit: SearchHit): Row {
     iconLabel: phrase.value.search_kind(hit.kind),
     title: searchHitTitle(hit),
     ...(hit.titleSegments ? { titleSegments: hit.titleSegments } : {}),
-    ...(hit.parent
-      ? {
-          parent: {
-            // A day's name is its date, whole: a cut date names no day.
-            title: hit.parent.date
-              ? searchEntityTitle('diary-entry', hit.parent.date)
-              : publicText(hit.parent.title),
-            media: hit.parent.media,
-            whole: Boolean(hit.parent.date),
-          },
-        }
-      : {}),
-    when: searchHitWhen(hit) || undefined,
+    ...(subject
+      ? { parent: subject }
+      : hit.parent
+        ? {
+            parent: {
+              // A day's name is its date, whole: a cut date names no day.
+              title: entityListName(hit.parent),
+              icon: entityTypeIcon(hit.parent.type),
+              media: hit.parent.media,
+              whole: Boolean(hit.parent.date),
+            },
+          }
+        : {}),
+    // Named by its subject, an excerpt of a diary entry says its day here.
+    when:
+      searchHitWhen(hit) ||
+      (subject && hit.date
+        ? formatAbsolutePublicDate(hit.date, language.value.code)
+        : undefined),
     // On a phone a section's line has room for its project, not its years.
     years: (!hit.parent && searchHitYears(hit)) || undefined,
     access: searchAccessBadge(hit.access),

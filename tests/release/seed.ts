@@ -39,6 +39,7 @@ import {
   repoRoot,
   signIn,
   sitemapPaths,
+  sql,
   upload,
   workDir,
   type Server,
@@ -77,6 +78,8 @@ export interface SeedManifest {
     previewAt?: number;
   }[];
   slogan: string;
+  /** When each stored text was last changed, by its id. */
+  texts: Record<string, number>;
   /** Every public address the site had on the last release. */
   sitemap: string[];
   /** Public IDs that must never be listed. */
@@ -732,7 +735,8 @@ function createSite(
 /**
  * The seed site is whole on `server`: every entity opens with its name and
  * parts, every file serves the bytes it was stored with, every address it
- * had answers, and nothing private is listed.
+ * had answers, nothing private is listed, and no text counts as edited
+ * since; on a release after the seed's, every stored block has its id.
  */
 export function checkSeedSite(server: Server, manifest: SeedManifest): void {
   for (const entity of manifest.entities) {
@@ -846,6 +850,8 @@ export function checkSeedSite(server: Server, manifest: SeedManifest): void {
   );
   check(listed.length === 0, `nothing private is listed${failing(listed)}`);
 
+  checkStoredTexts(server, manifest);
+
   // A picture's description is its alt wherever it is drawn publicly: in the
   // section's Markdown copy too, with the site's typography between words.
   const section = manifest.sitemap.find((path) =>
@@ -859,6 +865,69 @@ export function checkSeedSite(server: Server, manifest: SeedManifest): void {
   check(
     words(markdown).includes(`![${words(descriptions.picture!)}]`),
     `a picture's description reaches the public text of ${section}`,
+  );
+}
+
+/** When each stored text was last changed, by its id. */
+function textChangeTimes(server: Server): Record<string, number> {
+  const times: Record<string, number> = {};
+  for (const line of sql(
+    server,
+    "select contentUuid || ' ' || updatedAt from content order by contentUuid",
+  ).split('\n')) {
+    const [uuid, updatedAt] = line.split(' ');
+    if (uuid) times[uuid] = Number(updatedAt);
+  }
+  return times;
+}
+
+/**
+ * The stored texts are the seed's own: no update step counts as an edit of
+ * one, so each is as old as it was. The seed writes its blocks without ids,
+ * as an app does; a release after the seed's gives every block an id of its
+ * own (update task `0.0.9/001-block-ids`), which is looked for only on a
+ * site that runs one — the seed's own release keeps the blocks as written.
+ */
+function checkStoredTexts(server: Server, manifest: SeedManifest): void {
+  const times = textChangeTimes(server);
+  const moved = Object.entries(manifest.texts)
+    .filter(([uuid, updatedAt]) => times[uuid] !== updatedAt)
+    .map(([uuid]) => uuid);
+  check(
+    moved.length === 0,
+    `all ${Object.keys(manifest.texts).length} texts are as old as they were${failing(moved)}`,
+  );
+
+  const running = (api(server, 'GET', '/api/admin/updates').body as any)
+    ?.currentVersion;
+  check(
+    typeof running === 'string' && running !== '',
+    `the site says which version it runs (${running})`,
+  );
+  if (running === manifest.release) return;
+
+  const blocks = "content, json_each(content.data, '$.blocks') as block";
+  const id = "json_extract(block.value, '$.id')";
+  const total = Number(sql(server, `select count(*) from ${blocks}`));
+  const unnamed = sql(
+    server,
+    `select distinct content.contentUuid from ${blocks} where coalesce(${id}, '') = ''`,
+  )
+    .split('\n')
+    .filter(Boolean);
+  check(
+    total > 0 && unnamed.length === 0,
+    `all ${total} stored blocks have an id${failing(unnamed)}`,
+  );
+  const repeated = sql(
+    server,
+    `select distinct contentUuid from (select content.contentUuid as contentUuid from ${blocks} group by content.contentUuid, ${id} having count(*) > 1)`,
+  )
+    .split('\n')
+    .filter(Boolean);
+  check(
+    repeated.length === 0,
+    `no stored block repeats the id of another${failing(repeated)}`,
   );
 }
 
@@ -882,11 +951,17 @@ export async function buildSeedSite(server: Server): Promise<void> {
     entities: [],
     assets: [],
     slogan: 'Проверяю, что ничего не потерялось ✨',
+    texts: {},
     sitemap: [],
     privateIds: [],
   };
   const files = await uploadFiles(server, manifest);
   createSite(server, files, manifest);
+  manifest.texts = textChangeTimes(server);
+  check(
+    Object.keys(manifest.texts).length > 0,
+    `the site stores its ${Object.keys(manifest.texts).length} texts`,
+  );
   manifest.sitemap = sitemapPaths(server);
   check(
     manifest.sitemap.some((path) => path.includes('BenchNorth')),

@@ -473,3 +473,138 @@ describe('a name typed from memory, word by word', () => {
     ).toEqual(['cat']);
   });
 });
+
+describe('an excerpt found by what it is about', () => {
+  type Item = ContentEntitySearchItem & { subjectSynonyms?: string[] };
+  const base = { summary: '', url: '', humanReadableSlug: '' };
+  const dtf = {
+    type: 'project',
+    title: 'DTF',
+    href: '/projects/dtf-P1/',
+  } as const;
+  const excerpt = (
+    entityId: string,
+    title: string,
+    subject: Item['subject'],
+    updatedAt = 1,
+    subjectSynonyms?: string[],
+  ): Item => ({
+    ...base,
+    entityType: 'excerpt',
+    entityId,
+    title,
+    updatedAt,
+    ...(subject ? { subject } : {}),
+    ...(subjectSynonyms ? { subjectSynonyms } : {}),
+  });
+  const items: Item[] = [
+    excerpt('farewell', 'Прощальный пост', dtf, 5, ['Дтф', 'the blog']),
+    excerpt('year', 'Итоги года', dtf, 9, ['Дтф', 'the blog']),
+    excerpt('own', 'Как я пришла на DTF', undefined, 1),
+    excerpt('other', 'Прощальный вечер', {
+      type: 'event',
+      title: 'Выпускной',
+      href: '/events/prom-E1/',
+    }),
+    excerpt('day', 'Что было дальше', {
+      type: 'diary-entry',
+      title: '',
+      date: '2024-05-12',
+      href: '/diary/2024-05-12/',
+    }),
+    {
+      ...base,
+      entityType: 'project',
+      entityId: 'dtf',
+      title: 'DTF',
+      synonyms: ['Дтф', 'the blog'],
+      updatedAt: 2,
+    },
+    {
+      ...base,
+      entityType: 'event',
+      entityId: 'meetup',
+      title: 'Встреча авторов DTF',
+      updatedAt: 3,
+    },
+    {
+      ...base,
+      entityType: 'diary-entry',
+      entityId: 'entry',
+      title: '2024-05-12',
+      date: '2024-05-12',
+      updatedAt: 4,
+    },
+  ];
+  const ids = (query: string) =>
+    rankContentEntities(items, query, 10).map((item) => item.entityId);
+
+  it('comes after the thing itself and everything named so, newest first', () => {
+    expect(ids('DTF')).toEqual(['dtf', 'meetup', 'own', 'year', 'farewell']);
+  });
+
+  it('is found by a synonym of what it is about', () => {
+    expect(ids('the blog')).toEqual(['dtf', 'year', 'farewell']);
+    expect(ids('дтф')).toEqual(['dtf', 'meetup', 'own', 'year', 'farewell']);
+  });
+
+  it('keeps the rank of its own title when that answers', () => {
+    expect(ids('прощальный')).toEqual(['other', 'farewell']);
+    expect(ids('итоги')).toEqual(['year']);
+  });
+
+  it('is found by words of its title and of its subject together', () => {
+    expect(ids('DTF прощальный')).toEqual(['farewell']);
+    expect(ids('прощальный пост dtf')).toEqual(['farewell']);
+    expect(ids('blog итоги')).toEqual(['year']);
+    // Never by a piece of a word, and never by a word that stands nowhere.
+    expect(ids('DTF вечер')).toEqual([]);
+    expect(ids('dt щальный')).toEqual([]);
+  });
+
+  it('is found by the day of a diary entry it is about, after the entry', () => {
+    expect(ids('2024-05-12')).toEqual(['entry', 'day']);
+    expect(ids('май 2024')).toEqual(['entry', 'day']);
+    expect(ids('2023')).toEqual([]);
+  });
+
+  it('is not found by a subject it does not have', () => {
+    expect(ids('выпускной')).toEqual(['other']);
+    expect(
+      rankContentEntities([excerpt('alone', 'Одна', undefined)], 'dtf'),
+    ).toEqual([]);
+  });
+
+  it('is suggested after the thing a selected word names', () => {
+    expect(
+      suggestContentEntities(items, 'написала на DTF', 3).map(
+        (item) => item.entityId,
+      ),
+    ).toEqual(['dtf', 'own', 'meetup']);
+    expect(
+      suggestContentEntities(items, 'написала на DTF', 10)
+        .map((item) => item.entityId)
+        .slice(3, 5)
+        .sort(),
+    ).toEqual(['farewell', 'year']);
+  });
+
+  it('does not make a name a common word by the many excerpts about it', () => {
+    const many: Item[] = [
+      ...Array.from({ length: 30 }, (_, at) =>
+        excerpt(`x-${at}`, `Запись ${at}`, dtf, at + 10),
+      ),
+      {
+        ...base,
+        entityType: 'project',
+        entityId: 'dtf',
+        title: 'DTF',
+        updatedAt: 1,
+      },
+    ];
+    const suggested = suggestContentEntities(many, 'написала на DTF', 5);
+    expect(suggested[0]!.entityId).toBe('dtf');
+    expect(suggested).toHaveLength(5);
+    expect(rankContentEntities(many, 'dtf', 5)[0]!.entityId).toBe('dtf');
+  });
+});

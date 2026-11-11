@@ -30,18 +30,21 @@ describe('landing marks', () => {
 
   // The search finds the note of an excerpt's relation on the excerpt's
   // page, at `r-<kind>~<address>` of what it is about.
+  // The line over the title marks it, and both headers hand it the subject.
+  it('marks what an excerpt is about by its address in the line over its title', () => {
+    expect(read('app/components/public/PublicPageParent.vue')).toContain(
+      `:data-relation-href="key === 'subject' ? entity.href : undefined"`,
+    );
+  });
   it.each([
     'app/components/public/PublicHero.vue',
     'app/components/public/PublicPageHeader.vue',
-  ])('marks what an excerpt is about by its address in %s', (path) => {
-    const lines = [
-      ...read(path).matchAll(
-        /<PublicPageParent\s[^>]*:parent="subject"[^>]*>/g,
-      ),
-    ].map((match) => match[0]);
+  ])('hands what an excerpt is about to that line in %s', (path) => {
+    const lines = [...read(path).matchAll(/<PublicPageParent\s[^>]*>/g)].map(
+      (match) => match[0],
+    );
     expect(lines.length).toBeGreaterThan(0);
-    for (const line of lines)
-      expect(line).toContain(':data-relation-href="subject.href"');
+    for (const line of lines) expect(line).toContain(':subject');
   });
 
   it("opens the hint of a relation's note cut short in its line", () => {

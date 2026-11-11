@@ -16,6 +16,7 @@ export async function contentEntitySearchItem(
     ...(record.publicId ? { publicId: record.publicId } : {}),
     ...(record.date ? { date: record.date } : {}),
     ...(record.parent ? { parent: record.parent } : {}),
+    ...(record.subject ? { subject: record.subject } : {}),
     ...(record.access ? { access: record.access } : {}),
     updatedAt: record.updatedAt,
     ...(previewMedia ? { previewMedia } : {}),

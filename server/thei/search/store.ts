@@ -22,7 +22,7 @@ import { SEARCH_FIELDS, type SearchUnit } from './units';
  * no migration, and may be deleted at any time: a file of another format, or
  * one made by another reading of words, is emptied and built again.
  */
-const FORMAT = 13;
+const FORMAT = 18;
 
 /** What a term may hold for FTS5 to keep it whole. */
 export function ftsTerm(term: string): string {
@@ -42,6 +42,7 @@ export interface StoredCard {
    */
   dated?: { by: 'added' | 'shown'; day: string };
   parent?: SearchDocument['parent'];
+  subject?: SearchDocument['subject'];
   shownAt?: string;
   editHref?: string;
   period?: SearchDocument['period'];
@@ -296,6 +297,7 @@ export class SearchStore {
       href: document.href,
       ...(document.publicRef ? { publicRef: document.publicRef } : {}),
       ...(document.parent ? { parent: document.parent } : {}),
+      ...(document.subject ? { subject: document.subject } : {}),
       // A file shows no days of its own; the rest show theirs when they
       // have them.
       ...(document.sort && (document.kind === 'file' || !document.sort.life)
@@ -503,7 +505,7 @@ function filePlacesOf(document: SearchDocument): StoredFilePlace[] {
       placeTitle: part
         ? `${document.title} · ${part.title}`
         : document.parent
-          ? `${document.parent.title} · ${document.title}`
+          ? `${document.parent.date ?? document.parent.title} · ${document.title}`
           : document.title,
       placeName: part?.title ?? document.title,
       ...(document.sort ? { sort: document.sort } : {}),

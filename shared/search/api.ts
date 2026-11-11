@@ -1,4 +1,5 @@
-import type { PublicTagSummary } from '../api/public';
+import type { PublicEntityLink, PublicTagSummary } from '../api/public';
+import type { ContentEntityParent } from '../content-link';
 import type { MediaDescriptor } from '../media';
 import type { LanguagePhrases } from '../language/types';
 import type { SearchSegment } from './snippet';
@@ -70,14 +71,17 @@ export interface SearchHit {
   /** `project:<uuid>`, `diary-entry:<uuid>`, `file:<family>`… */
   ref: string;
   title: string;
-  /** Of a section or an excerpt: what it is a part of, with its picture. */
-  /** What a section or an excerpt is part of; a diary entry named by its `date`. */
-  parent?: {
-    title: string;
-    href: string;
+  /** What a section or an excerpt is part of, with its picture. */
+  parent?: ContentEntityParent & {
     media?: MediaDescriptor;
-    date?: string;
+    /** What it says of itself, for its card. */
+    summary?: string;
   };
+  /**
+   * What an excerpt is about, as this reader may see it: the one project,
+   * event or diary entry. None once its subject is deleted.
+   */
+  subject?: PublicEntityLink;
   /**
    * Of a file: what shows it first, by its own name alone — a section's
    * title, an entity's, a diary entry's day — which names one with no title.

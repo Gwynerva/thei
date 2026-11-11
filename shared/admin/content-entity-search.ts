@@ -1,9 +1,12 @@
 import type { ProjectEventAccessLevel } from '../access-level';
-import type { ContentEntityType } from '../content-link';
+import type { ContentEntityParent, ContentEntityType } from '../content-link';
 import { dayQueryRank, parseDayQuery, type DayQuery } from '../day-query';
 import type { MediaDescriptor } from '../media';
 import {
+  ABOUT_TOGETHER_RANK,
+  NAME_RANKS,
   nameRank,
+  nameTier,
   prepareNameQuery,
   textWords,
   type NameQuery,
@@ -24,8 +27,10 @@ export type ContentEntitySearchItem = {
   publicId?: string;
   /** The day of a diary entry, which stands in for its missing title. */
   date?: string;
-  /** The project a section belongs to. */
-  parent?: { title: string; href: string };
+  /** The project a section belongs to; the parent of an excerpt. */
+  parent?: ContentEntityParent;
+  /** What an excerpt is about: it is found by that name too, and shown with it. */
+  subject?: ContentEntityParent;
   /** How open it is: what an excerpt's form says of an excerpt about it. */
   access?: ProjectEventAccessLevel;
   updatedAt: number;
@@ -38,7 +43,13 @@ export type ContentEntitySearchItem = {
  */
 export type ContentEntityChoice = Pick<
   ContentEntitySearchItem,
-  'entityType' | 'entityId' | 'title' | 'summary' | 'date' | 'parent'
+  | 'entityType'
+  | 'entityId'
+  | 'title'
+  | 'summary'
+  | 'date'
+  | 'parent'
+  | 'subject'
 > & { previewMedia?: MediaDescriptor };
 
 /** How many results a picker shows unless it asks for more. */
@@ -76,6 +87,10 @@ type Rankable = {
   /** Other names it is found by, as well as by its title. */
   synonyms?: string[];
   date?: string;
+  /** What an excerpt is about, named by its title or, a diary entry, its day. */
+  subject?: { title: string; date?: string };
+  /** The other names of what it is about: only searched. */
+  subjectSynonyms?: string[];
   updatedAt: number;
 };
 
@@ -97,11 +112,13 @@ export function rankContentEntities<T extends Rankable>(
       .map((item) => ({ item, rank: bestRank(item, prepared, day) }))
       .filter(({ rank }) => Number.isFinite(rank))
       // Diary entries found equally well come newest first: of the days of a
-      // month or a year, the recent ones are the likely link.
+      // month or a year, the recent ones are the likely link. So do the
+      // excerpts about one thing, found by its name alike.
       .sort(
         (a, b) =>
           a.rank - b.rank ||
           (b.item.date ?? '').localeCompare(a.item.date ?? '') ||
+          (foundByAbout(a.rank) ? b.item.updatedAt - a.item.updatedAt : 0) ||
           a.item.title.localeCompare(b.item.title),
       )
       .slice(0, limit)
@@ -122,16 +139,58 @@ export function rankContentEntities<T extends Rankable>(
  * A diary entry has no name to search by, only its day, written however the
  * person is used to (`day-query.ts`): a whole day as written ranks with a
  * whole title, a month or a year with a title found in part.
+ *
+ * An excerpt is found by what it is about as well (`aboutRank`), below
+ * every name of its own.
  */
 function bestRank(item: Rankable, query: NameQuery, day?: DayQuery) {
   if (item.date)
     return (day && dayQueryRank(item.date, day)) ?? Number.POSITIVE_INFINITY;
-  return nameRank(query, {
+  const own = nameRank(query, {
     title: item.title,
     synonyms: item.synonyms,
     publicId: item.publicId,
     slug: item.humanReadableSlug,
   }).rank;
+  return Math.min(own, aboutRank(item, query, day));
+}
+
+const ABOUT = NAME_RANKS.about;
+
+function foundByAbout(rank: number) {
+  return rank >= ABOUT.exact && rank <= ABOUT.inside;
+}
+
+/**
+ * How well what an excerpt is about answers a query (`NAME_RANKS.about`):
+ * the subject's title or a synonym of it, as a name is found; a diary entry
+ * by its day, as the entry is. Words that neither the excerpt's title nor
+ * its subject answer alone may answer between them — «DTF farewell» finds
+ * «Farewell post» about DTF — never as a piece of a word.
+ */
+function aboutRank(item: Rankable, query: NameQuery, day?: DayQuery) {
+  const subject = item.subject;
+  if (!subject) return Number.POSITIVE_INFINITY;
+  if (subject.date) {
+    const rank = day && dayQueryRank(subject.date, day);
+    // A day's rank runs from 0 to 4: laid over the span of the tier.
+    return rank === undefined
+      ? Number.POSITIVE_INFINITY
+      : ABOUT.exact + (rank / 4) * (ABOUT.inside - ABOUT.exact);
+  }
+  const names = [subject.title, ...(item.subjectSynonyms ?? [])];
+  let rank = Number.POSITIVE_INFINITY;
+  for (const name of names) {
+    const tier = nameTier(query, name);
+    if (tier) rank = Math.min(rank, ABOUT[tier]);
+  }
+  if (Number.isFinite(rank) || query.words.length < 2) return rank;
+  return names.some((name) => {
+    const tier = nameTier(query, `${item.title} ${name}`);
+    return tier && tier !== 'inside';
+  })
+    ? ABOUT_TOGETHER_RANK
+    : rank;
 }
 
 type Suggestible = Rankable & { summary: string };
@@ -148,6 +207,8 @@ type SuggestProfile = {
   synonymStems: Set<string>;
   /** The synonyms as phrases, found in the text as a title is. */
   synonymPhrases: string[];
+  /** The words of what an excerpt is about, by its title and synonyms. */
+  aboutStems: Set<string>;
 };
 
 /** Case and runs of space set aside, for comparing phrases. */
@@ -168,6 +229,12 @@ function suggestProfile(item: Suggestible): SuggestProfile {
       ),
     ),
     synonymPhrases: (item.synonyms ?? []).map(normalizePhrase),
+    aboutStems: new Set(
+      (item.subject && !item.subject.date
+        ? [item.subject.title, ...(item.subjectSynonyms ?? [])]
+        : []
+      ).flatMap((name) => textWords(name).map(({ term }) => term)),
+    ),
   };
 }
 
@@ -185,6 +252,11 @@ function suggestProfile(item: Suggestible): SuggestProfile {
  * how common a word is, not how short: a word found across a large share of
  * the archive matches nothing on its own. A title found whole in the text,
  * or the whole text found in a title, comes before any match by words.
+ *
+ * An excerpt answers the words of what it is about as weakly as those of a
+ * summary, so the thing itself comes first. Those words are not counted
+ * among the archive's: a project with many excerpts about it would make its
+ * own name a common word, and stop being found by it.
  */
 export function suggestContentEntities<T extends Suggestible>(
   items: T[],
@@ -238,7 +310,8 @@ export function suggestContentEntities<T extends Suggestible>(
           profile.titleWords.some((word) => word.startsWith(token))
         )
           title += 2 * weight;
-        else if (profile.summaryStems.has(stem)) summary += weight;
+        else if (profile.summaryStems.has(stem) || profile.aboutStems.has(stem))
+          summary += weight;
       }
       // A title matched in full outweighs a long one sharing a single word.
       let titleWeight = 0;
