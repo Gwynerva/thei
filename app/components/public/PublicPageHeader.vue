@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 import type { IconName } from '#thei/icons';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
-import type { RelationType } from '#layers/thei/shared/relation';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
+import type { PublicPageNamed } from './public-detail';
 
 const props = defineProps<{
   icon: IconName;
@@ -22,25 +22,12 @@ const props = defineProps<{
    * text, not a button: "Project section" and then the project, with
    * only the project itself being the link back.
    */
-  parent?: {
-    label: string;
-    href: string;
-    title: string;
-    iconMedia?: MediaDescriptor;
-    icon?: IconName;
-  };
+  parent?: PublicPageNamed;
   /**
-   * What the page is about, on a line under `parent` that turns down to the
-   * title: an excerpt's subject. No link where the reader may not open it.
+   * What the page is about, after `parent` in its line: an excerpt's
+   * subject. No link where the reader may not open it.
    */
-  subject?: {
-    label?: string;
-    href?: string;
-    title: string;
-    iconMedia?: MediaDescriptor;
-    icon?: IconName;
-    relation?: { type: RelationType; note?: string };
-  };
+  subject?: PublicPageNamed;
 }>();
 
 const isCustom = computed(
@@ -76,14 +63,7 @@ usePublicPageGlow({ color: accent });
       <div class="flex max-w-full flex-col items-center gap-xs sm:items-start">
         <!-- Desktop: above the title. On a phone it sits under the icon instead. -->
         <div v-if="parent" class="hidden max-w-full min-w-0 sm:block">
-          <PublicPageParent :parent />
-          <PublicPageParent
-            v-if="subject"
-            :parent="subject"
-            arrow
-            class="mt-xs"
-            :data-relation-href="subject.href"
-          />
+          <PublicPageParent :parent :subject />
         </div>
         <div
           class="flex max-w-full min-w-0 flex-col items-center gap-sm
@@ -122,14 +102,7 @@ usePublicPageGlow({ color: accent });
               sm:contents"
           >
             <div v-if="parent" class="max-w-full min-w-0 sm:hidden">
-              <PublicPageParent :parent />
-              <PublicPageParent
-                v-if="subject"
-                :parent="subject"
-                arrow
-                class="mt-xs"
-                :data-relation-href="subject.href"
-              />
+              <PublicPageParent :parent :subject />
             </div>
             <h1
               class="max-w-full text-3xl font-bold tracking-tight text-balance

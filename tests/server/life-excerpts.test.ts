@@ -286,6 +286,7 @@ describe('excerpts on the Life', () => {
     expect(entry.excerpts).toEqual([
       {
         title: 'XD title',
+        summary: 'XD summary',
         href: '/diary/2026-04-01/excerpts/XD-XD/',
         about: expect.objectContaining({
           entityType: 'project',
@@ -293,18 +294,22 @@ describe('excerpts on the Life', () => {
           href: '/projects/p-P/',
         }),
       },
-      { title: 'XD2 title', href: '/diary/2026-04-01/excerpts/XD2-XD2/' },
+      {
+        title: 'XD2 title',
+        summary: 'XD2 summary',
+        href: '/diary/2026-04-01/excerpts/XD2-XD2/',
+      },
     ]);
     // The entry's lead names its headings, then quotes it; its excerpts are
     // listed under it on the card, and the lead does not name them again.
-    expect(entry.summary).toBe('Morning — Morning Out in the open.');
+    expect(entry.summary).toBe('Morning — Out in the open.');
     const seen = (await getLatestLifePoints(20, { viewer: STRANGER })).find(
       (point) =>
         point.entityKind === 'diary-entry' && point.date === '2026-04-01',
     );
     expect(seen?.visibility).toBe('visible');
     if (seen?.visibility !== 'visible') return;
-    expect(seen.summary).toBe('Morning — Morning Out in the open.');
+    expect(seen.summary).toBe('Morning — Out in the open.');
     // An event's point names its excerpts the visitor may see, and the
     // private one by its codename in its place, leading nowhere.
     const event = (await getLatestLifePoints(20, { viewer: STRANGER })).find(

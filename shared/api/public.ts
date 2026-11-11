@@ -1,6 +1,6 @@
 import type { ProjectEventAccessLevel } from '../access-level';
 import type { PublicContentOutputData } from '../content';
-import type { ContentEntityType } from '../content-link';
+import type { ContentEntityParent, ContentEntityType } from '../content-link';
 import type { DatedPeriod } from '../date-precision';
 import type { Period } from '../period';
 import type {
@@ -89,6 +89,8 @@ export type PublicExcerptParent = {
   type: ExcerptParentType;
   /** Empty for a diary entry, which is called by its `date`. */
   title: string;
+  /** What its card says under its name: a diary entry, its opening words. */
+  summary: string;
   href: string;
   /** The day of a diary entry. */
   date?: string;
@@ -130,20 +132,26 @@ export type PublicExcerpt = PublicExcerptCard & {
   content: PublicContentOutputData;
   /** `updatedAt` only when the excerpt was edited on a later day. */
   chronology: { createdAt: string; updatedAt?: string };
-  /** Its place among its parent's excerpts the viewer may see: "2 of 3". */
-  position: { number: number; count: number };
 };
 
 /**
  * An excerpt of a page's entity the visitor may not read — private, or
  * about something closed to them — kept in its place among the ones they
- * may, under its codename. Only its parent's side shows it: the page of
+ * may, under its codename and what it is about. Only its parent's side
+ * shows it: the page of
  * what it is about and the search leave it out.
  */
 export type PublicExcerptSecret = {
   key: string;
   title: string;
+  /** The words a secret is given with its codename, as any secret's are. */
+  summary: string;
   iconMedia: MediaDescriptor;
+  /**
+   * What it is about, as far as this visitor may know: the entity, or its
+   * codename; none for a diary entry closed to them, or a subject deleted.
+   */
+  about: PublicEntityLink[];
   /** How many of the excerpts the visitor may read stand before it. */
   before: number;
 };
@@ -224,12 +232,14 @@ export type PublicFilePlace = {
   kind: PublicFilePlaceKind;
   /** A diary entry's day, which is its title. */
   title: string;
+  /** What the page says of itself, for its card: a summary, a lead, an opening. */
+  summary: string;
   /** The page, at where it shows the file first (`shared/landing.ts`). */
   href: string;
   /** What stands for the page on a card: its icon, banner or first picture. */
   media?: MediaDescriptor;
   /** The project a section belongs to; the parent of an excerpt. */
-  parent?: { title: string; href: string };
+  parent?: ContentEntityParent;
   /** How the file is shown there, each way once. */
   uses: AssetRole[];
 };

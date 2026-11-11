@@ -8,9 +8,10 @@ const resource = await useFetch<PublicExcerptResponse>(
     `/api/events/${encodeURIComponent(String(route.params.event))}/excerpts/${encodeURIComponent(String(route.params.excerpt))}`,
 );
 const data = useRequiredResource(resource);
-// The address is the excerpt's own, under its parent's.
+// The address is the excerpt's own, under its parent's; the place a link
+// named in it goes along.
 if (route.path !== data.value.href)
-  await navigateTo(data.value.href, { redirectCode: 301 });
+  await navigateTo(data.value.href + route.hash, { redirectCode: 301 });
 </script>
 
 <template>

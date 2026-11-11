@@ -1,3 +1,4 @@
+import { describedSummaries, describedSummary } from '../content/described';
 import { eq } from 'drizzle-orm';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
@@ -51,19 +52,21 @@ import {
   projectCreatedUtcDate,
   sortLifePoints,
 } from '#layers/thei/shared/life-timeline';
-import { buildPublicEntityPreviewMedia } from './content';
+import { buildPublicDiaryCardMedia } from './parent-media';
 import { buildPublicCardMedia, readEntityBannerUuids } from '../entity-banner';
 import type { ExcerptParentType } from '#layers/thei/shared/excerpt';
 import { buildExcerptUrl } from '#layers/thei/shared/excerpt-url';
 import {
   diaryExcerptParent,
   eventExcerptParent,
+  excerptIsOwn,
   loadExcerptParent,
+  projectExcerptDay,
   type ExcerptParentInfo,
 } from '../excerpts/parents';
 import {
   buildPublicExcerptCard,
-  secretParentExcerpts,
+  secretParentExcerptNames,
   visibleParentExcerpts,
 } from './excerpts';
 import { placeExcerptSecrets } from '#layers/thei/shared/excerpt-secrets';
@@ -655,7 +658,7 @@ function buildRawLifePoints(cutoff?: string): RawPoint[] {
     } else {
       const parent = projectById.get(excerpt.parentId);
       if (!parent) continue;
-      date = projectCreatedUtcDate(excerpt.createdAt);
+      date = projectExcerptDay(excerpt);
       access = parent.access;
     }
     const bannerAssetUuid = excerptBanners.get(excerpt.excerptUuid);
@@ -1062,7 +1065,7 @@ async function hydrateLifePoint(
       project: {
         entityType: parent.type,
         title: card.parent.title,
-        summary: '',
+        summary: card.parent.summary,
         href: card.parent.href,
         ...(card.parent.media ? { iconMedia: card.parent.media } : {}),
         ...(card.parent.date ? { date: card.parent.date } : {}),
@@ -1096,13 +1099,7 @@ async function hydrateLifePoint(
     const entry = point.diaryEntry!;
     const parent = diaryExcerptParent(entry);
     const [media, content] = await Promise.all([
-      buildPublicEntityPreviewMedia(
-        'diary-entry',
-        entry.diaryUuid,
-        'diary-body',
-        { type: 'diary-entry', date: entry.date },
-        opens,
-      ),
+      buildPublicDiaryCardMedia(entry, viewer),
       THEI_SERVER.content.findByOwner(
         'diary-entry',
         entry.diaryUuid,
@@ -1163,9 +1160,15 @@ async function hydrateLifePoint(
     };
   }
   const section = point.section!;
-  const [media, projectReference] = await Promise.all([
+  const [media, projectReference, sectionSummary] = await Promise.all([
     buildPublicCardMedia({ type: 'project-section', project, section }, opens),
     buildPublicEntityReference(project),
+    describedSummary(
+      'project-section',
+      section.sectionUuid,
+      section.summary,
+      opens,
+    ),
   ]);
   return {
     key,
@@ -1178,7 +1181,7 @@ async function hydrateLifePoint(
     transition: point.transition,
     visibility: 'visible',
     title: section.title,
-    summary: section.summary,
+    summary: sectionSummary,
     href: buildProjectSectionUrl(
       project.humanReadableSlug,
       project.publicId,
@@ -1200,6 +1203,15 @@ async function excerptNames(
   viewer: PublicViewer,
 ): Promise<{ excerpts?: LifeExcerptName[] }> {
   const visible = visibleParentExcerpts(parent, viewer);
+  // Their texts read in one query, for those without a summary.
+  const summaries = describedSummaries(
+    'excerpt',
+    visible.map((excerpt) => ({
+      id: excerpt.excerptUuid,
+      summary: excerpt.summary,
+    })),
+    excerptIsOwn(viewer, parent),
+  );
   const named = await Promise.all(
     visible.map(async (excerpt): Promise<LifeExcerptName> => {
       const [about] = await buildPublicRelatedLinks(
@@ -1211,6 +1223,7 @@ async function excerptNames(
       );
       return {
         title: excerpt.title,
+        summary: summaries.get(excerpt.excerptUuid) ?? '',
         href: buildExcerptUrl(
           parent.address,
           excerpt.humanReadableSlug,
@@ -1222,7 +1235,9 @@ async function excerptNames(
   );
   const names = placeExcerptSecrets(
     named,
-    secretParentExcerpts(parent, viewer),
+    // Only the codenames: what a closed excerpt is about is said on its
+    // parent's page, not on a card.
+    secretParentExcerptNames(parent, viewer),
   ).map((placed): LifeExcerptName =>
     placed.secret
       ? {

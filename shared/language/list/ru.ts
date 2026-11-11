@@ -98,6 +98,20 @@ function formatDuration(years: number, months: number, days: number) {
   );
 }
 
+/** A page of a kind as "this one": «связанные с …» and «об …». */
+const THIS_KIND = {
+  instrumental: {
+    project: 'этим проектом',
+    event: 'этим событием',
+    'diary-entry': 'этой записью дневника',
+  },
+  prepositional: {
+    project: 'этом проекте',
+    event: 'этом событии',
+    'diary-entry': 'этой записи дневника',
+  },
+} as const;
+
 export default defineI18nModule({
   code: 'ru',
   normalize,
@@ -313,7 +327,6 @@ export default defineI18nModule({
     asset_library_unused_line: 'Не используется',
     asset_library_history_line: 'Только в истории текстов',
     asset_library_held_by_ai_line: 'Только в действиях ИИ',
-    asset_open_place: (title) => `Открыть «${title}» в новой вкладке`,
     asset_open_variant: 'Открыть этот вариант',
     asset_preview_frame: 'Превью',
     asset_preview_frame_auto: 'Выбрать автоматически',
@@ -345,7 +358,11 @@ export default defineI18nModule({
     asset_role_content: 'Содержимое',
     asset_role_project_description: 'Описание проекта',
     asset_role_event_description: 'Описание события',
-    asset_role_page_content: 'Содержимое страницы',
+    asset_role_page_content: 'Текст страницы',
+    asset_role_section_text: 'Текст раздела',
+    asset_role_excerpt_text: 'Текст отрывка',
+    asset_role_diary_text: 'Текст записи',
+    asset_role_tag_description: 'Описание тега',
     asset_role_profile_about: 'Обо мне',
     asset_role_showcase: 'Витрина',
     asset_role_other: 'Вложение',
@@ -476,7 +493,6 @@ export default defineI18nModule({
     events: 'События',
     excerpts: 'Отрывки',
     excerpt: 'Отрывок',
-    excerpt_position: (index, total) => `Отрывок ${index} из ${total}`,
     excerpt_about: 'Про что',
     pages: 'Страницы',
     tags: 'Теги',
@@ -728,9 +744,6 @@ export default defineI18nModule({
     public_event_description: 'Описание события',
     public_diary_text: 'Текст записи',
     public_excerpt_text: 'Текст отрывка',
-    public_excerpt_position_in: (index, total) =>
-      `Отрывок ${index} из ${total} в`,
-    public_excerpt_in: 'Отрывок в',
     public_excerpt_about: 'Про',
     public_details_neighbour_sections: 'Соседние разделы',
     public_details_neighbour_entries: 'Соседние записи',
@@ -1442,14 +1455,14 @@ export default defineI18nModule({
     project_action_issue_color: 'цвет фона в формате #RRGGBB',
     project_content_sections: 'Разделы проекта',
     project_content_sections_description:
-      'Части проекта и этапы, через которые он прошёл.',
+      'Дополнительные детали о проекте и этапы, через которые он прошёл.',
     project_content_sections_hint:
       'Детальные описания составных частей проекта и этапов, через которые он прошел.',
     project_sections_dated: 'Этапы с датами',
     project_sections_undated: 'Общие разделы',
     related_entities: 'Связи',
-    related_entities_description:
-      'Проекты, события и записи дневника, которые автор связал с этим.',
+    related_entities_description: (kind) =>
+      `Другие сущности цифрового архива, как-либо связанные с ${THIS_KIND.instrumental[kind]}.`,
     related_entities_hint:
       'Проекты, события и записи дневника, с которыми это связано. Связь видна с обеих сторон.',
     related_entity_add: 'Добавить связь',
@@ -1564,7 +1577,8 @@ export default defineI18nModule({
     excerpt_without_about: 'Пока ни про что',
     excerpt_without_about_hint:
       'То, про что он был, удалено. Откройте отрывок и укажите, про что он теперь.',
-    excerpts_about_description: 'Написаны в других местах архива — про это.',
+    excerpts_about_description: (kind) =>
+      `Что об ${THIS_KIND.prepositional[kind]} написано в других местах цифрового архива.`,
     relation_recommendation_excerpt: 'Есть отрывок про это',
     excerpts_on_delete_keep: 'Оставить отрывки про него',
     excerpts_on_delete_delete: 'Удалить и отрывки',
@@ -1645,7 +1659,7 @@ export default defineI18nModule({
     content_private_section: 'Приватная секция',
     content_private_section_start: 'Начало приватной секции',
     content_private_section_end: 'Конец приватной секции',
-    content_private_section_remove: 'Убрать приватную секцию',
+    content_private_section_remove: 'Убрать секцию',
     content_editor_i18n: {
       add: 'Добавить',
       convert_to: 'Поменять на…',
@@ -1974,6 +1988,7 @@ export default defineI18nModule({
     upload_format_lossless: 'WebP без потерь',
     upload_format_picked: (format, reason) => `${format}: ${reason}`,
     upload_format_reason_smallest: 'самый лёгкий',
+    upload_format_reason_photo: 'фотография',
     upload_format_avif_no_lossless:
       'У AVIF нет режима без потерь; Авто или WebP сохранят каждый пиксель.',
     upload_result: 'Результат',
@@ -2046,7 +2061,6 @@ export default defineI18nModule({
     search_preset_cv_description:
       'Профессиональная часть архива: проекты, из которых складывается рабочая история.',
     og_personal_archive: 'Личный архив',
-    og_section_position: (index, total) => `Этап ${index} из ${total}`,
     og_updated: (date) => `Обновлено ${date}`,
     og_life_headline: (years) =>
       `${plural(years, 'год', 'года', 'лет')} в одной хронике`,
@@ -2146,7 +2160,6 @@ export default defineI18nModule({
     ai_session_you: 'Вы',
     ai_session_template: 'Готовая просьба',
     ai_session_running: 'Работает',
-    ai_session_recent: 'Недавно завершены',
     ai_session_waiting: (count) => `Ждут решения: ${count}`,
     ai_session_starting: 'Начинаю сессию…',
     ai_sessions_archive_note: 'Старше 30 дней удаляются',
@@ -2315,8 +2328,8 @@ export default defineI18nModule({
       proofread: {
         title: 'Ошибки в тексте',
         instruction:
-          'Найди и исправь очевидные ошибки в тексте. Если есть сомнения, прокомментируй и предоставь выбор мне. Только то, что ещё не было вычитано или изменилось с тех пор.\n\n' +
-          'Не исправляй авторский стиль подачи текста и мат. Ты проверяешь правильность написания текста, а не «корректность», «красоту», «лаконичность» и другие субъективные критерии!',
+          'Найди и исправь очевидные ошибки в тексте. Заодно отметь простые ошибки смысла внутри одного текста: случайный повтор одного и того же в разных местах, шаг, который не следует из сказанного, противоречие самому себе, фразу, о которую читатель спотыкается. Такое не исправляй молча: покажи место, объясни, что не так, и оставь выбор мне. Если есть сомнения, прокомментируй и предоставь выбор мне. Только то, что ещё не было вычитано или изменилось с тех пор.\n\n' +
+          'Не исправляй авторский стиль подачи текста и мат. Ты проверяешь, что текст написан правильно и не спорит сам с собой, а не «корректность», «красоту», «лаконичность» и другие субъективные критерии!',
       },
       describe: {
         title: 'Описания файлов',
@@ -2615,7 +2628,6 @@ export default defineI18nModule({
       tag: 'этим тегом',
     },
     ai_entity_menu: (it) => `ИИ и ${it}`,
-    ai_entity_new_session: (title) => `Новая сессия о «${title}»`,
     ai_entity_sessions: (count) => `Сессии · ${count}`,
     ai_entity_no_sessions: 'Сессий о нём ещё не было',
     ai_entity_all_sessions: 'Все сессии о нём',
@@ -2627,10 +2639,6 @@ export default defineI18nModule({
     ai_sessions_about: 'Только о',
     ai_sessions_about_clear: 'Показать все сессии',
     ai_new_about: 'О чём:',
-    ai_bar_new_plain: 'Новая сессия без привязки',
-    ai_bar_waiting_title: (count) => `Ждут вас · ${count}`,
-    ai_bar_nothing_waits: 'Ничего не ждёт вашего решения.',
-    ai_bar_all_sessions: 'Все сессии',
     ai_memory_open: 'Открыть',
     ai_memory_more: (count) => `Ещё ${count}`,
     ai_memory_cancel: 'Отмена',
@@ -2859,7 +2867,8 @@ export default defineI18nModule({
       busy: 'провайдер занят, попробуйте позже',
       error: 'ошибка',
     },
-    ai_bar_waiting: (count) => (count ? `ИИ: ждут вас — ${count}` : 'ИИ'),
+    x_ai_sessions: (count) =>
+      `ИИ: ${plural(count, 'сессия', 'сессии', 'сессий')}`,
     ai_error: 'Не получилось. Попробуйте ещё раз.',
     ai_off_notice: 'ИИ в Thei выключен.',
     x_sections: (count) => plural(count, 'раздел', 'раздела', 'разделов'),

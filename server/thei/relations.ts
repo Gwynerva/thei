@@ -23,6 +23,7 @@ import { buildAdminAssetUrls } from './assets/urls';
 import { contentOwnerKeys } from './content/history';
 import { resolveEntityIconMedia } from './media/generated-icon';
 import { buildAdminEntityBanner } from './entity-banner';
+import { buildAdminExcerptsPreviewMedia } from './excerpts/preview-media';
 import { inChunks } from './db/in-chunks';
 
 /**
@@ -32,13 +33,11 @@ import { inChunks } from './db/in-chunks';
  * event and a diary entry borrow whatever their body opens with, exactly as
  * their own cards do, and a drawn icon of their kind when it opens with none.
  *
+ * With no picture of its own, an event or an entry is shown by the first of
+ * its excerpts' (`buildAdminExcerptsPreviewMedia`).
+ *
  * Admin addresses: this is for the relations editor. Public pages build their
  * pictures through `findContentEntity`, with the visitor's view.
- */
-/**
- * The picture that stands for a project, an event or a diary entry in a list:
- * a project's icon, the first media of an event or an entry, or else the icon
- * generated from its identity.
  */
 export async function relationIconMedia(endpoint: RelationEndpoint) {
   if (endpoint.type === 'project') {
@@ -69,7 +68,13 @@ export async function relationIconMedia(endpoint: RelationEndpoint) {
   return resolveEntityIconMedia(
     ownerType,
     endpoint.id,
-    buildContentPreview(content?.data).media,
+    buildContentPreview(content?.data).media ??
+      (endpoint.type === 'excerpt'
+        ? undefined
+        : await buildAdminExcerptsPreviewMedia({
+            type: ownerType as 'event' | 'diary-entry',
+            id: endpoint.id,
+          })),
   );
 }
 

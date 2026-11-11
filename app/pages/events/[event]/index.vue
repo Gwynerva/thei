@@ -75,8 +75,6 @@ const details = computed(
   () =>
     ({
       periods: data.value.periods,
-      excerpts: data.value.excerpts,
-      excerptSecrets: data.value.excerptSecrets,
       chronology: createdAndUpdatedTimelineItems(data.value.chronology, {
         created: phrase.value.event_chronology_created,
         updated: phrase.value.event_chronology_updated,
@@ -132,11 +130,13 @@ const extraContents = computed(() => publicBelowTextContents(data.value));
           :class="{ 'mt-lg': data.content.blocks.length }"
         />
         <PublicExcerptsBlock
+          entity="event"
           :about="data.excerptsAbout"
           :url="excerptsUrl"
           class="mt-lg"
         />
         <PublicRelatedBlock
+          entity="event"
           :counts="data.related"
           :url="relatedUrl"
           class="mt-lg"

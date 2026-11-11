@@ -11,7 +11,8 @@ import {
   type ExcerptParentAddress,
 } from '#layers/thei/shared/excerpt-url';
 import type { StoredAssetRecord } from './assets/storage';
-import { buildPublicEntityPreviewMedia } from './public/content';
+import { buildPublicContentPreviewMedia } from './public/content';
+import { resolveEntityIconMedia } from './media/generated-icon';
 import { deleteUsagesReleasing } from './assets/repository/usages/release';
 
 /**
@@ -199,11 +200,28 @@ export async function buildPublicCardMedia(
   includePrivate = false,
   banner?: StoredAssetRecord | null,
 ): Promise<MediaDescriptor> {
+  return resolveEntityIconMedia(
+    holder.type,
+    holderId(holder),
+    await findPublicCardMedia(holder, includePrivate, banner),
+  );
+}
+
+/**
+ * The same without the drawn icon: its banner, else its body's picture, or
+ * nothing when it has neither — what a parent looks for in its excerpts
+ * before it settles for an icon (`public/parent-media.ts`).
+ */
+export async function findPublicCardMedia(
+  holder: BannerHolder,
+  includePrivate = false,
+  banner?: StoredAssetRecord | null,
+): Promise<MediaDescriptor | undefined> {
   const own = await buildPublicBanner(holder, banner);
   if (own) return own;
   switch (holder.type) {
     case 'event':
-      return buildPublicEntityPreviewMedia(
+      return buildPublicContentPreviewMedia(
         'event',
         holder.event.eventUuid,
         'event-body',
@@ -211,7 +229,7 @@ export async function buildPublicCardMedia(
         includePrivate,
       );
     case 'project-section':
-      return buildPublicEntityPreviewMedia(
+      return buildPublicContentPreviewMedia(
         'project-section',
         holder.section.sectionUuid,
         'project-section-body',
@@ -219,7 +237,7 @@ export async function buildPublicCardMedia(
         includePrivate,
       );
     case 'excerpt':
-      return buildPublicEntityPreviewMedia(
+      return buildPublicContentPreviewMedia(
         'excerpt',
         holder.excerpt.excerptUuid,
         'excerpt-body',

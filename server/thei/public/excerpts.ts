@@ -1,3 +1,4 @@
+import { describedSummary } from '../content/described';
 import type {
   PublicExcerpt,
   PublicExcerptCard,
@@ -18,6 +19,7 @@ import {
 } from '#layers/thei/shared/relation';
 import type { PublicViewer } from '../access-links/viewer';
 import type { StoredAssetRecord } from '../assets/storage';
+import { findContentEntity } from '../content-entities';
 import {
   buildPublicBanner,
   buildPublicCardMedia,
@@ -32,6 +34,7 @@ import {
 import {
   diaryExcerptParent,
   eventExcerptParent,
+  excerptDay,
   excerptIsOwn,
   excerptListed,
   excerptOpens,
@@ -41,10 +44,11 @@ import {
   type ExcerptParentInfo,
 } from '../excerpts/parents';
 import { fromStoredRelationNote, fromStoredRelationType } from '../relations';
+import { buildPublicContentData } from './content';
 import {
-  buildPublicContentData,
-  buildPublicEntityPreviewMedia,
-} from './content';
+  buildPublicDiaryCardMedia,
+  buildPublicEventCardMedia,
+} from './parent-media';
 import {
   buildPublicEntityChronology,
   buildPublicEntityReference,
@@ -68,28 +72,40 @@ import { buildSecretReference } from './secret';
 /** How many cards one page of the block on a target holds. */
 export const PUBLIC_EXCERPTS_PAGE_SIZE = 12;
 
+/**
+ * How many a project's page shows: only the latest, since the rest are read
+ * on its chronology, which an event and a diary entry have none of.
+ */
+export const PUBLIC_PROJECT_EXCERPTS_SIZE = 5;
+
 export { diaryExcerptParent, eventExcerptParent, projectExcerptParent };
 
 /** The parent as a card names it, with what stands for it. */
 async function buildPublicExcerptParent(
   parent: ExcerptParentInfo,
-  own: boolean,
+  viewer: PublicViewer,
 ): Promise<PublicExcerptParent> {
   const media =
     parent.type === 'project'
       ? (await buildPublicEntityReference(parent.row)).iconMedia
       : parent.type === 'event'
-        ? await buildPublicCardMedia({ type: 'event', event: parent.row }, own)
-        : await buildPublicEntityPreviewMedia(
-            'diary-entry',
-            parent.id,
-            'diary-body',
-            { type: 'diary-entry', date: parent.row.date },
-            own,
-          );
+        ? await buildPublicEventCardMedia(parent.row, viewer)
+        : await buildPublicDiaryCardMedia(parent.row, viewer);
+  // What the parent's own link says of it: the summary in the row a project
+  // or an event came with; a diary entry has none, and is read for its lead.
+  const summary =
+    parent.type === 'diary-entry'
+      ? ((
+          await findContentEntity(
+            { entityType: parent.type, entityId: parent.id },
+            viewer,
+          )
+        )?.summary ?? '')
+      : parent.row.summary;
   return {
     type: parent.type,
     title: parent.title,
+    summary,
     href: parent.href,
     ...(parent.type === 'diary-entry' ? { date: parent.row.date } : {}),
     access: parent.access,
@@ -101,8 +117,9 @@ async function buildPublicExcerptParent(
 export type ExcerptAboutSide = { relationType: RelationType; note?: string };
 
 /**
- * An excerpt as a card shows it. `banner` is its banner when the caller has
- * read it already; an excerpt without one reads nothing.
+ * An excerpt as a card shows it: described by its summary, or else by how
+ * its text begins (`describedSummary`). `banner` is its banner when the
+ * caller has read it already; an excerpt without one reads nothing.
  */
 export async function buildPublicExcerptCard(
   excerpt: ExcerptRecord,
@@ -114,18 +131,19 @@ export async function buildPublicExcerptCard(
     : null,
 ): Promise<PublicExcerptCard> {
   const own = excerptIsOwn(viewer, parent);
-  const [media, parentCard, about] = await Promise.all([
+  const [summary, media, parentCard, about] = await Promise.all([
+    describedSummary('excerpt', excerpt.excerptUuid, excerpt.summary, own),
     buildPublicCardMedia(
       { type: 'excerpt', parent: parent.address, excerpt },
       own,
       banner,
     ),
-    buildPublicExcerptParent(parent, own),
+    buildPublicExcerptParent(parent, viewer),
     resolvePublicRelated({ type: 'excerpt', id: excerpt.excerptUuid }, viewer),
   ]);
   return {
     title: excerpt.title,
-    summary: excerpt.summary,
+    summary,
     href: buildExcerptUrl(
       parent.address,
       excerpt.humanReadableSlug,
@@ -147,13 +165,12 @@ export async function buildPublicExcerptCard(
 
 /**
  * An excerpt whole, as its parent's page embeds it and its own page shows
- * it: the card, its banner, its text and its place among its parent's.
+ * it: the card, its banner and its text.
  */
 export async function buildPublicExcerpt(
   excerpt: ExcerptRecord,
   parent: ExcerptParentInfo,
   viewer: PublicViewer,
-  position: { number: number; count: number },
 ): Promise<PublicExcerpt> {
   const own = excerptIsOwn(viewer, parent);
   // Read once, for the card and for the page's hero.
@@ -175,11 +192,13 @@ export async function buildPublicExcerpt(
   ]);
   return {
     ...card,
+    // Shown whole, it has the summary the owner wrote: its text follows, and
+    // would only be said twice.
+    summary: excerpt.summary,
     humanReadableSlug: excerpt.humanReadableSlug,
     ...(bannerMedia ? { bannerMedia } : {}),
     content: content ?? { blocks: [] },
     chronology: buildPublicEntityChronology(excerpt),
-    position,
   };
 }
 
@@ -200,14 +219,54 @@ export function visibleParentExcerpts(
 /**
  * A parent's excerpts the viewer may not read, each as its codename where
  * it stands among the ones they may: the parent's side says it has a part
- * closed to them, as the Life does, and nothing of it. The codename is the
- * one its point on a chronology goes by.
+ * closed to them, as the Life does. The codename is the one its point on a
+ * chronology goes by.
+ *
+ * What it is about is named as any relation names its other end to this
+ * viewer (`resolvePublicRelated`): a project or an event closed to them by
+ * its own codename, a diary entry closed to them not at all. The relation's
+ * note is the excerpt's own words and is left out.
  */
-export function secretParentExcerpts(
+export async function secretParentExcerpts(
   parent: ExcerptParentInfo,
   viewer: PublicViewer,
-): PublicExcerptSecret[] {
-  const secrets: PublicExcerptSecret[] = [];
+): Promise<PublicExcerptSecret[]> {
+  return Promise.all(
+    hiddenParentExcerpts(parent, viewer).map(async ({ excerpt, name }) => ({
+      ...name,
+      about: await buildPublicRelatedLinks(
+        (
+          await resolvePublicRelated(
+            { type: 'excerpt', id: excerpt.excerptUuid },
+            viewer,
+          )
+        ).map(({ note: _note, ...item }) => item),
+        viewer,
+      ),
+    })),
+  );
+}
+
+/** A closed excerpt by its codename alone, where it stands. */
+export type PublicExcerptSecretName = Omit<PublicExcerptSecret, 'about'>;
+
+/**
+ * The same excerpts by their codenames alone, without what each is about:
+ * what a card of the Life names them by, which reads no relation for it.
+ */
+export function secretParentExcerptNames(
+  parent: ExcerptParentInfo,
+  viewer: PublicViewer,
+): PublicExcerptSecretName[] {
+  return hiddenParentExcerpts(parent, viewer).map(({ name }) => name);
+}
+
+function hiddenParentExcerpts(
+  parent: ExcerptParentInfo,
+  viewer: PublicViewer,
+): { excerpt: ExcerptRecord; name: PublicExcerptSecretName }[] {
+  const hidden: { excerpt: ExcerptRecord; name: PublicExcerptSecretName }[] =
+    [];
   let before = 0;
   for (const excerpt of listExcerpts(parent)) {
     if (excerptShownWithParent(viewer, excerpt, parent)) {
@@ -215,14 +274,18 @@ export function secretParentExcerpts(
       continue;
     }
     const secret = buildSecretReference('excerpt', excerpt.excerptUuid);
-    secrets.push({
-      key: secret.key,
-      title: secret.title,
-      iconMedia: secret.iconMedia,
-      before,
+    hidden.push({
+      excerpt,
+      name: {
+        key: secret.key,
+        title: secret.title,
+        summary: secret.summary,
+        iconMedia: secret.iconMedia,
+        before,
+      },
     });
   }
-  return secrets;
+  return hidden;
 }
 
 /**
@@ -252,12 +315,7 @@ export async function buildParentExcerpts(
 ): Promise<PublicExcerpt[]> {
   const visible = visibleParentExcerpts(parent, viewer);
   return Promise.all(
-    visible.map((excerpt, index) =>
-      buildPublicExcerpt(excerpt, parent, viewer, {
-        number: index + 1,
-        count: visible.length,
-      }),
-    ),
+    visible.map((excerpt) => buildPublicExcerpt(excerpt, parent, viewer)),
   );
 }
 
@@ -307,7 +365,7 @@ export type PublicExcerptAboutItem = {
 
 /**
  * The excerpts about an entity, as this visitor may see them, newest first:
- * by the day of the parent, then by when the excerpt was written.
+ * by the day each stands on, then by when the excerpt was written.
  *
  * Listed only where the parent may be listed and the excerpt is not private,
  * or on the parent's private side — the page's own entity is the one the
@@ -355,11 +413,18 @@ export async function resolvePublicExcerptsAbout(
   return items.sort(compareNewestFirst);
 }
 
+/**
+ * By the day each stands on a chronology (`excerptDay`): an excerpt of a
+ * project, which has no day of its own, by the day it was written — so the
+ * latest few a project's page shows are the latest, whatever they are part of.
+ */
 function compareNewestFirst(
   left: PublicExcerptAboutItem,
   right: PublicExcerptAboutItem,
 ) {
-  const byDay = (right.parent.date ?? '').localeCompare(left.parent.date ?? '');
+  const byDay = excerptDay(right.excerpt, right.parent).localeCompare(
+    excerptDay(left.excerpt, left.parent),
+  );
   if (byDay) return byDay;
   return (
     right.excerpt.createdAt - left.excerpt.createdAt ||
@@ -380,9 +445,10 @@ export async function buildPublicExcerptsPage(
   target: RelationEndpoint,
   page: unknown,
   viewer: PublicViewer,
+  pageSize = PUBLIC_EXCERPTS_PAGE_SIZE,
 ): Promise<PublicExcerptsPage> {
   const items = await resolvePublicExcerptsAbout(target, viewer);
-  const paged = paginate(items, page, PUBLIC_EXCERPTS_PAGE_SIZE);
+  const paged = paginate(items, page, pageSize);
   return {
     ...paged,
     items: await Promise.all(

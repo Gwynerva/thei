@@ -52,6 +52,8 @@ export interface ProfileEditData extends StatusEditData {
 export interface ProfilePageLink {
   pageUuid: string;
   title: string;
+  /** What the page says of itself, for its card on the public profile. */
+  summary?: string;
   href: string;
   media?: MediaDescriptor;
 }

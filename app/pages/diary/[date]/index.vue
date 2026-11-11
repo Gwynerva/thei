@@ -53,7 +53,7 @@ const description = computed(
         const about = excerpt.about[0];
         return {
           title: excerpt.title,
-          ...(about ? { subject: publicExcerptSubjectName(about) } : {}),
+          ...(about ? { subject: entityLinkName(about, 'abbreviated') } : {}),
         };
       }),
       includePrivate: true,
@@ -110,8 +110,6 @@ const details = computed(
         kind: 'diary-entry',
         ...data.value.neighbours,
       },
-      excerpts: data.value.excerpts,
-      excerptSecrets: data.value.excerptSecrets,
       // The day the entry is about is its heading, not a technical date.
       chronology: createdAndUpdatedTimelineItems(data.value.chronology, {
         created: phrase.value.diary_chronology_created,
@@ -149,11 +147,13 @@ const extraContents = computed(() => publicBelowTextContents(data.value));
         :class="{ 'mt-lg': data.content.blocks.length }"
       />
       <PublicExcerptsBlock
+        entity="diary-entry"
         :about="data.excerptsAbout"
         :url="excerptsUrl"
         class="mt-lg"
       />
       <PublicRelatedBlock
+        entity="diary-entry"
         :counts="data.related"
         :url="relatedUrl"
         class="mt-lg"

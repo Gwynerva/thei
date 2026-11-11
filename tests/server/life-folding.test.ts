@@ -19,8 +19,10 @@ vi.mock('../../server/thei/public/entities', () => ({
   buildPublicEntityReference: vi.fn(async () => undefined),
   buildPublicPageIcon: vi.fn(async () => undefined),
 }));
-vi.mock('../../server/thei/public/content', () => ({
-  buildPublicEntityPreviewMedia: vi.fn(async () => undefined),
+vi.mock('../../server/thei/public/content', () => ({}));
+vi.mock('../../server/thei/public/parent-media', () => ({
+  buildPublicDiaryCardMedia: vi.fn(async () => undefined),
+  buildPublicEventCardMedia: vi.fn(async () => undefined),
 }));
 
 let context: Awaited<ReturnType<typeof freshTestDb>>;

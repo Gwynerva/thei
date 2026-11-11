@@ -28,15 +28,6 @@ const neighboursTitle = computed(() => {
       <PublicContentContents :items="data.contents" :active="activeContent" />
     </PublicCollapsibleSection>
     <PublicCollapsibleSection
-      v-if="data.excerpts?.length || data.excerptSecrets?.length"
-      :title="phrase.excerpts"
-    >
-      <PublicExcerptList
-        :excerpts="data.excerpts ?? []"
-        :secrets="data.excerptSecrets ?? []"
-      />
-    </PublicCollapsibleSection>
-    <PublicCollapsibleSection
       v-if="data.neighbours?.next || data.neighbours?.previous"
       :title="neighboursTitle"
     >

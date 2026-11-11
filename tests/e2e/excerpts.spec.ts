@@ -255,6 +255,18 @@ test('an entry may be nothing but an excerpt, written in its modal and about a p
   await expect(article.locator('[data-excerpt-subject]')).toContainText(
     `Kayak ${stamp}`,
   );
+  // The contents name what the excerpt is about, and the excerpt under it;
+  // both are lit while it is read, and the excerpt is the current entry.
+  const contents = page.locator('aside nav');
+  const subjectEntry = contents.getByRole('link', { name: `Kayak ${stamp}` });
+  const excerptEntry = contents.getByRole('link', {
+    name: `Stringers ${stamp}`,
+  });
+  await expect(subjectEntry).toHaveAttribute('href', /^#excerpt-/);
+  await excerptEntry.click();
+  await expect(excerptEntry).toHaveAttribute('aria-current', 'location');
+  await expect(subjectEntry).toHaveClass(/text-accent/);
+  await expect(subjectEntry).not.toHaveAttribute('aria-current');
   await article.getByRole('link', { name: `Stringers ${stamp}` }).click();
   await expect(page).toHaveURL(
     new RegExp(`/diary/${date}/excerpts/stringers-`),
@@ -262,6 +274,20 @@ test('an entry may be nothing but an excerpt, written in its modal and about a p
   await expect(page.getByRole('heading', { level: 1 })).toContainText(
     `Stringers ${stamp}`,
   );
+  // The tab names the excerpt by what it is about, and the line over the
+  // title names its parent and that, each as a chip.
+  await expect(page).toHaveTitle(
+    new RegExp(`^Stringers ${stamp} - Kayak ${stamp}`),
+  );
+  const line = page.locator('[data-page-parent]:visible');
+  await expect(line).toHaveCount(2);
+  await expect(line.first()).toHaveText(/^Excerpt/);
+  await expect(line.first().locator('[data-entity-chip]')).toHaveAttribute(
+    'href',
+    new RegExp(`/diary/${date}/$`),
+  );
+  await expect(line.last()).toContainText(/^About\s*Kayak/);
+  await expect(line.last()).toHaveAttribute('data-relation-href', project.href);
   // The admin bar leads back to the excerpt, in its parent's form.
   await page.getByRole('link', { name: 'Edit excerpt' }).click();
   await expect(page).toHaveURL(/\/admin\/diary\/[^/]+\/edit\/$/);
@@ -422,4 +448,135 @@ test('an excerpt about something private is hidden with it, and opens with it', 
   } finally {
     await visitor.close();
   }
+});
+
+test('the search names what an excerpt is about, its day once, and lands in its text', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  const stamp = Date.now();
+  // A word of letters alone, no other text holds.
+  const word = `quill${[...String(stamp)].map((digit) => 'abcdefghij'[Number(digit)]).join('')}`;
+  const project = await createProject(page, stamp, 'Tarn');
+  const [date] = await freeDays(page, 1);
+  await createEntry(page, date!, [
+    {
+      ...excerpt(stamp, 'Shore', { type: 'project', id: project.uuid }),
+      // Written as an app writes it: its blocks carry no ids.
+      content: {
+        data: {
+          blocks: [
+            { type: 'paragraph', data: { text: 'The shore, first.' } },
+            { type: 'paragraph', data: { text: `Then ${word} by the tarn.` } },
+          ],
+        },
+      },
+    },
+  ]);
+  await expect
+    .poll(
+      async () =>
+        (await (await page.request.get(`/api/search?q=${word}`)).json()).total,
+      // The index may be building whole, after an access changed before this.
+      { timeout: 30_000 },
+    )
+    .toBe(1);
+
+  await open(page, `/search/?q=${word}`);
+  const card = page.locator('article', { hasText: `Shore ${stamp}` });
+  await expect(card.locator('[data-search-subject]')).toContainText(
+    `Tarn ${stamp}`,
+  );
+  // The parent's chip names the day; the card does not say it again.
+  await expect(card.getByText('2011')).toHaveCount(1);
+
+  await card.getByRole('link', { name: new RegExp(word) }).click();
+  await expect(page).toHaveURL(/\/excerpts\/shore-.*#b-/);
+  const found = page.locator('[data-landing-found]');
+  await expect(found).toHaveText(`Then ${word} by the tarn.`);
+  await expect(found).toHaveAttribute('data-block', /.+/);
+});
+
+test('an excerpt is found by the name of what it is about, in the link picker and the search', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  const stamp = Date.now();
+  // A name of letters alone, which nothing else is called and no text holds.
+  const name = `Fjeld${[...String(stamp)].map((digit) => 'abcdefghij'[Number(digit)]).join('')}`;
+  const project = await createProject(page, stamp, name);
+  const [date] = await freeDays(page, 1);
+  await createEntry(page, date!, [
+    excerpt(stamp, 'Cairn', { type: 'project', id: project.uuid }),
+  ]);
+
+  // The picker offers the project, then the excerpt about it, named by it.
+  const picked = await (
+    await page.request.get(`/api/admin/content-entities?query=${name}`)
+  ).json();
+  expect(picked.map((item: { entityType: string }) => item.entityType)).toEqual(
+    ['project', 'excerpt'],
+  );
+  expect(picked[1].title).toBe(`Cairn ${stamp}`);
+  expect(picked[1].subject).toMatchObject({
+    type: 'project',
+    title: `${name} ${stamp}`,
+  });
+  // Words of the two together find the excerpt alone.
+  const together = await (
+    await page.request.get(`/api/admin/content-entities?query=${name}%20cairn`)
+  ).json();
+  expect(
+    together.map((item: { entityType: string }) => item.entityType),
+  ).toEqual(['excerpt']);
+
+  // The search finds both, and the excerpt's find leads to the line that
+  // names what it is about.
+  await expect
+    .poll(
+      async () =>
+        (await (await page.request.get(`/api/search?q=${name}`)).json()).total,
+      { timeout: 30_000 },
+    )
+    .toBe(2);
+  await open(page, `/search/?q=${name}`);
+  const card = page.locator('article', { hasText: `Cairn ${stamp}` });
+  await expect(card.locator('[data-search-subject]')).toContainText(name);
+  await card.getByRole('link', { name: /Relation|Связ/ }).click();
+  await expect(page).toHaveURL(/\/excerpts\/cairn-.*#r-project~/);
+});
+
+test('resting on the chip of what an excerpt is about shows its card', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  const stamp = Date.now();
+  const project = await createProject(page, stamp, 'Sloop');
+  const [date] = await freeDays(page, 1);
+  await createEntry(page, date!, [
+    excerpt(stamp, 'Mast', { type: 'project', id: project.uuid }),
+  ]);
+  await open(page, `/diary/${date}/`);
+
+  const chip = page
+    .locator('[data-excerpt] [data-excerpt-subject]')
+    .locator('[data-entity-chip]');
+  await expect(chip).toHaveAttribute('data-entity-card', '');
+  await expect(chip).toHaveAttribute('href', project.href);
+  // The card is the page's one popup, drawn from what the page holds of the
+  // project: its name and what it says of itself.
+  const card = page.locator('[data-floating-popup]', {
+    has: page.locator('[data-link-preview-title]'),
+  });
+  await expect(card).toHaveCount(0);
+  await chip.hover();
+  await expect(card).toBeVisible();
+  await expect(card.locator('[data-link-preview-title]')).toHaveText(
+    `Sloop ${stamp}`,
+  );
+  await expect(card).toContainText('Something an excerpt is about.');
+  // The chip shows it is open for as long as the card is.
+  await expect(chip).toHaveAttribute('data-popup-open', /.+/);
+  await page.mouse.move(0, 0);
+  await expect(card).toBeHidden();
 });

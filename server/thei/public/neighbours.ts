@@ -12,7 +12,7 @@ import type { ProjectSectionRecord } from '../projects/content-sections';
 import { OWNER, STRANGER } from '../access-links/viewer';
 import { listExcerpts } from '../excerpts';
 import { excerptShownWithParent } from '../excerpts/parents';
-import { buildPublicEntityPreviewMedia } from './content';
+import { buildPublicDiaryCardMedia } from './parent-media';
 import { buildPublicProjectSectionSummary } from './entities';
 
 type ProjectRow = NonNullable<
@@ -98,13 +98,7 @@ export async function buildDiaryEntryNeighbours(
     { previous: pair.previous ?? undefined, next: pair.next ?? undefined },
     async (entry) => {
       const [media, content] = await Promise.all([
-        buildPublicEntityPreviewMedia(
-          'diary-entry',
-          entry.diaryUuid,
-          'diary-body',
-          { type: 'diary-entry', date: entry.date },
-          isAdmin,
-        ),
+        buildPublicDiaryCardMedia(entry, isAdmin ? OWNER : STRANGER),
         THEI_SERVER.content.findByOwner(
           'diary-entry',
           entry.diaryUuid,

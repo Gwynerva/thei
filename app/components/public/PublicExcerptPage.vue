@@ -1,5 +1,8 @@
 <script lang="ts" setup>
-import type { PublicExcerptResponse } from '#layers/thei/shared/api/public';
+import {
+  isPublicSecret,
+  type PublicExcerptResponse,
+} from '#layers/thei/shared/api/public';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 import { EXCERPT_TEXT_ANCHOR } from '#layers/thei/shared/content-headings';
 import {
@@ -8,11 +11,11 @@ import {
 } from './public-detail';
 
 /**
- * An excerpt's own page, under whichever parent it belongs to: "Excerpt 2
- * of 3 in" its parent above its title, then "About" what it is about,
- * turning down to the title, then its text, with
- * the excerpts beside it among its parent's in the sidebar. The three
- * routes under a diary entry, an event and a project share it.
+ * An excerpt's own page, under whichever parent it belongs to: "Excerpt"
+ * and its parent, then "About" and what it is about, in one line above its
+ * title, each a chip, then its text, with the excerpts beside it among its
+ * parent's in the sidebar. The three routes under a diary entry, an event
+ * and a project share it.
  */
 const { data } = defineProps<{ data: PublicExcerptResponse }>();
 
@@ -20,27 +23,43 @@ const { data } = defineProps<{ data: PublicExcerptResponse }>();
 const parentName = computed(() =>
   entityListName({ title: data.parent.title, date: data.parent.date }),
 );
-// "Excerpt 2 of 3 in" the parent, or "Excerpt in" it when it is the one.
+// "Excerpt" and its parent's chip.
 const parentLine = computed(() => ({
-  label:
-    data.position.count > 1
-      ? phrase.value.public_excerpt_position_in(
-          data.position.number,
-          data.position.count,
-        )
-      : phrase.value.public_excerpt_in,
+  label: phrase.value.excerpt,
   href: data.parent.href,
   title: parentName.value,
   iconMedia: data.parent.media,
   icon: entityTypeIcon(data.parent.type),
+  card: {
+    entityType: data.parent.type,
+    title: data.parent.title,
+    summary: data.parent.summary,
+    ...(data.parent.date ? { date: data.parent.date } : {}),
+    ...(data.parent.media ? { iconMedia: data.parent.media } : {}),
+  },
 }));
-/** "About" what it is about, turning down to the title; none once deleted. */
+/** "About" what it is about, in the same line; none once deleted. */
 const subjectLine = computed(() =>
   publicExcerptSubjectLine(data.about, phrase.value.public_excerpt_about),
 );
-/** What the excerpt is, where it has no summary to say so. */
+/**
+ * What the excerpt is about, as the tab names it: none once deleted, and
+ * never a codename, which names nothing to whoever reads a tab or a link.
+ */
+const subjectName = computed(() => {
+  const subject = data.about[0];
+  return subject && !isPublicSecret(subject)
+    ? entityListName(subject)
+    : undefined;
+});
+/**
+ * What a search engine shows under the excerpt: its summary, or else how its
+ * text begins — the text arrived cut to this reader already, so it is taken
+ * whole — or, with no text this reader may see, only what it is a part of.
+ */
 const description = computed(() => {
-  if (data.summary) return data.summary;
+  const said = publicSeoDescription(data.summary, data.content);
+  if (said) return said;
   switch (data.parent.type) {
     case 'project':
       return phrase.value.excerpt_of_project(data.parent.title);
@@ -65,9 +84,10 @@ usePublicSeo({
   ogImage,
   markdown: true,
   ogType: 'article',
-  // The parent is the context an excerpt is read in, so the tab and a
-  // shared link name it: "Excerpt - Parent - Owner".
-  title: () => `${data.title} - ${parentName.value}`,
+  // An excerpt is written about its subject, so the tab and a shared link
+  // name that: "Excerpt - Subject - Owner". About nothing, or about what
+  // the reader may not open, it names the parent it is read in.
+  title: () => `${data.title} - ${subjectName.value ?? parentName.value}`,
   description,
   canonical: () => data.href,
   noIndex: () => data.parent.access === 'link-only',

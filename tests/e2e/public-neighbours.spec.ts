@@ -162,20 +162,21 @@ test('a dated section leads back above and on below, by picture, name and time',
     await expect(aside.getByText(word, { exact: true })).toHaveCount(0);
   await expect(links.nth(0).locator('.media-edge-strip')).toHaveCount(1);
 
-  // A long name is cut to two lines and told whole in the popup; a short
-  // one has nothing to add.
-  const long = links.nth(1);
-  const clipped = await long
-    .locator('[data-title-popup-clip]')
-    .first()
-    .evaluate((element) => element.scrollHeight > element.clientHeight + 1);
-  expect(clipped).toBe(true);
-  await long.hover();
-  await expect(page.locator('[data-title-popup-el]')).toContainText(LONG);
+  // Resting on a tile shows the card of what it leads to, as a link in a
+  // text does: its kind, and its name whole however the tile cut it.
+  const card = page.locator('.entity-link-preview');
+  await links.nth(1).hover();
+  await expect(card.locator('[data-link-preview-kind]')).toHaveAttribute(
+    'aria-label',
+    'Project section',
+  );
+  await expect(card.locator('[data-link-preview-title]')).toHaveText(LONG);
   await page.mouse.move(5, 5);
+  await expect(card).toBeHidden();
   await links.nth(0).hover();
-  await page.waitForTimeout(700);
-  await expect(page.locator('[data-title-popup-el]')).toBeHidden();
+  await expect(card.locator('[data-link-preview-title]')).toHaveText(
+    'Groundwork',
+  );
 });
 
 test('the first dated section only leads on, past the undated one', async ({

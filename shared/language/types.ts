@@ -1,5 +1,5 @@
 import type { ContentHistoryReason } from '../content-history';
-import type { RelationEntityType } from '../relation';
+import type { RelationEntityType, RelationTargetType } from '../relation';
 import type { ProofreadCategory, TidyCommentKind } from '../ai-revise';
 import type { AiActionKind } from '../ai-actions';
 import type { ContentFileSkip } from '../content-file-placement';
@@ -194,7 +194,6 @@ export type LanguagePhrases = {
   asset_library_unused_line: string;
   asset_library_history_line: string;
   asset_library_held_by_ai_line: string;
-  asset_open_place: (title: string) => string;
   asset_open_variant: string;
   asset_preview_frame: string;
   asset_preview_frame_auto: string;
@@ -222,6 +221,10 @@ export type LanguagePhrases = {
   asset_role_project_description: string;
   asset_role_event_description: string;
   asset_role_page_content: string;
+  asset_role_section_text: string;
+  asset_role_excerpt_text: string;
+  asset_role_diary_text: string;
+  asset_role_tag_description: string;
   asset_role_profile_about: string;
   asset_role_showcase: string;
   asset_role_other: string;
@@ -326,8 +329,6 @@ export type LanguagePhrases = {
   events: string;
   excerpts: string;
   excerpt: string;
-  /** "Excerpt 2 of 5": an excerpt's place among its parent's. */
-  excerpt_position: (index: number, total: number) => string;
   /** The block of what an excerpt is about: its relations. */
   excerpt_about: string;
   pages: string;
@@ -499,8 +500,6 @@ export type LanguagePhrases = {
   public_event_description: string;
   public_diary_text: string;
   public_excerpt_text: string;
-  public_excerpt_position_in: (index: number, total: number) => string;
-  public_excerpt_in: string;
   public_excerpt_about: string;
   public_details_neighbour_sections: string;
   public_details_neighbour_entries: string;
@@ -1014,7 +1013,8 @@ export type LanguagePhrases = {
   project_sections_dated: string;
   project_sections_undated: string;
   related_entities: string;
-  related_entities_description: string;
+  /** Under the heading of the relations of a page of this kind. */
+  related_entities_description: (kind: RelationTargetType) => string;
   related_entities_hint: string;
   related_entity_add: string;
   relation_direction: string;
@@ -1110,7 +1110,8 @@ export type LanguagePhrases = {
   /** An excerpt left about nothing by a deleted target. */
   excerpt_without_about: string;
   excerpt_without_about_hint: string;
-  excerpts_about_description: string;
+  /** Under the heading of the excerpts about a page of this kind. */
+  excerpts_about_description: (kind: RelationTargetType) => string;
   relation_recommendation_excerpt: string;
   excerpts_on_delete_keep: string;
   excerpts_on_delete_delete: string;
@@ -1433,6 +1434,7 @@ export type LanguagePhrases = {
   upload_format_lossless: string;
   upload_format_picked: (format: string, reason: string) => string;
   upload_format_reason_smallest: string;
+  upload_format_reason_photo: string;
   upload_format_avif_no_lossless: string;
   upload_result: string;
   upload_result_pending: string;
@@ -1498,7 +1500,6 @@ export type LanguagePhrases = {
   search_preset_cv_title: string;
   search_preset_cv_description: string;
   og_personal_archive: string;
-  og_section_position: (index: number, total: number) => string;
   og_updated: (date: string) => string;
   og_life_headline: (years: number) => string;
   og_tags_headline: (count: number) => string;
@@ -1588,8 +1589,6 @@ export type LanguagePhrases = {
   ai_session_you: string;
   ai_session_template: string;
   ai_session_running: string;
-  /** The dashboard's group of sessions done within the week. */
-  ai_session_recent: string;
   ai_session_waiting: (count: number) => string;
   /** A new session sent, until it opens. */
   ai_session_starting: string;
@@ -1923,7 +1922,6 @@ export type LanguagePhrases = {
     tag: string;
   };
   ai_entity_menu: (it: string) => string;
-  ai_entity_new_session: (title: string) => string;
   ai_entity_sessions: (count: number) => string;
   ai_entity_no_sessions: string;
   ai_entity_all_sessions: string;
@@ -1934,10 +1932,6 @@ export type LanguagePhrases = {
   ai_sessions_about: string;
   ai_sessions_about_clear: string;
   ai_new_about: string;
-  ai_bar_new_plain: string;
-  ai_bar_waiting_title: (count: number) => string;
-  ai_bar_nothing_waits: string;
-  ai_bar_all_sessions: string;
   ai_memory_open: string;
   ai_memory_more: (count: number) => string;
   ai_memory_cancel: string;
@@ -2123,7 +2117,8 @@ export type LanguagePhrases = {
     'ok' | 'key' | 'model' | 'address' | 'busy' | 'error',
     string
   >;
-  ai_bar_waiting: (count: number) => string;
+  /** The admin bar's link to the AI page, by its sessions outside the archive. */
+  x_ai_sessions: (count: number) => string;
   ai_error: string;
   ai_off_notice: string;
   x_sections: (count: number) => string;

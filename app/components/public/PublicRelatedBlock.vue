@@ -19,6 +19,8 @@ import type { ContentHeading } from '#layers/thei/app/components/content/content
  * kinds come first, as the server lists them.
  */
 const { counts, url } = defineProps<{
+  /** The kind of entity whose page this is: the description names it. */
+  entity: 'project' | 'event' | 'diary-entry';
   counts: PublicRelatedCounts;
   /** The entity's own `…/related` address, without the query. */
   url: string;
@@ -140,7 +142,7 @@ export function publicRelatedHeading(title: string): ContentHeading {
     <PublicSectionHeader
       heading-id="related-entities-heading"
       :title="phrase.related_entities"
-      :description="phrase.related_entities_description"
+      :description="phrase.related_entities_description(entity)"
       icon="arrow-cycle"
     />
     <UnderlineTabs

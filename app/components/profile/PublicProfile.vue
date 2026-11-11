@@ -4,8 +4,10 @@ import {
   type PublicProfileResponse,
 } from '#layers/thei/shared/profile';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
-import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
-import LinkHoverPopup from '#layers/thei/app/components/LinkHoverPopup.vue';
+import {
+  entityCardFromTag,
+  vEntityCard,
+} from '#layers/thei/app/composables/entity-cards';
 import PublicProfileHero from './PublicProfileHero.vue';
 import PublicStatusBlock from '#layers/thei/app/components/public/PublicStatusBlock.vue';
 const props = defineProps<{ profile: PublicProfileResponse }>();
@@ -47,17 +49,6 @@ useLandingReveal((target) => {
   if (holdsLandingBlock(blocks.slice(2), target)) allAbout.value = true;
   if (target.zone === 'facts') allFacts.value = true;
 });
-
-/**
- * A chip carries the owner's short name for a link; the card of the page it
- * opens, with the owner's note under it, comes up over the chip, as over a
- * link in a text.
- */
-const linksRoot = useTemplateRef<HTMLElement>('linksRoot');
-function linkAt(anchor: HTMLElement) {
-  const url = anchor.getAttribute('href');
-  return props.profile.externalLinks.find((link) => link.url === url);
-}
 </script>
 <template>
   <div class="flex flex-col gap-md">
@@ -88,25 +79,18 @@ function linkAt(anchor: HTMLElement) {
         v-if="profile.externalLinks.length"
         :title="phrase.profile_links"
         data-landing-zone="links"
-        ><div ref="linksRoot" class="flex flex-wrap gap-xs">
+        ><div class="flex flex-wrap gap-xs">
           <ExternalLinkChip
             v-for="link in profile.externalLinks"
             :key="link.url"
+            v-entity-card="{ external: link, note: link.note }"
             :url="link.url"
             :label="publicText(link.name)"
             :favicon-media="link.faviconMedia"
             size="compact"
             :data-link="link.url"
             :data-link-note="link.note || undefined"
-          />
-        </div>
-        <LinkHoverPopup v-slot="{ anchor }" :root="linksRoot" selector="a[href]"
-          ><ExternalLinkPreviewCard
-            :link="linkAt(anchor)"
-            :url="anchor.getAttribute('href') ?? ''"
-            :note="linkAt(anchor)?.note"
-            :interactive="false"
-            flush /></LinkHoverPopup
+          /></div
       ></ProfileInfoBlock>
       <PublicStatusBlock
         v-if="profile.currentStatus"
@@ -151,6 +135,7 @@ function linkAt(anchor: HTMLElement) {
           <TheiLink
             v-for="tag in profile.tags"
             :key="tag.publicId"
+            v-entity-card="entityCardFromTag(tag)"
             :to="buildTagUrl(tag.slug, tag.publicId)"
             class="inline-flex rounded-sm transition focus-visible:ring-2
               focus-visible:ring-accent focus-visible:outline-none

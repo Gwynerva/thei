@@ -2,12 +2,17 @@ import type { ResolvableLink, ResolvableMeta } from '@unhead/vue/types';
 import type { MaybeRefOrGetter } from 'vue';
 import { toValue } from 'vue';
 import { version as theiVersion } from '#thei/static-public';
+import {
+  summaryOrOpening,
+  type ContentOpeningData,
+} from '#layers/thei/shared/content-opening';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import {
   OG_IMAGE_HEIGHT,
   OG_IMAGE_WIDTH,
   type OgImageInfo,
 } from '#layers/thei/shared/og-url';
+import { SEO_DESCRIPTION_LIMIT } from '#layers/thei/shared/seo-description';
 
 /** One step of the trail leading to the current page. */
 export type PublicBreadcrumb = {
@@ -99,7 +104,9 @@ function formatTexts<T>(value: T): T {
   if (Array.isArray(value)) return value.map(formatTexts) as T;
   if (!value || typeof value !== 'object') return value;
   const result: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value))
+  for (const [key, item] of Object.entries(value)) {
+    // Nothing to describe a thing by is no description, not an empty one.
+    if (key === 'description' && item === '') continue;
     result[key] = !TEXT_KEYS.has(key)
       ? formatTexts(item)
       : typeof item === 'string'
@@ -111,6 +118,7 @@ function formatTexts<T>(value: T): T {
                 : formatTexts(entry),
             )
           : formatTexts(item);
+  }
   return result as T;
 }
 
@@ -162,6 +170,27 @@ export function publicSeoImage(
   )
     return fallback;
   return media.kind === 'video' ? media.previewSrc : media.src;
+}
+
+/**
+ * What a search engine shows under a section or an excerpt: its summary, or
+ * else how its text begins. The text arrived cut to this reader already, its
+ * private parts opened or stood in for, so it is taken whole. Nothing when
+ * there is no word this reader may see: the page then says what it has to.
+ */
+export function publicSeoDescription(
+  summary: string,
+  content: ContentOpeningData,
+): string {
+  return summaryOrOpening(
+    summary,
+    content,
+    {
+      includePrivate: true,
+      privateLabel: phrase.value.content_private_section,
+    },
+    SEO_DESCRIPTION_LIMIT,
+  );
 }
 
 /**

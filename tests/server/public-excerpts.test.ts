@@ -5,12 +5,15 @@ import { OWNER, STRANGER } from '../../server/thei/access-links/viewer';
 import {
   diaryExcerptParent,
   excerptAccess,
+  excerptDay,
   excerptListed,
   excerptOpens,
 } from '../../server/thei/excerpts/parents';
 import {
   buildParentExcerpts,
   buildPublicExcerptsPage,
+  PUBLIC_EXCERPTS_PAGE_SIZE,
+  PUBLIC_PROJECT_EXCERPTS_SIZE,
   countPublicExcerptsAbout,
   findOpenParentExcerpt,
   resolvePublicExcerptsAbout,
@@ -20,11 +23,13 @@ import {
   contentEntityOpens,
   findContentEntity,
   findContentEntityByTarget,
+  listContentEntities,
 } from '../../server/thei/content-entities';
 import { shiftHeadings } from '../../server/thei/markdown/render';
 import {
   diaryDocument,
   excerptDocument,
+  placeHref,
   projectDocument,
 } from '../../server/thei/search/documents';
 import { contentAttachmentAccess } from '../../server/thei/assets/context-access';
@@ -304,6 +309,81 @@ describe('the excerpts about an entity', () => {
     expect(card.media.src).toContain('/media/generated-icons/excerpt/');
   });
 
+  it('gives a page of the size it is asked for, the newest first, and counts them all', async () => {
+    seed();
+    const page = await buildPublicExcerptsPage(
+      { type: 'project', id: 'p' },
+      1,
+      STRANGER,
+      2,
+    );
+    expect(page.total).toBe(3);
+    expect(page.pageCount).toBe(2);
+    expect(page.items.map((card) => card.title)).toEqual([
+      'x-event title',
+      'x-new title',
+    ]);
+    expect(PUBLIC_PROJECT_EXCERPTS_SIZE).toBeLessThan(
+      PUBLIC_EXCERPTS_PAGE_SIZE,
+    );
+  });
+
+  it('dates an excerpt of a project by the day it was written, as the chronology does', async () => {
+    project('p');
+    project('host');
+    diary('d', '2026-05-01');
+    event('e');
+    const day = (date: string) => Date.parse(`${date}T10:00:00Z`);
+    excerpt('x-diary', ['diary-entry', 'd'], [['project', 'p']]);
+    excerpt('x-host', ['project', 'host'], [['project', 'p']], {
+      createdAt: day('2026-05-03'),
+    });
+    excerpt('x-event', ['event', 'e'], [['project', 'p']]);
+    const items = await resolvePublicExcerptsAbout(
+      { type: 'project', id: 'p' },
+      STRANGER,
+    );
+    // The event's on 5 May, the project's on 3 May, the entry's on 1 May:
+    // a project has no day of its own, and its excerpt is not left last.
+    expect(items.map((item) => item.excerpt.excerptUuid)).toEqual([
+      'x-event',
+      'x-host',
+      'x-diary',
+    ]);
+    expect(excerptDay(items[1]!.excerpt, items[1]!.parent)).toBe('2026-05-03');
+    expect(excerptDay(items[2]!.excerpt, items[2]!.parent)).toBe('2026-05-01');
+  });
+
+  it("gives a project's page its latest five, excerpts of projects among them, and counts them all", async () => {
+    project('p');
+    project('host');
+    diary('d', '2026-04-01');
+    excerpt('x-diary', ['diary-entry', 'd'], [['project', 'p']]);
+    for (const number of [1, 2, 3, 4, 5, 6])
+      excerpt(`h${number}`, ['project', 'host'], [['project', 'p']], {
+        createdAt: Date.parse(`2026-05-0${number}T10:00:00Z`),
+      });
+    const page = await buildPublicExcerptsPage(
+      { type: 'project', id: 'p' },
+      1,
+      STRANGER,
+      PUBLIC_PROJECT_EXCERPTS_SIZE,
+    );
+    expect(page.total).toBe(7);
+    expect(page.items.map((card) => card.title)).toEqual([
+      'h6 title',
+      'h5 title',
+      'h4 title',
+      'h3 title',
+      'h2 title',
+    ]);
+    expect(page.items[0]!.parent).toMatchObject({
+      type: 'project',
+      title: 'host title',
+      summary: '',
+    });
+  });
+
   it("embeds a parent's own excerpts whole, the private one for the owner alone", async () => {
     seed();
     const parent = {
@@ -313,9 +393,9 @@ describe('the excerpts about an entity', () => {
       await import('../../server/thei/excerpts/parents');
     const own = diaryExcerptParent(parent);
     const seen = await buildParentExcerpts(own, STRANGER);
-    expect(seen.map((item) => [item.title, item.position])).toEqual([
-      ['x-old title', { number: 1, count: 2 }],
-      ['x-new title', { number: 2, count: 2 }],
+    expect(seen.map((item) => item.title)).toEqual([
+      'x-old title',
+      'x-new title',
     ]);
     expect(seen[0]!.content.blocks).toHaveLength(1);
     const owners = await buildParentExcerpts(own, OWNER);
@@ -326,15 +406,62 @@ describe('the excerpts about an entity', () => {
     ]);
     // The private one stays in its place for a stranger as its codename,
     // after the two they may read; the owner has nothing hidden.
-    expect(secretParentExcerpts(own, STRANGER)).toEqual([
+    const secrets = await secretParentExcerpts(own, STRANGER);
+    expect(secrets).toEqual([
       {
         key: expect.any(String),
         title: expect.stringMatching(/^Secret excerpt /),
+        summary: expect.stringMatching(/\S/),
         iconMedia: expect.any(Object),
+        about: expect.any(Array),
         before: 2,
       },
     ]);
-    expect(secretParentExcerpts(own, OWNER)).toEqual([]);
+    // What it is about is named as far as a stranger may know, and never
+    // with the note the owner wrote on the relation.
+    for (const link of secrets[0]!.about)
+      expect(link).not.toHaveProperty('note');
+    expect(await secretParentExcerpts(own, OWNER)).toEqual([]);
+  });
+});
+
+describe('what a closed excerpt is about, on its parent’s page', () => {
+  it('names an open subject without the note, a closed one by its codename, a closed day not at all', async () => {
+    diary('d', '2026-05-01');
+    diary('d-closed', '2026-05-02', Private);
+    project('p-open');
+    project('p-closed', Private);
+    excerpt('x-private', ['diary-entry', 'd'], [['project', 'p-open']], {
+      isPrivate: true,
+      note: 'the owner’s own words',
+    });
+    excerpt('x-closed', ['diary-entry', 'd'], [['project', 'p-closed']]);
+    excerpt('x-day', ['diary-entry', 'd'], [['diary-entry', 'd-closed']]);
+    const { diaryExcerptParent } =
+      await import('../../server/thei/excerpts/parents');
+    const parent = diaryExcerptParent(
+      (await context.server.diary.findByUuid('d'))!,
+    );
+    const secrets = await secretParentExcerpts(parent, STRANGER);
+    expect(secrets.map((secret) => secret.title)).toEqual([
+      expect.stringMatching(/^Secret excerpt /),
+      expect.stringMatching(/^Secret excerpt /),
+      expect.stringMatching(/^Secret excerpt /),
+    ]);
+    const [open, closed, day] = secrets.map((secret) => secret.about);
+    expect(open).toEqual([
+      expect.objectContaining({ href: '/projects/p-open-p-open/' }),
+    ]);
+    expect(open![0]).not.toHaveProperty('note');
+    expect(closed).toEqual([
+      expect.objectContaining({
+        secret: true,
+        entityType: 'project',
+        title: expect.stringMatching(/^Secret project /),
+      }),
+    ]);
+    expect(closed![0]).not.toHaveProperty('href');
+    expect(day).toEqual([]);
   });
 });
 
@@ -544,7 +671,12 @@ describe('an excerpt as the rest of the site finds it', () => {
       title: 'x title',
       href: '/diary/2026-04-04/excerpts/x-x/',
       access: Private,
-      parent: { title: '2026-04-04', href: '/diary/2026-04-04/' },
+      parent: {
+        type: 'diary-entry',
+        title: '',
+        date: '2026-04-04',
+        href: '/diary/2026-04-04/',
+      },
       grantOwner: { entityType: 'diary-entry', entityId: 'd' },
     });
     const target = parseInternalUrl(
@@ -575,9 +707,24 @@ describe('an excerpt as the rest of the site finds it', () => {
       publicRef: 'excerpt:x',
       href: '/diary/2026-05-01/excerpts/x-x/',
       date: '2026-05-01',
-      parent: { title: '2026-05-01', href: '/diary/2026-05-01/' },
+      parent: {
+        type: 'diary-entry',
+        title: '',
+        date: '2026-05-01',
+        href: '/diary/2026-05-01/',
+      },
+    });
+    // What it is about goes on its card, as the reader may see it.
+    expect(found.subject).toMatchObject({
+      entityType: 'project',
+      href: expect.stringContaining('/projects/'),
     });
     expect(found.units.map((unit) => unit.where)).toContain('text');
+    // A find in its text leads to its block on its own page.
+    const words = found.units.find((unit) => unit.where === 'text')!;
+    expect(placeHref(found, words.place ?? {})).toBe(
+      '/diary/2026-05-01/excerpts/x-x/#b-b-x',
+    );
     expect(await excerptDocument('x-private', 'public')).toBeUndefined();
     expect((await excerptDocument('x-private', 'owner'))?.editHref).toBe(
       '/admin/diary/d/edit/?excerpt=x-private',
@@ -592,6 +739,46 @@ describe('an excerpt as the rest of the site finds it', () => {
     // keeps to its own words.
     const owner = (await projectDocument('p', 'public'))!;
     expect(owner.units.some((unit) => unit.where === 'excerpt')).toBe(false);
+  });
+
+  it('carries what it is about to the owner’s picker, and its other names', async () => {
+    project('p', Private);
+    context.server
+      .useDb()
+      .rawDb.prepare("UPDATE projects SET synonyms = ? WHERE projectUuid = 'p'")
+      .run(JSON.stringify(['the blog']));
+    diary('d', '2026-05-01');
+    diary('d-about', '2026-04-04');
+    excerpt('x-project', ['diary-entry', 'd'], [['project', 'p']]);
+    excerpt('x-day', ['diary-entry', 'd'], [['diary-entry', 'd-about']]);
+    excerpt('x-none', ['diary-entry', 'd'], []);
+    excerpt('x-gone', ['diary-entry', 'd'], [['project', 'p-gone']]);
+    const records = new Map(
+      (await listContentEntities(new Set(['excerpt']))).map((record) => [
+        record.entityId,
+        record,
+      ]),
+    );
+    expect(records.get('x-project')).toMatchObject({
+      subject: { type: 'project', title: 'p title', href: '/projects/p-p/' },
+      subjectSynonyms: ['the blog'],
+    });
+    expect(records.get('x-day')!.subject).toEqual({
+      type: 'diary-entry',
+      title: '',
+      date: '2026-04-04',
+      href: '/diary/2026-04-04/',
+    });
+    expect(records.get('x-day')).not.toHaveProperty('subjectSynonyms');
+    for (const id of ['x-none', 'x-gone'])
+      expect(records.get(id), id).not.toHaveProperty('subject');
+    // A record read for a viewer names no subject: only the owner's list does.
+    expect(
+      await findContentEntity(
+        { entityType: 'excerpt', entityId: 'x-project' },
+        STRANGER,
+      ),
+    ).not.toHaveProperty('subject');
   });
 
   it('serves the pictures of an excerpt from its parent, a private one to the private side', async () => {

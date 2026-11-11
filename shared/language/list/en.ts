@@ -36,6 +36,13 @@ function normalize(text: string): string {
   );
 }
 
+/** What a page of a kind is, after "this". */
+const THIS_KIND = {
+  project: 'project',
+  event: 'event',
+  'diary-entry': 'diary entry',
+} as const;
+
 /** So many of what a check looks at, by the check. */
 function checkUnits(count: number, key: AiBuiltinTemplateKey) {
   const words = {
@@ -271,7 +278,6 @@ export default defineI18nBase({
     asset_library_unused_line: 'Not used',
     asset_library_history_line: 'Only in the history of texts',
     asset_library_held_by_ai_line: 'Only in AI actions',
-    asset_open_place: (title) => `Open “${title}” in a new tab`,
     asset_open_variant: 'Open this variant',
     asset_preview_frame: 'Preview',
     asset_preview_frame_auto: 'Choose automatically',
@@ -304,7 +310,11 @@ export default defineI18nBase({
     asset_role_content: 'Content',
     asset_role_project_description: 'Project description',
     asset_role_event_description: 'Event description',
-    asset_role_page_content: 'Page content',
+    asset_role_page_content: 'Page text',
+    asset_role_section_text: 'Section text',
+    asset_role_excerpt_text: 'Excerpt text',
+    asset_role_diary_text: 'Entry text',
+    asset_role_tag_description: 'Tag description',
     asset_role_profile_about: 'About',
     asset_role_showcase: 'Showcase',
     asset_role_other: 'Attachment',
@@ -421,7 +431,6 @@ export default defineI18nBase({
     events: 'Events',
     excerpts: 'Excerpts',
     excerpt: 'Excerpt',
-    excerpt_position: (index, total) => `Excerpt ${index} of ${total}`,
     excerpt_about: 'About',
     pages: 'Pages',
     tags: 'Tags',
@@ -667,9 +676,6 @@ export default defineI18nBase({
     public_event_description: 'Event description',
     public_diary_text: 'Entry text',
     public_excerpt_text: 'Excerpt text',
-    public_excerpt_position_in: (index, total) =>
-      `Excerpt ${index} of ${total} in`,
-    public_excerpt_in: 'Excerpt in',
     public_excerpt_about: 'About',
     public_details_neighbour_sections: 'Nearby sections',
     public_details_neighbour_entries: 'Nearby entries',
@@ -1378,14 +1384,14 @@ export default defineI18nBase({
     project_action_issue_color: 'a background color as #RRGGBB',
     project_content_sections: 'Project sections',
     project_content_sections_description:
-      'The parts of the project and the stages it went through.',
+      'More details about the project and the stages it went through.',
     project_content_sections_hint:
       "Detailed write-ups of the project's parts and of the stages it went through.",
     project_sections_dated: 'Dated stages',
     project_sections_undated: 'General sections',
     related_entities: 'Relations',
-    related_entities_description:
-      'Projects, events and diary entries the author has linked to this.',
+    related_entities_description: (kind) =>
+      `Everything else in the digital archive that is connected to this ${THIS_KIND[kind]} in some way.`,
     related_entities_hint:
       'Projects, events and diary entries tied to this one. A relation is visible from both sides.',
     related_entity_add: 'Add a relation',
@@ -1499,7 +1505,8 @@ export default defineI18nBase({
     excerpt_without_about: 'About nothing yet',
     excerpt_without_about_hint:
       'What it was about is gone. Open the excerpt and say what it is about now.',
-    excerpts_about_description: 'Written elsewhere in the archive, about this.',
+    excerpts_about_description: (kind) =>
+      `What other parts of the digital archive say about this ${THIS_KIND[kind]}.`,
     relation_recommendation_excerpt: 'Has an excerpt about this',
     excerpts_on_delete_keep: 'Keep the excerpts about it',
     excerpts_on_delete_delete: 'Delete the excerpts too',
@@ -1581,7 +1588,7 @@ export default defineI18nBase({
     content_private_section: 'Private section',
     content_private_section_start: 'Start of private section',
     content_private_section_end: 'End of private section',
-    content_private_section_remove: 'Remove private section',
+    content_private_section_remove: 'Remove section',
     content_editor_i18n: {
       add: 'Add',
       convert_to: 'Convert to',
@@ -1909,6 +1916,7 @@ export default defineI18nBase({
     upload_format_lossless: 'WebP lossless',
     upload_format_picked: (format, reason) => `${format}: ${reason}`,
     upload_format_reason_smallest: 'the smallest',
+    upload_format_reason_photo: 'a photograph',
     upload_format_avif_no_lossless:
       'AVIF has no lossless mode; Auto or WebP keeps every pixel.',
     upload_result: 'Result',
@@ -1981,7 +1989,6 @@ export default defineI18nBase({
     search_preset_cv_description:
       'The professional part of the archive: the projects that make up a working history.',
     og_personal_archive: 'Personal archive',
-    og_section_position: (index, total) => `Stage ${index} of ${total}`,
     og_updated: (date) => `Updated ${date}`,
     og_life_headline: (years) =>
       `${plural(years, 'year', 'years')} in one chronicle`,
@@ -2082,7 +2089,6 @@ export default defineI18nBase({
     ai_session_you: 'You',
     ai_session_template: 'Ready request',
     ai_session_running: 'Working',
-    ai_session_recent: 'Recently done',
     ai_session_starting: 'Starting the session…',
     ai_session_waiting: (count) => `Waiting for your decision: ${count}`,
     ai_sessions_archive_note: 'Deleted after 30 days',
@@ -2238,8 +2244,8 @@ export default defineI18nBase({
       proofread: {
         title: 'Mistakes in the text',
         instruction:
-          'Find and fix obvious mistakes in the text. Where in doubt, comment and leave the choice to me. Only what was not proofread yet or changed since.\n\n' +
-          'Do not correct the author’s style of telling or the swearing. You check that the text is written correctly, not its “propriety”, “beauty”, “conciseness” or other subjective criteria!',
+          'Find and fix obvious mistakes in the text. Also mark simple mistakes of meaning inside one text: the same thing said again by accident in different places, a step that does not follow from what was said, the text contradicting itself, a phrase a reader stumbles on. Do not fix these silently: show the place, say what is wrong and leave the choice to me. Where in doubt, comment and leave the choice to me. Only what was not proofread yet or changed since.\n\n' +
+          'Do not correct the author’s style of telling or the swearing. You check that the text is written correctly and does not argue with itself, not its “propriety”, “beauty”, “conciseness” or other subjective criteria!',
       },
       describe: {
         title: 'File descriptions',
@@ -2537,7 +2543,6 @@ export default defineI18nBase({
       tag: 'this tag',
     },
     ai_entity_menu: (it) => `AI and ${it}`,
-    ai_entity_new_session: (title) => `New session about “${title}”`,
     ai_entity_sessions: (count) => `Sessions · ${count}`,
     ai_entity_no_sessions: 'No sessions about it yet',
     ai_entity_all_sessions: 'All sessions about it',
@@ -2549,10 +2554,6 @@ export default defineI18nBase({
     ai_sessions_about: 'Only about',
     ai_sessions_about_clear: 'Show every session',
     ai_new_about: 'About:',
-    ai_bar_new_plain: 'New session about nothing in particular',
-    ai_bar_waiting_title: (count) => `Waiting for you · ${count}`,
-    ai_bar_nothing_waits: 'Nothing waits for your decision.',
-    ai_bar_all_sessions: 'All sessions',
     ai_memory_open: 'Open',
     ai_memory_more: (count) => `${count} more`,
     ai_memory_cancel: 'Cancel',
@@ -2778,8 +2779,7 @@ export default defineI18nBase({
       busy: 'the provider is busy; try later',
       error: 'error',
     },
-    ai_bar_waiting: (count) =>
-      count ? `AI: waiting for you — ${count}` : 'AI',
+    x_ai_sessions: (count) => `AI: ${plural(count, 'session', 'sessions')}`,
     ai_error: 'It did not work. Try again.',
     ai_off_notice: 'AI in Thei is off.',
     x_sections: (count) => plural(count, 'section', 'sections'),

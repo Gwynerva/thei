@@ -38,7 +38,10 @@ usePublicSeo({
                 position:
                   (rewind.value.page - 1) * rewind.value.pageSize + index + 1,
                 url: point.href,
-                name: point.title,
+                name:
+                  point.entityKind === 'diary-entry'
+                    ? entityListName({ date: point.date })
+                    : point.title,
               },
             ]
           : [],
