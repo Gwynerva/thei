@@ -32,7 +32,14 @@ belongs in this file in the same commit.
 }
 ```
 
-`id` is optional. Unknown block types are rejected, not ignored.
+`id` is optional in a text handed in, and every stored block has one, its own
+within the text: a block that arrives without, or with the id of a block
+before it, is given an id as the text is saved
+(`shared/content-block-ids.ts`) — the id of the stored block that says the
+same, when the text had one, so a text written back whole keeps the ids its
+places are known by. A link, a find of the search and a heading's anchor name
+a place of a text by its block's id. Unknown block types are rejected, not
+ignored.
 
 ## Block attributes
 

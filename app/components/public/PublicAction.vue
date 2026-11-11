@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { PublicAction } from '#layers/thei/shared/api/public';
+import { vEntityCard } from '#layers/thei/app/composables/entity-cards';
 
 defineProps<{ action?: PublicAction }>();
 </script>
@@ -7,6 +8,17 @@ defineProps<{ action?: PublicAction }>();
 <template>
   <ProjectActionButton
     v-if="action"
+    v-entity-card="
+      action.target === 'external-link'
+        ? {
+            external: {
+              url: action.href,
+              title: publicText(action.text),
+              faviconMedia: action.faviconMedia,
+            },
+          }
+        : undefined
+    "
     :text="action.text"
     :accent-color="action.accentColor"
     :target="action.target"

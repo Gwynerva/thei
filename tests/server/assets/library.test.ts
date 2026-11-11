@@ -334,7 +334,11 @@ describe('asset library', () => {
     expect(
       listLibraryFeed().entries.find((e) => e.place.id === 'launch')?.place
         .parent,
-    ).toEqual({ title: 'Проект Луна', url: '/projects/project-p/' });
+    ).toEqual({
+      type: 'project',
+      title: 'Проект Луна',
+      url: '/projects/project-p/',
+    });
     // Found by its own words, not the project's; and the project does not
     // repeat what its parts hold.
     expect(placesOf({ q: 'rocket' })).toEqual(['project-section:launch']);
@@ -353,6 +357,82 @@ describe('asset library', () => {
     ]);
     expect(filesIn('project-section', 'launch')).toEqual(['b']);
     expect(filesIn('project', 'p')).toEqual(['a']);
+  });
+  it('names the parent of an excerpt: a project by its title, a diary entry by its day', () => {
+    db.insert(schema.diaryEntries)
+      .values({
+        diaryUuid: 'day',
+        date: '2026-03-09',
+        access: 'public' as any,
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    for (const [id, parentType, parentId, asset] of [
+      ['of-day', 'diary-entry', 'day', 'b'],
+      ['of-project', 'project', 'p', 'b'],
+    ] as const) {
+      db.insert(schema.excerpts)
+        .values({
+          excerptUuid: id,
+          parentType,
+          parentId,
+          title: `Excerpt ${id}`,
+          humanReadableSlug: id,
+          publicId: `x-${id}`,
+          sortOrder: 0,
+          createdAt: 1,
+          updatedAt: 1,
+        })
+        .run();
+      db.insert(schema.content)
+        .values({
+          contentUuid: `content-${id}`,
+          ownerType: 'excerpt',
+          ownerId: id,
+          slot: 'excerpt-body',
+          data: { blocks: [] },
+          createdAt: 1,
+          updatedAt: 1,
+        })
+        .run();
+      db.insert(schema.assetUsages)
+        .values({
+          assetUuid: asset,
+          containerType: 'content',
+          containerId: `content-${id}`,
+          role: 'content',
+        })
+        .run();
+    }
+
+    const sources = Object.fromEntries(
+      getAssetUsages('b').placements.map((each) => [
+        each.source.id,
+        each.source,
+      ]),
+    );
+    // A diary entry has no title: its day names it, and its title is empty.
+    expect(sources['of-day']).toMatchObject({
+      type: 'excerpt',
+      url: '/diary/2026-03-09/excerpts/of-day-x-of-day/',
+    });
+    expect(sources['of-day']?.parent).toEqual({
+      type: 'diary-entry',
+      title: '',
+      date: '2026-03-09',
+      url: '/diary/2026-03-09/',
+    });
+    expect(sources['of-project']?.parent).toEqual({
+      type: 'project',
+      title: 'Проект Луна',
+      url: '/projects/project-p/',
+    });
+    // The run carries the same parent on the place.
+    expect(
+      listLibraryFeed().entries.find((e) => e.place.id === 'of-day')?.place
+        .parent,
+    ).toEqual(sources['of-day']?.parent);
   });
   it('keeps a section private when it or its project is', () => {
     addLaunch(true);

@@ -1,6 +1,6 @@
 {
   "name": "thei",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "🗃️ Digital archive of your life — a résumé and a diary in one place.",
   "license": "MIT",
   "author": "Gwynerva",
@@ -26,6 +26,9 @@
     "og:gallery": "OG_GALLERY=1 bun vitest run tests/server/og/gallery.test.ts",
     "bench:media": "THEI_MEDIA_BENCH=1 bun vitest run tests/bench/media.test.ts",
     "bench:media:docker": "bun tests/bench/docker.ts",
+    "bench:corpus": "bun tests/bench/image-corpus/fetch.ts",
+    "bench:image-quality": "THEI_IMAGE_QUALITY_BENCH=1 bun vitest run tests/bench/image-quality.test.ts",
+    "bench:image-content": "THEI_IMAGE_CONTENT_BENCH=1 bun vitest run tests/bench/image-content.test.ts",
     "typecheck": "nuxt typecheck .playground --checker golar",
     "format": "prettier --write .",
     "db:push": "drizzle-kit push",

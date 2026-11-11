@@ -1,3 +1,4 @@
+import { summaryOrOpening } from '#layers/thei/shared/content-opening';
 import { createHash } from 'node:crypto';
 import { and, eq, inArray } from 'drizzle-orm';
 import {
@@ -36,11 +37,14 @@ import {
   excerptAccess,
   excerptListed,
   excerptShownWithParent,
+  excerptParentRef,
   loadExcerptParent,
   projectExcerptParent,
   type ExcerptParentInfo,
 } from '../excerpts/parents';
 import { buildExcerptUrl } from '#layers/thei/shared/excerpt-url';
+import type { ContentEntityParent } from '#layers/thei/shared/content-link';
+import type { PublicEntityLink } from '#layers/thei/shared/api/public';
 import { buildPublicExcerpt } from '../public/excerpts';
 import { buildPublicContentData } from '../public/content';
 import {
@@ -82,8 +86,13 @@ export interface SearchDocument {
    */
   publicRef?: string;
   title: string;
-  /** Of a section or an excerpt: what it is a part of, with its picture; a diary entry by its day. */
-  parent?: { title: string; href: string; media?: MediaDescriptor };
+  /** Of a section or an excerpt: what it is a part of, with its picture. */
+  parent?: ContentEntityParent & { media?: MediaDescriptor; summary?: string };
+  /**
+   * Of an excerpt: what it is about, as this reader may see it. None once
+   * its subject is deleted.
+   */
+  subject?: PublicEntityLink;
   /** Of a file: what shows it first, by its own name alone. */
   shownAt?: string;
   href: string;
@@ -220,8 +229,9 @@ async function relationUnits(
   type: RelationEntityType,
   id: string,
   viewer: PublicViewer,
+  related?: PublicRelated,
 ): Promise<SearchUnit[]> {
-  const items = await resolvePublicRelated({ type, id }, viewer);
+  const items = related ?? (await resolvePublicRelated({ type, id }, viewer));
   return items.flatMap((item) => {
     if (item.secret || !item.note) return [];
     const arrives = viewer === STRANGER ? arrivalOf(item.target) : 0;
@@ -237,6 +247,61 @@ async function relationUnits(
     });
   });
 }
+
+/**
+ * What an excerpt is about, as a name the excerpt is found by: the subject's
+ * title, a find that leads to the line naming it over the excerpt's title,
+ * and its other names, never shown. A subject the reader may not open is not
+ * named, and a diary entry has no words to be found by, only its day. A
+ * stranger finds an excerpt by an event of a day still to come once that day
+ * comes, as the event itself.
+ *
+ * `related` is the excerpt's one relation, read once for its note too: a
+ * whole pass builds every excerpt, so nothing is read twice here.
+ */
+function subjectUnits(
+  related: PublicRelated,
+  viewer: PublicViewer,
+): SearchUnit[] {
+  const item = related[0];
+  const target = item?.target;
+  // A day has no words; an excerpt is never what another is about.
+  if (!item || item.secret || !target?.title) return [];
+  if (target.type !== 'project' && target.type !== 'event') return [];
+  const { db, schema } = THEI_SERVER.useDb();
+  const synonyms =
+    (target.type === 'project'
+      ? db
+          .select({ synonyms: schema.projects.synonyms })
+          .from(schema.projects)
+          .where(eq(schema.projects.projectUuid, target.id))
+          .get()
+      : db
+          .select({ synonyms: schema.events.synonyms })
+          .from(schema.events)
+          .where(eq(schema.events.eventUuid, target.id))
+          .get()
+    )?.synonyms ?? [];
+  const arrives = viewer === STRANGER ? arrivalOf(target) : 0;
+  const extra = {
+    place: {
+      relation: {
+        title: target.title,
+        kind: target.type,
+        href: relationHref(target),
+      },
+    },
+    ...(arrives ? { visibleFrom: arrives } : {}),
+  };
+  return [
+    ...fieldUnit('names', 'relation', target.title, extra),
+    ...synonyms.flatMap((synonym) =>
+      fieldUnit('names', 'relation', synonym, { ...extra, hidden: true }),
+    ),
+  ];
+}
+
+type PublicRelated = Awaited<ReturnType<typeof resolvePublicRelated>>;
 
 /**
  * When a related entity is found by a stranger: a diary entry on its day,
@@ -601,7 +666,9 @@ export async function sectionDocument(
     publicRef: `project-section:${section.publicId}`,
     title: section.title,
     parent: {
+      type: 'project',
       title: project.title,
+      ...(project.summary ? { summary: project.summary } : {}),
       href: buildProjectUrl(project.humanReadableSlug, project.publicId),
       ...(built.project.iconMedia ? { media: built.project.iconMedia } : {}),
     },
@@ -627,7 +694,7 @@ export async function sectionDocument(
     visibleFrom:
       audience === 'public' && period ? dayArrives(period.startDate) : 0,
     ...accessOf(audience, section.isPrivate ? 'private' : project.access),
-    summary: section.summary,
+    summary: describedBy(section.summary, built.content),
     media: built.media,
     tags: tagUuidsOf('project', project.projectUuid),
     units: withFamilies([
@@ -650,8 +717,9 @@ export async function sectionDocument(
 /**
  * An excerpt as a result of its own: its title, summary and text, found by
  * those who may open its page — a stranger not a private one, nor one of a
- * parent that is not public. It carries its parent's tags and names its
- * parent, and waits for the parent's day as the parent does.
+ * parent that is not public — and by the name of what it is about. It
+ * carries its parent's tags and names its parent, and waits for the parent's
+ * day as the parent does.
  */
 export async function excerptDocument(
   excerptUuid: string,
@@ -664,15 +732,13 @@ export async function excerptDocument(
   const viewer = viewerOf(audience);
   if (audience === 'public' && !excerptListed(viewer, excerpt, parent))
     return undefined;
-  const visible = listExcerpts(parent).filter((item) =>
-    excerptShownWithParent(viewer, item, parent),
-  );
-  const built = await buildPublicExcerpt(excerpt, parent, viewer, {
-    number: visible.findIndex((item) => item.excerptUuid === excerptUuid) + 1,
-    count: visible.length,
-  });
+  const built = await buildPublicExcerpt(excerpt, parent, viewer);
   const tags =
     parent.type === 'diary-entry' ? [] : tagUuidsOf(parent.type, parent.id);
+  const related = await resolvePublicRelated(
+    { type: 'excerpt', id: excerpt.excerptUuid },
+    viewer,
+  );
   return {
     audience,
     kind: 'excerpt',
@@ -680,12 +746,11 @@ export async function excerptDocument(
     publicRef: `excerpt:${excerpt.publicId}`,
     title: excerpt.title,
     parent: {
-      title: built.parent.title || built.parent.date || '',
-      href: built.parent.href,
+      ...excerptParentRef(parent),
+      ...(built.parent.summary ? { summary: built.parent.summary } : {}),
       ...(built.parent.media ? { media: built.parent.media } : {}),
-      // A day is named by its date, which the row formats and never cuts.
-      ...(parent.type === 'diary-entry' ? { date: built.parent.date } : {}),
     },
+    ...(built.about[0] ? { subject: built.about[0] } : {}),
     href: built.href,
     ...(audience === 'owner'
       ? {
@@ -704,19 +769,20 @@ export async function excerptDocument(
       : sortOf(undefined, excerpt.createdAt),
     visibleFrom: audience === 'public' ? parent.arrives : 0,
     ...accessOf(audience, excerptAccess(excerpt, parent)),
-    summary: excerpt.summary,
+    summary: describedBy(excerpt.summary, built.content),
     media: built.media,
     tags,
     units: withFamilies([
       ...fieldUnit('title', 'title', excerpt.title),
       ...fieldUnit('summary', 'summary', excerpt.summary),
       ...names([excerpt.humanReadableSlug]),
+      ...subjectUnits(related, viewer),
       ...tagUnits(tags),
       ...heroFileUnits('excerpt', excerpt.excerptUuid, audience, {
         banner: built.bannerMedia,
       }),
       ...contentUnits(built.content),
-      ...(await relationUnits('excerpt', excerpt.excerptUuid, viewer)),
+      ...(await relationUnits('excerpt', excerpt.excerptUuid, viewer, related)),
     ]),
   };
 }
@@ -1097,4 +1163,20 @@ export function placeHref(
     ...(place.zone ? { zone: place.zone } : {}),
   });
   return hash ? `${page}#${hash}` : page;
+}
+
+/**
+ * What a find's card says of a section or an excerpt: its summary, or else
+ * how its text begins. The text is the page's own, cut for the audience
+ * already, so nothing more is withheld here. Only the card says it: a match
+ * in those words is found in the text, where they are.
+ */
+function describedBy(
+  summary: string,
+  content: Parameters<typeof summaryOrOpening>[1],
+) {
+  return summaryOrOpening(summary, content, {
+    includePrivate: true,
+    privateLabel: THEI_SERVER.phrase.content_private_section,
+  });
 }

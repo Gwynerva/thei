@@ -10,6 +10,7 @@ import {
   runSearch,
   type SearchRequest,
 } from '../../../server/thei/search/query';
+import { excerptDocument } from '../../../server/thei/search/documents';
 import type { SearchHit, SearchResponse } from '../../../shared/search/api';
 import { freshAiTestDb } from '../../helpers/fresh-ai-db';
 
@@ -1048,5 +1049,154 @@ describe('a place whose day has not come', () => {
         ref: `project:${PROJECT}`,
       })!.finds.map((find) => find.where),
     ).toContain('relation');
+  });
+});
+
+describe('an excerpt found by what it is about', () => {
+  let order = 0;
+  /** An excerpt of the public diary entry, about a project or an event. */
+  function excerpt(
+    uuid: string,
+    title: string,
+    about?: ['project' | 'event' | 'diary-entry', string],
+    isPrivate = false,
+  ) {
+    insert('excerpts', {
+      excerptUuid: uuid,
+      parentType: 'diary-entry',
+      parentId: DIARY,
+      title,
+      summary: '',
+      humanReadableSlug: uuid,
+      publicId: uuid,
+      isPrivate: isPrivate ? 1 : 0,
+      sortOrder: order++,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    text('excerpt', uuid, 'excerpt-body', [
+      paragraph(`b-${uuid}`, 'Собирала чемодан весь вечер.'),
+    ]);
+    if (!about) return;
+    // Rows are stored in canonical order: an excerpt before a project,
+    // after an event and a diary entry.
+    const [first, second] =
+      about[0] === 'project'
+        ? [['excerpt', uuid], about]
+        : [about, ['excerpt', uuid]];
+    insert('entity-relations', {
+      firstType: first![0],
+      firstId: first![1],
+      secondType: second![0],
+      secondId: second![1],
+      type: 'related',
+      note: null,
+      firstSortOrder: 0,
+      secondSortOrder: 0,
+    });
+  }
+  const later = () => Date.now() + 3 * 24 * 60 * 60 * 1000;
+  const owner = (q: string) => search(q, { audience: 'owner' });
+
+  it('is found by the title and the other names of its subject, after the subject', async () => {
+    excerpt('x-open', 'Прощальный пост', ['project', PROJECT]);
+    excerpt('x-none', 'Ни о чём');
+    await rebuildSearchIndex();
+    for (const q of ['шедоухарт', 'трактир']) {
+      const found = titles(await search(q));
+      expect(found[0], q).toBe('Косплей на Шедоухарт');
+      expect(found, q).toContain('Прощальный пост');
+      expect(found, q).not.toContain('Ни о чём');
+    }
+    // The find names the subject and leads to the line that names it.
+    const hit = hits(await search('шедоухарт', { kind: 'excerpt' }))[0]!;
+    expect(hit.title).toBe('Прощальный пост');
+    expect(hit.finds[0]).toMatchObject({ where: 'relation' });
+    expect(hit.finds[0]!.href).toMatch(/#r-project~%2Fprojects%2F/);
+    // A synonym finds it and is never shown.
+    expect(
+      JSON.stringify(hits(await search('трактир', { kind: 'excerpt' }))),
+    ).not.toContain('Трактир');
+    // Its own words find it as before.
+    expect(titles(await search('прощальный', { kind: 'excerpt' }))).toEqual([
+      'Прощальный пост',
+    ]);
+  });
+
+  it('is not found by a stranger by a subject that is closed, nor when private', async () => {
+    excerpt('x-hidden', 'Коробки', ['project', HIDDEN_PROJECT]);
+    excerpt('x-link', 'Экспонаты', ['project', LINK_PROJECT]);
+    excerpt('x-private', 'Про себя', ['project', PROJECT], true);
+    await rebuildSearchIndex();
+    for (const q of ['переезд', 'музея', 'шедоухарт'])
+      expect(
+        hits(await search(q)).filter((hit) => hit.kind === 'excerpt'),
+        q,
+      ).toEqual([]);
+    expect(titles(await owner('переезд'))).toContain('Коробки');
+    expect(titles(await owner('музея'))).toContain('Экспонаты');
+    expect(titles(await owner('шедоухарт'))).toContain('Про себя');
+  });
+
+  it('is not found by the words of a day, and by nothing once its subject is gone', async () => {
+    excerpt('x-day', 'Что было дальше', ['diary-entry', PRIVATE_DIARY]);
+    excerpt('x-gone', 'Осталось одно', ['project', 'p-gone']);
+    await rebuildSearchIndex();
+    const day = (await excerptDocument('x-day', 'owner'))!;
+    const gone = (await excerptDocument('x-gone', 'owner'))!;
+    for (const document of [day, gone])
+      expect(
+        document.units.filter((unit) => unit.where === 'relation'),
+      ).toEqual([]);
+    expect(
+      titles(await search('осталось', { audience: 'owner', kind: 'excerpt' })),
+    ).toEqual(['Осталось одно']);
+  });
+
+  it('follows its subject’s name when that changes', async () => {
+    excerpt('x-open', 'Прощальный пост', ['project', PROJECT]);
+    await rebuildSearchIndex();
+    context.server
+      .useDb()
+      .rawDb.prepare(
+        'UPDATE projects SET title = ?, synonyms = ? WHERE projectUuid = ?',
+      )
+      .run('Костюм жрицы', '[]', PROJECT);
+    await rebuildSearchIndex();
+    expect(titles(await search('жрицы', { kind: 'excerpt' }))).toEqual([
+      'Прощальный пост',
+    ]);
+    for (const q of ['шедоухарт', 'трактир'])
+      expect(titles(await search(q, { kind: 'excerpt' })), q).toEqual([]);
+  });
+
+  it('waits for the day of an event it is about, for a stranger', async () => {
+    insert('events', {
+      eventUuid: 'e-future',
+      title: 'Фестиваль можжевельника',
+      summary: '',
+      access: 'public',
+      humanReadableSlug: 'festival',
+      publicId: 'Festival',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    insert('periods', {
+      ownerType: 'event',
+      ownerId: 'e-future',
+      sortOrder: 0,
+      startDate: tomorrow,
+      endDate: tomorrow,
+      precision: 'exact',
+      precisionNote: '',
+      label: '',
+    });
+    excerpt('x-future', 'Жду не дождусь', ['event', 'e-future']);
+    await rebuildSearchIndex();
+    const excerpts = async (patch: Partial<SearchRequest> = {}) =>
+      titles(await search('можжевельника', { kind: 'excerpt', ...patch }));
+    expect(await excerpts()).toEqual([]);
+    expect(await excerpts({ now: later() })).toEqual(['Жду не дождусь']);
+    expect(await excerpts({ audience: 'owner' })).toEqual(['Жду не дождусь']);
   });
 });

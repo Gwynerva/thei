@@ -41,7 +41,6 @@ import {
 } from '#layers/thei/shared/content-link';
 import { contentEntityOpens, findContentEntity } from '../content-entities';
 import { STRANGER, type PublicViewer } from '../access-links/viewer';
-import { resolveEntityIconMedia } from '../media/generated-icon';
 
 /**
  * Canonical shape `normalizeContentInlineHtml` writes entity anchors in, so
@@ -175,33 +174,6 @@ export async function buildPublicContentPreviewMedia(
             : buildPublicProjectContentMedia(entity, asset);
   }
   return undefined;
-}
-
-/**
- * What stands for an event, a section, an excerpt or a diary entry in a card, a
- * tile or a link: the first picture of its body, or — when the body opens with
- * none — its kind's drawn icon in its own accent, exactly as a project without
- * an icon gets one. Seeded by the uuid, so a rename keeps the colour. An
- * event's or a section's banner goes ahead of all this (`entity-banner.ts`).
- */
-export async function buildPublicEntityPreviewMedia(
-  ownerType: 'event' | 'project-section' | 'excerpt' | 'diary-entry',
-  ownerId: string,
-  slot: ContentSlot,
-  entity: PublicContentEntity,
-  includePrivate = false,
-): Promise<MediaDescriptor> {
-  return resolveEntityIconMedia(
-    ownerType,
-    ownerId,
-    await buildPublicContentPreviewMedia(
-      ownerType,
-      ownerId,
-      slot,
-      entity,
-      includePrivate,
-    ),
-  );
 }
 
 export function selectPublicContentMediaAssetUuids(

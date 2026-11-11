@@ -5,10 +5,11 @@ import {
 } from '#layers/thei/app/composables/press-hint-dom';
 
 /**
- * The card of a link: the popup of the links in a text, and of the chips that
- * stand for links elsewhere, such as the profile's. One popup serves every
- * link `selector` finds inside `root`; what it shows of the link under it is
- * the slot's to draw.
+ * The card of a link, as a popup: of the links in a text
+ * (`ContentInlineLinkDecorator`), and, through `EntityCardPopup`, of whatever
+ * stands for an entity or a site elsewhere on a page — a chip, a token, a
+ * row. One popup serves every link `selector` finds inside `root`; what it
+ * shows of the link under it is the slot's to draw.
  *
  * It opens as a title popup does (`press-hint.ts`): while the pointer rests
  * on a link, when the keyboard reaches one, and on a first long press of a
@@ -18,6 +19,16 @@ import {
 const props = defineProps<{
   root: HTMLElement | null;
   selector: string;
+  /**
+   * The root is left unmarked: it is the page whole, and what `selector`
+   * finds marks itself for `main.css`, as an entity's chip does.
+   */
+  unmarked?: boolean;
+  /**
+   * Whether there is a card to show for a link just now; every link has one
+   * when this is not given. One without gives way to another hint on it.
+   */
+  shows?: (anchor: HTMLElement) => boolean;
 }>();
 const emit = defineEmits<{
   /** A link was pointed at, reached with the keyboard or held. */
@@ -41,7 +52,7 @@ const provider: PressHintProvider = {
     const link = target.closest<HTMLElement>(props.selector);
     return link && root.contains(link) ? link : null;
   },
-  hasHint: () => true,
+  hasHint: (link) => props.shows?.(link) ?? true,
   show(link, how) {
     anchor.value = link;
     placement.value = how.placement === 'top' ? 'top-start' : 'bottom-start';
@@ -62,6 +73,7 @@ const ROOT_ATTRIBUTE = 'data-link-card-root';
 watch(
   () => props.root,
   (next, previous) => {
+    if (props.unmarked) return;
     previous?.removeAttribute(ROOT_ATTRIBUTE);
     next?.setAttribute(ROOT_ATTRIBUTE, '');
   },
@@ -74,7 +86,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   unregister?.();
-  props.root?.removeAttribute(ROOT_ATTRIBUTE);
+  if (!props.unmarked) props.root?.removeAttribute(ROOT_ATTRIBUTE);
 });
 </script>
 

@@ -32,6 +32,12 @@ export interface AssetDraftSource {
   hasAudio?: boolean;
   isVector?: boolean;
   /**
+   * The picture is surely not a drawing, told by what it is made of when
+   * the draft opened (`server/thei/assets/image-content.ts`): AVIF is the
+   * smallest for it, with nothing to weigh.
+   */
+  photographic?: boolean;
+  /**
    * Of a video or a recording: what the editor estimates a variant's size
    * from. For a recording, the bitrate and codec are those of its sound.
    */

@@ -12,12 +12,18 @@ import { publicDatePrecisionOptions } from '#layers/thei/app/composables/public-
  * parts and before what it is related to: each a card torn off its parent,
  * newest first, a page at a time, the way the relations block fetches its
  * lists. The page carries only how many there are; the first page comes
- * with it, the rest as the reader asks.
+ * with it, the rest as the reader asks. Where the rest is read elsewhere —
+ * a project's chronology — the block shows the latest and leads there
+ * (`allHref`).
  */
-const { about, url } = defineProps<{
+const { about, url, allHref } = defineProps<{
+  /** The kind of entity whose page this is: the description names it. */
+  entity: 'project' | 'event' | 'diary-entry';
   about: PublicExcerptsAbout;
   /** The entity's own `…/excerpts` address. */
   url: string;
+  /** Where all of them are read, in place of loading more here. */
+  allHref?: string;
 }>();
 
 const { data: page, status } = await useFetch<PublicExcerptsPage>(url, {
@@ -58,7 +64,7 @@ function parentOf(card: PublicExcerptCard) {
   return {
     entityType: card.parent.type,
     title: card.parent.title,
-    summary: '',
+    summary: card.parent.summary,
     href: card.parent.href,
     ...(card.parent.media ? { iconMedia: card.parent.media } : {}),
     ...(card.parent.date ? { date: card.parent.date } : {}),
@@ -106,12 +112,12 @@ export function publicExcerptsHeading(title: string): ContentHeading {
     aria-labelledby="excerpts-about-heading"
     class="flex scroll-mt-[var(--public-anchor-offset,8rem)] flex-col gap-sm"
   >
-    <!-- Named apart from the entity's own excerpts in the sidebar: these
-         were written elsewhere, about it. -->
+    <!-- Not the entity's own excerpts, which are read in its text and named
+         in its contents: these were written elsewhere, about it. -->
     <PublicSectionHeader
       heading-id="excerpts-about-heading"
       :title="phrase.excerpts"
-      :description="phrase.excerpts_about_description"
+      :description="phrase.excerpts_about_description(entity)"
       icon="excerpt"
     />
     <p v-if="loading" class="text-sm text-text-3">
@@ -143,7 +149,18 @@ export function publicExcerptsHeading(title: string): ContentHeading {
         />
       </div>
       <Button
-        v-if="more"
+        v-if="allHref"
+        v-show="about.total > items.length"
+        :to="allHref"
+        variant="secondary"
+        class="flex min-h-10 w-full items-center justify-center gap-xs
+          font-semibold sm:w-auto sm:self-start"
+        data-excerpts-all
+      >
+        {{ phrase.view_all }}
+      </Button>
+      <Button
+        v-else-if="more"
         type="button"
         variant="secondary"
         :disabled="loadingMore"

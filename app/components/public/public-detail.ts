@@ -1,13 +1,33 @@
 import type {
-  PublicExcerpt,
-  PublicExcerptSecret,
   PublicNeighbours,
   PublicReferences,
   PublicTagSummary,
 } from '#layers/thei/shared/api/public';
+import type { MediaDescriptor } from '#layers/thei/shared/media';
 import type { Period } from '#layers/thei/shared/period';
+import type { RelationType } from '#layers/thei/shared/relation';
 import type { IconName } from '#thei/icons';
+import type { EntityCardData } from '#layers/thei/app/composables/entity-cards';
 import type { ContentHeading } from '#layers/thei/app/components/content/content-headings';
+
+/**
+ * An entity a page stands by, as the line above its title names it
+ * (`PublicPageParent`): what the page is a part of, or what it is about.
+ */
+export type PublicPageNamed = {
+  /** The faint words before it; none where the line is the entity alone. */
+  label?: string;
+  /** None for what the reader may not open: then the chip is no link. */
+  href?: string;
+  title: string;
+  iconMedia?: MediaDescriptor;
+  /** The kind's icon, where the entity has no picture: a project's. */
+  icon?: IconName;
+  /** How the page relates to it, said after its name: an excerpt's subject. */
+  relation?: { type: RelationType; note?: string };
+  /** What its chip shows of it under the pointer. */
+  card?: EntityCardData;
+};
 
 export type PublicDetailMetric = {
   icon: IconName;
@@ -56,10 +76,6 @@ export type PublicDetailNeighbours = PublicNeighbours & {
 
 export type PublicDetailPanelData = {
   contents?: ContentHeading[];
-  /** The page's own excerpts, listed under the contents, each leading to its place. */
-  excerpts?: PublicExcerpt[];
-  /** Its excerpts the visitor may not read, as codenames in their places. */
-  excerptSecrets?: PublicExcerptSecret[];
   neighbours?: PublicDetailNeighbours;
   chronology?: PublicDetailTimelineItem[];
   periods?: Period[];

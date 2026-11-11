@@ -20,6 +20,12 @@ export interface ContentHeading {
   path: string;
   /** Marks a heading of the page itself rather than of authored content. */
   icon?: IconName;
+  /**
+   * The ids of the entries under this one: while the reader is in any of
+   * them, this one is lit too. It is what a run of excerpts is about, which
+   * has no place of its own on the page.
+   */
+  covers?: string[];
 }
 
 export interface VisibleContentBlock {

@@ -1,6 +1,6 @@
 import type { AssetImageFormat } from './asset-upload-settings';
 
-export type AutoImageFormatReason = 'vector' | 'smallest';
+export type AutoImageFormatReason = 'vector' | 'photo' | 'smallest';
 
 export interface AutoImageFormat {
   format: AssetImageFormat;
@@ -8,33 +8,45 @@ export interface AutoImageFormat {
   reason?: AutoImageFormatReason;
 }
 
-/** The raster formats "Auto" weighs against each other. */
-export const AUTO_IMAGE_FORMATS = ['avif', 'webp', 'webp-lossless'] as const;
+/** The lossy formats "Auto" weighs first; its choice is made once both are in. */
+export const AUTO_LOSSY_IMAGE_FORMATS = ['avif', 'webp'] as const;
+
+/** Every format "Auto" weighs, lossless WebP last: it takes the longest. */
+export const AUTO_IMAGE_FORMATS = [
+  ...AUTO_LOSSY_IMAGE_FORMATS,
+  'webp-lossless',
+] as const;
 
 /**
  * The format "Auto" picks for an output.
  *
  * A vector drawing stays a vector: cropped, never rasterised. Anything else
- * goes to whichever format came out smallest for these exact settings — the
- * editor encodes every one of them anyway, so the choice is made on real
- * sizes rather than on a guess about the picture. Lossless wins only when it
- * is also the smallest, which costs nothing. Until the sizes are in, AVIF
- * stands in: it was the smallest on nearly everything measured.
+ * goes to whichever format came out smallest for these exact settings, on
+ * real sizes rather than on a guess about the picture. The two lossy ones
+ * decide as soon as both are in; lossless takes longest to encode and joins
+ * when it arrives, winning only when it is also the smallest, which costs
+ * nothing. Until the lossy sizes are in, AVIF stands in: it was the smallest
+ * on nearly everything measured.
+ *
+ * A photograph — the server tells one by what it is made of (`photographic`
+ * of a draft) — is AVIF at once, with nothing weighed and nothing to wait
+ * for: on real photographs lossless is never the smaller, and WebP hardly
+ * ever, by a tenth at most (docs/media-quality.md). Another format is still
+ * there to be chosen.
  */
 export function recommendImageFormat(
   sizes: Partial<Record<AssetImageFormat, number>>,
-  isVector = false,
+  source: { isVector?: boolean; photographic?: boolean } = {},
 ): AutoImageFormat {
-  if (isVector) return { format: 'svg', reason: 'vector' };
-  const measured = AUTO_IMAGE_FORMATS.map((format) => ({
-    format,
-    size: sizes[format],
-  }));
-  if (measured.some((item) => item.size === undefined)) {
+  if (source.isVector) return { format: 'svg', reason: 'vector' };
+  if (source.photographic) return { format: 'avif', reason: 'photo' };
+  if (AUTO_LOSSY_IMAGE_FORMATS.some((format) => sizes[format] === undefined)) {
     return { format: 'avif' };
   }
-  const smallest = measured.reduce((best, item) =>
-    item.size! < best.size! ? item : best,
+  const weighed: AssetImageFormat[] = [...AUTO_LOSSY_IMAGE_FORMATS];
+  if (sizes['webp-lossless'] !== undefined) weighed.push('webp-lossless');
+  const smallest = weighed.reduce((best, format) =>
+    sizes[format]! < sizes[best]! ? format : best,
   );
-  return { format: smallest.format, reason: 'smallest' };
+  return { format: smallest, reason: 'smallest' };
 }

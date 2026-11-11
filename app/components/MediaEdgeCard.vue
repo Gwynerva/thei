@@ -72,7 +72,11 @@ const accent = computed(() =>
 </template>
 
 <style scoped>
-.media-edge-card-interactive:is(:focus-visible, :has(:focus-visible)) {
+.media-edge-card-interactive:is(
+  :focus-visible,
+  :has(:focus-visible),
+  [data-popup-open]
+) {
   border-color: var(--card-accent);
   --tw-shadow-color: var(--card-shadow);
 }

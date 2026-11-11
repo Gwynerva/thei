@@ -64,8 +64,7 @@ Two traps of scoped CSS:
   does, or use `group` and `group-hocus:` in the template.
 - A component whose root is a `<Transition>` (`TransitionFade`) loses the
   parent's class when rendered on the server. Set `inheritAttrs: false` and
-  bind `$attrs` to the element inside the transition, as
-  `app/components/admin/AdminAiSessions.vue` does.
+  bind `$attrs` to the element inside the transition.
 
 ## Why
 

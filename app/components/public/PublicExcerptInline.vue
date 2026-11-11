@@ -7,9 +7,10 @@ import { buildExcerptContentHeadings } from '#layers/thei/app/components/content
  * An excerpt whole, on its parent's page, after the parent's own text: a
  * part of the page to a reader and to a machine alike. It is an article of
  * its own under its heading, which is the one link to the excerpt's page,
- * marked as its bookmark; what it is about stands over the heading, turning
- * down to it; its text follows with its headings one level down, each anchored under the
- * excerpt's own anchor, so the page's outline stays one.
+ * marked as its bookmark; what it is about stands over the heading as its
+ * chip, an arrow coming up from the heading to it; its text follows with its
+ * headings one level down, each anchored under the excerpt's own anchor, so
+ * the page's outline stays one.
  */
 const { excerpt } = defineProps<{ excerpt: PublicExcerpt }>();
 
@@ -51,28 +52,27 @@ export function publicExcerptParts(excerpts: PublicExcerpt[]): {
     :aria-labelledby="headingId"
     :data-excerpt="excerpt.publicId"
     class="flex min-w-0 scroll-mt-[var(--public-anchor-offset,8rem)] flex-col
-      gap-sm border-t border-border-1 pt-lg"
+      gap-sm"
   >
-    <!-- What it is about over its title, turning down to it; the summary is
-         left to its own page, since the text is read whole here. -->
-    <header class="flex min-w-0 flex-col gap-xs">
+    <!-- Its head is a block of its own: what it is about over its title,
+         as its chip, an arrow coming up from the title to it, and the
+         excerpt's own picture — its banner, or the first of its text —
+         along the right edge. The summary is left to its own page, since
+         the text is read whole here. No icon of an excerpt before the
+         title: that one marks the block of excerpts written elsewhere
+         about the page. -->
+    <PublicExcerptHead as="header" :media="excerpt.media" data-excerpt-head>
       <PublicPageParent
         v-if="subject"
         :parent="subject"
-        arrow
+        arrow="start"
         class="justify-start!"
         data-excerpt-subject
       />
       <h2
         :id="headingId"
-        class="flex min-w-0 items-start gap-xs text-xl font-bold tracking-tight
-          sm:text-2xl"
+        class="min-w-0 text-xl font-bold tracking-tight sm:text-2xl"
       >
-        <Icon
-          name="excerpt"
-          class="mt-[0.2em] shrink-0 text-[0.85em] text-text-3"
-          aria-hidden="true"
-        />
         <TheiLink
           :to="excerpt.href"
           rel="bookmark"
@@ -84,20 +84,9 @@ export function publicExcerptParts(excerpts: PublicExcerpt[]): {
           >{{ title }}</TheiLink
         >
       </h2>
-    </header>
-    <div
-      v-if="excerpt.bannerMedia"
-      class="aspect-video w-full overflow-hidden rounded-normal bg-bg-3"
-    >
-      <Media
-        v-bind="excerpt.bannerMedia"
-        playback="autoplay"
-        autoplay-reduced-motion
-        loop
-        muted
-        class="size-full"
-      />
-    </div>
+    </PublicExcerptHead>
+    <!-- Its banner is left to its cards and its own page: here the text
+         follows the head at once. -->
     <ContentRenderer
       v-if="excerpt.content.blocks.length"
       :data="excerpt.content"

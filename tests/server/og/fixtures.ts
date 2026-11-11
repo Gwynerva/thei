@@ -44,6 +44,8 @@ export interface OgArtworkSet {
       | 'tag'
       | 'diary-entry'
       | 'project-section'
+      | 'excerpt'
+      | 'secret'
       | 'author',
     hue: number,
   ) => OgPicture;
@@ -447,7 +449,6 @@ export function ogFixtures(art: OgArtworkSet): OgFixture[] {
           tagsTotal: 200,
           picture: art.tiny,
           banner: art.portrait,
-          parent: { title: LONG_TITLE, picture: art.flatIcon },
         },
         {
           name: 'Очень длинное имя сайта, которое владелец написал целиком, с отчеством и регалиями',
@@ -548,8 +549,15 @@ export function ogFixtures(art: OgArtworkSet): OgFixture[] {
         'Реставрация фонаря',
         { hue: 355, chroma: 0.14 },
         {
-          chips: [{ icon: 'project-section', label: 'Этап 3 из 7' }],
-          parent: { title: 'Атлас северных маяков', picture: art.logo },
+          chips: [{ icon: 'project-section', label: 'Раздел проекта' }],
+          lineage: [
+            {
+              label: 'Раздел проекта',
+              title: 'Атлас северных маяков',
+              icon: 'project',
+              picture: art.logo,
+            },
+          ],
           summary: 'Разобрали фонарь, отмыли призмы и заново собрали механизм.',
           meta: [{ icon: 'calendar', text: 'май — август 2025' }],
           picture: art.portrait,
@@ -564,8 +572,15 @@ export function ogFixtures(art: OgArtworkSet): OgFixture[] {
         'Карта маршрута',
         { hue: 45, chroma: 0.16 },
         {
-          chips: [{ icon: 'project-section', label: 'Раздел' }],
-          parent: { title: 'Атлас северных маяков', picture: art.logo },
+          chips: [{ icon: 'project-section', label: 'Раздел проекта' }],
+          lineage: [
+            {
+              label: 'Раздел проекта',
+              title: 'Атлас северных маяков',
+              icon: 'project',
+              picture: art.portrait,
+            },
+          ],
           summary: 'Где мы шли, где ночевали и где ждали погоду.',
           meta: [{ icon: 'history', text: 'обновлено 2 сентября 2026' }],
           picture: art.logo,
@@ -580,14 +595,126 @@ export function ogFixtures(art: OgArtworkSet): OgFixture[] {
         'Как устроена линза Френеля',
         { hue: 170, chroma: 0.1 },
         {
-          chips: [{ icon: 'project-section', label: 'Раздел' }],
-          parent: {
-            title: 'Мастерская линз',
-            picture: art.generated('project', 45),
-          },
+          chips: [{ icon: 'project-section', label: 'Раздел проекта' }],
+          lineage: [
+            {
+              label: 'Раздел проекта',
+              title: 'Мастерская линз',
+              icon: 'project',
+              picture: art.generated('project', 45),
+            },
+          ],
           summary: 'Кольца, призмы и почему маяк видно за двадцать миль.',
           meta: [{ icon: 'history', text: 'обновлено 2 сентября 2026' }],
           picture: art.generated('project-section', 170),
+        },
+      ),
+    },
+    {
+      name: 'excerpt with a subject and a photo',
+      content: content(
+        'excerpt',
+        'excerpt-photo',
+        'Стрингеры встали на место',
+        { hue: 40, chroma: 0.12 },
+        {
+          chips: [{ icon: 'excerpt', label: 'Отрывок' }],
+          lineage: [
+            {
+              label: 'Отрывок',
+              title: '4 марта 2026',
+              icon: 'thought',
+              picture: art.generated('diary-entry', 215),
+            },
+            {
+              label: 'Про',
+              title: 'Байдарка',
+              icon: 'project',
+              picture: art.logo,
+            },
+          ],
+          summary:
+            'Весь день клеил продольные рейки: сначала килевую, потом скуловые, и к вечеру корпус впервые стал похож на лодку.',
+          picture: art.sunset,
+        },
+      ),
+    },
+    {
+      name: 'excerpt with long names',
+      content: content(
+        'excerpt',
+        'excerpt-long',
+        LONG_TITLE,
+        { hue: 300, chroma: 0.14 },
+        {
+          chips: [{ icon: 'excerpt', label: 'Отрывок' }],
+          lineage: [
+            {
+              label: 'Отрывок',
+              title:
+                'Экспедиция на дальние маяки Белого моря и обратно через Соловки',
+              icon: 'event',
+              picture: art.portrait,
+            },
+            {
+              label: 'Про',
+              title:
+                'Полностью задокументированный многолетний проект по восстановлению северных маяков',
+              icon: 'project',
+            },
+          ],
+          summary: LONG_SUMMARY,
+          picture: art.forest,
+        },
+      ),
+    },
+    {
+      name: 'excerpt about a secret, without a summary',
+      content: content(
+        'excerpt',
+        'excerpt-secret',
+        'Что решили на собрании',
+        { hue: 120, chroma: 0.12 },
+        {
+          chips: [{ icon: 'excerpt', label: 'Отрывок' }],
+          lineage: [
+            {
+              label: 'Отрывок',
+              title: 'Мастерская линз',
+              icon: 'project',
+              picture: art.flatIcon,
+            },
+            {
+              label: 'Про',
+              title: 'Секретное событие «Полынь»',
+              icon: 'event',
+              picture: art.generated('secret', 320),
+            },
+          ],
+          picture: art.generated('excerpt', 120),
+        },
+      ),
+    },
+    {
+      name: 'excerpt about nothing, by the opening of its text',
+      content: content(
+        'excerpt',
+        'excerpt-bare',
+        'Лак',
+        { hue: 25, chroma: 0.15 },
+        {
+          chips: [{ icon: 'excerpt', label: 'Отрывок' }],
+          lineage: [
+            {
+              label: 'Отрывок',
+              title: 'Первый рассвет на Соловках',
+              icon: 'event',
+              picture: art.square,
+            },
+          ],
+          summary:
+            'Первый слой лёг плохо: было сыро, и к утру он пошёл разводами. Пришлось шкурить всё заново, ждать сухого дня и начинать с самого начала, уже не торопясь. Второй слой держался, третий дал тот самый блеск, ради которого всё затевалось, — и стало видно, где дерево было с изъяном…',
+          picture: art.generated('excerpt', 25),
         },
       ),
     },

@@ -1,11 +1,13 @@
 <script lang="ts" setup>
 import type { SearchFind, SearchHit } from '#layers/thei/shared/search/api';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
+import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 import { scrollIntoSight } from '#layers/thei/app/modals/layer-motion';
 
 /**
  * One result of the search page, of any kind, in one shape. The head says
- * what it is — its kind and time, its title, its description — with its
+ * what it is — its kind and time, what it is a part of and, an excerpt, what
+ * it is about, its title, its description — with its
  * picture dissolving in from the right, or a file's own preview. Under the
  * head, the full width of the card, the places the words were found at,
  * each leading straight to its place; a line between every part.
@@ -26,6 +28,10 @@ const size = useHumanSize();
 const title = computed(() => searchHitTitle(props.hit));
 const when = computed(() => searchHitWhen(props.hit));
 const access = computed(() => searchAccessBadge(props.hit.access));
+/** What an excerpt is about, as its own page names it over its title. */
+const subject = computed(() =>
+  props.hit.subject ? publicExcerptSubjectLine([props.hit.subject]) : undefined,
+);
 const isFile = computed(() => props.hit.kind === 'file');
 const facts = computed(() =>
   props.hit.file ? searchFileFacts(props.hit.file, size) : '',
@@ -152,21 +158,41 @@ const accent = computed(() =>
               <span>{{ phrase.search_kind(hit.kind) }}</span>
             </span>
             <!-- What it is a part of, a way to it of its own. -->
-            <TheiLink
+            <EntityChip
               v-if="hit.parent"
-              :to="hit.parent.href"
-              class="pointer-events-auto relative z-3 flex min-w-0 items-center
-                gap-1.5 rounded-xs text-text-2 transition focus-visible:ring-2
-                focus-visible:ring-accent focus-visible:outline-none
-                hocus:text-accent"
+              :title="entityListName(hit.parent, 'abbreviated')"
+              :href="hit.parent.href"
+              :media="hit.parent.media"
+              :icon="entityTypeIcon(hit.parent.type)"
+              :card="
+                entityCard(hit.parent.type, {
+                  title: hit.parent.title,
+                  summary: hit.parent.summary,
+                  date: hit.parent.date,
+                  iconMedia: hit.parent.media,
+                })
+              "
+              size="sm"
+              class="pointer-events-auto z-3"
+            />
+            <!-- And what it is about: an excerpt is found by its subject as
+                 much as by where it was written. -->
+            <span
+              v-if="subject"
+              class="flex min-w-0 items-center gap-1.5"
+              data-search-subject
             >
-              <EntityTokenIcon
-                :media="hit.parent.media"
-                icon="project"
-                class="size-4 rounded-xs"
+              <span class="text-text-3">{{ phrase.public_excerpt_about }}</span>
+              <EntityChip
+                :title="subject.title"
+                :href="subject.href"
+                :media="subject.iconMedia"
+                :icon="subject.icon"
+                :card="subject.card"
+                size="sm"
+                class="pointer-events-auto z-3"
               />
-              <span class="truncate">{{ publicText(hit.parent.title) }}</span>
-            </TheiLink>
+            </span>
             <span v-if="when" class="text-text-3">{{ when }}</span>
             <span v-if="facts" class="text-text-3">{{ facts }}</span>
             <Icon

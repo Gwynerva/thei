@@ -12,6 +12,7 @@ import { useContentLinkResolver } from '#layers/thei/app/composables/content-lin
 import { isAssetExtensionSafeInline } from '#layers/thei/shared/assets/formats';
 import { landingHash } from '#layers/thei/shared/landing';
 import type { PublicFilePlace } from '#layers/thei/shared/api/public';
+import type { EntityCardData } from '#layers/thei/app/composables/entity-cards';
 import {
   assetFormatLabel,
   assetKindIcon,
@@ -85,6 +86,18 @@ const { data: placesData } = useFetch<{ places: PublicFilePlace[] }>(
   { server: false, lazy: true },
 );
 const withSlash = (path: string) => (path.endsWith('/') ? path : `${path}/`);
+
+/** A place as its card: a diary entry by its day, which is its title. */
+function placeCard(place: PublicFilePlace): EntityCardData {
+  return {
+    entityType: place.kind,
+    title: place.title,
+    summary: place.summary,
+    ...(place.kind === 'diary-entry' ? { date: place.title } : {}),
+    ...(place.media ? { iconMedia: place.media } : {}),
+    ...(place.parent ? { parent: place.parent } : {}),
+  };
+}
 const places = computed(() =>
   (placesData.value?.places ?? []).filter(
     (place) =>
@@ -224,9 +237,8 @@ async function goTo(event: MouseEvent, href: string) {
               :title="
                 assetSourceTitle({ type: place.kind, title: place.title })
               "
-              :parent="
-                place.parent ? publicText(place.parent.title) : undefined
-              "
+              :parent="place.parent"
+              :card="placeCard(place)"
               :uses="
                 place.uses
                   .map((use) => assetUseLabel(use, place.kind))

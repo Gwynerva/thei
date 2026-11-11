@@ -382,8 +382,10 @@ export interface AiSessionListResponse {
   next?: number;
   /** Whether a model is set to answer sessions. */
   modelReady: boolean;
-  /** What waits for the owner across all sessions, as the admin bar counts it. */
+  /** What waits for the owner across all sessions. */
   waiting: number;
+  /** The owner's sessions outside the archive, as the admin bar counts them. */
+  total: number;
 }
 
 /** How long a session done since counts as recent: a week. */
@@ -400,13 +402,4 @@ export function aiSessionStanding(
   if (item.state === 'running') return 'running';
   if (item.waiting > 0) return 'waiting';
   return now - item.lastActiveAt < AI_SESSION_RECENT_MS ? 'recent' : 'earlier';
-}
-
-/** The dashboard's sessions: the latest that wait, work, or are done. */
-export interface AiSessionOverview {
-  /** The sessions there are, the archive aside. */
-  total: number;
-  waiting: AiSessionItem[];
-  running: AiSessionItem[];
-  recent: AiSessionItem[];
 }

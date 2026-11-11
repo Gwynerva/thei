@@ -92,7 +92,7 @@ export const SIZE_SHARE_CLASS: Record<SizeShare['tone'], string> = {
 
 /**
  * What "Auto" picked, and why when that is not plain: "AVIF: the smallest",
- * but a vector staying SVG needs no reason.
+ * "AVIF: a photograph", but a vector staying SVG needs no reason.
  */
 export function autoImageFormatDetail(
   auto: AutoImageFormat,
@@ -101,6 +101,8 @@ export function autoImageFormatDetail(
   if (!auto.reason) return undefined;
   return phrase.value.upload_format_picked(
     imageFormatLabel(auto.format),
-    phrase.value.upload_format_reason_smallest,
+    auto.reason === 'photo'
+      ? phrase.value.upload_format_reason_photo
+      : phrase.value.upload_format_reason_smallest,
   );
 }

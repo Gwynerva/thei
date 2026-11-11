@@ -154,6 +154,7 @@ export async function buildPublicRelatedLinks(
         iconMedia: await entity.media(
           'public',
           opensGrantOwner(viewer, entity.grantOwner),
+          viewer,
         ),
         relationType: item.relationType,
         ...(entity.date ? { date: entity.date } : {}),

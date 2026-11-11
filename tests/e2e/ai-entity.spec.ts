@@ -20,8 +20,7 @@ import { expectPopupUsable } from './helpers/popup';
  * own — and accepted, it is laid into the form and counts as applied once
  * the form is saved. The ✦ of the
  * form starts a session about the entity, remembers something of it and
- * lists the sessions about it; the admin bar's ✦ starts one about the form
- * in hand. A change a session applies while the form is open is told to it.
+ * lists the sessions about it. A change a session applies while the form is open is told to it.
  * The profile's form takes what is proposed for it the same way.
  */
 test.use({
@@ -739,21 +738,6 @@ test('a ready-made request opens in a new session from its row', async ({
   } finally {
     await page.request.delete(`/api/admin/ai/templates/${preset.templateId}`);
   }
-});
-
-test('the admin bar starts a session about the form in hand', async ({
-  page,
-}) => {
-  for (const size of [DESKTOP, MOBILE]) {
-    await page.setViewportSize(size);
-    await openForm(page);
-    await page.locator('[data-ai-bar]').click();
-    const menu = page.locator('[data-ai-bar-menu]');
-    await expectPopupUsable(page, menu);
-    await expect(menu.locator('[data-ai-bar-start]')).toContainText(NEW_TITLE);
-  }
-  await page.locator('[data-ai-bar-menu] [data-ai-bar-start]').click();
-  await expect(page).toHaveURL(new RegExp(`about=event(:|%3A)${eventUuid}`));
 });
 
 test('a change a session applies is told to the open form', async ({

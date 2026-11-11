@@ -86,9 +86,15 @@ function hitLines(hit: SearchHit): string[] {
     hit.kind === 'diary-entry'
       ? ''
       : ` — ${hit.title || hit.file?.extension.toUpperCase() || ''}`;
-  const parent = hit.parent ? `, of «${hit.parent.title}»` : '';
+  const parent = hit.parent
+    ? `, of «${hit.parent.date ?? hit.parent.title}»`
+    : '';
+  // What an excerpt is about, by its name: a diary entry by its day.
+  const subject = hit.subject
+    ? `, about «${('date' in hit.subject && hit.subject.date) || hit.subject.title}»`
+    : '';
   return [
-    `- ${refOfHit(hit)}${title}${parent}${when ? ` (${when})` : ''}${hit.access ? ` [${hit.access}]` : ''}`,
+    `- ${refOfHit(hit)}${title}${parent}${subject}${when ? ` (${when})` : ''}${hit.access ? ` [${hit.access}]` : ''}`,
     ...hit.finds.map(findLine),
     ...(hit.more ? [`  … ${hit.more} more places`] : []),
   ];

@@ -72,10 +72,13 @@ onBeforeUnmount(cancelHold);
 /**
  * A file waiting to be swept is a warning in the storage, where it is about
  * to go; in a picker, taking it is what keeps it, so it is drawn as any
- * other and its hint alone says so.
+ * other and its hint alone says so. A file only a draft or a version of a
+ * text still shows is drawn the same: it goes with them, most likely.
  */
 const sweeping = computed(
-  () => Boolean(props.item.deleteAfter) && props.selected === undefined,
+  () =>
+    Boolean(props.item.deleteAfter || props.item.inHistory) &&
+    props.selected === undefined,
 );
 
 const warning = computed(() =>
@@ -134,8 +137,8 @@ const warning = computed(() =>
       v-if="editable"
       type="button"
       :disabled="busy"
-      :aria-label="phrase.upload_how"
-      :data-title-popup="phrase.upload_how"
+      :aria-label="phrase.upload_apply_settings"
+      :data-title-popup="phrase.upload_apply_settings"
       data-feed-tile-edit
       class="pointer-events-none absolute top-1.5 left-1/2 z-10 flex size-8
         -translate-x-1/2 cursor-pointer items-center justify-center rounded-full

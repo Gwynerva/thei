@@ -151,9 +151,17 @@
  * Pointed at or reached with the keyboard. Pointing needs a pointer that can
  * point, as for Tailwind's own `hover:`: a phone reports the last tap as a
  * hover, and the look would stay on whatever was tapped.
+ *
+ * An anchor whose popup is open keeps this look for as long as it is: that
+ * is how it shows where the popup came from, in the look it already has
+ * rather than one made up for the occasion, which would paint over a glass
+ * pane or a chip's own ground.
  */
 @custom-variant hocus {
   &:focus-visible {
+    @slot;
+  }
+  &[data-popup-open] {
     @slot;
   }
   &:hover {
@@ -377,6 +385,23 @@
 }
 
 /*
+ * The same halo, denser, for the words of a link's card, wherever it stands
+ * (`LinkPreviewCard`), and of a row of a list (`ContentEntityRow`,
+ * `SearchQuickRow`): there a picture's edge runs under most of a short line,
+ * and the soft halo alone lets it show through the letters. Two tight layers
+ * close the ground right behind them.
+ */
+@utility text-halo-strong-* {
+  --halo-ground: --value(--color-*, [color]);
+  text-shadow:
+    0 0 0.12em var(--halo-ground),
+    0 0 0.25em var(--halo-ground),
+    0 0 0.55em var(--halo-ground),
+    0 0 0.9em var(--halo-ground),
+    0 0.1em 0.45em var(--halo-ground);
+}
+
+/*
  * A round marker on a rail, shaded towards its middle so the white shape on
  * it stands out of the colour: `marker-shade-accent` on the life rail and in
  * a chronology, `marker-shade-text-warning` for what is new.
@@ -490,17 +515,6 @@
 }
 
 @layer base {
-  /*
-   * A control whose popup is open stays pressed while it is, so it is plain
-   * where the popup comes from. Any utility of its own wins over this; a
-   * control drawn in a colour of its own says how it looks with
-   * `popup-open:`.
-   */
-  :where(button, a, [role='button'])[data-popup-open] {
-    background-color: var(--color-bg-3);
-    color: var(--color-text-1);
-  }
-
   :root {
     --width-narrow: min(700px, 100%);
     --width-wide: min(1100px, 100%);
@@ -689,7 +703,8 @@
         [role='treeitem']
       )
       [data-title-popup],
-    [data-link-card-root] a[href] {
+    [data-link-card-root] a[href],
+    a[href][data-entity-card] {
       &:not(
         [data-title-popup-open],
         [data-title-popup-clipped],

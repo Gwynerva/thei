@@ -131,6 +131,8 @@ export type LifeExcerptName =
   | {
       secret?: undefined;
       title: string;
+      /** What the excerpt says of itself, for its card. */
+      summary: string;
       href: string;
       about?: PublicEntityLink;
     }

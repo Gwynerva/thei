@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { assetPlacementContentContext } from '../../../app/composables/asset-library-labels';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  assetPlacementLabel,
+  assetUseLabel,
+} from '../../../app/composables/asset-library-labels';
 import type {
   AssetPlacement,
   AssetSourceType,
@@ -20,25 +23,51 @@ function placement(sourceType: AssetSourceType): AssetPlacement {
   };
 }
 
-describe('assetPlacementContentContext', () => {
+beforeEach(() => {
+  // Every phrase reads as its own key: the test names which one is said.
+  vi.stubGlobal('phrase', {
+    value: new Proxy({}, { get: (_target, key) => String(key) }),
+  });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('assetUseLabel', () => {
   it.each([
-    ['project', 'project-description'],
-    ['event', 'event-description'],
-    ['page', 'page-content'],
-    ['profile', 'profile-about'],
-  ] as const)('describes root %s content', (source, expected) => {
-    expect(assetPlacementContentContext(placement(source))).toBe(expected);
-  });
+    ['project', 'asset_role_project_description'],
+    ['event', 'asset_role_event_description'],
+    ['page', 'asset_role_page_content'],
+    ['profile', 'asset_role_profile_about'],
+    ['project-section', 'asset_role_section_text'],
+    ['excerpt', 'asset_role_excerpt_text'],
+    ['diary-entry', 'asset_role_diary_text'],
+    ['tag', 'asset_role_tag_description'],
+    ['ai-session', 'asset_role_content'],
+    ['unused', 'asset_role_content'],
+  ] as const)(
+    'names a file in the text of %s by whose text it is',
+    (source, expected) => {
+      expect(assetUseLabel('content', source)).toBe(expected);
+      expect(assetPlacementLabel(placement(source))).toBe(expected);
+    },
+  );
 
-  it('keeps section content generic', () => {
-    expect(assetPlacementContentContext(placement('project-section'))).toBe(
-      'content',
-    );
-  });
-
-  it('describes only content by where it is', () => {
+  it('names any other use by its role, whatever the place', () => {
+    expect(assetUseLabel('banner', 'project')).toBe('asset_role_banner');
     expect(
-      assetPlacementContentContext({ ...placement('project'), role: 'banner' }),
-    ).toBe('content');
+      assetPlacementLabel({ ...placement('project'), role: 'banner' }),
+    ).toBe('asset_role_banner');
+  });
+
+  it('names a profile picture by what it is', () => {
+    expect(
+      assetPlacementLabel({
+        ...placement('profile'),
+        role: 'icon',
+        detail: 'avatar',
+      }),
+    ).toBe('asset_role_avatar');
   });
 });

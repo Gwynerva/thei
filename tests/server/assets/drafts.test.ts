@@ -135,6 +135,13 @@ function holdSlot(type: AssetType) {
 const request = (width: number, quality = 80): AssetImageTransformRequest => ({
   type: 'image-transform',
   quality,
+  format: 'avif',
+  dimensions: { width },
+});
+/** A request that names no format, as a file pasted into a text makes. */
+const formatless = (width: number): AssetImageTransformRequest => ({
+  type: 'image-transform',
+  quality: 75,
   dimensions: { width },
 });
 
@@ -165,6 +172,92 @@ describe('editor drafts', () => {
       width: 800,
       height: 600,
     });
+  });
+
+  it('says whether a picture is a photograph, by what it is made of', async () => {
+    // One flat colour is a drawing: nothing is claimed of it.
+    expect((await stagedDraft(800, 600)).photographic).toBeUndefined();
+
+    const path = join(
+      import.meta.dirname,
+      '..',
+      '..',
+      'fixtures',
+      'image-content',
+      'photo-nasa-ksc-82pc-0331-small.jpg',
+    );
+    const bytes = await readFile(path);
+    const photo = await openDraft({
+      id: 'draft-photo',
+      source: {
+        path,
+        size: bytes.length,
+        hash: createHash('sha256').update(bytes).digest('hex'),
+        extension: 'jpg',
+        owned: false,
+      },
+      type: AssetType.Image,
+      familyUuid: 'af-photo',
+    });
+    expect(photo.photographic).toBe(true);
+  });
+
+  it('stores a picture asked for in no format in the one "Auto" picks', async () => {
+    // A drawing: all three are weighed, and lossless is the smallest.
+    await stagedDraft(800, 600);
+    const drawing = await commitDraft(useDraft('draft-a'), formatless(800), {
+      signal: live(),
+    });
+    // Lossless is recorded at 100 whatever was asked for, as the editor
+    // resolves it: one output, one settings key.
+    expect(drawing).toMatchObject({
+      extension: 'webp',
+      settings: { format: 'webp-lossless', quality: 100 },
+    });
+    expect(
+      rawDb
+        .prepare('SELECT settingsKey FROM assets WHERE assetUuid = ?')
+        .get(drawing.assetUuid),
+    ).toEqual({
+      settingsKey: 'image-transform:q100:w800:h600:fmt:webp-lossless',
+    });
+    // The formats not picked stay as renders, for an editor opened next.
+    expect(
+      [...useDraft('draft-a').renders.values()].map(
+        (render) => render.settings.format,
+      ),
+    ).toEqual(['avif', 'webp']);
+
+    // A photograph: AVIF, and nothing else was encoded.
+    const path = join(
+      import.meta.dirname,
+      '..',
+      '..',
+      'fixtures',
+      'image-content',
+      'photo-nasa-ksc-82pc-0331-small.jpg',
+    );
+    const bytes = await readFile(path);
+    await openDraft({
+      id: 'draft-photo',
+      source: {
+        path,
+        size: bytes.length,
+        hash: createHash('sha256').update(bytes).digest('hex'),
+        extension: 'jpg',
+        owned: false,
+      },
+      type: AssetType.Image,
+      familyUuid: 'af-photo',
+    });
+    const photo = await commitDraft(useDraft('draft-photo'), formatless(640), {
+      signal: live(),
+    });
+    expect(photo).toMatchObject({
+      extension: 'avif',
+      settings: { format: 'avif' },
+    });
+    expect(useDraft('draft-photo').renders.size).toBe(0);
   });
 
   it('renders without storing and answers repeated settings from its cache', async () => {

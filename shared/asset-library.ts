@@ -1,5 +1,6 @@
 import { AssetType, type AssetMeta, type AssetRole } from './asset';
 import type { AssetVariantInfo } from './api/asset';
+import type { ContentEntityParent, ContentEntityType } from './content-link';
 import type { MediaDescriptor } from './media';
 import type { PaginatedResponse } from './pagination';
 import {
@@ -36,12 +37,19 @@ export interface AssetSource {
   url?: string;
   editUrl?: string;
   updatedAt: number;
-  /** The project a section belongs to; its title as typed. */
-  parent?: { title: string; url: string };
+  /**
+   * The project a section belongs to; the parent of an excerpt. A diary
+   * entry is named by its `date`, its `title` empty.
+   */
+  parent?: Omit<ContentEntityParent, 'type' | 'href'> & {
+    type: Extract<ContentEntityType, 'project' | 'event' | 'diary-entry'>;
+    /** The parent's public page, as `url` above is the place's. */
+    url: string;
+  };
   /**
    * The picture that stands for the place — an icon, a banner, the first
-   * picture of a body — through the admin's own addresses. Only the file's
-   * window asks for it.
+   * picture of a body — through the admin's own addresses. The file's window
+   * and the library's run ask for it.
    */
   media?: MediaDescriptor;
 }

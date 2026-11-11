@@ -21,9 +21,7 @@ function textFacts(scan: TextScan | undefined, prefix = ''): Facts {
   return {
     [`${prefix}words`]: scan.words,
     [`${prefix}headings`]: n('heading-2') + n('heading-3'),
-    [`${prefix}pictures`]: scan.files.filter(
-      (file) => file.as === 'media' || file.as === 'gallery',
-    ).length,
+    [`${prefix}pictures`]: picturesOf(scan),
     [`${prefix}galleries`]: n('gallery'),
     [`${prefix}recordings`]: n('audio'),
     [`${prefix}fileGroups`]: n('files'),
@@ -60,6 +58,52 @@ function periodFacts(periods: ArchivePeriod[], seedDay: string): Facts {
   };
 }
 
+const picturesOf = (scan: TextScan | undefined) =>
+  scan?.files.filter((file) => file.as === 'media' || file.as === 'gallery')
+    .length ?? 0;
+
+/**
+ * The events and diary entries a stranger sees by a picture of their
+ * excerpts, by ref: no banner and no picture in their own text, and an
+ * excerpt a stranger is shown on their page — not private, about something
+ * public — with a banner or a picture in its text.
+ */
+export function excerptsWithPicture(
+  archive: Archive,
+  scans: Map<string, TextScan>,
+): Set<string> {
+  const access = new Map(
+    archiveEntities(archive).map((entity) => [
+      entity.ref,
+      'access' in entity.item ? entity.item.access : 'public',
+    ]),
+  );
+  const found = new Set<string>();
+  for (const parent of [
+    ...archive.events.map((item) => ({
+      ref: refOf.event(item),
+      own: Boolean(item.banner),
+      excerpts: item.excerpts,
+    })),
+    ...archive.diary.map((item) => ({
+      ref: refOf.diary(item),
+      own: false,
+      excerpts: item.excerpts,
+    })),
+  ]) {
+    if (parent.own || picturesOf(scans.get(`${parent.ref}|body`))) continue;
+    const given = parent.excerpts.some(
+      (excerpt) =>
+        !excerpt.private &&
+        access.get(excerpt.about.to) === 'public' &&
+        (Boolean(excerpt.banner) ||
+          picturesOf(scans.get(`${refOf.excerpt(excerpt)}|body`)) > 0),
+    );
+    if (given) found.add(parent.ref);
+  }
+  return found;
+}
+
 /** Facts of every entity, by ref. */
 export function archiveFacts(
   archive: Archive,
@@ -89,6 +133,7 @@ export function archiveFacts(
     excerpts: excerpts.length,
     privateExcerpts: excerpts.filter((excerpt) => excerpt.private).length,
   });
+  const shown = excerptsWithPicture(archive, scans);
 
   const mentions = new Map<string, number>();
   for (const scan of scans.values())
@@ -187,6 +232,7 @@ export function archiveFacts(
           links: event.links.length,
           hasBanner: Boolean(event.banner),
           hasAction: Boolean(event.action),
+          pictureFromExcerpts: shown.has(entity.ref),
         };
       }
       case 'diary': {
@@ -200,6 +246,7 @@ export function archiveFacts(
           relative: entity.item.date.startsWith('today'),
           future: day > seedDay,
           textless: !entity.item.body.trim(),
+          pictureFromExcerpts: shown.has(entity.ref),
         };
       }
       case 'page':

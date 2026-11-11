@@ -8,7 +8,10 @@ import {
   type AssetImageTransformSettings,
   type AssetTransformSource,
 } from '../../../shared/asset-upload-settings';
-import { imageDisplayQualityToAvifQuality } from '../../../shared/asset-upload-quality';
+import {
+  imageDisplayQualityToAvifQuality,
+  imageDisplayQualityToWebpQuality,
+} from '../../../shared/asset-upload-quality';
 import { canZipAssetExtension } from '../../../shared/asset-upload-zip';
 import { getAssetUploadProfileConfig } from '../../../shared/asset-upload-profiles';
 import type { OtherAssetMeta } from '../../../shared/asset';
@@ -290,6 +293,17 @@ describe('asset upload image quality', () => {
     // Halfway between high (65) and maximum (72).
     expect(imageDisplayQualityToAvifQuality(92.5)).toBe(69);
     expect(imageDisplayQualityToAvifQuality(100)).toBe(72);
+  });
+
+  it('maps it onto WebP through a table of its own, not as it is', () => {
+    expect(imageDisplayQualityToWebpQuality(10)).toBe(35);
+    expect(imageDisplayQualityToWebpQuality(40)).toBe(35);
+    expect(imageDisplayQualityToWebpQuality(60)).toBe(62);
+    expect(imageDisplayQualityToWebpQuality(75)).toBe(80);
+    expect(imageDisplayQualityToWebpQuality(90)).toBe(86);
+    // A file made at 85 by an older version: two thirds of the way to high.
+    expect(imageDisplayQualityToWebpQuality(85)).toBe(84);
+    expect(imageDisplayQualityToWebpQuality(100)).toBe(89);
   });
 });
 

@@ -1,6 +1,7 @@
 ---
 title: The moon over the river
 summary: Where the lamp began
+banner: photo-d
 about:
   to: project:lamp
   kind: related

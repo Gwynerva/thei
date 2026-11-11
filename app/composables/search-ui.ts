@@ -8,6 +8,7 @@ import {
   formatAbsolutePublicDate,
   formatPublicDateRange,
 } from '#layers/thei/shared/public-date-format';
+import { formatEntityPlaceName } from '#layers/thei/shared/entity-place-name';
 import type { SearchSegment } from '#layers/thei/shared/search/snippet';
 import { AssetType } from '#layers/thei/shared/asset';
 import { assetKindName } from '#layers/thei/shared/asset-format-label';
@@ -80,9 +81,11 @@ export function searchEntityTitle(kind: SearchKind, title: string): string {
  * not as stored.
  */
 function searchPlaceName(name: string): string {
-  return /^\d{4}-\d{2}-\d{2}$/u.test(name)
-    ? formatAbsolutePublicDate(name, language.value.code)
-    : publicText(name);
+  return formatEntityPlaceName(
+    name,
+    (day) => formatAbsolutePublicDate(day, language.value.code),
+    publicText,
+  );
 }
 
 /**
@@ -154,15 +157,27 @@ export function searchTitleIsSummary(hit: SearchHit): boolean {
 }
 
 /**
- * When it was: its period, or its day — none for a diary entry, named by it.
- * Read by days, one with neither says the day it stands at: «Добавлено …».
+ * Whether a result's day is said already by what names it: a diary entry is
+ * called by its day, and so is the entry an excerpt is a part of.
+ */
+function dayIsNamed(hit: SearchHit): boolean {
+  return (
+    hit.kind === 'diary-entry' ||
+    (Boolean(hit.parent?.date) && hit.parent?.date === hit.date)
+  );
+}
+
+/**
+ * When it was: its period, or its day — none for a diary entry, named by it,
+ * nor for an excerpt of one, whose parent is. Read by days, one with neither
+ * says the day it stands at: «Добавлено …».
  */
 export function searchHitWhen(hit: SearchHit): string {
   if (hit.period)
     return hit.period.startDate === hit.period.endDate
       ? formatAbsolutePublicDate(hit.period.startDate, language.value.code)
       : formatPublicDateRange(hit.period, language.value.code);
-  if (hit.date && hit.kind !== 'diary-entry')
+  if (hit.date && !dayIsNamed(hit))
     return formatAbsolutePublicDate(hit.date, language.value.code);
   if (hit.dated)
     return phrase.value.search_dated(
@@ -177,8 +192,7 @@ export function searchHitWhen(hit: SearchHit): string {
  * «2017–2019».
  */
 export function searchHitYears(hit: SearchHit): string {
-  const start =
-    hit.period?.startDate ?? (hit.kind === 'diary-entry' ? '' : hit.date);
+  const start = hit.period?.startDate ?? (dayIsNamed(hit) ? '' : hit.date);
   const end = hit.period?.endDate ?? start;
   if (!start || !end) return '';
   const [from, to] = [start.slice(0, 4), end.slice(0, 4)];

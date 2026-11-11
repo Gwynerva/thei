@@ -8,7 +8,7 @@ import {
   type VideoAssetMeta,
 } from '#layers/thei/shared/asset';
 import { assetSelectionError } from '#layers/thei/shared/asset-library';
-import { AUTO_IMAGE_FORMATS } from '#layers/thei/shared/asset-image-format-auto';
+import { AUTO_LOSSY_IMAGE_FORMATS } from '#layers/thei/shared/asset-image-format-auto';
 import {
   ASSET_QUALITY_LEVEL_QUALITY,
   ASSET_QUALITY_LEVELS,
@@ -70,7 +70,6 @@ import {
 import {
   buildQualityStops,
   draftRenderOrder,
-  LOSSY_IMAGE_FORMATS,
   type StopSize,
 } from './quality-stops';
 import {
@@ -288,6 +287,7 @@ const transformSource = computed(() => {
     width: dimensions.width,
     height: dimensions.height,
     isVector: isVector.value,
+    ...(draft?.photographic ? { photographic: true } : {}),
     ...(hasAudio !== undefined ? { hasAudio } : {}),
     ...(duration ? { duration } : {}),
     ...(fps ? { fps } : {}),
@@ -409,6 +409,10 @@ const renderRequests = computed<DraftRenderRequest[]>(() => {
     fixedFormat: edit.fixedFormat.value,
     availableFormats: renderedFormats.value,
     level: edit.qualityLevel.value,
+    // Until the draft says what the picture is, nothing is weighed: a
+    // photograph's other formats would be asked for the moment it opened.
+    photographic:
+      transformSource.value?.photographic || !draftSession.draft.value,
   }).flatMap(({ format, level }) =>
     renderRequest(
       edit.settingsAt(
@@ -419,6 +423,10 @@ const renderRequests = computed<DraftRenderRequest[]>(() => {
     ),
   );
 });
+/** The dry runs asked for: a format outside them shows a guess, not a wait. */
+const wantedRenderKeys = computed(
+  () => new Set(renderRequests.value.map((item) => item.key)),
+);
 const primaryRenderKey = computed(() =>
   rendersActive.value && edit.request.value?.type === 'image-transform'
     ? `${originKey.value}|${edit.settingsKey.value}`
@@ -453,9 +461,11 @@ function formatSizes(): Partial<Record<AssetImageFormat, number>> {
 }
 
 /**
- * "Auto" is still weighing the sizes it picks by. Only its own row says so:
- * the result and "Use" go by the render "Auto" stands on meanwhile, and
- * when a smaller format comes in, its render is already there to switch to.
+ * "Auto" is still weighing the sizes it picks by: the two lossy ones, which
+ * decide as soon as both are in. Only its own row says so: the result and
+ * "Use" go by the render "Auto" stands on meanwhile, and when a smaller
+ * format comes in — the lossless one arrives last, and seldom wins — its
+ * render is already there to switch to. A photograph is not weighed at all.
  */
 const autoPending = computed(
   () =>
@@ -463,7 +473,9 @@ const autoPending = computed(
     !edit.fixedFormat.value &&
     edit.formatChoice.value === 'auto' &&
     !edit.autoFormat.value?.reason &&
-    AUTO_IMAGE_FORMATS.some((format) => renders.isPending(formatKey(format))),
+    AUTO_LOSSY_IMAGE_FORMATS.some((format) =>
+      renders.isPending(formatKey(format)),
+    ),
 );
 const renderPending = computed(() => renders.pending.value);
 
@@ -601,9 +613,11 @@ function imageStopSize(stop: AssetQualityStop): StopSize | undefined {
   if (fixed) return formatStopSize(fixed, stop);
   const choice = edit.formatChoice.value;
   if (choice !== 'auto') return formatStopSize(choice, stop);
+  // A photograph is AVIF under "Auto", whatever the others would weigh.
+  if (transformSource.value?.photographic) return formatStopSize('avif', stop);
   // "Auto" takes the smallest. A lossless guess is too rough to compete, so
   // lossless only enters once it has been rendered.
-  const candidates = LOSSY_IMAGE_FORMATS.flatMap((format) => {
+  const candidates = AUTO_LOSSY_IMAGE_FORMATS.flatMap((format) => {
     const size = formatStopSize(format, stop);
     return size ? [size] : [];
   });
@@ -687,12 +701,15 @@ const formatOptions = computed<UploadSettingsFormatOption[]>(() => {
   const sized = (format: AssetImageFormat) => {
     const key = formatKey(format);
     const render = renders.renderFor(key);
+    if (render) return { size: render.size };
+    // Not asked for — a photograph's other formats are encoded only once
+    // chosen — so the row says what the format would roughly come to.
+    if (!wantedRenderKeys.value.has(key)) {
+      const guess = formatStopSize(format, edit.qualityLevel.value);
+      return guess ? { size: guess.bytes, approximate: true } : {};
+    }
     const pending = renders.isPending(key);
-    return {
-      size: render?.size,
-      pending,
-      failed: Boolean(key) && !render && !pending,
-    };
+    return { pending, failed: Boolean(key) && !pending };
   };
   const lossless = edit.lossless.value && edit.canBeLossless.value;
   const auto = edit.autoFormat.value;

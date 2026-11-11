@@ -1,14 +1,19 @@
 <script lang="ts" setup>
 import type { IconName } from '#thei/icons';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import {
+  vEntityCard,
+  type LinkCardData,
+} from '#layers/thei/app/composables/entity-cards';
 
 /**
  * One file or link in a compact list. It shows its text as given: the caller
  * knows whose words they are, and formats the owner's (`publicText`).
  *
  * The title takes one line and the description two, each cut with an
- * ellipsis where it runs out of room. Whatever is cut is in the item's popup
- * in full, which says nothing when nothing is cut.
+ * ellipsis where it runs out of room. A link shows the card of what it
+ * leads to (`card`); for anything else, whatever is cut is in the item's
+ * popup in full, which says nothing when nothing is cut.
  */
 const props = withDefaults(
   defineProps<{
@@ -39,6 +44,8 @@ const props = withDefaults(
      * target says of itself.
      */
     note?: string;
+    /** What the link leads to, shown as its card in place of the popup. */
+    card?: LinkCardData;
   }>(),
   { icon: 'link' },
 );
@@ -54,17 +61,22 @@ const note = computed(() => oneLine(props.note));
 const descriptionClamp = computed(() =>
   note.value ? 'line-clamp-1' : 'line-clamp-2',
 );
-const popup = computed(() => ({
-  ...titlePopup(
-    { text: props.title, bold: true },
-    TITLE_POPUP_GAP,
-    description.value,
-    TITLE_POPUP_GAP,
-    note.value && { text: note.value, italic: true },
-  ),
-  // The popup repeats what is shown, so it only speaks when something is cut.
-  'data-title-popup-clipped': '',
-}));
+const popup = computed(() =>
+  props.card
+    ? {}
+    : {
+        ...titlePopup(
+          { text: props.title, bold: true },
+          TITLE_POPUP_GAP,
+          description.value,
+          TITLE_POPUP_GAP,
+          note.value && { text: note.value, italic: true },
+        ),
+        // The popup repeats what is shown, so it only speaks when something
+        // is cut.
+        'data-title-popup-clipped': '',
+      },
+);
 
 const extensionFontSize = computed(() => {
   const length = props.extension?.length ?? 0;
@@ -88,6 +100,7 @@ const extensionFontSize = computed(() => {
       text-left text-text-1 no-underline transition focus-visible:ring-2
       focus-visible:ring-accent focus-visible:outline-none"
     :class="{ 'cursor-pointer hocus:bg-bg-3/70': button || href }"
+    v-entity-card="card"
     :data-public-secret="secret || undefined"
     v-bind="popup"
     @click="button ? $emit('activate') : undefined"

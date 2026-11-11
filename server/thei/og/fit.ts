@@ -78,6 +78,12 @@ export interface OgRowSpec {
   plus?: (count: number) => OgNode;
   /** Items beyond the list that exist but were never going to be drawn. */
   hiddenCount?: number;
+  /**
+   * Nothing is left out: an item that does not fit beside the ones before it
+   * starts a line of its own, `rowGap` below, and the row is as tall as its
+   * lines. An item wider than the column is still cut to it.
+   */
+  wrap?: { rowGap: number };
   required?: boolean;
   gapBefore: number;
 }
@@ -150,6 +156,8 @@ export interface OgFittedRow {
   plus: number;
   widths: number[];
   plusWidth: number;
+  /** How many items each line of a wrapping row holds, in order. */
+  lines?: number[];
   height: number;
 }
 
@@ -197,6 +205,25 @@ export function packRow(
     if (used <= available) return { shown, plus: plusWidth ? rest : 0 };
   }
   return { shown: 0, plus: plusWidth ? total : 0 };
+}
+
+/**
+ * Every item of a row, in order, on as many lines as it takes: how many
+ * items each line holds. An item wider than a line has one to itself.
+ */
+function wrapRow(widths: number[], gap: number, available: number): number[] {
+  const lines: number[] = [];
+  let used = 0;
+  for (const width of widths) {
+    if (lines.length && used + gap + width <= available) {
+      lines[lines.length - 1]! += 1;
+      used += gap + width;
+    } else {
+      lines.push(1);
+      used = width;
+    }
+  }
+  return lines;
 }
 
 export function digitsOf(count: number) {
@@ -294,6 +321,22 @@ export function solveStack(
         entry.maxWidth ?? plan.width,
       ),
     );
+    if (item.wrap) {
+      const cut = widths.map((width) => Math.min(width, plan.width));
+      const lines = wrapRow(cut, item.gap, plan.width);
+      return {
+        kind: 'row',
+        key: item.key,
+        shown: cut.length,
+        plus: 0,
+        widths: cut,
+        plusWidth: 0,
+        lines,
+        height:
+          lines.length * item.height +
+          Math.max(0, lines.length - 1) * item.wrap.rowGap,
+      };
+    }
     const plusWidth = item.plus
       ? (count: number) =>
           measurements.itemWidth.get(plusKey(item.key, digitsOf(count))) ?? 0

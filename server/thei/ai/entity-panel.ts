@@ -345,11 +345,12 @@ export async function entityPanel(key: EntityKey): Promise<AiEntityPanel> {
 
 /**
  * What a field's ✦ reads, of an entity or a file by its ref: whether a model
- * answers it, what is asked and still answered, and what waits for the
- * owner, for the admin bar's ✦.
+ * answers it, what is asked and still answered, and how many sessions there
+ * are, for the admin bar's count.
  */
 export function aiFieldState(
   ref: string,
-): Pick<AiEntityPanel, 'modelReady' | 'asking' | 'waiting'> {
-  return { ...aiReadiness(), asking: asksRunning(ref) };
+): Pick<AiEntityPanel, 'modelReady' | 'asking' | 'total'> {
+  const { modelReady, total } = aiReadiness();
+  return { modelReady, total, asking: asksRunning(ref) };
 }

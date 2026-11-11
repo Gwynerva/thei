@@ -17,11 +17,7 @@ import {
   findSession,
   insertMessage,
 } from '../../server/thei/ai/sessions/store';
-import {
-  aiWaiting,
-  listSessions,
-  sessionOverview,
-} from '../../server/thei/ai/sessions/view';
+import { aiCounts, listSessions } from '../../server/thei/ai/sessions/view';
 import { freshAiTestDb } from '../helpers/fresh-ai-db';
 
 /**
@@ -152,64 +148,19 @@ describe('the list of sessions', () => {
     });
     expect(listSessions().sessions).toEqual([]);
     expect(listSessions({ origin: 'app' }).sessions).toEqual([]);
-    expect(aiWaiting()).toBe(0);
-    expect(sessionOverview().total).toBe(0);
+    expect(aiCounts()).toEqual({ waiting: 0, total: 0 });
   });
 
-  it('gives the dashboard a few that wait, work and were done this week', () => {
-    const DAY = 24 * 60 * 60 * 1000;
-    const session = (
-      title: string,
-      set: {
-        state?: string;
-        waiting?: number;
-        ago?: number;
-        archived?: boolean;
-      },
-    ) => {
-      const sessionUuid = createSession({ origin: 'owner', title });
-      const at = Date.now() - (set.ago ?? 0);
-      context.rawDb
-        .prepare(
-          'UPDATE "ai-sessions" SET state = ?, waiting = ?, lastActiveAt = ?, archivedAt = ? WHERE sessionUuid = ?',
-        )
-        .run(
-          set.state ?? 'idle',
-          set.waiting ?? 0,
-          at,
-          set.archived ? at : null,
-          sessionUuid,
-        );
-    };
-    // What waits shows however old it is; one at work shows as working, what
-    // waits in it too; the archive and what was done before the week, never.
-    session('Old question', { waiting: 1, ago: 30 * DAY });
-    session('Working', { state: 'running', waiting: 2 });
-    for (const day of [1, 2, 3, 4]) session(`Done ${day}`, { ago: day * DAY });
-    session('Done long ago', { ago: 10 * DAY });
-    session('Archived', { waiting: 1, archived: true });
-    const titles = (items: { title: string }[]) =>
-      items.map((item) => item.title);
-    const overview = sessionOverview();
-    expect(overview.total).toBe(7);
-    expect(titles(overview.waiting)).toEqual(['Old question']);
-    expect(titles(overview.running)).toEqual(['Working']);
-    // What the others leave, the done ones take.
-    expect(titles(overview.recent)).toEqual([
-      'Done 1',
-      'Done 2',
-      'Done 3',
-      'Done 4',
-    ]);
-    // Little room is shared evenly; a short kind leaves the rest to others.
-    const small = sessionOverview(5);
-    expect(titles(small.waiting)).toEqual(['Old question']);
-    expect(titles(small.running)).toEqual(['Working']);
-    expect(titles(small.recent)).toEqual(['Done 1', 'Done 2', 'Done 3']);
-    const tiny = sessionOverview(2);
-    expect(
-      [tiny.waiting, tiny.running, tiny.recent].map((list) => list.length),
-    ).toEqual([1, 1, 0]);
+  it('counts for the admin bar the sessions outside the archive', () => {
+    for (const title of ['One', 'Two', 'Three'])
+      createSession({ origin: 'owner', title });
+    const archived = createSession({ origin: 'owner', title: 'Archived' });
+    context.rawDb
+      .prepare('UPDATE "ai-sessions" SET archivedAt = ? WHERE sessionUuid = ?')
+      .run(Date.now(), archived);
+    expect(aiCounts().total).toBe(3);
+    expect(listSessions().total).toBe(3);
+    expect(listSessions({ archived: true }).total).toBe(3);
   });
 
   it('finds words in any case and alphabet, in the title or what was said', () => {

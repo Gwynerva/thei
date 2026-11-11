@@ -30,7 +30,7 @@ export interface AssetDescriptionResponse
   extends
     AssetDescription,
     Partial<
-      Pick<AiEntityPanel, 'offers' | 'asking' | 'modelReady' | 'waiting'>
+      Pick<AiEntityPanel, 'offers' | 'asking' | 'modelReady' | 'total'>
     > {}
 
 /** What a save sends: the words, and the version they were written over. */

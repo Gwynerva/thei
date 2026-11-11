@@ -3,6 +3,11 @@ import type { PublicNeighbour } from '#layers/thei/shared/api/public';
 import type { IconName } from '#thei/icons';
 import type { PublicDetailNeighbours } from './public-detail';
 import { datePresentationToneClass } from '#layers/thei/app/composables/public-date';
+import {
+  entityCard,
+  vEntityCard,
+  type EntityCardData,
+} from '#layers/thei/app/composables/entity-cards';
 
 /**
  * The way back to the section or diary entry before this one, and on
@@ -14,7 +19,7 @@ import { datePresentationToneClass } from '#layers/thei/app/composables/public-d
  * The chevrons point where the reader goes, at the outer edges, and the
  * picture fills the other end, so the pair reads as a way back and a way on
  * without saying so; the words "back" and "next" are left to screen readers.
- * What a tile has to cut short is shown whole in its popup.
+ * Resting on a tile shows the card of what it leads to.
  */
 const { neighbours } = defineProps<{ neighbours: PublicDetailNeighbours }>();
 
@@ -85,16 +90,15 @@ function label(side: Side) {
     .join(', ');
 }
 
-/** Everything the tile says, in full, only when the tile had to cut it. */
-function popup(neighbour: PublicNeighbour) {
-  const line = detail(neighbour);
-  return {
-    ...titlePopup(
-      { text: title(neighbour), bold: true },
-      line && { text: line, italic: isDiary.value && !neighbour.period },
-    ),
-    'data-title-popup-clipped': '',
-  };
+/** What the tile leads to, as its card. */
+function card(neighbour: PublicNeighbour): EntityCardData {
+  return entityCard(neighbours.kind, {
+    title: neighbour.title,
+    summary: neighbour.summary,
+    // A section is called by its title, whatever day it has.
+    date: neighbour.title ? undefined : neighbour.date,
+    iconMedia: neighbour.media,
+  });
 }
 </script>
 
@@ -110,7 +114,7 @@ function popup(neighbour: PublicNeighbour) {
         :to="side.neighbour.href"
         :rel="side.rel"
         :aria-label="label(side)"
-        v-bind="popup(side.neighbour)"
+        v-entity-card="card(side.neighbour)"
         class="group relative flex min-h-16 min-w-0 items-center gap-1
           overflow-hidden rounded-normal border border-border-1 bg-bg-2 py-xs
           text-text-1 no-underline transition focus-visible:ring-2
@@ -150,14 +154,12 @@ function popup(neighbour: PublicNeighbour) {
           <span
             class="-mx-[0.75em] line-clamp-2 px-[0.75em] text-sm font-semibold
               transition-colors group-hocus:text-accent"
-            data-title-popup-clip
             >{{ title(side.neighbour) }}</span
           >
           <span
             v-if="period(side.neighbour)"
             class="-mx-[0.75em] truncate px-[0.75em] text-xs text-text-3"
             :class="datePresentationToneClass(period(side.neighbour)!)"
-            data-title-popup-clip
             ><Icon
               v-if="period(side.neighbour)!.approximate"
               name="approximate"
@@ -169,7 +171,6 @@ function popup(neighbour: PublicNeighbour) {
             v-else-if="detail(side.neighbour)"
             class="-mx-[0.75em] line-clamp-2 px-[0.75em] text-xs text-text-3"
             :class="{ italic: isDiary }"
-            data-title-popup-clip
             >{{ detail(side.neighbour) }}</span
           >
         </span>

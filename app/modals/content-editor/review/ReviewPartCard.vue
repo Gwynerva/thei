@@ -93,7 +93,7 @@ function send(text: string) {
           part.link.made
             ? phrase.ai_review_link_none
             : part.link.from
-              ? publicText(part.link.from)
+              ? entityPlaceName(part.link.from)
               : phrase.ai_review_link_gone
         }}</ReviewMark>
       </dd>
@@ -106,7 +106,7 @@ function send(text: string) {
         ><ReviewMark kind="added"
           ><Icon v-if="part.link.made" name="link" class="mr-0.5" />{{
             part.link.to
-              ? publicText(part.link.to)
+              ? entityPlaceName(part.link.to)
               : part.link.made
                 ? phrase.ai_review_kinds.link
                 : phrase.ai_review_link_off

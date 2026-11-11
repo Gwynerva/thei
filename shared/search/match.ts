@@ -82,7 +82,22 @@ export const NAME_RANKS = {
   title: { exact: 0, start: 1, ordered: 1.4, words: 1.7, inside: 2 },
   /** Another name the owner gave it: whole, just below a whole title. */
   synonym: { exact: 0.5, start: 3, ordered: 3.4, words: 3.7, inside: 4 },
+  /**
+   * The name of something else it is told apart by — what an excerpt is
+   * about: below every name of its own, so the thing named comes first.
+   */
+  about: { exact: 5, start: 5.2, ordered: 5.4, words: 5.6, inside: 6 },
 } as const satisfies Record<string, Record<NameTier, number>>;
+
+/**
+ * A rank of the `about` tier that no single name gives: a thing's own words
+ * and the name of what it is about, answering a query only together. It
+ * lies inside the tier — after every way the subject's name answers whole,
+ * before a piece of it — and whoever asks whether a rank is the tier's
+ * (`foundByAbout` in `shared/admin/content-entity-search.ts`) counts on
+ * that: it moves with `NAME_RANKS.about`.
+ */
+export const ABOUT_TOGETHER_RANK = 5.8;
 
 const KEY_RANKS = { exact: 0, start: 1, inside: 2 } as const;
 

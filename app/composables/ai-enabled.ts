@@ -13,6 +13,8 @@ interface AdminSummary {
   aiModelReady: boolean;
   /** What waits for the owner in AI sessions: actions and questions. */
   aiWaiting: number;
+  /** The owner's sessions outside the archive: the number at the bar's ✦. */
+  aiSessionCount: number;
 }
 
 /** The admin bar's summary, fetched once and shared under its key. */
@@ -45,11 +47,18 @@ export function useAiWaiting() {
   return computed(() => (data.value?.aiEnabled ? data.value.aiWaiting : 0));
 }
 
-/** What waits for the owner, newly counted: the admin bar shows it at once. */
+/** What waits for the owner, newly counted: the AI page shows it at once. */
 export function setAiWaiting(waiting: number) {
   const { data } = useNuxtData<AdminSummary>('admin-bar');
   if (data.value && data.value.aiWaiting !== waiting)
     data.value = { ...data.value, aiWaiting: waiting };
+}
+
+/** The sessions outside the archive, newly counted: the admin bar shows it. */
+export function setAiSessionCount(count: number) {
+  const { data } = useNuxtData<AdminSummary>('admin-bar');
+  if (data.value && data.value.aiSessionCount !== count)
+    data.value = { ...data.value, aiSessionCount: count };
 }
 
 /**

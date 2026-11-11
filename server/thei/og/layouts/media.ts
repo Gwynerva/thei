@@ -14,7 +14,7 @@ import { kindIcon, textColumn, type OgLayout } from './common';
 const ICON = 340;
 
 /**
- * A section or an event, laid the way a project's card is (`cover.ts`): its
+ * A section, an excerpt or an event, laid the way a project's card is (`cover.ts`): its
  * banner, or else the first picture of its body, is the card's cover, and a
  * thing without one has the picture the site draws for it there instead —
  * the same picture its cards in the feed show. Only a picture that cannot be
@@ -53,7 +53,13 @@ export const media: OgLayout = async (input) => {
       width: COVER_WORDS_WIDTH,
       height: SAFE.height,
     },
-    { sizes: [64, 58, 52, 46, 40, 36] },
+    {
+      sizes: [64, 58, 52, 46, 40, 36],
+      // A card that opens with a line of its own — an excerpt's, a
+      // section's — gives its summary, or the opening of its text, five
+      // lines: an excerpt's has no row of facts, a section's one fact.
+      ...(content.lineage?.length ? { summaryLines: 5 } : {}),
+    },
   );
 
   return {

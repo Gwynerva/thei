@@ -74,8 +74,8 @@ function remove(index: number) {
         ref="addButton"
         type="button"
         class="flex h-10 cursor-pointer items-center gap-xs rounded-normal
-          bg-bg-3 px-sm text-sm text-text-2 transition popup-open:bg-bg-accent
-          popup-open:text-accent hocus:bg-bg-accent hocus:text-accent"
+          bg-bg-3 px-sm text-sm text-text-2 transition hocus:bg-bg-accent
+          hocus:text-accent"
         @click="popupOpen ? (popupOpen = false) : open()"
       >
         <Icon name="plus" />

@@ -3,6 +3,7 @@ import {
   ProjectEventAccessLevel,
   strictestAccess,
 } from '#layers/thei/shared/access-level';
+import type { ContentEntityParent } from '#layers/thei/shared/content-link';
 import { coverDatedPeriods } from '#layers/thei/shared/date-precision';
 import { utcDayOf } from '#layers/thei/shared/date-range';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
@@ -63,7 +64,8 @@ export type ExcerptParentInfo = {
   href: string;
   /**
    * The day the parent's excerpts are dated by: a diary entry's day, the
-   * last day of an event that has come. A project has no day of its own.
+   * last day of an event that has come. A project has no day of its own:
+   * its excerpts stand on the day each was written (`excerptDay`).
    */
   date?: string;
   /** When a stranger first sees the parent's excerpts: a day still to come waits. */
@@ -138,6 +140,39 @@ export function diaryExcerptParent(entry: DiaryRow): ExcerptParentInfo {
     arrives: dayArrives(entry.date),
     createdAt: entry.createdAt,
     row: entry,
+  };
+}
+
+/**
+ * The day an excerpt of a project stands on, on a chronology and wherever
+ * excerpts are put in time order: the day it was written, since a project
+ * has no day of its own.
+ */
+export function projectExcerptDay(excerpt: { createdAt: number }): string {
+  return utcDayOf(excerpt.createdAt);
+}
+
+/** The day an excerpt stands on: its parent's, or else its own (`projectExcerptDay`). */
+export function excerptDay(
+  excerpt: { createdAt: number },
+  parent: Pick<ExcerptParentInfo, 'date'>,
+): string {
+  return parent.date ?? projectExcerptDay(excerpt);
+}
+
+/**
+ * A parent as what names its excerpt carries it. A diary entry is named by
+ * its day, so only it comes with a `date`: an event's is the day its
+ * excerpts are dated by, not its name.
+ */
+export function excerptParentRef(
+  parent: ExcerptParentInfo,
+): ContentEntityParent {
+  return {
+    type: parent.type,
+    title: parent.title,
+    ...(parent.type === 'diary-entry' ? { date: parent.row.date } : {}),
+    href: parent.href,
   };
 }
 

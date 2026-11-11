@@ -414,6 +414,7 @@ function hitOf(
           : row.ref,
     title: row.title,
     ...(card.parent ? { parent: card.parent } : {}),
+    ...(card.subject ? { subject: card.subject } : {}),
     ...(card.shownAt ? { shownAt: card.shownAt } : {}),
     href: card.href,
     ...(card.editHref ? { editHref: card.editHref } : {}),

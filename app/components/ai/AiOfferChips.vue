@@ -115,7 +115,7 @@ const decisions = {};
       class="inline-flex h-8 max-w-full cursor-pointer items-center gap-1.5
         rounded-normal border border-dashed border-accent bg-bg-1 px-2.5 text-sm
         font-semibold text-accent transition-colors pointer-coarse:h-11
-        popup-open:bg-bg-accent hocus:bg-bg-accent"
+        hocus:bg-bg-accent"
       :class="{
         'line-through': chipOf(offer).removal,
         'opacity-55': isDeclined(offer),

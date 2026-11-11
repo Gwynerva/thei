@@ -10,6 +10,10 @@ import {
 } from '#layers/thei/shared/content-link';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 import type { IconName } from '#thei/icons';
+import {
+  entityCardFromLink,
+  linkCardFromReference,
+} from '#layers/thei/app/composables/entity-cards';
 defineProps<{
   links: (PublicReferenceLink | PublicSecretReference)[];
 }>();
@@ -53,6 +57,7 @@ function linkTitle(link: PublicReferenceLink) {
         :icon-media="link.iconMedia"
         :corner-icon="entityIcon(link.entityType)"
         :corner-title="entityTitle(link.entityType)"
+        :card="entityCardFromLink(link)"
         icon="project"
         secret
       />
@@ -68,6 +73,7 @@ function linkTitle(link: PublicReferenceLink) {
         :data-link="link.href"
         :icon="entityTypeIcon(link.kind)"
         :continuous-media="contentEntityHasIcon(link.kind)"
+        :card="linkCardFromReference(link)"
         plain-icon
       />
       <!-- A title the linked page gave itself, or its hostname, stays as it
@@ -83,6 +89,7 @@ function linkTitle(link: PublicReferenceLink) {
         :href="link.href"
         :data-link="link.href"
         icon="external-link"
+        :card="linkCardFromReference(link)"
         external
         plain-icon
       />

@@ -1,25 +1,23 @@
 import { SEO_DESCRIPTION_LIMIT } from './seo-description';
 import {
+  CONTENT_OPENING_LENGTH,
+  cutAtWord,
+  openingBlocksOf,
+  readerPlainText,
+} from './content-opening';
+import {
   contentBlockIsInPrivateSection,
   contentBlockTextParts,
-  contentPlainText,
-  normalizeContentData,
   normalizedContentPrivateSectionRanges,
-  publicContentPlainText,
-  type ContentOutputBlock,
   type ContentOutputData,
   type PublicContentOutputData,
 } from './content';
 
 /**
- * How much of an entry stands in for the title it does not have.
- *
- * Four lines is what a card can hold before the text stops being a glance and
- * starts being the entry itself; the limit is in characters because a card's
- * width is not known here, and it is generous enough that the clamp in CSS,
- * not this number, is usually what ends the text.
+ * How much of an entry stands in for the title it does not have: as much as
+ * of any text that describes itself by how it begins (`content-opening.ts`).
  */
-export const DIARY_LEAD_LENGTH = 240;
+export const DIARY_LEAD_LENGTH = CONTENT_OPENING_LENGTH;
 
 /** What a lead is built from: the day's text and the names of its excerpts. */
 export type DiaryLeadParts = {
@@ -42,8 +40,10 @@ export type DiaryLeadParts = {
  * first words say only the first of them: the lead names them all first —
  * the level-two headings of its text in order, then its excerpts, which its
  * page shows as headings after the text — and then quotes how it begins:
- * `Morning · Evening — The alarm did not go off…`. An entry with neither is
- * its first words alone.
+ * `Morning · Evening — The alarm did not go off…`. The words quoted are the
+ * text without the headings already named, so none is said twice; a heading
+ * of a lower level is not named and stays among them. An entry with neither
+ * is its first words alone.
  *
  * Only what the reader may see is there. A heading inside a private part is
  * not named to a visitor, and the words quoted are the public ones with
@@ -56,26 +56,30 @@ export function diaryLead(
   parts: DiaryLeadParts,
   limit = DIARY_LEAD_LENGTH,
 ): string {
-  const normalized = normalizeContentData(storedBlocksOf(parts));
-  const words = parts.includePrivate
-    ? contentPlainText(normalized)
-    : publicContentPlainText(normalized, 'all', {
-        privatePlaceholder: parts.privateLabel,
-      });
+  const normalized = openingBlocksOf(parts.data, parts.privateLabel);
+  const headings =
+    parts.headings === false
+      ? []
+      : namedHeadingsOf(normalized, parts.includePrivate);
+  const named = new Set(headings.map((heading) => heading.index));
+  const quoted = named.size
+    ? {
+        ...normalized,
+        blocks: normalized.blocks.filter((_, index) => !named.has(index)),
+      }
+    : normalized;
+  const words = readerPlainText(quoted, parts);
   const names =
     parts.headings === false
       ? []
       : [
-          ...headingsOf(normalized, parts.includePrivate),
+          ...headings.flatMap((heading) => heading.names),
           ...parts.excerptTitles,
         ]
           .map((name) => name.replace(/\s+/g, ' ').trim())
           .filter(Boolean);
-  const named = names.join(' · ');
-  return cutAtWord(
-    named && words ? `${named} — ${words}` : named || words,
-    limit,
-  );
+  const said = names.join(' · ');
+  return cutAtWord(said && words ? `${said} — ${words}` : said || words, limit);
 }
 
 /** An excerpt as an entry's description names it: by what it is about. */
@@ -128,77 +132,20 @@ function endSentence(text: string) {
   return /[.!?…]$/.test(text) ? text : `${text}.`;
 }
 
-/** The level-two headings of a text, as plain words, in text order. */
-function headingsOf(
+/**
+ * The level-two headings of a text the reader may see, in text order: where
+ * each block stands and its plain words.
+ */
+function namedHeadingsOf(
   normalized: ContentOutputData,
   includePrivate: boolean,
-): string[] {
+): { index: number; names: string[] }[] {
   const ranges = normalizedContentPrivateSectionRanges(normalized);
   return normalized.blocks.flatMap((block, index) =>
     block.type === 'header' &&
     (block.data as { level?: number }).level === 2 &&
     (includePrivate || !contentBlockIsInPrivateSection(ranges, index))
-      ? contentBlockTextParts(block)
+      ? [{ index, names: contentBlockTextParts(block) }]
       : [],
   );
-}
-
-/**
- * The body as stored. A public page receives its private parts already
- * decided — opened whole for the reader on the private side, or stood in for
- * by a placeholder that holds nothing to quote — so each goes back into a
- * private section of its own: an opened part with its blocks, a placeholder
- * with the label it would show, which `includePrivate` then quotes or marks.
- */
-function storedBlocksOf({
-  data,
-  privateLabel,
-}: Pick<DiaryLeadParts, 'data' | 'privateLabel'>): ContentOutputData {
-  const boundary = (sectionId: string, edge: 'start' | 'end') =>
-    ({
-      type: 'privateSectionBoundary',
-      data: { sectionId, edge },
-    }) as unknown as ContentOutputBlock;
-  return {
-    ...data,
-    blocks: (data?.blocks ?? []).flatMap(
-      (block, index): ContentOutputBlock[] => {
-        const sectionId = `lead-private-${index}`;
-        if (block.type === 'privateSectionPlaceholder')
-          return [
-            boundary(sectionId, 'start'),
-            {
-              type: 'paragraph',
-              data: { text: `[${privateLabel}]` },
-            } as unknown as ContentOutputBlock,
-            boundary(sectionId, 'end'),
-          ];
-        if (block.type === 'privateSectionExpanded')
-          return [
-            boundary(sectionId, 'start'),
-            ...block.data.blocks,
-            boundary(sectionId, 'end'),
-          ];
-        return [block];
-      },
-    ),
-  };
-}
-
-/**
- * The opening of a text, cut at a word and marked as cut.
- *
- * Cutting mid-word reads as damage rather than as a quotation, so the cut
- * retreats to the last space before the limit when there is one close enough.
- * An ellipsis ends whatever was cut: without it, an opening shorter than the
- * clamp of its card reads as if the entry itself stopped there. It takes the
- * place of a comma, a dash or a full stop the cut would leave hanging.
- */
-function cutAtWord(text: string, limit: number): string {
-  const clean = text.replace(/\s+/g, ' ').trim();
-  if (clean.length <= limit) return clean;
-  const cut = clean.slice(0, limit);
-  const lastSpace = cut.lastIndexOf(' ');
-  const kept = lastSpace > limit * 0.6 ? cut.slice(0, lastSpace) : cut;
-  return `${kept.replace(/[\s,;:.·–—-]+$/, '')}…`;
 }

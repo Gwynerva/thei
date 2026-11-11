@@ -17,9 +17,10 @@ export type { AssetCropRect, AssetRotation } from './asset-crop';
  * A requested parameter, not an engine setting: it belongs in the settings key
  * because two formats are genuinely two different derivations.
  *
- * - `avif` is the default. Measured with these encoder settings on photos,
- *   screenshots and text, it came out smaller than lossy WebP at the same
- *   quality and closer to the source, edges and small text included.
+ * - `avif` is the default. A level is the same closeness to the source in
+ *   both lossy formats, each by a table of its own
+ *   (`shared/asset-quality-levels.ts`), and at one level a photograph in AVIF
+ *   weighs about 0.73 of its WebP (docs/media-quality.md).
  * - `webp` is what a browser tab icon can rely on, and on tiny flat images it
  *   can undercut AVIF by a few hundred bytes of container.
  * - `webp-lossless` keeps every pixel: the editor's "lossless" stop past the
@@ -40,7 +41,8 @@ export const ASSET_IMAGE_FORMATS: readonly AssetImageFormat[] = [
 export const DEFAULT_ASSET_IMAGE_FORMAT: AssetImageFormat = 'avif';
 
 /**
- * Long side below which WebP still beats AVIF.
+ * Long side below which a request that names no format gets WebP, outside a
+ * draft's commit (`resolveAssetImageFormat`).
  *
  * AVIF's container overhead does not amortize on a small icon. Measured on
  * this project's own media, AVIF is 1.0-1.3x the size of WebP at 48px and only
@@ -57,7 +59,12 @@ export const ASSET_TRANSFORM_MAX_DIMENSION = 8192;
  * Picks the output format for an image transform.
  *
  * An explicit request always wins; otherwise the long side of the output
- * decides.
+ * decides. That rule is what a request with no format gets where nothing is
+ * weighed: a variant made outside a draft (`createAssetVariant` — the admin's
+ * direct upload, a file an app brings over MCP) and a draft's dry run. A
+ * draft's commit replaces it with the choice "Auto" makes on real sizes
+ * (`autoFormat` in `server/thei/assets/drafts.ts`), which is how a file
+ * pasted into a text is stored.
  */
 export function resolveAssetImageFormat(
   dimensions: FileDimensions,
@@ -196,6 +203,12 @@ export function isLongCommit(request: AssetUploadRequest): boolean {
 export interface AssetTransformSource extends FileDimensions {
   /** Vector sources are redrawn at any size, so they may be enlarged. */
   isVector?: boolean;
+  /**
+   * A bitmap that is, by what it is made of, surely not a drawing: "Auto"
+   * then takes AVIF at once, and no other format is encoded until it is
+   * chosen. Absent when it may be a drawing, and when nobody looked.
+   */
+  photographic?: boolean;
   /** `false` only when the source is known to be silent. */
   hasAudio?: boolean;
   /** Seconds of video: what a size estimate multiplies the bitrate by. */

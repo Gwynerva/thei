@@ -7,8 +7,8 @@ import type {
 } from '#layers/thei/shared/api/public';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import type { IconName } from '#thei/icons';
-import type { RelationType } from '#layers/thei/shared/relation';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
+import type { PublicPageNamed } from './public-detail';
 
 /**
  * The dark head of a page that has a picture to open with.
@@ -28,26 +28,16 @@ const props = defineProps<{
   iconMedia?: MediaDescriptor;
   /** What the page is, when it has no icon of its own. */
   kind?: { icon: IconName; label: string };
-  /** What the page is a part of, and what it is of it: a section's project, an excerpt's parent. */
-  parent?: {
-    label: string;
-    href: string;
-    title: string;
-    iconMedia?: MediaDescriptor;
-    icon?: IconName;
-  };
   /**
-   * What the page is about, on a line under `parent` that turns down to the
-   * title: an excerpt's subject. No link where the reader may not open it.
+   * What the page is a part of, and what it is of it: a section's project,
+   * an excerpt's parent.
    */
-  subject?: {
-    label?: string;
-    href?: string;
-    title: string;
-    iconMedia?: MediaDescriptor;
-    icon?: IconName;
-    relation?: { type: RelationType; note?: string };
-  };
+  parent?: PublicPageNamed;
+  /**
+   * What the page is about, after `parent` in its line: an excerpt's
+   * subject. No link where the reader may not open it.
+   */
+  subject?: PublicPageNamed;
   action?: PublicAction;
   showcase?: (PublicAssetDescriptor | PublicSecretReference)[];
   tags?: PublicTagSummary[];
@@ -109,7 +99,7 @@ const heroPill = `inline-flex items-center gap-2 rounded-full bg-white/9 text-sm
       :class="{ 'sm:min-h-80 sm:justify-center': tall }"
     >
       <div
-        class="relative z-2 flex min-w-0 flex-col items-center gap-md
+        class="hero-words relative z-2 flex min-w-0 flex-col items-center gap-md
           text-center sm:items-start sm:text-left"
         :class="bannerMedia ? 'sm:max-w-2/3' : 'sm:max-w-4/5'"
       >
@@ -160,20 +150,9 @@ const heroPill = `inline-flex items-center gap-2 rounded-full bg-white/9 text-sm
             <PublicPageParent
               v-if="parent"
               :parent
+              :subject
               on-dark
-              class="hero-parent"
               data-hero-parent
-            />
-            <!-- The one relation of an excerpt's page: a find of its note
-                 lands on it (`r-<kind>~<address>`). -->
-            <PublicPageParent
-              v-if="subject"
-              :parent="subject"
-              on-dark
-              arrow
-              class="hero-parent"
-              data-hero-subject
-              :data-relation-href="subject.href"
             />
             <div
               class="flex max-w-full min-w-0 flex-col items-center gap-sm
@@ -210,10 +189,13 @@ const heroPill = `inline-flex items-center gap-2 rounded-full bg-white/9 text-sm
         </div>
         <PublicAction v-if="action" :action />
       </div>
-      <!-- md from the column gap plus md here: the gallery gets lg. -->
+      <!-- md from the column gap plus md here: the gallery gets lg above,
+           and the same below when tags follow it. The words above end at
+           their baseline (`hero-words`), so both are what the eye sees. -->
       <div
         v-if="showcase?.length"
         class="relative z-2 mt-md min-w-0"
+        :class="{ 'mb-md': visibleTags.length }"
         data-landing-zone="showcase"
       >
         <PublicAssetGallery :items="showcase" variant="hero" zone="showcase" />
@@ -267,6 +249,18 @@ const heroPill = `inline-flex items-center gap-2 rounded-full bg-white/9 text-sm
     0 0 0.9em rgb(0 0 0 / 64%);
 }
 /*
+ * A line of text is taller than its letters: the room its line height leaves
+ * under the baseline would add itself to the distance to whatever follows,
+ * which a picture or a row of tags, having none, does not answer. The last
+ * words of the hero end at their baseline instead, so the gap after them is
+ * the gap that was set. Where the browser cannot trim a text's box, the
+ * words keep their line.
+ */
+.hero-words .hero-summary,
+.hero-words:not(:has(.hero-summary)) .hero-title {
+  text-box: trim-end cap alphabetic;
+}
+/*
  * Tags wear their own colours, which the light theme makes too dark for the
  * hero; the hero is dark in either theme, so they take the dark theme's.
  */
@@ -276,7 +270,7 @@ const heroPill = `inline-flex items-center gap-2 rounded-full bg-white/9 text-sm
 }
 /* Small words over the banner, with the shade they need on a light one. */
 .hero-tags,
-.hero-parent {
+[data-hero-parent] {
   text-shadow:
     0 0.03em 0.08em rgb(0 0 0 / 72%),
     0 0 0.6em rgb(0 0 0 / 80%);

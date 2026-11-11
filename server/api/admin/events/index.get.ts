@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { resolveEntityIconMedia } from '../../../thei/media/generated-icon';
 import { buildAdminAssetUrls } from '../../../thei/assets/urls';
+import { buildAdminExcerptsPreviewMedia } from '../../../thei/excerpts/preview-media';
 import { contentPlainText } from '#layers/thei/shared/content';
 import type { EventListResponse } from '#layers/thei/shared/api/event';
 import {
@@ -172,11 +173,15 @@ export default defineEventHandler(async (event): Promise<EventListResponse> => {
         const banner = banners.get(item.eventUuid);
         const media = banner
           ? (await buildAdminAssetUrls(banner)).media
-          : await THEI_SERVER.content.buildPreviewMedia(
+          : ((await THEI_SERVER.content.buildPreviewMedia(
               'event',
               item.eventUuid,
               'event-body',
-            );
+            )) ??
+            (await buildAdminExcerptsPreviewMedia({
+              type: 'event',
+              id: item.eventUuid,
+            })));
         return {
           eventUuid: item.eventUuid,
           title: item.title,

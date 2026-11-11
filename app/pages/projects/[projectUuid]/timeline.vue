@@ -140,7 +140,6 @@ watch(filter, (value) => {
     </div>
     <LifeFeed
       v-if="resource.data.value"
-      class="pt-lg"
       v-model:filter="filter"
       v-model:active-date="activeDate"
       :initial="resource.data.value"

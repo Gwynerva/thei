@@ -36,7 +36,10 @@ and behaves.
   line, then its time quiet after it — on a phone its years only, where the
   days have no room; a section's project, quieter still, after its own
   small rounded icon, gives way before the title does. Each quiet part
-  follows a dot: «Сияние · ▣ Териберка · 2026». Under it, from the left edge, the place found best and its
+  follows a dot: «Сияние · ▣ Териберка · 2026». An excerpt's line names what
+  it is about there, after the word for it, «Про», and its parent only when
+  it is about nothing; the day of a diary entry it is a part of follows as
+  its time. Under it, from the left edge, the place found best and its
   words, the found ones marked, two lines on a phone that stop short of the
   picture; then, on a line of its own under an arrow from the result, in
   italics, how many other places hold the words — a bare «+5» on the
@@ -165,10 +168,12 @@ and behaves.
 - A head like the site's other cards: the kind and its time, the title, the
   description, with the result's picture dissolving in from the right
   (`MediaEdge`), or a file's own preview, framed. A section names its
-  project beside its kind, with the project's own icon (`EntityTokenIcon`),
-  a link of its own. A file with neither title nor
-  description is called by its kind and where it is shown. The words found
-  are marked in the title and the description too.
+  project beside its kind, as the project's chip (`EntityChip`), a link of
+  its own. An excerpt names its parent the same way, and after it what it is
+  about: «Про» and the subject's chip, as its own page does. A day its
+  parent is called by is not said again as its time. A file with neither
+  title nor description is called by its kind and where it is shown. The
+  words found are marked in the title and the description too.
 - The owner sees its lock with two words beside it («Только вам»), its
   badges, and a pencil to its editor in the head's corner, on a ground of
   its own: in the line of badges it wrapped onto a line alone on a phone and

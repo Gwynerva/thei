@@ -31,8 +31,10 @@ vi.mock('../../server/thei/public/entities', () => ({
   })),
   buildPublicPageIcon: vi.fn(async () => undefined),
 }));
-vi.mock('../../server/thei/public/content', () => ({
-  buildPublicEntityPreviewMedia: vi.fn(async () => undefined),
+vi.mock('../../server/thei/public/content', () => ({}));
+vi.mock('../../server/thei/public/parent-media', () => ({
+  buildPublicDiaryCardMedia: vi.fn(async () => undefined),
+  buildPublicEventCardMedia: vi.fn(async () => undefined),
 }));
 vi.mock('../../server/thei/entity-banner', () => ({
   buildPublicCardMedia: vi.fn(async () => undefined),

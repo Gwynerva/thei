@@ -1,6 +1,10 @@
 <script lang="ts" setup>
 import type { PublicProjectSection } from '#layers/thei/shared/api/public';
 import { datePresentationToneClass } from '#layers/thei/app/composables/public-date';
+import {
+  entityCard,
+  vEntityCard,
+} from '#layers/thei/app/composables/entity-cards';
 import TheiLink from '../TheiLink';
 
 /**
@@ -11,8 +15,8 @@ import TheiLink from '../TheiLink';
  * Of the same family as a related entity's card, a size larger: the words
  * keep to the left three quarters with a halo of the card's colour, and under
  * the pointer the card lifts and takes its picture's accent. A general
- * section says no date — the day it was written says nothing of it. Whatever
- * the card cuts short is in its popup in full.
+ * section says no date — the day it was written says nothing of it. Resting
+ * on it shows the section's card, as a link in a text does.
  */
 const { section } = defineProps<{ section: PublicProjectSection }>();
 
@@ -32,16 +36,6 @@ const period = computed(() =>
       )
     : undefined,
 );
-
-/** Everything the card says, in full, only when the card had to cut it. */
-const popup = computed(() => ({
-  ...titlePopup(
-    period.value && { text: period.value.label },
-    { text: title.value, bold: true },
-    summary.value && { text: summary.value },
-  ),
-  'data-title-popup-clipped': '',
-}));
 </script>
 
 <template>
@@ -49,7 +43,13 @@ const popup = computed(() => ({
     :as="TheiLink"
     :to="section.href"
     :media="section.media"
-    v-bind="popup"
+    v-entity-card="
+      entityCard('project-section', {
+        title: section.title,
+        summary: section.summary,
+        iconMedia: section.media,
+      })
+    "
     class="min-h-20 items-center"
     data-section-card
   >
@@ -66,7 +66,6 @@ const popup = computed(() => ({
         class="-mx-[0.75em] truncate px-[0.75em] text-xs text-text-2"
         :class="datePresentationToneClass(period)"
         v-bind="period.title ? titlePopup(...period.title) : undefined"
-        data-title-popup-clip
         data-section-period
         ><Icon
           v-if="period.approximate"
@@ -78,7 +77,6 @@ const popup = computed(() => ({
       <h3
         class="-mx-[0.75em] line-clamp-2 px-[0.75em] text-sm leading-snug
           font-semibold transition-colors group-hocus:text-accent sm:text-base"
-        data-title-popup-clip
       >
         {{ title }}
       </h3>
@@ -86,7 +84,6 @@ const popup = computed(() => ({
         v-if="summary"
         class="-mx-[0.75em] line-clamp-2 px-[0.75em] text-xs text-text-2
           sm:text-sm"
-        data-title-popup-clip
         >{{ summary }}</span
       >
     </span>

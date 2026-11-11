@@ -100,10 +100,7 @@ export async function sendPublicExcerpt(
   if (excerptAccess(excerpt, parent) === ProjectEventAccessLevel.LinkOnly)
     setHeader(event, 'X-Robots-Tag', 'noindex, nofollow');
   const [response, neighbours] = await Promise.all([
-    buildPublicExcerpt(excerpt, parent, viewer, {
-      number: visible.indexOf(excerpt) + 1,
-      count: visible.length,
-    }),
+    buildPublicExcerpt(excerpt, parent, viewer),
     buildExcerptNeighbours(visible, excerpt, parent, viewer),
   ]);
   return { ...response, neighbours };
@@ -113,6 +110,7 @@ export async function sendPublicExcerpt(
 export async function sendPublicExcerptsAbout(
   event: H3Event,
   target: ExcerptParentInfo,
+  pageSize?: number,
 ): Promise<PublicExcerptsPage> {
   const viewer = await resolveEntityViewer(event, target.type, target.id);
   if (target.access === ProjectEventAccessLevel.Private && !viewer.asOwner)
@@ -121,6 +119,7 @@ export async function sendPublicExcerptsAbout(
     { type: target.type, id: target.id },
     getQuery(event).page,
     viewer,
+    pageSize,
   );
 }
 

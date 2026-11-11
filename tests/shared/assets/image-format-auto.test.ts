@@ -21,17 +21,42 @@ describe('automatic image format', () => {
     ).toEqual({ format: 'webp-lossless', reason: 'smallest' });
   });
 
-  it('stands in with AVIF until every size is known', () => {
+  it('stands in with AVIF until both lossy sizes are known', () => {
     expect(recommendImageFormat({})).toEqual({ format: 'avif' });
-    expect(recommendImageFormat({ avif: 900, webp: 100 })).toEqual({
+    expect(recommendImageFormat({ avif: 900 })).toEqual({ format: 'avif' });
+    expect(recommendImageFormat({ webp: 100, 'webp-lossless': 50 })).toEqual({
       format: 'avif',
     });
   });
 
+  it('decides by the two lossy formats without waiting for lossless', () => {
+    expect(recommendImageFormat({ avif: 900, webp: 100 })).toEqual({
+      format: 'webp',
+      reason: 'smallest',
+    });
+    expect(recommendImageFormat({ avif: 100, webp: 900 })).toEqual({
+      format: 'avif',
+      reason: 'smallest',
+    });
+  });
+
   it('keeps a vector a vector', () => {
-    expect(recommendImageFormat({ avif: 10 }, true)).toEqual({
+    expect(recommendImageFormat({ avif: 10 }, { isVector: true })).toEqual({
       format: 'svg',
       reason: 'vector',
     });
+  });
+
+  it('gives a photograph AVIF at once, whatever was measured', () => {
+    expect(recommendImageFormat({}, { photographic: true })).toEqual({
+      format: 'avif',
+      reason: 'photo',
+    });
+    expect(
+      recommendImageFormat(
+        { avif: 900, webp: 100, 'webp-lossless': 50 },
+        { photographic: true },
+      ),
+    ).toEqual({ format: 'avif', reason: 'photo' });
   });
 });

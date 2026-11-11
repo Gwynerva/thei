@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  externalLinkAddress,
   externalLinkHostLooksComplete,
   externalLinkIdentity,
   normalizeExternalLinkUrl,
@@ -197,5 +198,45 @@ describe('link notes', () => {
         fail,
       ).map((link) => link.note),
     ).toEqual(['Мой профиль', 'Код. Статьи.']);
+  });
+});
+
+describe('an address as a card shows it', () => {
+  it('drops the scheme, www and a trailing slash, and keeps the rest', () => {
+    expect(externalLinkAddress('https://www.example.org/')).toBe('example.org');
+    expect(externalLinkAddress('https://example.org/a/b/?q=1')).toBe(
+      'example.org/a/b/?q=1',
+    );
+    expect(externalLinkAddress('http://example.org/page/')).toBe(
+      'example.org/page',
+    );
+  });
+
+  it('keeps a port the address names, and leaves the fragment out', () => {
+    expect(externalLinkAddress('http://localhost:8080/x')).toBe(
+      'localhost:8080/x',
+    );
+    expect(externalLinkAddress('https://www.example.org:8443/')).toBe(
+      'example.org:8443',
+    );
+    // The scheme's own port is no part of the address.
+    expect(externalLinkAddress('https://example.org:443/a')).toBe(
+      'example.org/a',
+    );
+    expect(externalLinkAddress('https://example.org/a?q=1#part')).toBe(
+      'example.org/a?q=1',
+    );
+  });
+
+  it('reads encoded letters, and leaves what it cannot read', () => {
+    expect(
+      externalLinkAddress(
+        'https://ru.wikipedia.org/wiki/%D0%A2%D1%80%D0%BE%D0%BC%D1%81%D1%91',
+      ),
+    ).toBe('ru.wikipedia.org/wiki/Тромсё');
+    expect(externalLinkAddress('https://example.org/50%-off')).toBe(
+      'example.org/50%-off',
+    );
+    expect(externalLinkAddress('not an address')).toBe('not an address');
   });
 });

@@ -27,7 +27,6 @@ export const TYPE = {
   meta: 25,
   tag: 23,
   signature: 24,
-  parent: 26,
   status: 24,
   summary: 27,
   quote: [36, 32, 29, 27],
@@ -39,7 +38,6 @@ export const ROW = {
   related: 36,
   tag: 32,
   signature: 40,
-  parent: 40,
   status: 44,
   stat: 44,
 } as const;

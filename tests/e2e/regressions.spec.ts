@@ -572,7 +572,7 @@ test.describe('private sections in the editor', () => {
       '.ce-popover-item[data-item-name="private-section-remove"]',
     );
     await expect(remove).toBeVisible();
-    await expect(remove).toHaveText('Remove private section');
+    await expect(remove).toHaveText('Remove section');
     await expect(
       page.locator('.ce-popover--opened [data-item-name="delete"]'),
     ).toBeHidden();

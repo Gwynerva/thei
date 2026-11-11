@@ -22,6 +22,19 @@ const groups = computed(() => {
   return result;
 });
 
+/** Lit: the entry the reader is in, and the one over it that covers it. */
+function lit(item: ContentHeading) {
+  return (
+    active !== undefined &&
+    (item.id === active || Boolean(item.covers?.includes(active)))
+  );
+}
+
+/** The one entry the reader is in: of two with one place, the inner one. */
+function current(item: ContentHeading) {
+  return item.id === active && !item.covers;
+}
+
 /** Room kept between the current entry and the edge of what scrolls it. */
 const KEEP_IN_SIGHT = 32;
 /** How long the reader's own scrolling of the list is left alone. */
@@ -125,9 +138,9 @@ watch(
           focus-visible:ring-accent focus-visible:outline-none hocus:underline"
         :class="[
           group.sub ? 'text-xs' : 'text-sm',
-          item.id === active ? 'text-accent' : 'text-text-1',
+          lit(item) ? 'text-accent' : 'text-text-1',
         ]"
-        :aria-current="item.id === active ? 'location' : undefined"
+        :aria-current="current(item) ? 'location' : undefined"
       >
         <span v-if="item.icon" class="flex h-lh shrink-0 items-center">
           <!-- Its own colour, eased as the words' is: `currentColor`
@@ -135,7 +148,7 @@ watch(
           <Icon
             :name="item.icon"
             class="transition-colors"
-            :class="item.id === active ? 'text-accent' : 'text-text-3'"
+            :class="lit(item) ? 'text-accent' : 'text-text-3'"
             aria-hidden="true"
           />
         </span>

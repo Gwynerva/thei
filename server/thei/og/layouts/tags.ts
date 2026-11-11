@@ -1,7 +1,7 @@
-import { frame, label, place, thumbnail } from '../blocks';
+import { entityChip, frame, place } from '../blocks';
 import { packCloud } from '../fit';
 import { SAFE } from '../geometry';
-import { ogIcon, OG_KIND_ICONS } from '../icons';
+import { OG_KIND_ICONS } from '../icons';
 import { probe } from '../measure';
 import type { OgTag } from '../model';
 import { tagPlate, type OgPalette } from '../palette';
@@ -24,38 +24,12 @@ function tier(index: number) {
   return { font: 23, height: 46, icon: 26 };
 }
 
-async function tagChip(tag: OgTag, index: number, palette: OgPalette) {
-  const size = tier(index);
-  const plate = tagPlate(tag.accent, palette.dark);
-  const picture = await thumbnail(tag.picture, size.icon, size.icon / 2);
-  return el(
-    'div',
-    {
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        height: size.height,
-        padding: `0 ${Math.round(size.height * 0.36)}px 0 ${Math.round(size.height * 0.2)}px`,
-        borderRadius: size.height / 2,
-        background: plate.background,
-        color: plate.text,
-        fontSize: size.font,
-        fontWeight: 600,
-        whiteSpace: 'nowrap',
-      },
-    },
-    picture ?? ogIcon(OG_KIND_ICONS.tag, plate.text, size.icon),
-    label(tag.title, { maxWidth: REGION.width - 160 }),
-    ...(tag.count
-      ? [
-          el(
-            'div',
-            { style: { display: 'flex', color: plate.muted, fontWeight: 400 } },
-            String(tag.count),
-          ),
-        ]
-      : []),
+function tagChip(tag: OgTag, index: number, palette: OgPalette) {
+  return entityChip(
+    { ...tag, icon: OG_KIND_ICONS.tag },
+    tagPlate(tag.accent, palette.dark),
+    tier(index),
+    { maxWidth: REGION.width - 160 },
   );
 }
 

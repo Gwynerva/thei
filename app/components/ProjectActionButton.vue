@@ -116,7 +116,7 @@ const buttonStyle = computed(() => ({
     color-mix(in oklab, var(--action-color) 72%, white)
   );
 }
-.project-action-button:focus-visible {
+.project-action-button:is(:focus-visible, [data-popup-open]) {
   border-color: var(--action-color);
   box-shadow:
     0 0 0.35rem color-mix(in oklab, var(--action-color) 55%, transparent),

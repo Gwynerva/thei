@@ -13,6 +13,7 @@ import {
 } from '#layers/thei/shared/life';
 import { toDateString } from '#layers/thei/shared/date-range';
 import { lifeEntityKindIcon } from './life-entity-icon';
+import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 import { heatmapMonthLayout } from './heatmap-months';
 import TheiLink from '../TheiLink';
 
@@ -189,6 +190,16 @@ function pointTitle(point: LifePoint) {
   return point.visibility === 'visible' && point.entityKind === 'diary-entry'
     ? formatDate(point.date)
     : point.title;
+}
+
+/**
+ * The colour of a row's kind icon when it has no picture: the entity's own
+ * accent, which its drawn picture carries, else the site's.
+ */
+function pointAccent(point: LifePoint) {
+  return point.visibility === 'visible' && point.media?.accent
+    ? imageAccentCssColor(point.media.accent)
+    : undefined;
 }
 
 async function selectDay(date: string) {
@@ -515,10 +526,23 @@ watch(weeks, () => void nextTick(readEdges));
           >
             <!-- A picture of its own when the point has one, marked with its
                  kind in the corner as the side panel marks related entities;
-                 otherwise the kind's icon alone. -->
+                 otherwise the kind's icon alone, in the entity's accent on a
+                 thin field of it. What is withheld stays grey. -->
             <span
               class="relative flex size-10 shrink-0 items-center justify-center
-                overflow-hidden rounded-sm bg-bg-3 text-lg text-text-3"
+                overflow-hidden rounded-sm text-lg"
+              :class="
+                point.visibility !== 'visible'
+                  ? 'bg-bg-3 text-text-3'
+                  : pointPicture(point)
+                    ? 'bg-bg-3'
+                    : 'bg-current/10 text-accent'
+              "
+              :style="
+                !pointPicture(point) && pointAccent(point)
+                  ? { color: pointAccent(point) }
+                  : undefined
+              "
             >
               <Media
                 v-if="pointPicture(point)"

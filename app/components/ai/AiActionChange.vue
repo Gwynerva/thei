@@ -319,9 +319,9 @@ const revise = computed(() => {
         name: part.words ? phrase.value.quoted(publicText(part.words)) : '',
         change: {
           type: 'whole',
-          before: publicText(part.fromTitle),
+          before: entityPlaceName(part.fromTitle),
           after: part.toTitle
-            ? publicText(part.toTitle)
+            ? entityPlaceName(part.toTitle)
             : phrase.value.ai_review_link_off,
         } as AiValueChange,
       };

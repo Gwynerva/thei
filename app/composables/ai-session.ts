@@ -5,7 +5,6 @@ import type {
   AiSessionDetail,
   AiSessionItem,
   AiSessionListResponse,
-  AiSessionOverview,
 } from '#layers/thei/shared/ai';
 import type { AiRevisePartState } from '#layers/thei/shared/ai-actions';
 import type { AiEntityPanel } from '#layers/thei/shared/ai-entity';
@@ -297,22 +296,9 @@ export const aiApi = {
       `/api/admin/ai/entities/${type}/${encodeURIComponent(id)}`,
     );
   },
-  /** The first few sessions that wait for the owner; none when unread. */
-  async waitingSessions(): Promise<AiSessionItem[]> {
-    const list = await $fetch<AiSessionListResponse>('/api/admin/ai/sessions', {
-      query: { waiting: 'true', archived: 'false' },
-    }).catch(() => null);
-    return list?.sessions.slice(0, 5) ?? [];
-  },
   /** One session whole: itself, what was said and what was proposed. */
   session(sessionUuid: string) {
     return $fetch<AiSessionDetail>(`/api/admin/ai/sessions/${sessionUuid}`);
-  },
-  /** The few sessions the dashboard shows; none when unread. */
-  sessionOverview(): Promise<AiSessionOverview | null> {
-    return $fetch<AiSessionOverview>('/api/admin/ai/overview').catch(
-      () => null,
-    );
   },
   apply(
     actionUuids: string[],

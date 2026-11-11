@@ -140,35 +140,28 @@ export function assetUseLabel(
   return {
     content: phrase.value.asset_role_content,
     'project-description': phrase.value.asset_role_project_description,
+    'section-text': phrase.value.asset_role_section_text,
+    'excerpt-text': phrase.value.asset_role_excerpt_text,
     'event-description': phrase.value.asset_role_event_description,
     'page-content': phrase.value.asset_role_page_content,
+    'diary-text': phrase.value.asset_role_diary_text,
     'profile-about': phrase.value.asset_role_profile_about,
+    'tag-description': phrase.value.asset_role_tag_description,
   }[assetContentContext(sourceType)];
 }
 
-export function assetPlacementContentContext(
-  placement: AssetPlacement,
-):
-  | 'content'
-  | 'project-description'
-  | 'event-description'
-  | 'page-content'
-  | 'profile-about' {
-  if (placement.role !== 'content') return 'content';
-  return assetContentContext(placement.source.type);
-}
-
+/** Whose text a file stands in; `content` where the place has no text of its own. */
 function assetContentContext(sourceType: AssetSourceType) {
   return (
     {
       project: 'project-description',
-      'project-section': 'content',
-      excerpt: 'content',
+      'project-section': 'section-text',
+      excerpt: 'excerpt-text',
       event: 'event-description',
       page: 'page-content',
-      'diary-entry': 'content',
+      'diary-entry': 'diary-text',
       profile: 'profile-about',
-      tag: 'content',
+      tag: 'tag-description',
       'ai-session': 'content',
       unused: 'content',
     } as const

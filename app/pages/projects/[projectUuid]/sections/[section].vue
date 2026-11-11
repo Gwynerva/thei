@@ -23,6 +23,14 @@ const canonical = computed(() =>
 );
 if (route.path !== canonical.value)
   await navigateTo(canonical.value, { redirectCode: 301 });
+/**
+ * What a search engine shows under the section: its summary, or else how its
+ * text begins. The text arrived cut to this reader already, its private
+ * parts opened or stood in for, so it is taken whole.
+ */
+const description = computed(() =>
+  publicSeoDescription(data.value.summary, data.value.content),
+);
 const ogImage = useOgImage(() => ({
   kind: 'section',
   id: data.value.publicId,
@@ -37,7 +45,7 @@ usePublicSeo({
   // The project is the context a section is read in, so the tab and a
   // shared link name it: "Section - Project - Owner".
   title: () => `${data.value.title} - ${data.value.project.title}`,
-  description: () => data.value.summary,
+  description,
   canonical,
   noIndex: () => data.value.project.access === 'link-only',
   breadcrumbs: () => [
@@ -50,7 +58,7 @@ usePublicSeo({
       '@type': 'Article',
       '@id': '#section',
       headline: data.value.title,
-      description: data.value.summary,
+      description: description.value,
       author: publicSeoOwner,
       datePublished: data.value.chronology.createdAt,
       ...(data.value.chronology.updatedAt
@@ -84,6 +92,12 @@ const details = computed(
       }),
     }) satisfies PublicDetailPanelData,
 );
+/** "Project section" and the project's chip, over the title. */
+const projectLine = computed(() => ({
+  ...data.value.project,
+  label: phrase.value.content_section,
+  card: entityCardFromLink(data.value.project),
+}));
 </script>
 
 <template>
@@ -94,7 +108,7 @@ const details = computed(
       :title="data.title"
       :summary="data.summary"
       :banner-media="data.bannerMedia"
-      :parent="{ ...data.project, label: phrase.content_section }"
+      :parent="projectLine"
     />
     <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
       <PublicPageHeader
@@ -102,7 +116,7 @@ const details = computed(
         icon="project-section"
         :title="data.title"
         :description="data.summary"
-        :parent="{ ...data.project, label: phrase.content_section }"
+        :parent="projectLine"
       />
       <PublicDetailLayout :details="details" :content="data.content">
         <ContentRenderer

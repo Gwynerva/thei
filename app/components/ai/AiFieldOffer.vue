@@ -282,8 +282,7 @@ const decisions = {};
       class="relative -top-px inline-flex h-6 min-w-6 cursor-pointer
         items-center justify-center gap-0.5 rounded-full px-1 align-middle
         text-sm transition-colors pointer-coarse:-my-2.5 pointer-coarse:h-11
-        pointer-coarse:min-w-11 popup-open:bg-bg-accent hocus:bg-bg-accent
-        hocus:text-accent"
+        pointer-coarse:min-w-11 hocus:bg-bg-accent hocus:text-accent"
       :class="state === 'idle' && !listed ? 'text-text-3' : 'text-accent'"
       :aria-label="
         state === 'offers'

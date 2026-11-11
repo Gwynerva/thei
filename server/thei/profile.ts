@@ -212,6 +212,7 @@ export async function getPinnedPages() {
     rows.map(async ({ page }) => ({
       pageUuid: page.pageUuid,
       title: page.title,
+      summary: page.summary,
       href: buildPageUrl(page.slug),
       media: await buildPublicPageIcon(page),
     })),

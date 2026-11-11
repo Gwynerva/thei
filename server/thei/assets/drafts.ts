@@ -24,9 +24,15 @@ import {
 } from '#layers/thei/shared/api/asset-upload-progress';
 import { AssetType } from '#layers/thei/shared/asset';
 import {
+  AUTO_IMAGE_FORMATS,
+  recommendImageFormat,
+} from '#layers/thei/shared/asset-image-format-auto';
+import {
   buildAssetSettingsKey,
   createOriginalAssetSettings,
+  isLosslessAssetImageFormat,
   type AssetAudioSource,
+  type AssetImageFormat,
   type AssetImageTransformSettings,
   type AssetTransformSource,
   type AssetUploadRequest,
@@ -41,6 +47,7 @@ import {
   validateAssetVariantSettings,
 } from './create-variant';
 import { probeAudioSource } from './audio';
+import { isPhotograph, measureImageContent } from './image-content';
 import type { AssetSourceFile, ProcessedAsset } from './process';
 import { isProcessingQueued, withProbeSlot, withProcessingSlot } from './queue';
 import { discardAssetScratch } from './storage';
@@ -173,6 +180,12 @@ export async function openDraft(input: {
       transform = await withProbeSlot(() =>
         probeTransformSource(input.source, input.type),
       );
+      if (input.type === AssetType.Image && !transform.isVector) {
+        const photographic = await withProbeSlot(() =>
+          looksPhotographic(input.source.path),
+        );
+        if (photographic) transform = { ...transform, photographic };
+      }
     } else if (input.type === AssetType.Audio) {
       audio = await withProbeSlot(() => probeAudioSource(input.source));
     }
@@ -200,6 +213,18 @@ export async function openDraft(input: {
   return describeDraft(session);
 }
 
+/**
+ * Whether a bitmap is almost surely a photograph. A picture that cannot be
+ * read for this is simply not known to be one: its sizes then decide.
+ */
+async function looksPhotographic(path: string): Promise<boolean> {
+  try {
+    return isPhotograph(await measureImageContent(path));
+  } catch {
+    return false;
+  }
+}
+
 function describeDraft(session: DraftSession): AssetDraftSource {
   return {
     draftId: session.id,
@@ -214,6 +239,7 @@ function describeDraft(session: DraftSession): AssetDraftSource {
             ? { hasAudio: session.transform.hasAudio }
             : {}),
           ...(session.transform.isVector ? { isVector: true } : {}),
+          ...(session.transform.photographic ? { photographic: true } : {}),
           ...(session.transform.duration
             ? { duration: session.transform.duration }
             : {}),
@@ -419,6 +445,9 @@ export function findDraftRender(
  * gets exactly the bytes they judged, and nothing is encoded twice. Anything
  * else is produced now, video included, inside a processing slot. A new file
  * turned into a variant is kept beside it as it was uploaded (`keepOriginal`).
+ *
+ * A picture asked for in no format — a file pasted into a text — is stored
+ * in the one "Auto" picks (`autoFormat`).
  */
 export async function commitDraft(
   session: DraftSession,
@@ -434,13 +463,15 @@ export async function commitDraft(
   session.busy += 1;
   try {
     // The source was probed when the draft opened, so this reads no file.
-    const settings = await resolveAssetRequest(
+    let settings = await resolveAssetRequest(
       request,
       session.source,
       session.type,
       session.transform ?? session.audio,
     );
-    const key = buildAssetSettingsKey(settings);
+    let key = buildAssetSettingsKey(settings);
+    const formatLeftOpen =
+      request.type === 'image-transform' && request.format === undefined;
     // "Use" pressed while these very settings are still encoding: wait for
     // that encode rather than starting a second one.
     await joinableRender(session, key)?.promise.catch(() => undefined);
@@ -452,6 +483,10 @@ export async function commitDraft(
       session.type,
       async () => {
         options.onStatus?.({ phase: 'processing' });
+        if (formatLeftOpen && settings.type === 'image-transform') {
+          settings = await autoFormat(session, settings, options.signal);
+          key = buildAssetSettingsKey(settings);
+        }
         let measured = false;
         let processed = await takeRender(session, settings);
         if (!processed) {
@@ -529,6 +564,57 @@ export async function commitDraft(
     session.busy -= 1;
     await releaseClosedDraft(session);
   }
+}
+
+/**
+ * The settings in the format "Auto" picks, by the editor's own rule
+ * (`recommendImageFormat`): AVIF at once for a photograph; for anything else
+ * the three formats are encoded and the smallest taken. Each encode is kept
+ * as a render of the draft, so the one picked is stored without a second
+ * encode, and an editor opened on the file afterwards finds its "Auto"
+ * already weighed. A vector keeps what the request resolved to.
+ */
+async function autoFormat(
+  session: DraftSession,
+  settings: AssetImageTransformSettings,
+  signal: AbortSignal,
+): Promise<AssetImageTransformSettings> {
+  if (session.transform?.isVector) return settings;
+  if (session.transform?.photographic) return inFormat(settings, 'avif');
+  const sizes: Partial<Record<(typeof AUTO_IMAGE_FORMATS)[number], number>> =
+    {};
+  for (const format of AUTO_IMAGE_FORMATS) {
+    const candidate = inFormat(settings, format);
+    const key = buildAssetSettingsKey(candidate);
+    await joinableRender(session, key)?.promise.catch(() => undefined);
+    signal.throwIfAborted();
+    const rendered =
+      session.renders.get(key) ??
+      (await cacheRender(
+        session,
+        key,
+        candidate,
+        await renderAsset(await sourceAtRest(session), candidate, { signal }),
+      ));
+    sizes[format] = rendered.size;
+  }
+  return inFormat(settings, recommendImageFormat(sizes).format);
+}
+
+/**
+ * Resolved settings in another format, resolved still: lossless has no
+ * quality to choose and is recorded at 100 (`resolveAssetUploadSettings`),
+ * so the recipe has the one key the editor asks for it by.
+ */
+function inFormat(
+  settings: AssetImageTransformSettings,
+  format: AssetImageFormat,
+): AssetImageTransformSettings {
+  return {
+    ...settings,
+    format,
+    quality: isLosslessAssetImageFormat(format) ? 100 : settings.quality,
+  };
 }
 
 /**

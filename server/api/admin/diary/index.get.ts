@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { resolveEntityIconMedia } from '../../../thei/media/generated-icon';
+import { buildAdminExcerptsPreviewMedia } from '../../../thei/excerpts/preview-media';
 import { contentPlainText } from '#layers/thei/shared/content';
 import type { DiaryListResponse } from '#layers/thei/shared/api/diary';
 import {
@@ -151,11 +152,16 @@ export default defineEventHandler(async (event): Promise<DiaryListResponse> => {
     ...result,
     items: await Promise.all(
       result.items.map(async (item) => {
-        const media = await THEI_SERVER.content.buildPreviewMedia(
-          'diary-entry',
-          item.diaryUuid,
-          'diary-body',
-        );
+        const media =
+          (await THEI_SERVER.content.buildPreviewMedia(
+            'diary-entry',
+            item.diaryUuid,
+            'diary-body',
+          )) ??
+          (await buildAdminExcerptsPreviewMedia({
+            type: 'diary-entry',
+            id: item.diaryUuid,
+          }));
         return {
           diaryUuid: item.diaryUuid,
           date: item.date,

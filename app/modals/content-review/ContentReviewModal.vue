@@ -76,21 +76,22 @@ const title = computed(() => {
 
 const context = computed(() => {
   const action = text.value?.action;
-  if (action?.kind === 'create')
-    return publicText(
-      String(
-        (action.payload as { fields?: { title?: unknown; date?: unknown } })
-          .fields?.title ??
-          (action.payload as { fields?: { date?: unknown } }).fields?.date ??
-          '',
-      ),
-    );
+  if (action?.kind === 'create') {
+    const made = action.payload as {
+      entity?: string;
+      fields?: { title?: unknown; date?: unknown };
+    };
+    return aiEntityName({
+      type: made.entity,
+      title: String(made.fields?.title ?? made.fields?.date ?? ''),
+    });
+  }
   if (!action?.target || !payload.value?.text) return '';
   const name =
     phrase.value.ai_action_texts[
       payload.value.text as keyof typeof phrase.value.ai_action_texts
     ] ?? payload.value.text;
-  return `${entityListName({ title: action.target.title, date: action.target.type === 'diary-entry' ? action.target.title : undefined })} · ${name}`;
+  return `${aiEntityName(action.target)} · ${name}`;
 });
 
 async function done(decisions: Record<string, ReviewDecision>) {

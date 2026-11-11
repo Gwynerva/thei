@@ -71,8 +71,7 @@ reach for elsewhere.
 - A state that flips in an instant reads as a flicker, and two durations side
   by side read as two sites.
 - A box that pops in after the page has drawn moves what the reader was
-  looking at; the dashboard's AI box was moved to render with the page for
-  this.
+  looking at.
 - A phone with three diary entries on screen, each with a video, could not
   keep up: every card decoded its video twice and blurred a copy larger than
   itself on every frame. A copy drawn from the video keeps its colours, which

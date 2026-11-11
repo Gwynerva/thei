@@ -273,14 +273,15 @@ function remove() {
       <!-- The other end, chosen with the picker. What the field and the
            kinds below are needs no words on the screen. -->
       <Field>
-        <div ref="entityAnchor" class="flex min-w-0 gap-xs">
+        <div ref="entityAnchor" class="group/anchor flex min-w-0 gap-xs">
           <button
             type="button"
             aria-haspopup="dialog"
             :aria-expanded="pickerOpen"
             class="flex min-h-12 min-w-0 flex-1 cursor-pointer items-center
               gap-xs rounded-normal border-2 border-border-1 bg-bg-1 px-xs py-1
-              text-left transition hocus:border-border-3"
+              text-left transition group-popup-open/anchor:border-border-3
+              hocus:border-border-3"
             data-relation-entity
             @click="pickerOpen = !pickerOpen"
           >

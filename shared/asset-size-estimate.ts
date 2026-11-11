@@ -1,3 +1,4 @@
+import type { AUTO_LOSSY_IMAGE_FORMATS } from './asset-image-format-auto';
 import {
   ASSET_QUALITY_LEVELS,
   type AssetQualityLevel,
@@ -108,7 +109,7 @@ export function estimateAudioSize(
   };
 }
 
-type LossyImageFormat = 'avif' | 'webp';
+type LossyImageFormat = (typeof AUTO_LOSSY_IMAGE_FORMATS)[number];
 
 /**
  * How a lossy image's size moves with the level, relative to medium.
@@ -122,18 +123,18 @@ export const IMAGE_SIZE_RATIO_BY_LEVEL: Record<
   Record<AssetQualityLevel, number>
 > = {
   avif: { minimal: 0.42, low: 0.71, medium: 1, high: 1.3, maximum: 1.5 },
-  webp: { minimal: 0.67, low: 0.85, medium: 1, high: 2.1, maximum: 3 },
+  webp: { minimal: 0.54, low: 0.74, medium: 1, high: 1.25, maximum: 1.42 },
 };
 
 /** Bits per output pixel at medium, when the source says nothing useful. */
 const IMAGE_BITS_PER_PIXEL: Record<LossyImageFormat, number> = {
   avif: 0.3,
-  webp: 0.35,
+  webp: 0.41,
 };
 /** The share of a lossy source's bytes per pixel a medium re-encode keeps. */
 const IMAGE_SOURCE_SHARE: Record<LossyImageFormat, number> = {
   avif: 0.25,
-  webp: 0.3,
+  webp: 0.35,
 };
 /** Bits per pixel of a lossless WebP of a photograph. */
 const LOSSLESS_BITS_PER_PIXEL = 7;

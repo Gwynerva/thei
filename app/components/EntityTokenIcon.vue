@@ -7,15 +7,15 @@ import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
  * A small square picture with softly rounded corners.
  *
  * The token that stands for "another entity" wherever one is mentioned in
- * passing — a related project under a card, the parent project above a
- * section: a way to point at something, not a preview of it.
+ * passing — one of several related entities under a card, what a row of a
+ * list is about, an end of a relation: a way to point at something, not a
+ * preview of it. On a public page an entity named with its name is an
+ * `EntityChip` instead.
  */
-const { media, icon, plain } = defineProps<{
+const { media, icon } = defineProps<{
   media?: MediaDescriptor;
   /** Drawn in the accent of `media` when there is no picture to show. */
   icon: IconName;
-  /** No backing tile: the picture alone, as on a page header. */
-  plain?: boolean;
 }>();
 
 const accent = computed(() =>
@@ -25,8 +25,8 @@ const accent = computed(() =>
 
 <template>
   <span
-    class="flex shrink-0 items-center justify-center overflow-hidden rounded-sm"
-    :class="plain ? '' : 'bg-bg-4'"
+    class="flex shrink-0 items-center justify-center overflow-hidden rounded-sm
+      bg-bg-4"
     :style="accent ? { color: accent } : undefined"
   >
     <Media

@@ -797,7 +797,7 @@ defineExpose<AiComposerExpose>({
           class="flex size-9 shrink-0 cursor-pointer items-center justify-center
             bg-transparent text-xl text-accent transition-opacity
             disabled:cursor-default disabled:text-text-3 disabled:opacity-100
-            pointer-coarse:size-11 popup-open:opacity-75 hocus:opacity-75"
+            pointer-coarse:size-11 hocus:opacity-75"
           :disabled="disabled"
           aria-haspopup="menu"
           :aria-expanded="menuOpen"

@@ -5,6 +5,7 @@ import {
   type PublicDetailPanelData,
 } from '#layers/thei/app/components/public/public-detail';
 import {
+  buildProjectTimelineUrl,
   buildProjectUrl,
   PROJECT_DESCRIPTION_ANCHOR,
   PROJECT_SECTIONS_ANCHOR,
@@ -15,8 +16,10 @@ import {
 } from '#layers/thei/app/components/content/content-headings';
 import { PUBLIC_EXCERPTS_ABOUT_ID } from '#layers/thei/shared/content-headings';
 import { publicExcerptParts } from '#layers/thei/app/components/public/PublicExcerptInline.vue';
+import { buildLifeUrl } from '#layers/thei/shared/life';
 import type { IconName } from '#thei/icons';
 
+import { publicPageExcerptContents } from '#layers/thei/app/components/public/public-page-contents';
 import { publicOwnerNotesHeading } from '#layers/thei/app/components/public/PublicOwnerNotes.vue';
 import {
   PUBLIC_RELATED_SECTION_ID,
@@ -97,9 +100,16 @@ const excerptsUrl = computed(
   () =>
     `/api/projects/${encodeURIComponent(String(route.params.projectUuid))}/excerpts`,
 );
+/** The project's chronology, showing its excerpts alone. */
+const excerptsAllUrl = computed(() =>
+  buildLifeUrl(
+    { filter: ['excerpt'] },
+    buildProjectTimelineUrl(data.value.humanReadableSlug, data.value.publicId),
+  ),
+);
 // Headings of the description, then the page's own sections in page order.
 // A description without headings is one entry of its own; the project's
-// own excerpts are listed under the contents on their own.
+// own excerpts follow it, by what they are about.
 const contents = computed<ContentHeading[]>(() => {
   const headings = buildContentHeadings(
     data.value.description,
@@ -136,26 +146,32 @@ const contents = computed<ContentHeading[]>(() => {
       shown: publicRelatedTotal(data.value.related) > 0,
     },
   ];
+  const places = sections
+    .filter((section) => section.shown)
+    .map(({ id, title, icon }) => ({
+      id,
+      title,
+      icon,
+      level: 2 as const,
+      href: `#${id}`,
+      path: `page:${id}`,
+    }));
+  // The project's own excerpts stand after its description, as on the page.
+  const afterDescription = places.findIndex(
+    (place) => place.id !== PROJECT_DESCRIPTION_ANCHOR,
+  );
+  const split = afterDescription < 0 ? places.length : afterDescription;
   return [
     ...headings,
-    ...sections
-      .filter((section) => section.shown)
-      .map(({ id, title, icon }) => ({
-        id,
-        title,
-        icon,
-        level: 2 as const,
-        href: `#${id}`,
-        path: `page:${id}`,
-      })),
+    ...places.slice(0, split),
+    ...publicPageExcerptContents(data.value.excerpts),
+    ...places.slice(split),
   ];
 });
 const details = computed(
   () =>
     ({
       contents: contents.value,
-      excerpts: data.value.excerpts,
-      excerptSecrets: data.value.excerptSecrets,
       chronology: createdAndUpdatedTimelineItems(data.value.chronology, {
         created: phrase.value.project_chronology_page,
         updated: phrase.value.project_chronology_updated,
@@ -224,8 +240,17 @@ const ownerNotesContents = computed(() =>
             :secrets="data.excerptSecrets"
           />
           <PublicProjectSections :sections="data.sections" />
-          <PublicExcerptsBlock :about="data.excerptsAbout" :url="excerptsUrl" />
-          <PublicRelatedBlock :counts="data.related" :url="relatedUrl" />
+          <PublicExcerptsBlock
+            entity="project"
+            :about="data.excerptsAbout"
+            :url="excerptsUrl"
+            :all-href="excerptsAllUrl"
+          />
+          <PublicRelatedBlock
+            entity="project"
+            :counts="data.related"
+            :url="relatedUrl"
+          />
           <PublicOwnerNotes :notes="data.notes" />
         </div>
       </PublicDetailLayout>

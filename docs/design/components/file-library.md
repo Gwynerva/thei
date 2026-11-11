@@ -27,9 +27,16 @@ places stand by their days, the newest first, under a heading per month.
   stands in both, and in one place once, though an upload between two pages
   moves the run (`app/composables/asset-library-feed.ts`). Within a month its
   places follow one another, the files nothing holds once for each day of
-  upload, each named in a small line — its kind's icon, its name, its parent,
-  its day where the name does not say it — over a grid of its files. Days are
-  the reader's own: the feed asks with the reader's offset from UTC.
+  upload, each named in a rounded line of words
+  (`app/components/AssetLibraryFeedPlace.vue`) — its parent above, then its
+  kind's icon, its name and its day where neither says it — over a grid of
+  its files. The line's ground is clear at the left, where the words stand
+  on the page in line with the tiles, and gathers towards the right edge,
+  where the place's picture dissolves into it
+  (`app/components/MediaEdge.vue`), or its kind's icon stands while it has
+  none. The files nothing holds are such a line in red, with no border and
+  the bin at its edge. Days are the reader's own: the feed asks with the
+  reader's offset from UTC.
 - **One bar sticks over the run**, right against whatever sticks above it —
   the picker's header, the page's header — with no gap, and as wide as
   what the run lies in: the picker's whole window, the storage page's box
@@ -67,7 +74,9 @@ places stand by their days, the newest first, under a heading per month.
   the tiles as they lie, Space opens the file's window.
 - **A file waiting to be swept** is ringed in red with a bin on the storage
   page, where it is about to go; in the picker, where taking it is what keeps
-  it, it is drawn as any other and only its hint says so.
+  it, it is drawn as any other and only its hint says so. A file only a draft
+  or a version of a text still shows is drawn the same way, beside its
+  history mark: it goes when they do.
 - **In the picker a click takes the file as it is**: at once when one file is
   picked, into the footer when several are. A round button at the top of the
   tile, shown only under the pointer and on keyboard focus, opens the editor

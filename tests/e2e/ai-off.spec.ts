@@ -26,13 +26,12 @@ test.describe.configure({ mode: 'serial' });
 
 /**
  * What a page asks only while AI is on: its sessions and their actions, an
- * entity's memory and proposals, the entity a public page shows, a ✦'s
- * question, the dashboard's overview, a check run, a text's edits, the
+ * entity's memory and proposals, a ✦'s question, a check run, a text's edits, the
  * memory and templates. The Connection tab may read the model's settings,
  * which are set before AI is turned on.
  */
 const ASKS_ABOUT_AI =
-  /\/api\/admin\/ai\/(sessions|actions|entities|entity-at|ask|overview|check|texts|memory|templates|terms)\b/;
+  /\/api\/admin\/ai\/(sessions|actions|entities|ask|check|texts|memory|templates|terms)\b/;
 
 async function setAccess(request: APIRequestContext, enabled: boolean) {
   const response = await request.put('/api/admin/ai/settings', {
@@ -296,6 +295,7 @@ test('no admin page asks about AI while it is off', async ({
     aiEnabled: false,
     aiModelReady: false,
     aiWaiting: 0,
+    aiSessionCount: 0,
   });
   const paths = [
     '/admin/',
@@ -326,7 +326,6 @@ test('no admin page asks about AI while it is off', async ({
     // Nothing points to sessions: no button in the bar, nothing waiting,
     // no ✦ in a form or at a field's label, no memory or proposal in it.
     await expect(page.locator('[data-ai-bar]')).toHaveCount(0);
-    await expect(page.locator('[data-ai-sessions]')).toHaveCount(0);
     await expect(page.locator('[data-ai-entity]')).toHaveCount(0);
     await expect(page.locator('[data-ai-memory-block]')).toHaveCount(0);
     await expect(page.locator('[data-ai-offers]')).toHaveCount(0);
@@ -493,8 +492,6 @@ test('what would change AI answers as if it were not there', async ({
     ['get', '/api/admin/ai/actions/aia-none/text'],
     ['get', '/api/admin/ai/entities/project/p-none'],
     ['post', '/api/admin/ai/ask'],
-    ['get', '/api/admin/ai/entity-at'],
-    ['get', '/api/admin/ai/overview'],
     ['post', '/api/admin/ai/check'],
     ['get', '/api/admin/ai/texts/reviews'],
     ['get', '/api/admin/ai/memory'],

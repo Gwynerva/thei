@@ -10,6 +10,8 @@ import {
 } from '../../media/generated-icon';
 import { publicContentMediaAssets } from '../../public/content';
 import { findEntityBannerAsset } from '../../entity-banner';
+import { STRANGER } from '../../access-links/viewer';
+import { firstExcerptPicture } from '../../public/parent-media';
 import { getProfile } from '../../profile';
 import { ownerText } from '../../owner-text';
 import type { OgPicture, OgSite, OgStat } from '../model';
@@ -92,12 +94,39 @@ export async function ogPictureOfMedia(
 
 /**
  * The picture of a section, an excerpt, an event or a diary entry: the
- * banner of a section, an excerpt or an event, else the first picture of its public body a card can
- * draw — a video by its still, passed over while it has none — else the
- * drawn icon its page shows for a thing without one.
+ * banner of a section, an excerpt or an event, else the first picture of its
+ * public body a card can draw — a video by its still, passed over while it
+ * has none — else, for an event or a diary entry, the same of its excerpts a
+ * stranger is shown on its page, in the owner's order, by the walk its cards
+ * take (`firstExcerptPicture`) — else the drawn icon its page shows for a
+ * thing without one.
  */
 export async function ogBodyPicture(
-  ownerType: 'event' | 'project-section' | 'excerpt' | 'diary-entry',
+  ownerType: BodyOwner,
+  ownerId: string,
+  slot: ContentSlot,
+): Promise<OgPicture | undefined> {
+  const own = await ogOwnPicture(ownerType, ownerId, slot);
+  if (own) return own;
+  const borrowed =
+    ownerType === 'event' || ownerType === 'diary-entry'
+      ? await firstExcerptPicture(
+          { type: ownerType, id: ownerId },
+          STRANGER,
+          (excerpt) =>
+            ogOwnPicture('excerpt', excerpt.excerptUuid, 'excerpt-body'),
+        )
+      : undefined;
+  return (
+    borrowed ?? ogPictureOfMedia(resolveEntityIconMedia(ownerType, ownerId))
+  );
+}
+
+type BodyOwner = 'event' | 'project-section' | 'excerpt' | 'diary-entry';
+
+/** Its banner, else the first picture of its public body a card can draw. */
+async function ogOwnPicture(
+  ownerType: BodyOwner,
   ownerId: string,
   slot: ContentSlot,
 ): Promise<OgPicture | undefined> {
@@ -114,7 +143,7 @@ export async function ogBodyPicture(
     const picture = await ogPictureOfAsset(asset);
     if (picture) return picture;
   }
-  return ogPictureOfMedia(resolveEntityIconMedia(ownerType, ownerId));
+  return undefined;
 }
 
 /** The accent a picture carries, or one from the thing's identity. */

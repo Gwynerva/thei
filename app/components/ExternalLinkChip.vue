@@ -107,7 +107,7 @@ const accentColor = computed(() =>
   z-index: 1;
 }
 
-.external-link-chip:focus-visible {
+.external-link-chip:is(:focus-visible, [data-popup-open]) {
   border-color: color-mix(
     in oklab,
     var(--external-link-accent) 80%,
@@ -125,7 +125,7 @@ const accentColor = computed(() =>
   }
 }
 
-.external-link-chip:focus-visible::before {
+.external-link-chip:is(:focus-visible, [data-popup-open])::before {
   opacity: 1;
 }
 

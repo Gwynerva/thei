@@ -51,8 +51,8 @@ export interface AiEntityPanel {
   modelReady: boolean;
   /** What its fields' ✦ were asked and is still answered, by place. */
   asking: AiFieldAsk[];
-  /** What waits for the owner across sessions, for the admin bar's ✦. */
-  waiting: number;
+  /** The owner's sessions outside the archive, as the admin bar counts them. */
+  total: number;
 }
 
 /** An ask at a field still answered: where, and in which session. */

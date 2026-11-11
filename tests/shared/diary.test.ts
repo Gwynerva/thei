@@ -165,13 +165,49 @@ describe('diary lead of a body', () => {
 
   it('names the public headings, then quotes the opening with its private part marked', () => {
     expect(diaryLead({ ...parts, data: body, includePrivate: false })).toBe(
-      'Morning · Evening — Morning Out in the open. [Private section] A small point Evening Home.',
+      'Morning · Evening — Out in the open. [Private section] A small point Home.',
     );
   });
 
   it('names a private heading only to its owner, and quotes the whole', () => {
     expect(diaryLead({ ...parts, data: body, includePrivate: true })).toBe(
-      'Morning · Noon · Evening — Morning Out in the open. Noon Only for me. A small point Evening Home.',
+      'Morning · Noon · Evening — Out in the open. Only for me. A small point Home.',
+    );
+  });
+
+  it('is the headings alone when the text is nothing else', () => {
+    const bare = {
+      blocks: [
+        { type: 'header', data: { text: 'Morning', level: 2 } },
+        { type: 'header', data: { text: 'Evening', level: 2 } },
+      ],
+    } as any;
+    expect(diaryLead({ ...parts, data: bare, includePrivate: false })).toBe(
+      'Morning · Evening',
+    );
+  });
+
+  it('keeps a private part of one heading marked, and says it once to its owner', () => {
+    const hidden = {
+      blocks: [
+        { type: 'paragraph', data: { text: 'Out in the open.' } },
+        {
+          type: 'privateSectionBoundary',
+          data: { sectionId: 'secret', edge: 'start' },
+        },
+        { type: 'header', data: { text: 'Noon', level: 2 } },
+        {
+          type: 'privateSectionBoundary',
+          data: { sectionId: 'secret', edge: 'end' },
+        },
+        { type: 'paragraph', data: { text: 'Home.' } },
+      ],
+    } as any;
+    expect(diaryLead({ ...parts, data: hidden, includePrivate: false })).toBe(
+      'Out in the open. [Private section] Home.',
+    );
+    expect(diaryLead({ ...parts, data: hidden, includePrivate: true })).toBe(
+      'Noon — Out in the open. Home.',
     );
   });
 
@@ -184,7 +220,7 @@ describe('diary lead of a body', () => {
         includePrivate: false,
       }),
     ).toBe(
-      'Morning · Evening · The lamp · A quiet move — Morning Out in the open. [Private section] A small point Evening Home.',
+      'Morning · Evening · The lamp · A quiet move — Out in the open. [Private section] A small point Home.',
     );
   });
 
@@ -257,7 +293,7 @@ describe('diary lead of a body', () => {
       ],
     } as any;
     expect(diaryLead({ ...parts, data: page, includePrivate: true })).toBe(
-      'Morning — Morning Out in the open. [Private section] Home.',
+      'Morning — Out in the open. [Private section] Home.',
     );
     const own = {
       blocks: [
@@ -280,7 +316,7 @@ describe('diary lead of a body', () => {
       ],
     } as any;
     expect(diaryLead({ ...parts, data: own, includePrivate: true })).toBe(
-      'Noon — Out in the open. Noon Only for me.',
+      'Noon — Out in the open. Only for me.',
     );
   });
 

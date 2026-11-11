@@ -1,3 +1,4 @@
+import { describedSummary } from '../content/described';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { and, eq } from 'drizzle-orm';
 import type { SQLiteColumn } from 'drizzle-orm/sqlite-core';
@@ -88,11 +89,11 @@ import {
   STRANGER,
   type PublicViewer,
 } from '../access-links/viewer';
+import { buildPublicContentData, type PublicContentEntity } from './content';
 import {
-  buildPublicContentData,
-  buildPublicEntityPreviewMedia,
-  type PublicContentEntity,
-} from './content';
+  buildPublicDiaryCardMedia,
+  buildPublicEventCardMedia,
+} from './parent-media';
 import {
   entityNotesSlot,
   type EntityNotesOwner,
@@ -255,10 +256,7 @@ export async function buildPublicEventSummary(
   viewer: PublicViewer = STRANGER,
 ): Promise<PublicEntitySummary> {
   const [media, periods, tags, relations] = await Promise.all([
-    buildPublicCardMedia(
-      { type: 'event', event },
-      opensPrivate(viewer, 'event', event.eventUuid),
-    ),
+    buildPublicEventCardMedia(event, viewer),
     getEventPeriods(event.eventUuid),
     listTagsForContainer('event', event.eventUuid),
     resolvePublicRelated({ type: 'event', id: event.eventUuid }, viewer),
@@ -497,7 +495,10 @@ export async function buildPublicProject(
       ...sortStagesNewestFirst(sectionItems),
     ],
     excerpts,
-    excerptSecrets: secretParentExcerpts(projectExcerptParent(project), viewer),
+    excerptSecrets: await secretParentExcerpts(
+      projectExcerptParent(project),
+      viewer,
+    ),
     excerptsAbout,
     showcase,
     files,
@@ -518,8 +519,10 @@ export async function buildPublicProject(
 }
 
 /**
- * A section as a card or a list shows it. `banner` is the section's banner
- * when the caller has read it already; a section without one reads nothing.
+ * A section as a card or a list shows it: described by its summary, or else
+ * by how its text begins (`describedSummary`). `banner` is the section's
+ * banner when the caller has read it already; a section without one reads
+ * nothing.
  */
 export async function buildPublicProjectSectionSummary(
   project: Pick<ProjectRow, 'humanReadableSlug' | 'publicId'>,
@@ -532,16 +535,25 @@ export async function buildPublicProjectSectionSummary(
   const period = section.periods.length
     ? coverDatedPeriods(section.periods)
     : undefined;
-  return {
-    title: section.title,
-    summary: section.summary,
-    ...(period ? { period } : {}),
-    periods: section.periods,
-    media: await buildPublicCardMedia(
+  const [summary, media] = await Promise.all([
+    describedSummary(
+      'project-section',
+      section.sectionUuid,
+      section.summary,
+      includePrivate,
+    ),
+    buildPublicCardMedia(
       { type: 'project-section', project, section },
       includePrivate,
       banner,
     ),
+  ]);
+  return {
+    title: section.title,
+    summary,
+    ...(period ? { period } : {}),
+    periods: section.periods,
+    media,
     href: buildProjectSectionUrl(
       project.humanReadableSlug,
       project.publicId,
@@ -587,6 +599,9 @@ export async function buildPublicProjectSection(
   ]);
   return {
     ...summary,
+    // The page's own summary is the one the owner wrote: its text follows,
+    // and would only be said twice.
+    summary: section.summary,
     ...(bannerMedia ? { bannerMedia } : {}),
     humanReadableSlug: section.humanReadableSlug,
     publicId: section.publicId,
@@ -619,8 +634,9 @@ export async function buildPublicEvent(
   ] = await Promise.all([
     getEventPeriods(stored.eventUuid),
     buildPublicBanner(holder, banner),
-    // What stands for the event without a banner: the first picture of it.
-    banner ? undefined : buildPublicCardMedia(holder, own, null),
+    // What stands for the event without a banner: the first picture of it,
+    // or of its excerpts.
+    banner ? undefined : buildPublicEventCardMedia(stored, viewer, null),
     buildPublicContentData(
       'event',
       stored.eventUuid,
@@ -682,7 +698,10 @@ export async function buildPublicEvent(
     ...(bannerMedia ? { bannerMedia } : {}),
     content: content ?? { blocks: [] },
     excerpts,
-    excerptSecrets: secretParentExcerpts(eventExcerptParent(stored), viewer),
+    excerptSecrets: await secretParentExcerpts(
+      eventExcerptParent(stored),
+      viewer,
+    ),
     excerptsAbout,
     references: await buildPublicReferences(manual, viewer),
     tags: await buildPublicTags(tags),
@@ -749,13 +768,7 @@ export async function buildPublicDiaryEntry(
   const own = opensPrivate(viewer, 'diary-entry', stored.diaryUuid);
   const [media, content, relations, excerpts, excerptsAbout] =
     await Promise.all([
-      buildPublicEntityPreviewMedia(
-        'diary-entry',
-        stored.diaryUuid,
-        'diary-body',
-        { type: 'diary-entry', date: stored.date },
-        own,
-      ),
+      buildPublicDiaryCardMedia(stored, viewer),
       buildPublicContentData(
         'diary-entry',
         stored.diaryUuid,
@@ -781,7 +794,10 @@ export async function buildPublicDiaryEntry(
     media,
     content: content ?? { blocks: [] },
     excerpts,
-    excerptSecrets: secretParentExcerpts(diaryExcerptParent(stored), viewer),
+    excerptSecrets: await secretParentExcerpts(
+      diaryExcerptParent(stored),
+      viewer,
+    ),
     excerptsAbout,
     related: countPublicRelated(relations),
     ...(await buildOwnerOnlyNotes(
@@ -808,6 +824,7 @@ async function buildPublicEntityLink(
   const iconMedia = await entity.media(
     'public',
     opensGrantOwner(viewer, entity.grantOwner),
+    viewer,
   );
   return {
     kind: entity.entityType,

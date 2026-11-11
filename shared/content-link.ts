@@ -103,6 +103,19 @@ export type ContentExternalReference = { kind: 'external'; url: string };
 export type ContentLinkReference =
   ContentEntityReference | ContentExternalReference;
 
+/**
+ * What an entity belongs to, as anything that names it carries it: a
+ * section's project, an excerpt's parent. A diary entry has no title: it
+ * comes with its `date` and an empty `title`, and whoever shows it writes
+ * the day out (`entityListName`). No other kind carries a `date` here.
+ */
+export type ContentEntityParent = {
+  type: ContentEntityType;
+  title: string;
+  date?: string;
+  href: string;
+};
+
 export type ResolvedContentEntityLink = ContentEntityReference & {
   state: 'resolved';
   href: string;
@@ -116,7 +129,7 @@ export type ResolvedContentEntityLink = ContentEntityReference & {
    */
   date?: string;
   /** The project a section belongs to; the parent of an excerpt. */
-  parent?: { title: string; href: string };
+  parent?: ContentEntityParent;
 };
 
 export type ResolvedContentLink =
