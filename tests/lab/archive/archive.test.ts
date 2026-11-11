@@ -6,8 +6,10 @@ import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { addDays, resolveDay } from './dates';
 import { convertText, scanText } from './dialect';
+import { archiveFacts } from './facts';
 import { readArchive } from './read';
 import { archiveSource } from './source';
+import { archiveUsage } from './usage';
 import { validateArchive } from './validate';
 
 const SEED_DAY = '2026-10-20';
@@ -38,6 +40,30 @@ function archiveWith(files: Record<string, string>) {
 describe('the conformance archive', () => {
   it('reads and checks without a single issue', () => {
     expect(archiveWith({})).toEqual([]);
+  });
+
+  it('knows what is shown by a picture of its excerpts', () => {
+    const { archive } = readArchive(conformance);
+    const { scans } = validateArchive(archive, { seedDay: SEED_DAY });
+    const facts = archiveFacts(archive, scans, SEED_DAY);
+    const shown = (ref: string) => facts.get(ref)?.pictureFromExcerpts;
+    // No picture of its own, and an open excerpt with a banner.
+    expect(shown('diary:2021-03-04')).toBe(true);
+    // A banner of its own.
+    expect(shown('event:fair')).toBe(false);
+    // Excerpts without a picture.
+    expect(shown('diary:2022-01-02')).toBe(false);
+    expect(shown('event:secret-trip')).toBe(false);
+    const usage = archiveUsage(archive, scans, { min: 1, seedDay: SEED_DAY });
+    expect(
+      usage.find(
+        (line) => line.name === 'picture: a diary entry by its excerpts',
+      ),
+    ).toEqual({
+      name: 'picture: a diary entry by its excerpts',
+      count: 1,
+      min: 1,
+    });
   });
 });
 

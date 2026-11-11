@@ -6,6 +6,7 @@
 // cannot say at all is in `fields.ts`.
 import { resolveDay } from './dates';
 import type { TextScan } from './dialect';
+import { excerptsWithPicture } from './facts';
 import type { Archive } from './model';
 import { archiveEntities, archiveExcerpts, refOf } from './texts';
 
@@ -142,6 +143,14 @@ export function archiveUsage(
   for (const entry of archive.diary)
     if (!entry.body.trim() && entry.excerpts.length)
       add('excerpt: the whole of a diary entry');
+  // An event or a diary entry with no picture of its own, shown by the
+  // first picture of its excerpts.
+  for (const ref of excerptsWithPicture(archive, scans))
+    add(
+      ref.startsWith('event:')
+        ? 'picture: an event by its excerpts'
+        : 'picture: a diary entry by its excerpts',
+    );
 
   // Tags: a tag may carry an icon, and most do not.
   for (const tag of archive.tags)
@@ -317,6 +326,9 @@ export function archiveUsage(
   need('banner: an event', 1);
   need('banner: a section', 1);
   need('banner: an excerpt', 1);
+  // An event shown so is only counted, for the record: the archive has
+  // none yet.
+  need('picture: a diary entry by its excerpts', 1);
   need('hidden: a third slide of a gallery', 1);
   need('hidden: a second file of a group', 1);
   // Whatever else the archive uses, for the record.

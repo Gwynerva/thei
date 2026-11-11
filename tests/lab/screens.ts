@@ -140,6 +140,55 @@ const subjectOfExcerpts = (index: SiteIndex) =>
     (e) => n(e, 'excerptsAbout'),
     (e) => n(e, 'excerptsAbout') > 0,
   );
+/**
+ * An event or a diary entry with no picture of its own, which its cards show
+ * by the first picture of its excerpts: an event before a diary entry.
+ */
+const shownByExcerpts = (index: SiteIndex) =>
+  richest(
+    index,
+    ['event', 'diary'],
+    (e) => (e.kind === 'event' ? 1 : 0),
+    (e) =>
+      e.access === 'public' &&
+      !e.facts.future &&
+      Boolean(e.facts.pictureFromExcerpts),
+  );
+/** The excerpts about an entity a stranger may read. */
+const openExcerptsAbout = (index: SiteIndex, subject: SiteEntity) =>
+  Object.values(index.entities).filter(
+    (e) =>
+      e.kind === 'excerpt' &&
+      e.access === 'public' &&
+      e.facts.aboutRef === subject.ref,
+  ).length;
+/** The project the most excerpts are about: its chronology holds them as points. */
+const projectOfExcerpts = (index: SiteIndex) =>
+  richest(
+    index,
+    'project',
+    (e) => openExcerptsAbout(index, e),
+    (e) => e.access === 'public' && openExcerptsAbout(index, e) > 0,
+  );
+/**
+ * Where the library's pictures are narrowed to the ones a part of something
+ * holds — a section, else an excerpt: the window of such a file names the
+ * part with what it is a part of.
+ */
+const partWithPicture = (index: SiteIndex) => {
+  const pictures = Object.values(index.files).filter(
+    (file) => file.kind === 'image',
+  );
+  for (const [prefix, source] of [
+    ['section:', 'project-section'],
+    ['excerpt:', 'excerpt'],
+  ] as const)
+    if (pictures.some((file) => file.places.some((p) => p.startsWith(prefix))))
+      return source;
+  throw new Error(
+    'The archive has no picture in a section or an excerpt for this screen.',
+  );
+};
 /** A general section, open in the tab a project's form shows first. */
 const generalSection = (index: SiteIndex) =>
   richest(
@@ -174,6 +223,20 @@ export const SCREENS: Screen[] = [
   // What a visitor sees.
   { id: 'home', title: 'Home page', role: 'visitor', path: () => '/' },
   { id: 'life', title: 'Life', role: 'visitor', path: () => '/life/' },
+  {
+    // The Life at the day of an event or a diary entry with no picture of
+    // its own, narrowed to its kind: its card shows the first picture of
+    // its excerpts.
+    id: 'life-picture-from-excerpts',
+    title: 'Life: a card shown by a picture of its excerpts',
+    role: 'visitor',
+    path: (index) => {
+      const entity = shownByExcerpts(index);
+      const day =
+        entity.kind === 'event' ? entity.facts.firstDay : entity.facts.day;
+      return `/life/?d=${day}&f=${entity.kind === 'event' ? 'event' : 'diary-entry'}`;
+    },
+  },
   { id: 'tags', title: 'Tags', role: 'visitor', path: () => '/tags/' },
   {
     id: 'tag',
@@ -199,6 +262,13 @@ export const SCREENS: Screen[] = [
     title: "A project's timeline",
     role: 'visitor',
     path: (index) => `${project(index).publicUrl!}timeline/`,
+  },
+  {
+    id: 'project-timeline-excerpts',
+    title: "A project's timeline, the excerpts about it alone",
+    role: 'visitor',
+    path: (index) =>
+      `${projectOfExcerpts(index).publicUrl!}timeline/?f=excerpt`,
   },
   {
     id: 'section',
@@ -487,6 +557,27 @@ export const SCREENS: Screen[] = [
       {
         label: 'Look at its description',
         action: { look: { label: 'File description' } },
+        options: { optional: true },
+      },
+    ],
+  },
+  {
+    // A picture a section or an excerpt holds: its window names that place
+    // with what it is a part of, above the place's own name.
+    id: 'admin-file-places',
+    title: "A file's window: used in a part of something",
+    role: 'owner',
+    path: (index) =>
+      `/admin/assets/?type=image&source=${partWithPicture(index)}`,
+    steps: () => [
+      {
+        label: 'Open a picture',
+        action: { click: { role: 'button', name: /^Image · / } },
+        options: { answer: { role: 'dialog' }, timeoutMs: 15_000 },
+      },
+      {
+        label: 'Look at where it is used',
+        action: { look: { text: 'Used in' } },
         options: { optional: true },
       },
     ],
